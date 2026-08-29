@@ -1,8 +1,8 @@
-import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import {
   DATA_COVERAGE_MAX_ATTEMPTS,
   DATA_COVERAGE_TARGET_COUNT,
 } from "./config.js"
+import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import {
   checkWithRetry,
   createCoverageRejection,

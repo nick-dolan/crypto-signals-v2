@@ -1,12 +1,8 @@
+import {
+  DATA_COVERAGE_REQUIRED_METADATA,
+  DATA_COVERAGE_REQUIRED_SELECTION_FIELDS,
+} from "./config.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
-import { DATA_COVERAGE_REQUIRED_METADATA } from "./config.js"
-
-const SELECTION_FIELDS = Object.freeze([
-  "exchange",
-  "quoteSymbol",
-  "instrumentType",
-  "typeSpecification",
-])
 
 export function validatePositiveInteger (value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -25,7 +21,7 @@ function normalizeSelection (selection) {
     throw new Error("Crypto universe selection is required")
   }
 
-  return Object.fromEntries(SELECTION_FIELDS.map(field => [
+  return Object.fromEntries(DATA_COVERAGE_REQUIRED_SELECTION_FIELDS.map(field => [
     field,
     getRequiredString(selection[field], `Crypto universe selection ${field}`),
   ]))

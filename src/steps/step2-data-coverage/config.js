@@ -3,32 +3,32 @@ export const DATA_COVERAGE_PROBE_HOURS = 168
 export const DATA_COVERAGE_MIN_DENSE_VALUES = 120
 export const DATA_COVERAGE_MAX_STALENESS_HOURS = 24
 export const DATA_COVERAGE_MAX_ATTEMPTS = 2
-
 export const DATA_COVERAGE_TIMEFRAME = "60"
 export const DATA_COVERAGE_TIMEFRAME_LABEL = "1h"
 export const DATA_COVERAGE_TIMEOUT_MS = 45_000
 export const DATA_COVERAGE_CHART_SETTLE_DELAY_MS = 500
 export const DATA_COVERAGE_STUDY_SETTLE_DELAY_MS = 250
 
-export const DATA_COVERAGE_REQUIRED_STUDIES = Object.freeze({
-  volume: Object.freeze([
-    "volumeDelta",
-  ]),
-  derivatives: Object.freeze([
-    "openInterest",
-    "fundingRate",
-    "liquidations",
-    "longShortRatioAccounts",
-    "topTradersLongShortPositions",
-    "premium",
-  ]),
-  social: Object.freeze([
-    "socialDominance",
-    "interactions",
-    "activeContributors",
-    "createdPosts",
-  ]),
-})
+export const DATA_COVERAGE_REQUIRED_SELECTION_FIELDS = Object.freeze([
+  "exchange",
+  "quoteSymbol",
+  "instrumentType",
+  "typeSpecification",
+])
+
+export const DATA_COVERAGE_REQUIRED_STUDY_KEYS = Object.freeze([
+  "volumeDelta",
+  "openInterest",
+  "fundingRate",
+  "liquidations",
+  "longShortRatioAccounts",
+  "topTradersLongShortPositions",
+  "premium",
+  "socialDominance",
+  "interactions",
+  "activeContributors",
+  "createdPosts",
+])
 
 export const DATA_COVERAGE_SPARSE_STUDIES = Object.freeze(["liquidations"])
 

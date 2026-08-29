@@ -2,9 +2,9 @@ import {
   DATA_COVERAGE_MAX_STALENESS_HOURS,
   DATA_COVERAGE_MIN_DENSE_VALUES,
   DATA_COVERAGE_PROBE_HOURS,
+  DATA_COVERAGE_REQUIRED_STUDY_KEYS,
   DATA_COVERAGE_SPARSE_STUDIES,
 } from "./config.js"
-import { REQUIRED_STUDY_KEYS } from "./coverage-study-definitions.js"
 import {
   createResultBuilder,
   evaluateChart,
@@ -23,7 +23,7 @@ export function evaluateCoinCoverage (
     minDenseValues = DATA_COVERAGE_MIN_DENSE_VALUES,
     nowTimestamp = Math.floor(Date.now() / 1000),
     probeHours = DATA_COVERAGE_PROBE_HOURS,
-    requiredStudyKeys = REQUIRED_STUDY_KEYS,
+    requiredStudyKeys = DATA_COVERAGE_REQUIRED_STUDY_KEYS,
     sparseStudyKeys = DATA_COVERAGE_SPARSE_STUDIES,
   } = {},
 ) {

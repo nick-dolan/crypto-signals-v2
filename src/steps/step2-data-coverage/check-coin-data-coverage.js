@@ -1,4 +1,3 @@
-import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import {
   DATA_COVERAGE_CHART_SETTLE_DELAY_MS,
   DATA_COVERAGE_MAX_STALENESS_HOURS,
@@ -8,6 +7,7 @@ import {
   DATA_COVERAGE_TIMEFRAME,
   DATA_COVERAGE_TIMEOUT_MS,
 } from "./config.js"
+import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
 

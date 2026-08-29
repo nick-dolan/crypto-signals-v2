@@ -1,15 +1,15 @@
-import { connectTradingView, disconnectTradingView } from "../../api/tradingview/client.js"
-import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js"
-import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
 import {
   DATA_COVERAGE_MAX_STALENESS_HOURS,
   DATA_COVERAGE_MIN_DENSE_VALUES,
   DATA_COVERAGE_OPTIONAL_METADATA,
   DATA_COVERAGE_PROBE_HOURS,
   DATA_COVERAGE_REQUIRED_METADATA,
+  DATA_COVERAGE_REQUIRED_STUDY_KEYS,
   DATA_COVERAGE_TIMEFRAME_LABEL,
 } from "./config.js"
-import { REQUIRED_STUDY_KEYS } from "./coverage-study-definitions.js"
+import { connectTradingView, disconnectTradingView } from "../../api/tradingview/client.js"
+import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js"
+import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
 
 function logProgress (event) {
   if (event.status === "retrying") {
@@ -37,7 +37,7 @@ export function createDataCoverageProbeDescription () {
     hours: DATA_COVERAGE_PROBE_HOURS,
     minDenseValues: DATA_COVERAGE_MIN_DENSE_VALUES,
     maxStalenessHours: DATA_COVERAGE_MAX_STALENESS_HOURS,
-    requiredStudies: [...REQUIRED_STUDY_KEYS],
+    requiredStudies: [...DATA_COVERAGE_REQUIRED_STUDY_KEYS],
     requiredMetadata: DATA_COVERAGE_REQUIRED_METADATA.map(({ field }) => field),
     optionalMetadata: [...DATA_COVERAGE_OPTIONAL_METADATA],
   }
