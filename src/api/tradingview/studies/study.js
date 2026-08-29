@@ -1,0 +1,533 @@
+import { isObject } from "radash"
+
+import { createTradingViewIndicatorInstance } from "./resolver.js"
+
+const DEFAULT_TIMEOUT_MS = 20_000
+const DEFAULT_SETTLE_DELAY_MS = 50
+const PERIOD_TIME_FIELD = "time"
+const TRADINGVIEW_MISSING_VALUE = 1e100
+
+function getRequiredString (value, name) {
+  const normalizedValue = typeof value === "string" ? value.trim() : ""
+
+  if (!normalizedValue) {
+    throw new Error(`${name} is required`)
+  }
+
+  return normalizedValue
+}
+
+function getErrorMessage (error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function validatePositiveNumber (value, name) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`)
+  }
+
+  return value
+}
+
+function validateNonNegativeNumber (value, name) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative number`)
+  }
+
+  return value
+}
+
+function normalizeInputOverrides (inputs) {
+  if (inputs === undefined) {
+    return Object.freeze({})
+  }
+
+  if (!isObject(inputs)) {
+    throw new Error("TradingView study inputs must be an object")
+  }
+
+  return Object.freeze({ ...inputs })
+}
+
+function normalizeFields (fields) {
+  if (fields === undefined) {
+    return null
+  }
+
+  if (!isObject(fields) || Object.keys(fields).length === 0) {
+    throw new Error("TradingView study fields must be a non-empty object")
+  }
+
+  const fieldNames = new Set()
+  const normalizedFields = []
+
+  for (const [field, plot] of Object.entries(fields)) {
+    const normalizedField = getRequiredString(field, "TradingView study field")
+    const normalizedPlot = getRequiredString(
+      plot,
+      `TradingView study plot for ${normalizedField}`,
+    )
+
+    if (normalizedField === PERIOD_TIME_FIELD) {
+      throw new Error(`TradingView study field ${PERIOD_TIME_FIELD} is reserved`)
+    }
+
+    if (fieldNames.has(normalizedField)) {
+      throw new Error(`Duplicate TradingView study field ${normalizedField}`)
+    }
+
+    fieldNames.add(normalizedField)
+    normalizedFields.push([normalizedField, normalizedPlot])
+  }
+
+  return Object.freeze(Object.fromEntries(normalizedFields))
+}
+
+function normalizeStudyRequest (request) {
+  if (!isObject(request)) {
+    throw new Error("TradingView study request must be an object")
+  }
+
+  if (
+    request.allowMissingValues !== undefined
+    && typeof request.allowMissingValues !== "boolean"
+  ) {
+    throw new Error("allowMissingValues must be a boolean")
+  }
+
+  const normalizedRequest = {
+    key: getRequiredString(request.key, "TradingView study key"),
+    id: getRequiredString(request.id, "TradingView study id"),
+    version: request.version === undefined
+      ? "last"
+      : getRequiredString(request.version, "TradingView study version"),
+    inputs: normalizeInputOverrides(request.inputs),
+    fields: normalizeFields(request.fields),
+    allowMissingValues: Boolean(request.allowMissingValues),
+  }
+
+  if (request.group !== undefined) {
+    normalizedRequest.group = getRequiredString(
+      request.group,
+      "TradingView study group",
+    )
+  }
+
+  if (request.name !== undefined) {
+    normalizedRequest.name = getRequiredString(
+      request.name,
+      "TradingView study name",
+    )
+  }
+
+  return Object.freeze(normalizedRequest)
+}
+
+function normalizeWindow (window, timeframeSeconds) {
+  if (window === undefined && timeframeSeconds === undefined) {
+    return null
+  }
+
+  if (!isObject(window)) {
+    throw new Error("TradingView study window must be an object")
+  }
+
+  if (
+    !Number.isFinite(window.start)
+    || !Number.isFinite(window.end)
+    || window.end <= window.start
+  ) {
+    throw new Error("TradingView study window must have valid start and end timestamps")
+  }
+
+  validatePositiveNumber(
+    timeframeSeconds,
+    "TradingView study timeframeSeconds",
+  )
+
+  const expectedPeriods = (window.end - window.start) / timeframeSeconds
+
+  if (!Number.isInteger(expectedPeriods)) {
+    throw new Error(
+      "TradingView study window must be divisible by timeframeSeconds",
+    )
+  }
+
+  return Object.freeze({
+    start: window.start,
+    end: window.end,
+    timeframeSeconds,
+    expectedPeriods,
+  })
+}
+
+function normalizeStudyOptions ({
+  window,
+  timeframeSeconds,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  settleDelayMs = DEFAULT_SETTLE_DELAY_MS,
+} = {}) {
+  return Object.freeze({
+    window: normalizeWindow(window, timeframeSeconds),
+    timeoutMs: validatePositiveNumber(
+      timeoutMs,
+      "TradingView study timeoutMs",
+    ),
+    settleDelayMs: validateNonNegativeNumber(
+      settleDelayMs,
+      "TradingView study settleDelayMs",
+    ),
+  })
+}
+
+function getSourcePeriodCount (periods, window) {
+  if (!window) {
+    return periods.length
+  }
+
+  return periods.filter(period => (
+    Number.isFinite(period?.$time)
+    && period.$time >= window.start
+    && period.$time < window.end
+  )).length
+}
+
+function waitForStudy (
+  study,
+  label,
+  {
+    window,
+    timeoutMs,
+    settleDelayMs,
+  },
+) {
+  return new Promise((resolve, reject) => {
+    let availablePeriods = 0
+    let hasPlotUpdate = false
+    let ready = false
+    let settled = false
+    let settleTimeoutId = null
+    let timeoutId = null
+
+    const finish = (callback, value) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      clearTimeout(settleTimeoutId)
+      clearTimeout(timeoutId)
+      callback(value)
+    }
+
+    const resolveAfterUpdates = () => {
+      if (!ready || !hasPlotUpdate) {
+        return
+      }
+
+      clearTimeout(settleTimeoutId)
+      settleTimeoutId = setTimeout(() => {
+        finish(resolve, study.periods)
+      }, settleDelayMs)
+    }
+
+    study.onError((...messages) => {
+      const details = messages.map(getErrorMessage).join(" ")
+      finish(
+        reject,
+        new Error(`TradingView ${label} error: ${details || "Unknown error"}`),
+      )
+    })
+
+    study.onUpdate((changes) => {
+      if (!Array.isArray(changes) || !changes.includes("plots")) {
+        return
+      }
+
+      hasPlotUpdate = true
+      availablePeriods = getSourcePeriodCount(study.periods, window)
+      resolveAfterUpdates()
+    })
+
+    study.onReady(() => {
+      ready = true
+      resolveAfterUpdates()
+    })
+
+    timeoutId = setTimeout(() => {
+      finish(
+        reject,
+        new Error(
+          `TradingView ${label} request timed out: received ${availablePeriods} source periods`,
+        ),
+      )
+    }, timeoutMs)
+  })
+}
+
+function getObservedPlotNames (sourcePeriods) {
+  const plotNames = new Set()
+
+  for (const period of sourcePeriods) {
+    if (!isObject(period)) {
+      continue
+    }
+
+    for (const key of Object.keys(period)) {
+      if (key !== "$time") {
+        plotNames.add(key)
+      }
+    }
+  }
+
+  return plotNames
+}
+
+function getAvailablePlotNames (metadata, sourcePeriods) {
+  const plotNames = new Set(
+    Object.values(metadata.plots).filter(
+      plot => typeof plot === "string" && plot.trim(),
+    ),
+  )
+
+  for (const plot of getObservedPlotNames(sourcePeriods)) {
+    plotNames.add(plot)
+  }
+
+  return plotNames
+}
+
+function getFieldMap (request, metadata, sourcePeriods) {
+  const availablePlots = getAvailablePlotNames(metadata, sourcePeriods)
+
+  if (request.fields) {
+    const unknownPlots = [...new Set(Object.values(request.fields))]
+      .filter(plot => !availablePlots.has(plot))
+
+    if (unknownPlots.length > 0) {
+      throw new Error(
+        `${request.name || metadata.name}: unknown plots ${unknownPlots.join(", ")}`,
+      )
+    }
+
+    return request.fields
+  }
+
+  if (availablePlots.size === 0) {
+    throw new Error(
+      `${request.name || metadata.name} does not expose time-series plots`,
+    )
+  }
+
+  if (availablePlots.has(PERIOD_TIME_FIELD)) {
+    throw new Error(
+      `${request.name || metadata.name}: plot ${PERIOD_TIME_FIELD} conflicts with the period timestamp; provide a fields alias`,
+    )
+  }
+
+  return Object.freeze(Object.fromEntries(
+    [...availablePlots].map(plot => [plot, plot]),
+  ))
+}
+
+function normalizePlotValue (value) {
+  if (
+    typeof value !== "number"
+    || !Number.isFinite(value)
+    || Math.abs(value) >= TRADINGVIEW_MISSING_VALUE
+  ) {
+    return null
+  }
+
+  return value
+}
+
+function getSourcePeriodsByTime (sourcePeriods, window) {
+  const periodsByTime = new Map()
+
+  for (const period of sourcePeriods) {
+    const time = period?.$time
+
+    if (!Number.isFinite(time)) {
+      continue
+    }
+
+    if (window && (time < window.start || time >= window.end)) {
+      continue
+    }
+
+    periodsByTime.set(time, period)
+  }
+
+  return periodsByTime
+}
+
+function getPeriodTimes (sourcePeriodsByTime, window) {
+  if (!window) {
+    return [...sourcePeriodsByTime.keys()].sort((left, right) => left - right)
+  }
+
+  return Array.from(
+    { length: window.expectedPeriods },
+    (_, index) => window.start + index * window.timeframeSeconds,
+  )
+}
+
+function normalizePeriods (sourcePeriods, fieldMap, window) {
+  const sourcePeriodsByTime = getSourcePeriodsByTime(sourcePeriods, window)
+  const times = getPeriodTimes(sourcePeriodsByTime, window)
+  const periods = times.map((time) => {
+    const source = sourcePeriodsByTime.get(time)
+    const values = Object.fromEntries(
+      Object.entries(fieldMap).map(([field, plot]) => [
+        field,
+        normalizePlotValue(source?.[plot]),
+      ]),
+    )
+
+    return {
+      [PERIOD_TIME_FIELD]: time,
+      ...values,
+    }
+  })
+
+  return {
+    periods,
+    sourcePeriodCount: sourcePeriodsByTime.size,
+  }
+}
+
+function getCoverage (periods, fields, sourcePeriodCount) {
+  let completePeriods = 0
+  let partialPeriods = 0
+  let missingPeriods = 0
+
+  for (const period of periods) {
+    const availableValues = fields.filter(
+      field => Number.isFinite(period[field]),
+    ).length
+
+    if (availableValues === fields.length) {
+      completePeriods += 1
+    } else if (availableValues === 0) {
+      missingPeriods += 1
+    } else {
+      partialPeriods += 1
+    }
+  }
+
+  return Object.freeze({
+    periodCount: periods.length,
+    sourcePeriodCount,
+    completePeriods,
+    partialPeriods,
+    missingPeriods,
+  })
+}
+
+function validatePeriods (periods, coverage, request, label) {
+  if (periods.length === 0) {
+    throw new Error(`${label}: no periods received`)
+  }
+
+  if (
+    request.fields
+    && !request.allowMissingValues
+    && coverage.completePeriods !== coverage.periodCount
+  ) {
+    throw new Error(
+      `${label}: ${coverage.completePeriods}/${coverage.periodCount} periods are complete`,
+    )
+  }
+}
+
+function createPublicRequest (request) {
+  const publicRequest = {
+    key: request.key,
+    id: request.id,
+    version: request.version,
+    inputs: request.inputs,
+    allowMissingValues: request.allowMissingValues,
+  }
+
+  if (request.group) {
+    publicRequest.group = request.group
+  }
+
+  if (request.name) {
+    publicRequest.name = request.name
+  }
+
+  if (request.fields) {
+    publicRequest.fields = request.fields
+  }
+
+  return Object.freeze(publicRequest)
+}
+
+export function createTradingViewStudyFetcher ({
+  createIndicator = createTradingViewIndicatorInstance,
+} = {}) {
+  if (typeof createIndicator !== "function") {
+    throw new Error("createIndicator must be a function")
+  }
+
+  return async function fetchTradingViewStudy (
+    chart,
+    request,
+    options = {},
+  ) {
+    if (!chart?.Study) {
+      throw new Error("TradingView chart with Study support is required")
+    }
+
+    const normalizedRequest = normalizeStudyRequest(request)
+    const normalizedOptions = normalizeStudyOptions(options)
+    const { indicator, metadata } = await createIndicator(normalizedRequest)
+    const label = normalizedRequest.name || metadata.name || normalizedRequest.key
+    const study = new chart.Study(indicator)
+
+    try {
+      const sourcePeriods = await waitForStudy(
+        study,
+        label,
+        normalizedOptions,
+      )
+      const fieldMap = getFieldMap(
+        normalizedRequest,
+        metadata,
+        sourcePeriods,
+      )
+      const normalized = normalizePeriods(
+        sourcePeriods,
+        fieldMap,
+        normalizedOptions.window,
+      )
+      const fields = Object.keys(fieldMap)
+      const coverage = getCoverage(
+        normalized.periods,
+        fields,
+        normalized.sourcePeriodCount,
+      )
+
+      validatePeriods(
+        normalized.periods,
+        coverage,
+        normalizedRequest,
+        label,
+      )
+
+      return {
+        request: createPublicRequest(normalizedRequest),
+        indicator: metadata,
+        fields: Object.freeze({ ...fieldMap }),
+        periods: normalized.periods,
+        coverage,
+      }
+    } finally {
+      study.remove()
+    }
+  }
+}
+
+export const fetchTradingViewStudy = createTradingViewStudyFetcher()

@@ -1,0 +1,35 @@
+{
+  "name": "crypto-signals",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "all": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.22.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@mathieuc/tradingview": "^3.5.2",
+    "dayjs": "^1.11.23",
+    "dotenv": "^17.4.2",
+    "fuzzball": "^2.2.6",
+    "radash": "^12.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@eslint/json": "^2.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.9.0",
+    "globals": "^17.5.0"
+  }
+}
