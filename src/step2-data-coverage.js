@@ -1,4 +1,3 @@
-import { fetchTradingViewCryptoMarkets } from "./api/tradingview/crypto-market-screener.js"
 import { connectTradingView, disconnectTradingView } from "./api/tradingview/client.js"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { buildCompleteCryptoUniverse } from "./steps/step2-data-coverage/build-complete-crypto-universe.js"
@@ -45,20 +44,15 @@ function logProgress (event) {
 async function runDataCoverageStep () {
   const sourceUniverse = await readTmpJson(INPUT_FILENAME)
   const candidates = getCandidateCoins(sourceUniverse)
-  const markets = await fetchTradingViewCryptoMarkets({
-    baseCurrencyIds: candidates.map(candidate => candidate.baseCurrencyId),
-  })
   const nowTimestamp = Math.floor(Date.now() / 1000)
 
-  console.log(`✓ Loaded ${candidates.length} ranked candidates`)
-  console.log(`✓ Found ${markets.length} Binance USDT perpetual markets`)
+  console.log(`✓ Loaded ${candidates.length} ranked Binance USDT perpetual candidates`)
 
   await connectTradingView()
 
   try {
     const report = await buildCompleteCryptoUniverse(
       candidates,
-      markets,
       async (coin, market) => {
         const client = await connectTradingView()
 

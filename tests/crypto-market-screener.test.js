@@ -42,7 +42,10 @@ test("crypto market screener requests Binance USDT swaps by baseCurrencyId", asy
 
   const markets = await fetchTradingViewCryptoMarkets({
     baseCurrencyIds: ["xtvcbtc", "XTVCBTC"],
+    exchanges: ["BINANCE"],
+    instrumentTypes: ["swap"],
     maxRows: 100,
+    quoteSymbols: ["USDT"],
     timeoutMs: 100,
   })
   const request = JSON.parse(capturedOptions.body)
@@ -131,6 +134,9 @@ test("crypto market screener preserves identity for duplicate display tickers", 
 
   const markets = await fetchTradingViewCryptoMarkets({
     baseCurrencyIds: ["XTVCLITL", "XTVCLITENTRY"],
+    exchanges: ["BINANCE"],
+    instrumentTypes: ["swap"],
+    quoteSymbols: ["USDT"],
     timeoutMs: 100,
   })
 
@@ -155,6 +161,9 @@ test("crypto market screener rejects a truncated response", async (context) => {
   await assert.rejects(
     fetchTradingViewCryptoMarkets({
       baseCurrencyIds: ["XTVCBTC"],
+      exchanges: ["BINANCE"],
+      instrumentTypes: ["swap"],
+      quoteSymbols: ["USDT"],
       timeoutMs: 100,
     }),
     /response is incomplete/,

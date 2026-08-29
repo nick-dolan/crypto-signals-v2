@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { fetchCryptoUniverseCandidates } from "../src/steps/step1-crypto-universe/fetch-crypto-universe-candidates.js"
+import { fetchTradingViewCoins } from "../src/api/tradingview/coin-screener.js"
 
 const SCREENER_PAYLOAD = {
   totalCount: 2,
@@ -34,7 +34,7 @@ const SCREENER_PAYLOAD = {
   ],
 }
 
-test("crypto universe fetcher requests and normalizes ranked candidates", async (context) => {
+test("TradingView coin screener requests and normalizes ranked coins", async (context) => {
   let capturedUrl
   let capturedOptions
 
@@ -45,7 +45,7 @@ test("crypto universe fetcher requests and normalizes ranked candidates", async 
     return new Response(JSON.stringify(SCREENER_PAYLOAD), { status: 200 })
   })
 
-  const candidates = await fetchCryptoUniverseCandidates({
+  const candidates = await fetchTradingViewCoins({
     rankMax: 2,
     timeoutMs: 100,
   })
@@ -104,7 +104,7 @@ test("crypto universe fetcher requests and normalizes ranked candidates", async 
   ])
 })
 
-test("crypto universe fetcher preserves missing categories for coverage filtering", async (context) => {
+test("TradingView coin screener preserves missing categories", async (context) => {
   context.mock.method(globalThis, "fetch", async () => new Response(
     JSON.stringify({
       totalCount: 1,
@@ -127,7 +127,7 @@ test("crypto universe fetcher preserves missing categories for coverage filterin
     { status: 200 },
   ))
 
-  const [candidate] = await fetchCryptoUniverseCandidates({
+  const [candidate] = await fetchTradingViewCoins({
     rankMax: 1,
     timeoutMs: 100,
   })
@@ -135,7 +135,7 @@ test("crypto universe fetcher preserves missing categories for coverage filterin
   assert.deepEqual(candidate.categories, [])
 })
 
-test("crypto universe fetcher rejects duplicate baseCurrencyId values", async (context) => {
+test("TradingView coin screener rejects duplicate baseCurrencyId values", async (context) => {
   context.mock.method(globalThis, "fetch", async () => new Response(
     JSON.stringify({
       totalCount: 2,
@@ -172,7 +172,7 @@ test("crypto universe fetcher rejects duplicate baseCurrencyId values", async (c
   ))
 
   await assert.rejects(
-    fetchCryptoUniverseCandidates({ rankMax: 2, timeoutMs: 100 }),
+    fetchTradingViewCoins({ rankMax: 2, timeoutMs: 100 }),
     /duplicate baseCurrencyId: duplicate-id/,
   )
 })

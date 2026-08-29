@@ -7,10 +7,47 @@ import {
 const REQUIRED_EXCHANGE = "BINANCE"
 const REQUIRED_QUOTE_SYMBOL = "USDT"
 const REQUIRED_INSTRUMENT_TYPE = "swap"
+const REQUIRED_TYPE_SPECIFICATION = "perpetual"
 
 function validatePositiveInteger (value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
+  }
+}
+
+function validateRequiredString (value, fieldName) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${fieldName} is required`)
+  }
+}
+
+function validateCandidateMarket (candidate, index) {
+  const market = candidate.market
+  const fieldName = `Crypto universe candidate at index ${index} market`
+
+  if (!market || typeof market !== "object" || Array.isArray(market)) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  validateRequiredString(market.tradingViewSymbol, `${fieldName} tradingViewSymbol`)
+  validateRequiredString(market.symbol, `${fieldName} symbol`)
+  validateRequiredString(market.baseSymbol, `${fieldName} baseSymbol`)
+  validateRequiredString(market.baseCurrencyId, `${fieldName} baseCurrencyId`)
+
+  if (market.baseCurrencyId !== candidate.baseCurrencyId) {
+    throw new Error(`${fieldName} baseCurrencyId does not match its coin`)
+  }
+
+  if (
+    market.exchange !== REQUIRED_EXCHANGE
+    || market.quoteSymbol !== REQUIRED_QUOTE_SYMBOL
+    || market.instrumentType !== REQUIRED_INSTRUMENT_TYPE
+    || !Array.isArray(market.typeSpecifications)
+    || !market.typeSpecifications.includes(REQUIRED_TYPE_SPECIFICATION)
+    || !Number.isFinite(market.volume24hUsd)
+    || market.volume24hUsd <= 0
+  ) {
+    throw new Error(`${fieldName} must be a Binance USDT perpetual`)
   }
 }
 
@@ -21,6 +58,7 @@ function validateCandidates (candidates) {
 
   const ranks = new Set()
   const baseCurrencyIds = new Set()
+  const marketSymbols = new Set()
 
   for (const [index, candidate] of candidates.entries()) {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
@@ -31,11 +69,11 @@ function validateCandidates (candidates) {
       throw new Error(`Crypto universe candidate at index ${index} rank is invalid`)
     }
 
-    if (typeof candidate.baseCurrencyId !== "string" || !candidate.baseCurrencyId.trim()) {
-      throw new Error(
-        `Crypto universe candidate at index ${index} baseCurrencyId is required`,
-      )
-    }
+    validateRequiredString(
+      candidate.baseCurrencyId,
+      `Crypto universe candidate at index ${index} baseCurrencyId`,
+    )
+    validateCandidateMarket(candidate, index)
 
     if (ranks.has(candidate.rank)) {
       throw new Error(`Crypto universe contains duplicate rank: ${candidate.rank}`)
@@ -47,43 +85,16 @@ function validateCandidates (candidates) {
       )
     }
 
+    if (marketSymbols.has(candidate.market.tradingViewSymbol)) {
+      throw new Error(
+        `Crypto universe contains duplicate market: ${candidate.market.tradingViewSymbol}`,
+      )
+    }
+
     ranks.add(candidate.rank)
     baseCurrencyIds.add(candidate.baseCurrencyId)
+    marketSymbols.add(candidate.market.tradingViewSymbol)
   }
-}
-
-function isRequiredMarket (market) {
-  return market?.exchange === REQUIRED_EXCHANGE
-    && market?.quoteSymbol === REQUIRED_QUOTE_SYMBOL
-    && market?.instrumentType === REQUIRED_INSTRUMENT_TYPE
-    && Number.isFinite(market?.volume24hUsd)
-    && market.volume24hUsd > 0
-}
-
-export function selectMarketsByBaseCurrencyId (markets) {
-  if (!Array.isArray(markets)) {
-    throw new Error("Crypto markets must be an array")
-  }
-
-  const selectedMarkets = new Map()
-
-  for (const market of markets) {
-    if (
-      !isRequiredMarket(market)
-      || typeof market.baseCurrencyId !== "string"
-      || !market.baseCurrencyId.trim()
-    ) {
-      continue
-    }
-
-    const selected = selectedMarkets.get(market.baseCurrencyId)
-
-    if (!selected || market.volume24hUsd > selected.volume24hUsd) {
-      selectedMarkets.set(market.baseCurrencyId, market)
-    }
-  }
-
-  return selectedMarkets
 }
 
 function getErrorMessage (error) {
@@ -148,19 +159,7 @@ function toPublicMarket (market) {
     price: market.price,
     volume24hUsd: market.volume24hUsd,
     instrumentType: market.instrumentType,
-  }
-}
-
-function createMissingMarketRejection (coin) {
-  return {
-    ...coin,
-    market: null,
-    attempts: 0,
-    reasonCodes: ["market:not_found"],
-    reasons: [
-      `No identity-matched ${REQUIRED_EXCHANGE} ${REQUIRED_QUOTE_SYMBOL} perpetual`,
-    ],
-    coverage: null,
+    typeSpecifications: [...market.typeSpecifications],
   }
 }
 
@@ -197,7 +196,6 @@ function summarizeRejections (rejected) {
 
 export async function buildCompleteCryptoUniverse (
   candidates,
-  markets,
   checkCoverage,
   {
     generatedAt = new Date().toISOString(),
@@ -221,7 +219,6 @@ export async function buildCompleteCryptoUniverse (
   const orderedCandidates = [...candidates].sort(
     (first, second) => first.rank - second.rank,
   )
-  const selectedMarkets = selectMarketsByBaseCurrencyId(markets)
   const coins = []
   const rejected = []
   let liveCheckedCount = 0
@@ -231,20 +228,7 @@ export async function buildCompleteCryptoUniverse (
       break
     }
 
-    const market = selectedMarkets.get(coin.baseCurrencyId)
-
-    if (!market) {
-      const rejection = createMissingMarketRejection(coin)
-      rejected.push(rejection)
-      onProgress({
-        status: "rejected",
-        coin,
-        market: null,
-        rejection,
-      })
-      continue
-    }
-
+    const market = coin.market
     liveCheckedCount += 1
 
     const { attempts, result } = await checkWithRetry(
@@ -288,9 +272,6 @@ export async function buildCompleteCryptoUniverse (
   }
 
   const checkedCandidateCount = coins.length + rejected.length
-  const marketMatchedCandidateCount = orderedCandidates.filter(candidate => (
-    selectedMarkets.has(candidate.baseCurrencyId)
-  )).length
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
@@ -299,9 +280,10 @@ export async function buildCompleteCryptoUniverse (
       exchange: REQUIRED_EXCHANGE,
       quoteSymbol: REQUIRED_QUOTE_SYMBOL,
       instrumentType: REQUIRED_INSTRUMENT_TYPE,
+      typeSpecification: REQUIRED_TYPE_SPECIFICATION,
     },
     candidateCount: orderedCandidates.length,
-    marketMatchedCandidateCount,
+    marketMatchedCandidateCount: orderedCandidates.length,
     checkedCandidateCount,
     liveCheckedCount,
     uncheckedCandidateCount: orderedCandidates.length - checkedCandidateCount,

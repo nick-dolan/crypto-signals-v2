@@ -200,10 +200,10 @@ function validateResponse (payload, maxRows) {
 
 export async function fetchTradingViewCryptoMarkets ({
   baseCurrencyIds,
-  exchanges = ["BINANCE"],
-  instrumentTypes = ["swap"],
+  exchanges,
+  instrumentTypes,
   maxRows = DEFAULT_MAX_ROWS,
-  quoteSymbols = ["USDT"],
+  quoteSymbols,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const normalizedBaseCurrencyIds = normalizeStringArray(

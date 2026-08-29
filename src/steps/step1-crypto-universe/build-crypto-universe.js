@@ -1,11 +1,16 @@
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import {
   CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
+  CRYPTO_UNIVERSE_EXCHANGE,
+  CRYPTO_UNIVERSE_INSTRUMENT_TYPE,
+  CRYPTO_UNIVERSE_QUOTE_SYMBOL,
   CRYPTO_UNIVERSE_TARGET_COUNT,
+  CRYPTO_UNIVERSE_TYPE_SPECIFICATION,
 } from "./config.js"
 import {
   isStablecoin,
   normalizeUniverseCandidate,
+  selectUniverseMarketsByBaseCurrencyId,
   toUniverseCoin,
   validatePositiveInteger,
   validateUniqueUniverseCandidates,
@@ -13,6 +18,7 @@ import {
 
 export function buildCryptoUniverse (
   candidates,
+  markets,
   {
     candidateRankMax = CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
     generatedAt = new Date().toISOString(),
@@ -39,33 +45,52 @@ export function buildCryptoUniverse (
   const orderedCandidates = normalizedCandidates.sort(
     (first, second) => first.rank - second.rank,
   )
-  const coins = []
+  const selectedMarkets = selectUniverseMarketsByBaseCurrencyId(markets)
+  const eligibleCandidates = []
   let excludedStablecoinCount = 0
+  let excludedMissingMarketCount = 0
 
   for (const candidate of orderedCandidates) {
-    if (coins.length === targetCount) {
-      break
-    }
-
     if (isStablecoin(candidate)) {
       excludedStablecoinCount += 1
       continue
     }
 
-    coins.push(toUniverseCoin(candidate))
+    const market = selectedMarkets.get(candidate.baseCurrencyId)
+
+    if (!market) {
+      excludedMissingMarketCount += 1
+      continue
+    }
+
+    eligibleCandidates.push({ candidate, market })
   }
 
-  if (coins.length !== targetCount) {
+  if (eligibleCandidates.length < targetCount) {
     throw new Error(
-      `Crypto universe: expected ${targetCount} eligible coins, found ${coins.length}`,
+      `Crypto universe: expected ${targetCount} eligible Binance USDT perpetual coins, found ${eligibleCandidates.length}`,
     )
   }
+
+  const coins = eligibleCandidates
+    .slice(0, targetCount)
+    .map(({ candidate, market }) => toUniverseCoin(candidate, market))
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
     source: "tradingview",
+    selection: {
+      exchange: CRYPTO_UNIVERSE_EXCHANGE,
+      quoteSymbol: CRYPTO_UNIVERSE_QUOTE_SYMBOL,
+      instrumentType: CRYPTO_UNIVERSE_INSTRUMENT_TYPE,
+      typeSpecification: CRYPTO_UNIVERSE_TYPE_SPECIFICATION,
+    },
+    candidateCount: orderedCandidates.length,
+    marketMatchedCandidateCount: eligibleCandidates.length,
     coinCount: coins.length,
     excludedStablecoinCount,
+    excludedMissingMarketCount,
+    unselectedEligibleCount: eligibleCandidates.length - coins.length,
     coins,
   }
 }
