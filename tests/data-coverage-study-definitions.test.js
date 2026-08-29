@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
+  DATA_COVERAGE_REQUIRED_STUDIES,
+  DATA_COVERAGE_SPARSE_STUDIES,
+} from "../src/steps/step2-data-coverage/config.js"
+import {
   createCoverageStudyRequests,
   REQUIRED_STUDY_KEYS,
 } from "../src/steps/step2-data-coverage/coverage-study-definitions.js"
@@ -21,6 +25,11 @@ test("coverage requests contain every approved study in collection order", () =>
     "activeContributors",
     "createdPosts",
   ])
+  assert.deepEqual(
+    Object.values(DATA_COVERAGE_REQUIRED_STUDIES).flat(),
+    REQUIRED_STUDY_KEYS,
+  )
+  assert.deepEqual(DATA_COVERAGE_SPARSE_STUDIES, ["liquidations"])
   assert.deepEqual(
     requests.map(request => request.key),
     REQUIRED_STUDY_KEYS,

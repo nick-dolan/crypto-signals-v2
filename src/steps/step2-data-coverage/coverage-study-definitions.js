@@ -1,22 +1,7 @@
 import { DERIVATIVE_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/derivatives.js"
 import { SOCIAL_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/social.js"
 import { VOLUME_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/volume.js"
-
-const REQUIRED_DERIVATIVE_KEYS = Object.freeze([
-  "openInterest",
-  "fundingRate",
-  "liquidations",
-  "longShortRatioAccounts",
-  "topTradersLongShortPositions",
-  "premium",
-])
-
-const REQUIRED_SOCIAL_KEYS = Object.freeze([
-  "socialDominance",
-  "interactions",
-  "activeContributors",
-  "createdPosts",
-])
+import { DATA_COVERAGE_REQUIRED_STUDIES } from "./config.js"
 
 function getDefinitionsByKey (definitions, requiredKeys, group) {
   const definitionsByKey = new Map(
@@ -36,17 +21,17 @@ function getDefinitionsByKey (definitions, requiredKeys, group) {
 
 const REQUIRED_VOLUME_DEFINITIONS = getDefinitionsByKey(
   VOLUME_INDICATOR_DEFINITIONS,
-  ["volumeDelta"],
+  DATA_COVERAGE_REQUIRED_STUDIES.volume,
   "volume",
 )
 const REQUIRED_DERIVATIVE_DEFINITIONS = getDefinitionsByKey(
   DERIVATIVE_INDICATOR_DEFINITIONS,
-  REQUIRED_DERIVATIVE_KEYS,
+  DATA_COVERAGE_REQUIRED_STUDIES.derivatives,
   "derivative",
 )
 const REQUIRED_SOCIAL_DEFINITIONS = getDefinitionsByKey(
   SOCIAL_INDICATOR_DEFINITIONS,
-  REQUIRED_SOCIAL_KEYS,
+  DATA_COVERAGE_REQUIRED_STUDIES.social,
   "social",
 )
 
@@ -55,8 +40,6 @@ export const REQUIRED_STUDY_KEYS = Object.freeze([
   ...REQUIRED_DERIVATIVE_DEFINITIONS,
   ...REQUIRED_SOCIAL_DEFINITIONS,
 ].map(definition => definition.key))
-
-export const SPARSE_STUDY_KEYS = Object.freeze(["liquidations"])
 
 function toCoverageRequest (definition, inputs) {
   return Object.freeze({

@@ -3,13 +3,16 @@ import {
   DATA_COVERAGE_MIN_DENSE_VALUES,
   DATA_COVERAGE_PROBE_HOURS,
   DATA_COVERAGE_REQUIRED_METADATA,
+  DATA_COVERAGE_SPARSE_STUDIES,
 } from "./config.js"
-import { REQUIRED_STUDY_KEYS, SPARSE_STUDY_KEYS } from "./coverage-study-definitions.js"
-
-const HOUR_SECONDS = 60 * 60
+import { REQUIRED_STUDY_KEYS } from "./coverage-study-definitions.js"
 
 function getErrorMessage (error) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function hoursToSeconds (hours) {
+  return hours * 60 * 60
 }
 
 function validatePositiveInteger (value, name) {
@@ -31,7 +34,7 @@ function getRecentPeriods (periods, referenceTime, probeHours) {
     return []
   }
 
-  const cutoff = referenceTime - (probeHours - 1) * HOUR_SECONDS
+  const cutoff = referenceTime - hoursToSeconds(probeHours - 1)
 
   return periods.filter(period => (
     Number.isFinite(period?.time)
@@ -182,7 +185,7 @@ function evaluateChart (
 
   if (
     !Number.isFinite(chartCoverage.latestCompleteTime)
-    || nowTimestamp - chartCoverage.latestCompleteTime > maxStalenessHours * HOUR_SECONDS
+    || nowTimestamp - chartCoverage.latestCompleteTime > hoursToSeconds(maxStalenessHours)
   ) {
     result.add(
       "ohlcv:stale",
@@ -274,7 +277,7 @@ function evaluateStudy (
     const staleFields = Object.entries(summary.fieldLatestValueTimes)
       .filter(([, latestValueTime]) => (
         !Number.isFinite(latestValueTime)
-        || options.nowTimestamp - latestValueTime > options.maxStalenessHours * HOUR_SECONDS
+        || options.nowTimestamp - latestValueTime > hoursToSeconds(options.maxStalenessHours)
       ))
       .map(([field, latestValueTime]) => (
         `${field}=${latestValueTime ?? "missing"}`
@@ -303,7 +306,7 @@ export function evaluateCoinCoverage (
     nowTimestamp = Math.floor(Date.now() / 1000),
     probeHours = DATA_COVERAGE_PROBE_HOURS,
     requiredStudyKeys = REQUIRED_STUDY_KEYS,
-    sparseStudyKeys = SPARSE_STUDY_KEYS,
+    sparseStudyKeys = DATA_COVERAGE_SPARSE_STUDIES,
   } = {},
 ) {
   validatePositiveInteger(probeHours, "probeHours")

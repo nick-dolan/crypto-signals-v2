@@ -10,6 +10,28 @@ export const DATA_COVERAGE_TIMEOUT_MS = 45_000
 export const DATA_COVERAGE_CHART_SETTLE_DELAY_MS = 500
 export const DATA_COVERAGE_STUDY_SETTLE_DELAY_MS = 250
 
+export const DATA_COVERAGE_REQUIRED_STUDIES = Object.freeze({
+  volume: Object.freeze([
+    "volumeDelta",
+  ]),
+  derivatives: Object.freeze([
+    "openInterest",
+    "fundingRate",
+    "liquidations",
+    "longShortRatioAccounts",
+    "topTradersLongShortPositions",
+    "premium",
+  ]),
+  social: Object.freeze([
+    "socialDominance",
+    "interactions",
+    "activeContributors",
+    "createdPosts",
+  ]),
+})
+
+export const DATA_COVERAGE_SPARSE_STUDIES = Object.freeze(["liquidations"])
+
 export const DATA_COVERAGE_REQUIRED_METADATA = Object.freeze([
   Object.freeze({
     field: "circulatingSupply",
