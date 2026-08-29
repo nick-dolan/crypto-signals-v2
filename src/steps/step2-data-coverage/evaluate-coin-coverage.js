@@ -30,17 +30,17 @@ function getLatestTime (periods) {
   return times.length === 0 ? null : Math.max(...times)
 }
 
-function getRecentPeriods (periods, latestTime, probeHours) {
-  if (!Number.isFinite(latestTime)) {
+function getRecentPeriods (periods, referenceTime, probeHours) {
+  if (!Number.isFinite(referenceTime)) {
     return []
   }
 
-  const cutoff = latestTime - (probeHours - 1) * HOUR_SECONDS
+  const cutoff = referenceTime - (probeHours - 1) * HOUR_SECONDS
 
   return periods.filter(period => (
     Number.isFinite(period?.time)
     && period.time >= cutoff
-    && period.time <= latestTime
+    && period.time <= referenceTime
   ))
 }
 
@@ -53,30 +53,36 @@ function isFiniteChartPeriod (period) {
     && Number.isFinite(period?.volume)
 }
 
-function summarizeChartCoverage (periods, probeHours) {
+function summarizeChartCoverage (periods, referenceTime, probeHours) {
   const latestTime = getLatestTime(periods)
-  const recentPeriods = getRecentPeriods(periods, latestTime, probeHours)
+  const recentPeriods = getRecentPeriods(periods, referenceTime, probeHours)
+  const completePeriods = recentPeriods.filter(isFiniteChartPeriod)
 
   return {
     latestTime,
+    latestCompleteTime: getLatestTime(completePeriods),
     recentPeriodCount: recentPeriods.length,
-    completePeriodCount: recentPeriods.filter(isFiniteChartPeriod).length,
+    completePeriodCount: completePeriods.length,
   }
 }
 
-function summarizeStudyCoverage (study, chartLatestTime, probeHours) {
+function summarizeStudyCoverage (study, referenceTime, probeHours) {
   const fields = study?.fields && typeof study.fields === "object"
     ? Object.keys(study.fields)
     : []
   const periods = Array.isArray(study?.periods) ? study.periods : []
-  const latestPeriodTime = getLatestTime(periods)
-  const referenceTime = Number.isFinite(chartLatestTime)
-    ? chartLatestTime
-    : latestPeriodTime
   const recentPeriods = getRecentPeriods(periods, referenceTime, probeHours)
+  const periodsByField = Object.fromEntries(fields.map(field => [
+    field,
+    recentPeriods.filter(period => Number.isFinite(period[field])),
+  ]))
   const fieldValueCounts = Object.fromEntries(fields.map(field => [
     field,
-    recentPeriods.filter(period => Number.isFinite(period[field])).length,
+    periodsByField[field].length,
+  ]))
+  const fieldLatestValueTimes = Object.fromEntries(fields.map(field => [
+    field,
+    getLatestTime(periodsByField[field]),
   ]))
   const availablePeriods = recentPeriods.filter(period => (
     fields.some(field => Number.isFinite(period[field]))
@@ -87,6 +93,7 @@ function summarizeStudyCoverage (study, chartLatestTime, probeHours) {
     recentPeriodCount: recentPeriods.length,
     availablePeriodCount: availablePeriods.length,
     fieldValueCounts,
+    fieldLatestValueTimes,
     latestValueTime: getLatestTime(availablePeriods),
     sourcePeriodCount: Number.isSafeInteger(study?.coverage?.sourcePeriodCount)
       ? study.coverage.sourcePeriodCount
@@ -128,7 +135,9 @@ function evaluateMetadata (coin, result) {
   }
 }
 
-function evaluateIdentity (coin, market, chartInfo, result) {
+function evaluateIdentity (coin, chartInfo, result) {
+  const market = coin.market
+
   if (market.baseCurrencyId !== coin.baseCurrencyId) {
     result.add(
       "market:identity_mismatch",
@@ -136,14 +145,22 @@ function evaluateIdentity (coin, market, chartInfo, result) {
     )
   }
 
-  if (chartInfo?.baseCurrencyId !== coin.baseCurrencyId) {
+  if (
+    chartInfo?.baseCurrencyId
+    && chartInfo.baseCurrencyId !== coin.baseCurrencyId
+  ) {
     result.add(
       "chart:identity_mismatch",
-      `Chart baseCurrencyId ${chartInfo?.baseCurrencyId ?? "missing"} does not match ${coin.baseCurrencyId}`,
+      `Chart baseCurrencyId ${chartInfo.baseCurrencyId} does not match ${coin.baseCurrencyId}`,
     )
   }
 
-  if (chartInfo?.fullName && chartInfo.fullName !== market.tradingViewSymbol) {
+  if (!chartInfo?.fullName) {
+    result.add(
+      "chart:symbol_missing",
+      "Chart symbol is missing",
+    )
+  } else if (chartInfo.fullName !== market.tradingViewSymbol) {
     result.add(
       "chart:symbol_mismatch",
       `Chart symbol ${chartInfo.fullName} does not match ${market.tradingViewSymbol}`,
@@ -168,12 +185,12 @@ function evaluateChart (
   }
 
   if (
-    !Number.isFinite(chartCoverage.latestTime)
-    || nowTimestamp - chartCoverage.latestTime > maxStalenessHours * HOUR_SECONDS
+    !Number.isFinite(chartCoverage.latestCompleteTime)
+    || nowTimestamp - chartCoverage.latestCompleteTime > maxStalenessHours * HOUR_SECONDS
   ) {
     result.add(
       "ohlcv:stale",
-      `OHLCV latest timestamp is ${chartCoverage.latestTime ?? "missing"}`,
+      `OHLCV latest complete timestamp is ${chartCoverage.latestCompleteTime ?? "missing"}`,
     )
   }
 }
@@ -181,7 +198,6 @@ function evaluateChart (
 function evaluateStudy (
   key,
   settledStudy,
-  chartLatestTime,
   result,
   options,
 ) {
@@ -226,7 +242,7 @@ function evaluateStudy (
 
   const summary = summarizeStudyCoverage(
     settledStudy.value,
-    chartLatestTime,
+    options.nowTimestamp,
     options.probeHours,
   )
   const isSparse = options.sparseStudyKeys.has(key)
@@ -237,10 +253,14 @@ function evaluateStudy (
       `${key} exposes no fields`,
     )
   } else if (isSparse) {
-    if (summary.availablePeriodCount === 0) {
+    const missingFields = Object.entries(summary.fieldValueCounts)
+      .filter(([, count]) => count === 0)
+      .map(([field]) => field)
+
+    if (missingFields.length > 0) {
       result.add(
         `${key}:no_values`,
-        `${key} has no numeric values in the probe window`,
+        `${key} has no numeric values for fields: ${missingFields.join(", ")}`,
       )
     }
   } else {
@@ -255,13 +275,19 @@ function evaluateStudy (
       )
     }
 
-    const stale = Number.isFinite(chartLatestTime)
-      && chartLatestTime - summary.latestValueTime > options.maxStalenessHours * HOUR_SECONDS
+    const staleFields = Object.entries(summary.fieldLatestValueTimes)
+      .filter(([, latestValueTime]) => (
+        !Number.isFinite(latestValueTime)
+        || options.nowTimestamp - latestValueTime > options.maxStalenessHours * HOUR_SECONDS
+      ))
+      .map(([field, latestValueTime]) => (
+        `${field}=${latestValueTime ?? "missing"}`
+      ))
 
-    if (!Number.isFinite(summary.latestValueTime) || stale) {
+    if (staleFields.length > 0) {
       result.add(
         `${key}:stale`,
-        `${key} latest value timestamp is ${summary.latestValueTime ?? "missing"}`,
+        `${key} has stale fields: ${staleFields.join(", ")}`,
       )
     }
   }
@@ -274,7 +300,6 @@ function evaluateStudy (
 
 export function evaluateCoinCoverage (
   coin,
-  market,
   chartData,
   {
     maxStalenessHours = DATA_COVERAGE_MAX_STALENESS_HOURS,
@@ -293,8 +318,15 @@ export function evaluateCoinCoverage (
     throw new Error("nowTimestamp must be finite")
   }
 
-  if (!coin || typeof coin !== "object" || !market || typeof market !== "object") {
-    throw new Error("Coin and market are required")
+  if (
+    !coin
+    || typeof coin !== "object"
+    || Array.isArray(coin)
+    || !coin.market
+    || typeof coin.market !== "object"
+    || Array.isArray(coin.market)
+  ) {
+    throw new Error("Coin with market is required")
   }
 
   const chart = chartData?.chart
@@ -305,12 +337,16 @@ export function evaluateCoinCoverage (
   }
 
   const result = createResultBuilder()
-  const chartCoverage = summarizeChartCoverage(chart.periods, probeHours)
+  const chartCoverage = summarizeChartCoverage(
+    chart.periods,
+    nowTimestamp,
+    probeHours,
+  )
   const studyCoverage = {}
   const normalizedSparseStudyKeys = new Set(sparseStudyKeys)
 
   evaluateMetadata(coin, result)
-  evaluateIdentity(coin, market, chart.info, result)
+  evaluateIdentity(coin, chart.info, result)
   evaluateChart(chartCoverage, result, {
     maxStalenessHours,
     minDenseValues,
@@ -321,11 +357,11 @@ export function evaluateCoinCoverage (
     studyCoverage[key] = evaluateStudy(
       key,
       studies[key],
-      chartCoverage.latestTime,
       result,
       {
         maxStalenessHours,
         minDenseValues,
+        nowTimestamp,
         probeHours,
         sparseStudyKeys: normalizedSparseStudyKeys,
       },

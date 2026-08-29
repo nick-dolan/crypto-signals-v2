@@ -4,10 +4,12 @@ import {
   DATA_COVERAGE_TARGET_COUNT,
 } from "./config.js"
 
-const REQUIRED_EXCHANGE = "BINANCE"
-const REQUIRED_QUOTE_SYMBOL = "USDT"
-const REQUIRED_INSTRUMENT_TYPE = "swap"
-const REQUIRED_TYPE_SPECIFICATION = "perpetual"
+const SELECTION_FIELDS = Object.freeze([
+  "exchange",
+  "quoteSymbol",
+  "instrumentType",
+  "typeSpecification",
+])
 
 function validatePositiveInteger (value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -15,13 +17,34 @@ function validatePositiveInteger (value, name) {
   }
 }
 
-function validateRequiredString (value, fieldName) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${fieldName} is required`)
+function validatePositiveNumber (value, fieldName) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive number`)
   }
 }
 
-function validateCandidateMarket (candidate, index) {
+function getRequiredString (value, fieldName) {
+  const normalizedValue = typeof value === "string" ? value.trim() : ""
+
+  if (!normalizedValue) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  return normalizedValue
+}
+
+function normalizeSelection (selection) {
+  if (!selection || typeof selection !== "object" || Array.isArray(selection)) {
+    throw new Error("Crypto universe selection is required")
+  }
+
+  return Object.fromEntries(SELECTION_FIELDS.map(field => [
+    field,
+    getRequiredString(selection[field], `Crypto universe selection ${field}`),
+  ]))
+}
+
+function validateCandidateMarket (candidate, index, selection) {
   const market = candidate.market
   const fieldName = `Crypto universe candidate at index ${index} market`
 
@@ -29,29 +52,40 @@ function validateCandidateMarket (candidate, index) {
     throw new Error(`${fieldName} is required`)
   }
 
-  validateRequiredString(market.tradingViewSymbol, `${fieldName} tradingViewSymbol`)
-  validateRequiredString(market.symbol, `${fieldName} symbol`)
-  validateRequiredString(market.baseSymbol, `${fieldName} baseSymbol`)
-  validateRequiredString(market.baseCurrencyId, `${fieldName} baseCurrencyId`)
+  getRequiredString(market.tradingViewSymbol, `${fieldName} tradingViewSymbol`)
+  getRequiredString(market.symbol, `${fieldName} symbol`)
+  getRequiredString(market.baseSymbol, `${fieldName} baseSymbol`)
+  getRequiredString(market.baseCurrencyId, `${fieldName} baseCurrencyId`)
+  getRequiredString(market.quoteSymbol, `${fieldName} quoteSymbol`)
+  getRequiredString(market.exchange, `${fieldName} exchange`)
+  getRequiredString(market.instrumentType, `${fieldName} instrumentType`)
+  validatePositiveNumber(market.price, `${fieldName} price`)
+  validatePositiveNumber(market.volume24hUsd, `${fieldName} volume24hUsd`)
+
+  if (
+    !Array.isArray(market.typeSpecifications)
+    || market.typeSpecifications.some(specification => (
+      typeof specification !== "string" || !specification.trim()
+    ))
+  ) {
+    throw new Error(`${fieldName} typeSpecifications must be an array of strings`)
+  }
 
   if (market.baseCurrencyId !== candidate.baseCurrencyId) {
     throw new Error(`${fieldName} baseCurrencyId does not match its coin`)
   }
 
   if (
-    market.exchange !== REQUIRED_EXCHANGE
-    || market.quoteSymbol !== REQUIRED_QUOTE_SYMBOL
-    || market.instrumentType !== REQUIRED_INSTRUMENT_TYPE
-    || !Array.isArray(market.typeSpecifications)
-    || !market.typeSpecifications.includes(REQUIRED_TYPE_SPECIFICATION)
-    || !Number.isFinite(market.volume24hUsd)
-    || market.volume24hUsd <= 0
+    market.exchange !== selection.exchange
+    || market.quoteSymbol !== selection.quoteSymbol
+    || market.instrumentType !== selection.instrumentType
+    || !market.typeSpecifications.includes(selection.typeSpecification)
   ) {
-    throw new Error(`${fieldName} must be a Binance USDT perpetual`)
+    throw new Error(`${fieldName} does not match crypto universe selection`)
   }
 }
 
-function validateCandidates (candidates) {
+function validateCandidates (candidates, selection) {
   if (!Array.isArray(candidates)) {
     throw new Error("Crypto universe candidates must be an array")
   }
@@ -69,11 +103,11 @@ function validateCandidates (candidates) {
       throw new Error(`Crypto universe candidate at index ${index} rank is invalid`)
     }
 
-    validateRequiredString(
+    getRequiredString(
       candidate.baseCurrencyId,
       `Crypto universe candidate at index ${index} baseCurrencyId`,
     )
-    validateCandidateMarket(candidate, index)
+    validateCandidateMarket(candidate, index, selection)
 
     if (ranks.has(candidate.rank)) {
       throw new Error(`Crypto universe contains duplicate rank: ${candidate.rank}`)
@@ -97,6 +131,23 @@ function validateCandidates (candidates) {
   }
 }
 
+function normalizeSourceUniverse (sourceUniverse) {
+  if (!sourceUniverse || typeof sourceUniverse !== "object" || Array.isArray(sourceUniverse)) {
+    throw new Error("Source crypto universe must be an object")
+  }
+
+  const source = getRequiredString(sourceUniverse.source, "Crypto universe source")
+  const selection = normalizeSelection(sourceUniverse.selection)
+
+  validateCandidates(sourceUniverse.coins, selection)
+
+  return {
+    source,
+    selection,
+    candidates: sourceUniverse.coins,
+  }
+}
+
 function getErrorMessage (error) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -116,7 +167,6 @@ function createFailedCheckResult (error) {
 async function checkWithRetry (
   checkCoverage,
   coin,
-  market,
   maxAttempts,
   onProgress,
 ) {
@@ -124,7 +174,7 @@ async function checkWithRetry (
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      result = await checkCoverage(coin, market, attempt)
+      result = await checkCoverage(coin, attempt)
     } catch (error) {
       result = createFailedCheckResult(error)
     }
@@ -139,7 +189,7 @@ async function checkWithRetry (
     onProgress({
       status: "retrying",
       coin,
-      market,
+      market: coin.market,
       attempt,
       result,
     })
@@ -163,10 +213,10 @@ function toPublicMarket (market) {
   }
 }
 
-function createCoverageRejection (coin, market, attempts, result) {
+function createCoverageRejection (coin, attempts, result) {
   return {
     ...coin,
-    market: toPublicMarket(market),
+    market: toPublicMarket(coin.market),
     attempts,
     reasonCodes: Array.isArray(result?.reasonCodes)
       ? [...result.reasonCodes]
@@ -195,7 +245,7 @@ function summarizeRejections (rejected) {
 }
 
 export async function buildCompleteCryptoUniverse (
-  candidates,
+  sourceUniverse,
   checkCoverage,
   {
     generatedAt = new Date().toISOString(),
@@ -204,7 +254,8 @@ export async function buildCompleteCryptoUniverse (
     targetCount = DATA_COVERAGE_TARGET_COUNT,
   } = {},
 ) {
-  validateCandidates(candidates)
+  const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)
+
   validatePositiveInteger(targetCount, "targetCount")
   validatePositiveInteger(maxAttempts, "maxAttempts")
 
@@ -228,13 +279,11 @@ export async function buildCompleteCryptoUniverse (
       break
     }
 
-    const market = coin.market
     liveCheckedCount += 1
 
     const { attempts, result } = await checkWithRetry(
       checkCoverage,
       coin,
-      market,
       maxAttempts,
       onProgress,
     )
@@ -242,7 +291,7 @@ export async function buildCompleteCryptoUniverse (
     if (result?.complete) {
       const accepted = {
         ...coin,
-        market: toPublicMarket(market),
+        market: toPublicMarket(coin.market),
         attempts,
         coverage: result.coverage,
       }
@@ -250,23 +299,18 @@ export async function buildCompleteCryptoUniverse (
       onProgress({
         status: "accepted",
         coin,
-        market,
+        market: coin.market,
         accepted,
       })
       continue
     }
 
-    const rejection = createCoverageRejection(
-      coin,
-      market,
-      attempts,
-      result,
-    )
+    const rejection = createCoverageRejection(coin, attempts, result)
     rejected.push(rejection)
     onProgress({
       status: "rejected",
       coin,
-      market,
+      market: coin.market,
       rejection,
     })
   }
@@ -275,15 +319,9 @@ export async function buildCompleteCryptoUniverse (
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
-    source: "tradingview",
-    selection: {
-      exchange: REQUIRED_EXCHANGE,
-      quoteSymbol: REQUIRED_QUOTE_SYMBOL,
-      instrumentType: REQUIRED_INSTRUMENT_TYPE,
-      typeSpecification: REQUIRED_TYPE_SPECIFICATION,
-    },
+    source,
+    selection,
     candidateCount: orderedCandidates.length,
-    marketMatchedCandidateCount: orderedCandidates.length,
     checkedCandidateCount,
     liveCheckedCount,
     uncheckedCandidateCount: orderedCandidates.length - checkedCandidateCount,

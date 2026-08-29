@@ -21,7 +21,6 @@ export function createCoinDataCoverageChecker ({
   return async function checkCoinDataCoverage (
     client,
     coin,
-    market,
     {
       chartSettleDelayMs = DATA_COVERAGE_CHART_SETTLE_DELAY_MS,
       maxStalenessHours = DATA_COVERAGE_MAX_STALENESS_HOURS,
@@ -29,7 +28,6 @@ export function createCoinDataCoverageChecker ({
       nowTimestamp = Math.floor(Date.now() / 1000),
       probeHours = DATA_COVERAGE_PROBE_HOURS,
       studySettleDelayMs = DATA_COVERAGE_STUDY_SETTLE_DELAY_MS,
-      timeframe = DATA_COVERAGE_TIMEFRAME,
       timeoutMs = DATA_COVERAGE_TIMEOUT_MS,
     } = {},
   ) {
@@ -38,8 +36,8 @@ export function createCoinDataCoverageChecker ({
       client,
       requests,
       {
-        symbol: market?.tradingViewSymbol,
-        timeframe,
+        symbol: coin?.market?.tradingViewSymbol,
+        timeframe: DATA_COVERAGE_TIMEFRAME,
         range: probeHours,
         timeoutMs,
         settleDelayMs: chartSettleDelayMs,
@@ -49,7 +47,6 @@ export function createCoinDataCoverageChecker ({
 
     return evaluateCoinCoverage(
       coin,
-      market,
       chartData,
       {
         maxStalenessHours,

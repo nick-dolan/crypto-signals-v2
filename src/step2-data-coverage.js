@@ -46,22 +46,15 @@ async function runDataCoverageStep () {
   const candidates = getCandidateCoins(sourceUniverse)
   const nowTimestamp = Math.floor(Date.now() / 1000)
 
-  console.log(`✓ Loaded ${candidates.length} ranked Binance USDT perpetual candidates`)
-
-  await connectTradingView()
+  console.log(`✓ Loaded ${candidates.length} ranked candidates with preselected markets`)
 
   try {
     const report = await buildCompleteCryptoUniverse(
-      candidates,
-      async (coin, market) => {
+      sourceUniverse,
+      async (coin) => {
         const client = await connectTradingView()
 
-        return checkCoinDataCoverage(
-          client,
-          coin,
-          market,
-          { nowTimestamp },
-        )
+        return checkCoinDataCoverage(client, coin, { nowTimestamp })
       },
       {
         onProgress: logProgress,

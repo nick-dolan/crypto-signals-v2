@@ -2,19 +2,26 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { buildCompleteCryptoUniverse } from "../src/steps/step2-data-coverage/build-complete-crypto-universe.js"
 
+const DEFAULT_SELECTION = Object.freeze({
+  exchange: "BINANCE",
+  quoteSymbol: "USDT",
+  instrumentType: "swap",
+  typeSpecification: "perpetual",
+})
+
 function createMarket (
   baseCurrencyId,
   {
-    exchange = "BINANCE",
-    instrumentType = "swap",
-    quoteSymbol = "USDT",
-    symbol = `${baseCurrencyId}USDT.P`,
-    typeSpecifications = ["crypto", "perpetual"],
+    exchange = DEFAULT_SELECTION.exchange,
+    instrumentType = DEFAULT_SELECTION.instrumentType,
+    quoteSymbol = DEFAULT_SELECTION.quoteSymbol,
+    symbol = `${baseCurrencyId}${quoteSymbol}.P`,
+    typeSpecifications = ["crypto", DEFAULT_SELECTION.typeSpecification],
     volume24hUsd = 1_000_000,
   } = {},
 ) {
   return {
-    tradingViewSymbol: `BINANCE:${symbol}`,
+    tradingViewSymbol: `${exchange}:${symbol}`,
     symbol,
     baseSymbol: baseCurrencyId.replace("XTVC", ""),
     baseCurrencyId,
@@ -49,6 +56,20 @@ function createCoin (
   }
 }
 
+function createSourceUniverse (
+  coins,
+  {
+    selection = DEFAULT_SELECTION,
+    source = "tradingview",
+  } = {},
+) {
+  return {
+    source,
+    selection,
+    coins,
+  }
+}
+
 function createCoverageResult (complete, retryable = false) {
   return {
     complete,
@@ -72,10 +93,9 @@ test("complete universe checks attached markets by rank and stops at target", as
   ]
   const checkedIds = []
   const report = await buildCompleteCryptoUniverse(
-    candidates,
-    async (coin, market) => {
+    createSourceUniverse(candidates),
+    async (coin) => {
       checkedIds.push(coin.baseCurrencyId)
-      assert.equal(market, coin.market)
 
       return createCoverageResult(coin.baseCurrencyId !== "XTVCEDGED")
     },
@@ -94,19 +114,20 @@ test("complete universe checks attached markets by rank and stops at target", as
     report.rejected.map(coin => [coin.baseCurrencyId, coin.reasonCodes]),
     [["XTVCEDGED", ["premium:insufficient_values"]]],
   )
+  assert.deepEqual(report.selection, DEFAULT_SELECTION)
   assert.equal(report.targetReached, true)
   assert.equal(report.checkedCandidateCount, 3)
   assert.equal(report.uncheckedCandidateCount, 1)
   assert.equal(report.liveCheckedCount, 3)
-  assert.equal(report.marketMatchedCandidateCount, 4)
 })
 
 test("complete universe allows fewer coins than target and retries transient failures", async () => {
   let attempts = 0
   const report = await buildCompleteCryptoUniverse(
-    [createCoin(1)],
-    async () => {
+    createSourceUniverse([createCoin(1)]),
+    async (_coin, attempt) => {
       attempts += 1
+      assert.equal(attempt, attempts)
 
       if (attempts === 1) {
         throw new Error("Temporary WebSocket failure")
@@ -127,10 +148,10 @@ test("complete universe allows fewer coins than target and retries transient fai
   assert.equal(report.coins[0].attempts, 2)
 })
 
-test("complete universe requires a preselected Binance perpetual market", async () => {
+test("complete universe validates markets against selection from step 1", async () => {
   await assert.rejects(
     buildCompleteCryptoUniverse(
-      [createCoin(1, { market: null })],
+      createSourceUniverse([createCoin(1, { market: null })]),
       async () => createCoverageResult(true),
     ),
     /market is required/,
@@ -138,11 +159,44 @@ test("complete universe requires a preselected Binance perpetual market", async 
 
   await assert.rejects(
     buildCompleteCryptoUniverse(
-      [createCoin(1, {
-        market: createMarket("XTVC1", { exchange: "BYBIT" }),
-      })],
+      createSourceUniverse([
+        createCoin(1, {
+          market: createMarket("XTVC1", { exchange: "BYBIT" }),
+        }),
+      ]),
       async () => createCoverageResult(true),
     ),
-    /must be a Binance USDT perpetual/,
+    /does not match crypto universe selection/,
   )
+})
+
+test("complete universe does not hardcode the market selection", async () => {
+  const selection = {
+    exchange: "EXAMPLE",
+    quoteSymbol: "USD",
+    instrumentType: "futures",
+    typeSpecification: "quarterly",
+  }
+  const market = createMarket("XTVC1", {
+    exchange: selection.exchange,
+    instrumentType: selection.instrumentType,
+    quoteSymbol: selection.quoteSymbol,
+    symbol: "COIN1USDZ26",
+    typeSpecifications: ["crypto", selection.typeSpecification],
+  })
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse(
+      [createCoin(1, { market })],
+      { selection, source: "fixture" },
+    ),
+    async () => createCoverageResult(true),
+    {
+      generatedAt: "2026-08-29T12:00:00Z",
+      targetCount: 1,
+    },
+  )
+
+  assert.equal(report.source, "fixture")
+  assert.deepEqual(report.selection, selection)
+  assert.equal(report.coinCount, 1)
 })

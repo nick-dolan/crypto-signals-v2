@@ -5,6 +5,13 @@ import { createCoverageStudyRequests } from "../src/steps/step2-data-coverage/co
 
 const LATEST_TIME = 1_800_000_000
 
+function createMarket () {
+  return {
+    baseCurrencyId: "XTVCBTC",
+    tradingViewSymbol: "BINANCE:BTCUSDT.P",
+  }
+}
+
 function createCoin () {
   return {
     rank: 1,
@@ -16,13 +23,7 @@ function createCoin () {
     circulatingSupply: 20_000_000,
     marketCap: 1_500_000_000_000,
     fullyDilutedValuation: 1_575_000_000_000,
-  }
-}
-
-function createMarket () {
-  return {
-    baseCurrencyId: "XTVCBTC",
-    tradingViewSymbol: "BINANCE:BTCUSDT.P",
+    market: createMarket(),
   }
 }
 
@@ -89,16 +90,16 @@ function createChartData ({
   }
 }
 
-function evaluate (chartData, coin = createCoin()) {
+function evaluate (chartData, coin = createCoin(), options = {}) {
   return evaluateCoinCoverage(
     coin,
-    createMarket(),
     chartData,
     {
       maxStalenessHours: 2,
       minDenseValues: 2,
       nowTimestamp: LATEST_TIME,
       probeHours: 4,
+      ...options,
     },
   )
 }
@@ -109,6 +110,7 @@ test("coverage accepts all required studies and numeric zero values", () => {
   assert.equal(result.complete, true)
   assert.equal(result.retryable, false)
   assert.deepEqual(result.reasonCodes, [])
+  assert.equal(result.coverage.ohlcv.latestCompleteTime, LATEST_TIME)
   assert.equal(result.coverage.studies.liquidations.availablePeriodCount, 1)
   assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 4)
 })
@@ -130,6 +132,98 @@ test("coverage rejects Liquidations with no numeric events in the window", () =>
   assert.ok(result.reasonCodes.includes("liquidations:no_values"))
 })
 
+test("coverage requires numeric values for both Liquidations sides", () => {
+  const chartData = createChartData()
+  const periods = chartData.studies.liquidations.value.periods
+
+  for (const period of periods) {
+    period.short = null
+  }
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, false)
+  assert.equal(result.coverage.studies.liquidations.fieldValueCounts.long, 1)
+  assert.equal(result.coverage.studies.liquidations.fieldValueCounts.short, 0)
+  assert.ok(result.reasonCodes.includes("liquidations:no_values"))
+})
+
+test("coverage uses the latest complete OHLCV period for freshness", () => {
+  const chartData = createChartData()
+
+  chartData.chart.periods = createPeriods(6, index => (
+    index < 3
+      ? {
+          open: 1,
+          max: 2,
+          min: 0.5,
+          close: 1.5,
+          volume: 0,
+        }
+      : {
+          open: null,
+          max: null,
+          min: null,
+          close: null,
+          volume: null,
+        }
+  ))
+
+  const result = evaluate(chartData, createCoin(), {
+    minDenseValues: 2,
+    probeHours: 6,
+  })
+
+  assert.equal(result.coverage.ohlcv.completePeriodCount, 3)
+  assert.equal(
+    result.coverage.ohlcv.latestCompleteTime,
+    LATEST_TIME - 3 * 3_600,
+  )
+  assert.ok(result.reasonCodes.includes("ohlcv:stale"))
+})
+
+test("coverage checks dense study freshness for every field", () => {
+  const chartData = createChartData()
+  const periods = chartData.studies.premium.value.periods
+
+  periods[2].close = null
+  periods[3].close = null
+
+  const result = evaluate(chartData, createCoin(), {
+    maxStalenessHours: 1,
+  })
+
+  assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 2)
+  assert.equal(
+    result.reasonCodes.includes("premium:insufficient_values"),
+    false,
+  )
+  assert.ok(result.reasonCodes.includes("premium:stale"))
+})
+
+test("coverage measures study freshness from the current time", () => {
+  const chartData = createChartData()
+
+  for (const period of chartData.chart.periods) {
+    period.time -= 24 * 3_600
+  }
+
+  for (const period of chartData.studies.premium.value.periods) {
+    period.time -= 47 * 3_600
+  }
+
+  const result = evaluate(chartData, createCoin(), {
+    maxStalenessHours: 24,
+    probeHours: 72,
+  })
+
+  assert.equal(
+    result.reasonCodes.includes("ohlcv:stale"),
+    false,
+  )
+  assert.ok(result.reasonCodes.includes("premium:stale"))
+})
+
 test("coverage marks a failed Active Contributors request as retryable", () => {
   const result = evaluate(createChartData({
     rejectedStudyKey: "activeContributors",
@@ -147,6 +241,23 @@ test("coverage rejects a chart whose live baseCurrencyId differs", () => {
 
   assert.equal(result.complete, false)
   assert.ok(result.reasonCodes.includes("chart:identity_mismatch"))
+})
+
+test("coverage accepts missing optional chart identity when the exact symbol matches", () => {
+  const result = evaluate(createChartData({ chartBaseCurrencyId: null }))
+
+  assert.equal(result.complete, true)
+  assert.equal(result.reasonCodes.includes("chart:identity_mismatch"), false)
+})
+
+test("coverage requires the loaded chart symbol", () => {
+  const chartData = createChartData()
+  chartData.chart.info.fullName = null
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, false)
+  assert.ok(result.reasonCodes.includes("chart:symbol_missing"))
 })
 
 test("coverage allows empty categories but rejects missing required metadata", () => {
