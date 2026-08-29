@@ -2,15 +2,11 @@ import {
   DATA_COVERAGE_MAX_STALENESS_HOURS,
   DATA_COVERAGE_MIN_DENSE_VALUES,
   DATA_COVERAGE_PROBE_HOURS,
+  DATA_COVERAGE_REQUIRED_METADATA,
 } from "./config.js"
 import { REQUIRED_STUDY_KEYS, SPARSE_STUDY_KEYS } from "./coverage-study-definitions.js"
 
 const HOUR_SECONDS = 60 * 60
-const REQUIRED_METADATA = Object.freeze([
-  ["circulatingSupply", "circulating supply"],
-  ["marketCap", "market cap"],
-  ["fullyDilutedValuation", "fully diluted valuation"],
-])
 
 function getErrorMessage (error) {
   return error instanceof Error ? error.message : String(error)
@@ -125,7 +121,7 @@ function createResultBuilder () {
 }
 
 function evaluateMetadata (coin, result) {
-  for (const [field, label] of REQUIRED_METADATA) {
+  for (const { field, label } of DATA_COVERAGE_REQUIRED_METADATA) {
     if (!Number.isFinite(coin[field]) || coin[field] <= 0) {
       result.add(
         `metadata:${field}_missing`,
