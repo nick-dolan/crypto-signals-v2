@@ -16,11 +16,30 @@ import {
   validateUniqueUniverseCandidates,
 } from "./crypto-universe-helpers.js"
 
+function normalizeCoverageExcludedBaseCurrencyIds (value) {
+  if (!Array.isArray(value) && !(value instanceof Set)) {
+    throw new Error("coverageExcludedBaseCurrencyIds must be an array or Set")
+  }
+
+  const normalized = new Set()
+
+  for (const baseCurrencyId of value) {
+    if (typeof baseCurrencyId !== "string" || !baseCurrencyId.trim()) {
+      throw new Error("coverageExcludedBaseCurrencyIds must contain strings")
+    }
+
+    normalized.add(baseCurrencyId.trim())
+  }
+
+  return normalized
+}
+
 export function buildCryptoUniverse (
   candidates,
   markets,
   {
     candidateRankMax = CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
+    coverageExcludedBaseCurrencyIds = [],
     generatedAt = new Date().toISOString(),
     targetCount = CRYPTO_UNIVERSE_TARGET_COUNT,
   } = {},
@@ -42,17 +61,26 @@ export function buildCryptoUniverse (
 
   validateUniqueUniverseCandidates(normalizedCandidates)
 
+  const excludedBaseCurrencyIds = normalizeCoverageExcludedBaseCurrencyIds(
+    coverageExcludedBaseCurrencyIds,
+  )
   const orderedCandidates = normalizedCandidates.sort(
     (first, second) => first.rank - second.rank,
   )
   const selectedMarkets = selectUniverseMarketsByBaseCurrencyId(markets)
   const eligibleCandidates = []
   let excludedStablecoinCount = 0
+  let excludedCoverageCount = 0
   let excludedMissingMarketCount = 0
 
   for (const candidate of orderedCandidates) {
     if (isStablecoin(candidate)) {
       excludedStablecoinCount += 1
+      continue
+    }
+
+    if (excludedBaseCurrencyIds.has(candidate.baseCurrencyId)) {
+      excludedCoverageCount += 1
       continue
     }
 
@@ -89,6 +117,7 @@ export function buildCryptoUniverse (
     marketMatchedCandidateCount: eligibleCandidates.length,
     coinCount: coins.length,
     excludedStablecoinCount,
+    excludedCoverageCount,
     excludedMissingMarketCount,
     unselectedEligibleCount: eligibleCandidates.length - coins.length,
     coins,

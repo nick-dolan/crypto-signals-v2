@@ -143,6 +143,7 @@ function createFailedCheckResult (error) {
     retryable: true,
     reasonCodes: ["coverage:request_failed"],
     reasons: [`Coverage request failed: ${message}`],
+    unavailableMetrics: [],
     coverage: null,
   }
 }
@@ -154,6 +155,7 @@ export async function checkWithRetry (
   onProgress,
 ) {
   let result
+  let previousUnavailableMetrics = new Set()
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -162,12 +164,27 @@ export async function checkWithRetry (
       result = createFailedCheckResult(error)
     }
 
+    const unavailableMetrics = new Set(
+      Array.isArray(result?.unavailableMetrics)
+        ? result.unavailableMetrics
+        : [],
+    )
+    const confirmedUnavailableMetrics = [...unavailableMetrics]
+      .filter(metric => previousUnavailableMetrics.has(metric))
+
+    result = {
+      ...result,
+      confirmedUnavailableMetrics,
+    }
+
     if (result?.complete || !result?.retryable || attempt === maxAttempts) {
       return {
         attempts: attempt,
         result,
       }
     }
+
+    previousUnavailableMetrics = unavailableMetrics
 
     onProgress({
       status: "retrying",
@@ -207,6 +224,12 @@ export function createCoverageRejection (coin, attempts, result) {
     reasons: Array.isArray(result?.reasons)
       ? [...result.reasons]
       : ["Coverage check returned an invalid result"],
+    unavailableMetrics: Array.isArray(result?.unavailableMetrics)
+      ? [...result.unavailableMetrics]
+      : [],
+    confirmedUnavailableMetrics: Array.isArray(result?.confirmedUnavailableMetrics)
+      ? [...result.confirmedUnavailableMetrics]
+      : [],
     coverage: result?.coverage ?? null,
   }
 }
@@ -239,6 +262,14 @@ function getLatestTime (periods) {
   return times.length === 0 ? null : Math.max(...times)
 }
 
+function getEarliestTime (periods) {
+  const times = periods
+    .map(period => period?.time)
+    .filter(Number.isFinite)
+
+  return times.length === 0 ? null : Math.min(...times)
+}
+
 function getRecentPeriods (periods, referenceTime, probeHours) {
   if (!Number.isFinite(referenceTime)) {
     return []
@@ -269,6 +300,7 @@ export function summarizeChartCoverage (periods, referenceTime, probeHours) {
 
   return {
     latestTime,
+    earliestCompleteTime: getEarliestTime(completePeriods),
     latestCompleteTime: getLatestTime(completePeriods),
     recentPeriodCount: recentPeriods.length,
     completePeriodCount: completePeriods.length,
@@ -289,6 +321,10 @@ function summarizeStudyCoverage (study, referenceTime, probeHours) {
     field,
     periodsByField[field].length,
   ]))
+  const fieldEarliestValueTimes = Object.fromEntries(fields.map(field => [
+    field,
+    getEarliestTime(periodsByField[field]),
+  ]))
   const fieldLatestValueTimes = Object.fromEntries(fields.map(field => [
     field,
     getLatestTime(periodsByField[field]),
@@ -302,11 +338,109 @@ function summarizeStudyCoverage (study, referenceTime, probeHours) {
     recentPeriodCount: recentPeriods.length,
     availablePeriodCount: availablePeriods.length,
     fieldValueCounts,
+    fieldEarliestValueTimes,
     fieldLatestValueTimes,
     latestValueTime: getLatestTime(availablePeriods),
     sourcePeriodCount: Number.isSafeInteger(study?.coverage?.sourcePeriodCount)
       ? study.coverage.sourcePeriodCount
       : periods.length,
+  }
+}
+
+function validateHistoryRatio (value) {
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    throw new Error("historyMinRatio must be greater than 0 and at most 1")
+  }
+}
+
+export function getMinimumHistoryValues (historyHours, historyMinRatio) {
+  validatePositiveInteger(historyHours, "historyHours")
+  validateHistoryRatio(historyMinRatio)
+
+  return Math.ceil(historyHours * historyMinRatio)
+}
+
+function isHistoryStartAvailable (earliestTime, nowTimestamp, historyHours) {
+  const oldestRequiredTime = nowTimestamp - hoursToSeconds(historyHours - 1)
+
+  return Number.isFinite(earliestTime)
+    && earliestTime <= oldestRequiredTime + hoursToSeconds(1)
+}
+
+export function hasSufficientChartHistory (
+  coverage,
+  {
+    historyHours,
+    historyMinRatio,
+    nowTimestamp,
+  },
+) {
+  const minimumValues = getMinimumHistoryValues(historyHours, historyMinRatio)
+
+  return coverage.completePeriodCount >= minimumValues
+    && isHistoryStartAvailable(
+      coverage.earliestCompleteTime,
+      nowTimestamp,
+      historyHours,
+    )
+}
+
+export function evaluateChartHistory (
+  coverage,
+  result,
+  options,
+) {
+  const minimumValues = getMinimumHistoryValues(
+    options.historyHours,
+    options.historyMinRatio,
+  )
+  const complete = hasSufficientChartHistory(coverage, options)
+
+  if (!complete) {
+    result.add(
+      "ohlcv:insufficient_history",
+      `OHLCV history has ${coverage.completePeriodCount}/${minimumValues} required values and starts at ${coverage.earliestCompleteTime ?? "missing"}`,
+    )
+  }
+
+  return {
+    ...coverage,
+    requiredHours: options.historyHours,
+    minimumValues,
+    complete,
+  }
+}
+
+function evaluateStudyHistory (key, summary, result, options) {
+  const minimumValues = getMinimumHistoryValues(
+    options.historyHours,
+    options.historyMinRatio,
+  )
+  const insufficientFields = summary.fields.filter(field => (
+    summary.fieldValueCounts[field] < minimumValues
+    || !isHistoryStartAvailable(
+      summary.fieldEarliestValueTimes[field],
+      options.nowTimestamp,
+      options.historyHours,
+    )
+  ))
+
+  if (insufficientFields.length > 0) {
+    const details = insufficientFields.map(field => (
+      `${field}=${summary.fieldValueCounts[field]}, oldest=${summary.fieldEarliestValueTimes[field] ?? "missing"}`
+    ))
+
+    result.add(
+      `${key}:insufficient_history`,
+      `${key} has insufficient history: ${details.join(", ")}`,
+    )
+  }
+
+  return {
+    ...summary,
+    requiredHours: options.historyHours,
+    minimumValues,
+    complete: insufficientFields.length === 0,
   }
 }
 
@@ -454,7 +588,18 @@ export function evaluateStudy (
     options.nowTimestamp,
     options.probeHours,
   )
+  const availability = summarizeStudyCoverage(
+    settledStudy.value,
+    options.nowTimestamp,
+    options.fetchHours,
+  )
   const isSparse = options.sparseStudyKeys.has(key)
+  const isUnavailable = !isSparse
+    && options.canClassifyUnavailable
+    && availability.fields.length > 0
+    && Object.values(availability.fieldValueCounts).every(count => count === 0)
+  const requiredHistoryHours = options.historyRequirements[key]
+  let history
 
   if (summary.fields.length === 0) {
     result.add(
@@ -499,10 +644,41 @@ export function evaluateStudy (
         `${key} has stale fields: ${staleFields.join(", ")}`,
       )
     }
+
+    if (requiredHistoryHours) {
+      history = evaluateStudyHistory(
+        key,
+        summarizeStudyCoverage(
+          settledStudy.value,
+          options.nowTimestamp,
+          requiredHistoryHours,
+        ),
+        result,
+        {
+          historyHours: requiredHistoryHours,
+          historyMinRatio: options.historyMinRatio,
+          nowTimestamp: options.nowTimestamp,
+        },
+      )
+    }
+
+    if (isUnavailable) {
+      result.add(
+        `${key}:unavailable`,
+        `${key} has no numeric values in ${options.fetchHours} requested hours`,
+        { canRetry: true },
+      )
+    }
   }
 
   return {
     status: "fulfilled",
     ...summary,
+    availability: {
+      ...availability,
+      checkedHours: options.fetchHours,
+    },
+    ...(history ? { history } : {}),
+    unavailable: isUnavailable,
   }
 }

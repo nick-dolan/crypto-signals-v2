@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createCoinDataCoverageChecker } from "../src/steps/step2-data-coverage/check-coin-data-coverage.js"
+import { createCoinDataCoverageChecker } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
 
-test("coverage checker uses the market attached by step 1 and fixed hourly timeframe", async () => {
+test("coverage checker fetches 100 days from the market attached by step 1", async () => {
   const expectedError = new Error("Stop after capturing the request")
   let capturedClient
   let capturedOptions
@@ -36,7 +36,7 @@ test("coverage checker uses the market attached by step 1 and fixed hourly timef
   assert.equal(capturedClient, client)
   assert.equal(capturedOptions.symbol, coin.market.tradingViewSymbol)
   assert.equal(capturedOptions.timeframe, "60")
-  assert.equal(capturedOptions.range, 24)
+  assert.equal(capturedOptions.range, 2_400)
   assert.equal(capturedOptions.settleDelayMs, 10)
   assert.equal(capturedOptions.studySettleDelayMs, 20)
   assert.equal(capturedOptions.timeoutMs, 30)

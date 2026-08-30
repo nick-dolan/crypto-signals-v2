@@ -62,6 +62,7 @@ export async function buildCompleteCryptoUniverse (
         market: toPublicMarket(coin.market),
         attempts,
         coverage: result.coverage,
+        ...(result.hourlyData ? { hourlyData: result.hourlyData } : {}),
       }
       coins.push(accepted)
       onProgress({

@@ -3,8 +3,8 @@ import test from "node:test"
 import {
   DATA_COVERAGE_REQUIRED_STUDY_KEYS,
   DATA_COVERAGE_SPARSE_STUDIES,
-} from "../src/steps/step2-data-coverage/config.js"
-import { createCoverageStudyRequests } from "../src/steps/step2-data-coverage/coverage-study-definitions.js"
+} from "../src/steps/step2-data-bootstrap/config.js"
+import { createCoverageStudyRequests } from "../src/steps/step2-data-bootstrap/coverage-study-definitions.js"
 
 test("coverage requests contain every approved study in collection order", () => {
   const requests = createCoverageStudyRequests("CRYPTO:PEPEUSD")

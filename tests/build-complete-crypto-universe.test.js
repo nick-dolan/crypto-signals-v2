@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildCompleteCryptoUniverse } from "../src/steps/step2-data-coverage/build-complete-crypto-universe.js"
+import { buildCompleteCryptoUniverse } from "../src/steps/step2-data-bootstrap/build-complete-crypto-universe.js"
 
 const DEFAULT_SELECTION = Object.freeze({
   exchange: "BINANCE",
@@ -70,17 +70,26 @@ function createSourceUniverse (
   }
 }
 
-function createCoverageResult (complete, retryable = false) {
+function createCoverageResult (
+  complete,
+  retryable = false,
+  {
+    hourlyData,
+    unavailableMetrics = [],
+  } = {},
+) {
   return {
     complete,
     retryable,
     reasonCodes: complete ? [] : ["premium:insufficient_values"],
     reasons: complete ? [] : ["Premium is unavailable"],
+    unavailableMetrics,
     coverage: {
       ohlcv: {
         completePeriodCount: 168,
       },
     },
+    ...(hourlyData ? { hourlyData } : {}),
   }
 }
 
@@ -146,6 +155,64 @@ test("complete universe allows fewer coins than target and retries transient fai
   assert.equal(report.targetReached, false)
   assert.equal(report.uncheckedCandidateCount, 0)
   assert.equal(report.coins[0].attempts, 2)
+})
+
+test("complete universe keeps downloaded history for accepted coins", async () => {
+  const hourlyData = {
+    timeframe: "1h",
+    requestedHours: 2_400,
+    chart: { periods: [{ time: 1, close: 1 }] },
+    studies: {},
+  }
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse([createCoin(1)]),
+    async () => createCoverageResult(true, false, { hourlyData }),
+    { targetCount: 1 },
+  )
+
+  assert.equal(report.coins[0].hourlyData, hourlyData)
+})
+
+test("complete universe confirms unavailable metrics with a second attempt", async () => {
+  let attempts = 0
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse([createCoin(1)]),
+    async () => {
+      attempts += 1
+
+      return createCoverageResult(false, true, {
+        unavailableMetrics: ["premium"],
+      })
+    },
+    { targetCount: 1 },
+  )
+
+  assert.equal(attempts, 2)
+  assert.equal(report.rejected[0].attempts, 2)
+  assert.deepEqual(report.rejected[0].unavailableMetrics, ["premium"])
+  assert.deepEqual(report.rejected[0].confirmedUnavailableMetrics, ["premium"])
+})
+
+test("complete universe does not confirm absence after a failed first request", async () => {
+  let attempts = 0
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse([createCoin(1)]),
+    async () => {
+      attempts += 1
+
+      if (attempts === 1) {
+        throw new Error("Temporary WebSocket failure")
+      }
+
+      return createCoverageResult(false, true, {
+        unavailableMetrics: ["premium"],
+      })
+    },
+    { targetCount: 1 },
+  )
+
+  assert.deepEqual(report.rejected[0].unavailableMetrics, ["premium"])
+  assert.deepEqual(report.rejected[0].confirmedUnavailableMetrics, [])
 })
 
 test("complete universe validates markets against selection from step 1", async () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { evaluateCoinCoverage } from "../src/steps/step2-data-coverage/evaluate-coin-coverage.js"
-import { createCoverageStudyRequests } from "../src/steps/step2-data-coverage/coverage-study-definitions.js"
+import { evaluateCoinCoverage } from "../src/steps/step2-data-bootstrap/evaluate-coin-coverage.js"
+import { createCoverageStudyRequests } from "../src/steps/step2-data-bootstrap/coverage-study-definitions.js"
 
 const LATEST_TIME = 1_800_000_000
 
@@ -37,6 +37,7 @@ function createPeriods (count, createValues) {
 function createChartData ({
   chartBaseCurrencyId = "XTVCBTC",
   emptyStudyKey,
+  periodCount = 4,
   rejectedStudyKey,
 } = {}) {
   const requests = createCoverageStudyRequests("CRYPTO:BTCUSD")
@@ -49,12 +50,12 @@ function createChartData ({
     }
 
     const fields = Object.keys(request.fields)
-    const periods = createPeriods(4, index => Object.fromEntries(
+    const periods = createPeriods(periodCount, index => Object.fromEntries(
       fields.map(field => [
         field,
         request.key === emptyStudyKey
           ? null
-          : request.key === "liquidations" && index < 3
+          : request.key === "liquidations" && index < periodCount - 1
             ? null
             : 0,
       ]),
@@ -78,7 +79,7 @@ function createChartData ({
         fullName: "BINANCE:BTCUSDT.P",
         baseCurrencyId: chartBaseCurrencyId,
       },
-      periods: createPeriods(4, () => ({
+      periods: createPeriods(periodCount, () => ({
         open: 1,
         max: 2,
         min: 0.5,
@@ -95,10 +96,13 @@ function evaluate (chartData, coin = createCoin(), options = {}) {
     coin,
     chartData,
     {
+      fetchHours: 100,
+      historyRequirements: {},
       maxStalenessHours: 2,
       minDenseValues: 2,
       nowTimestamp: LATEST_TIME,
       probeHours: 4,
+      unavailableHistoryHours: 100,
       ...options,
     },
   )
@@ -115,13 +119,72 @@ test("coverage accepts all required studies and numeric zero values", () => {
   assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 4)
 })
 
+test("coverage accepts sufficient calculation history", () => {
+  const result = evaluate(createChartData({ periodCount: 10 }), createCoin(), {
+    fetchHours: 10,
+    historyMinRatio: 0.5,
+    historyRequirements: {
+      ohlcv: 8,
+      premium: 8,
+    },
+    nowTimestamp: LATEST_TIME + 1_800,
+    unavailableHistoryHours: 8,
+  })
+
+  assert.equal(result.complete, true)
+  assert.equal(result.coverage.ohlcv.history.complete, true)
+  assert.equal(result.coverage.studies.premium.history.complete, true)
+})
+
 test("coverage rejects Premium with no numeric values", () => {
   const result = evaluate(createChartData({ emptyStudyKey: "premium" }))
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, false)
+  assert.deepEqual(result.unavailableMetrics, [])
   assert.ok(result.reasonCodes.includes("premium:insufficient_values"))
   assert.ok(result.reasonCodes.includes("premium:stale"))
+})
+
+test("coverage marks a completely absent dense metric as unavailable for a mature coin", () => {
+  const result = evaluate(createChartData({
+    emptyStudyKey: "premium",
+    periodCount: 10,
+  }), createCoin(), {
+    fetchHours: 10,
+    historyMinRatio: 0.5,
+    unavailableHistoryHours: 8,
+  })
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, ["premium"])
+  assert.ok(result.reasonCodes.includes("premium:unavailable"))
+})
+
+test("coverage does not permanently exclude a metric with some history", () => {
+  const chartData = createChartData({
+    emptyStudyKey: "premium",
+    periodCount: 10,
+  })
+  const premium = chartData.studies.premium.value
+
+  for (const field of Object.keys(premium.fields)) {
+    premium.periods.at(-1)[field] = 0
+  }
+
+  const result = evaluate(chartData, createCoin(), {
+    fetchHours: 10,
+    historyMinRatio: 0.5,
+    historyRequirements: { premium: 8 },
+    unavailableHistoryHours: 8,
+  })
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, false)
+  assert.deepEqual(result.unavailableMetrics, [])
+  assert.ok(result.reasonCodes.includes("premium:insufficient_history"))
+  assert.equal(result.coverage.studies.premium.history.complete, false)
 })
 
 test("coverage rejects Liquidations with no numeric events in the window", () => {

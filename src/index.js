@@ -3,7 +3,7 @@ import { resetTmpDirectory } from "./helpers/fs-helper.js"
 
 const computationalSteps = [
   "step1-crypto-universe.js",
-  "step2-data-coverage.js",
+  "step2-data-bootstrap.js",
 ]
 
 function runStep (scriptPath) {

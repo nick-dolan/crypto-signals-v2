@@ -107,6 +107,7 @@ test("crypto universe keeps ranked non-stable coins with Binance perpetual marke
   assert.equal(universe.candidateCount, 5)
   assert.equal(universe.marketMatchedCandidateCount, 3)
   assert.equal(universe.excludedStablecoinCount, 1)
+  assert.equal(universe.excludedCoverageCount, 0)
   assert.equal(universe.excludedMissingMarketCount, 1)
   assert.equal(universe.unselectedEligibleCount, 0)
   assert.deepEqual(universe.coins.map(coin => coin.rank), [1, 3, 4])
@@ -122,6 +123,21 @@ test("crypto universe keeps ranked non-stable coins with Binance perpetual marke
     instrumentType: "swap",
     typeSpecifications: ["crypto", "perpetual"],
   })
+})
+
+test("crypto universe filters active coverage exclusions before filling its target", () => {
+  const universe = buildCryptoUniverse(
+    [1, 2, 3, 4].map(rank => createCandidate(rank)),
+    [1, 2, 3, 4].map(rank => createMarket(rank)),
+    {
+      candidateRankMax: 4,
+      coverageExcludedBaseCurrencyIds: new Set(["asset-2"]),
+      targetCount: 3,
+    },
+  )
+
+  assert.equal(universe.excludedCoverageCount, 1)
+  assert.deepEqual(universe.coins.map(coin => coin.rank), [1, 3, 4])
 })
 
 test("market selection keeps the most liquid matching perpetual per identity", () => {
