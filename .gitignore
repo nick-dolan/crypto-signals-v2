@@ -28,4 +28,4 @@ output/
 
 .pnpm-store
 
-.data/coverage-exclusions.json
+data/coverage-exclusions.json
