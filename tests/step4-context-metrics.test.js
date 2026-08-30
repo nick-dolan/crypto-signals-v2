@@ -29,8 +29,8 @@ function createMarketContext (times) {
   }
 }
 
-function categoryClose (valueAt8, valueAt12) {
-  const close = Array(13).fill(100)
+function categoryClose (valueAt8, valueAt12, length) {
+  const close = Array(length).fill(100)
   close[8] = valueAt8
   close[12] = valueAt12
   return close
@@ -42,49 +42,50 @@ function createBaseCoins (times) {
       coin: { baseCurrencyId: "TARGET", symbol: "TARGET" },
       categories: ["Zulu", "Alpha"],
       times,
-      close: categoryClose(100, 200),
+      close: categoryClose(100, 200, times.length),
     },
     {
       coin: { baseCurrencyId: "PEER1", symbol: "PEER1" },
       categories: ["Zulu", "Alpha"],
       times,
-      close: categoryClose(101, 103),
+      close: categoryClose(101, 103, times.length),
     },
     {
       coin: { baseCurrencyId: "PEER2", symbol: "PEER2" },
       categories: ["Zulu", "Alpha"],
       times,
-      close: categoryClose(102, 106),
+      close: categoryClose(102, 106, times.length),
     },
     {
       coin: { baseCurrencyId: "PEER3", symbol: "PEER3" },
       categories: ["Zulu", "Alpha"],
       times,
-      close: categoryClose(103, 102),
+      close: categoryClose(103, 102, times.length),
     },
     {
       coin: { baseCurrencyId: "XTVCBTC", symbol: "BTC" },
       categories: [],
       times,
-      close: Array(13).fill(100),
+      close: Array(times.length).fill(100),
     },
   ]
 }
 
-test("buildUniverseContext calculates segment rotation and leave-one-out breadth", () => {
-  const times = Array.from({ length: 13 }, (_, index) => index * 3_600)
+test("buildUniverseContext calculates shared market and category context", () => {
+  const times = Array.from({ length: 25 }, (_, index) => index * 3_600)
   const context = buildUniverseContext(
     createBaseCoins(times),
     createMarketContext(times),
   )
 
   assert.deepEqual(context.times, times)
-  assert.deepEqual(context.btcClose, Array(13).fill(100))
-  assert.deepEqual(context.total3esClose, Array(13).fill(300))
+  assert.deepEqual(context.btcClose, Array(25).fill(100))
+  assert.deepEqual(context.total3esClose, Array(25).fill(300))
   assert.deepEqual(
-    context.stableCap,
-    Array.from({ length: 13 }, (_, index) => 100 + index),
+    context.stablecapChange24h.slice(0, 24),
+    Array(24).fill(null),
   )
+  assertClose(context.stablecapChange24h[24], 0.24)
   assert.deepEqual(context.segmentRotation4h.slice(0, 4), Array(4).fill(null))
   assertClose(context.segmentRotation4h[4].btc, -0.004)
   assertClose(context.segmentRotation4h[4].eth, 0)
@@ -110,9 +111,9 @@ test("buildUniverseContext calculates segment rotation and leave-one-out breadth
     applicable: false,
     status: "not_applicable",
     category: null,
-    momentum4h: Array(13).fill(null),
-    breadth: Array(13).fill(null),
-    coinLeadsCategory: Array(13).fill(null),
+    momentum4h: Array(25).fill(null),
+    breadth: Array(25).fill(null),
+    coinLeadsCategory: Array(25).fill(null),
   })
 })
 
@@ -145,37 +146,22 @@ test("buildUniverseContext rejects grids that are not identical and hourly", () 
   )
 })
 
-test("calculateBreadthNarrativeMetrics exposes aligned context series", () => {
-  const universeBreadth4h = Array(25).fill(0.6)
-  const segmentRotation4h = Array(25).fill(null)
-  const stableCap = Array.from({ length: 25 }, (_, index) => 100 + index)
+test("calculateBreadthNarrativeMetrics keeps only coin category series", () => {
   const categoryContext = {
     momentum4h: Array(25).fill(0.02),
     breadth: Array(25).fill(0.75),
     coinLeadsCategory: Array(25).fill(-0.01),
   }
-  const metrics = calculateBreadthNarrativeMetrics({
-    universeBreadth4h,
-    segmentRotation4h,
-    stableCap,
-    categoryContext,
-  })
+  const metrics = calculateBreadthNarrativeMetrics({ categoryContext })
 
   assert.deepEqual(Object.keys(metrics), [
-    "breadth_pct_universe_up_4h",
-    "segment_rotation_4h",
     "category_momentum_4h",
     "category_breadth",
     "coin_leads_category",
-    "stablecap_change_24h",
   ])
-  assert.equal(metrics.breadth_pct_universe_up_4h, universeBreadth4h)
-  assert.equal(metrics.segment_rotation_4h, segmentRotation4h)
   assert.equal(metrics.category_momentum_4h, categoryContext.momentum4h)
   assert.equal(metrics.category_breadth, categoryContext.breadth)
   assert.equal(metrics.coin_leads_category, categoryContext.coinLeadsCategory)
-  assert.deepEqual(metrics.stablecap_change_24h.slice(0, 24), Array(24).fill(null))
-  assertClose(metrics.stablecap_change_24h[24], 0.24)
 })
 
 function closeFromLogReturns (returns, initial = 100) {

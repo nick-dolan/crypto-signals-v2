@@ -30,6 +30,11 @@ async function runFeatureMetricsStep () {
     asOf: new Date(universeContext.times.at(-1) * 1_000).toISOString(),
     source: "tradingview",
     timeframe: "1h",
+    marketContext: {
+      breadth: universeContext.universeBreadth4h.at(-1),
+      segmentRotation: universeContext.segmentRotation4h.at(-1),
+      stablecapChange: universeContext.stablecapChange24h.at(-1),
+    },
     coinCount: profiles.length,
     rejectedCoinCount: rejected.length,
     profiles,

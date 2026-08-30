@@ -217,7 +217,7 @@ export function buildUniverseContext (baseCoins, marketContext) {
     total3esClose,
     universeBreadth4h,
     segmentRotation4h,
-    stableCap,
+    stablecapChange24h: simpleReturns(stableCap, 24),
     categoryContextsByCoin,
   }
 }

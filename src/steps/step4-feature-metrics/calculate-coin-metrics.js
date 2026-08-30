@@ -29,12 +29,7 @@ export function calculateCoinMetrics (
     throw new Error(`${baseCurrencyId} is missing from the universe context`)
   }
 
-  const breadthNarrative = calculateBreadthNarrativeMetrics({
-    universeBreadth4h: universeContext.universeBreadth4h,
-    segmentRotation4h: universeContext.segmentRotation4h,
-    stableCap: universeContext.stableCap,
-    categoryContext,
-  })
+  const breadthNarrative = calculateBreadthNarrativeMetrics({ categoryContext })
   const divergences = calculateDivergenceFlags({
     close: coinSeries.close,
     btcClose: universeContext.btcClose,
