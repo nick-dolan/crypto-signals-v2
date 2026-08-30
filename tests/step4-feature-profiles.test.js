@@ -65,10 +65,10 @@ test("buildAlignedCoinSeries aligns the shorter Volume Delta history", () => {
   assert.deepEqual(series.topTradersShort, [-50, -49, -48])
 })
 
-test("buildBaseSeries joins accepted data with step 1 metadata and preserves rank", async () => {
+test("buildBaseSeries joins accepted data with step 1 metadata and preserves rank", () => {
   const hourlyData = createHourlyData()
   const input = {
-    coinDataFiles: ["step2-data-bootstrap/BTC/data.json"],
+    coinData: [hourlyData],
     sourceUniverse: {
       coins: [{
         rank: 1,
@@ -82,14 +82,13 @@ test("buildBaseSeries joins accepted data with step 1 metadata and preserves ran
       }],
     },
   }
-  const baseCoins = await buildBaseSeries(input, {
-    readCoinData: async () => hourlyData,
-  })
+  const baseCoins = buildBaseSeries(input)
 
   assert.equal(baseCoins.length, 1)
   assert.equal(baseCoins[0].coin.rank, 1)
   assert.deepEqual(baseCoins[0].categories, ["layer-1"])
   assert.deepEqual(baseCoins[0].close, [10, 11, 12])
+  assert.equal(baseCoins[0].hourlyData, hourlyData)
 })
 
 test("buildAlignedCoinSeries rejects a mismatched grid", () => {

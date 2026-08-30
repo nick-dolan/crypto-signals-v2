@@ -26,8 +26,7 @@ export async function readFeatureInput () {
 
   return {
     sourceUniverse,
-    bootstrapSummary,
     marketContext,
-    coinDataFiles,
+    coinData: await Promise.all(coinDataFiles.map(readTmpJson)),
   }
 }

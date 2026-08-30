@@ -1,4 +1,3 @@
-import { readTmpJson } from "../../helpers/fs-helper.js"
 import { buildAlignedCoinSeries } from "./build-base-series.js"
 import { calculateCoinMetrics } from "./calculate-coin-metrics.js"
 
@@ -100,20 +99,19 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
   }
 }
 
-export async function buildFeatureProfiles (
+export function buildFeatureProfiles (
   baseCoins,
   universeContext,
-  {
-    onProgress = () => {},
-    readCoinData = readTmpJson,
-  } = {},
+  { onProgress = () => {} } = {},
 ) {
   const profiles = []
   const rejected = []
 
   for (const [index, baseCoin] of baseCoins.entries()) {
-    const hourlyData = await readCoinData(baseCoin.dataFile)
-    const coinSeries = buildAlignedCoinSeries(hourlyData, universeContext.times)
+    const coinSeries = buildAlignedCoinSeries(
+      baseCoin.hourlyData,
+      universeContext.times,
+    )
     const calculated = calculateCoinMetrics(
       coinSeries,
       universeContext,

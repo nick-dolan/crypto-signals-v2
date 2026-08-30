@@ -1,5 +1,3 @@
-import { readTmpJson } from "../../helpers/fs-helper.js"
-
 function isHourlyGrid (times) {
   return times.length > 0 && times.every((time, index) => (
     Number.isFinite(time)
@@ -109,17 +107,12 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
   }
 }
 
-export async function buildBaseSeries (
-  { coinDataFiles, sourceUniverse },
-  { readCoinData = readTmpJson } = {},
-) {
+export function buildBaseSeries ({ coinData, sourceUniverse }) {
   const metadataById = new Map(
     sourceUniverse.coins.map(coin => [coin.baseCurrencyId, coin]),
   )
-  const baseCoins = []
 
-  for (const dataFile of coinDataFiles) {
-    const hourlyData = await readCoinData(dataFile)
+  return coinData.map((hourlyData) => {
     const chartPeriods = getChartPeriods(hourlyData)
     const metadata = metadataById.get(hourlyData?.coin?.baseCurrencyId)
 
@@ -133,8 +126,8 @@ export async function buildBaseSeries (
       throw new Error(`${metadata.symbol} market does not match step 1`)
     }
 
-    baseCoins.push({
-      dataFile,
+    return {
+      hourlyData,
       coin: {
         rank: metadata.rank,
         baseCurrencyId: metadata.baseCurrencyId,
@@ -147,8 +140,6 @@ export async function buildBaseSeries (
       metadata,
       times: chartPeriods.map(period => period.time),
       close: chartPeriods.map(period => period.close),
-    })
-  }
-
-  return baseCoins.sort((first, second) => first.coin.rank - second.coin.rank)
+    }
+  }).sort((first, second) => first.coin.rank - second.coin.rank)
 }
