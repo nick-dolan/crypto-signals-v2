@@ -27,3 +27,5 @@ output/
 .copilot-token.json
 
 .pnpm-store
+
+.data/coverage-exclusions.json
