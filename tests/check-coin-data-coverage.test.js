@@ -6,6 +6,7 @@ import {
   createBootstrapHourlyData,
   createCoinDataCoverageChecker,
 } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
+import { createCoverageStudyRequests } from "../src/steps/step2-data-bootstrap/coverage-study-definitions.js"
 
 test("coverage checker fetches 100 days from the market attached by step 1", async () => {
   const expectedError = new Error("Stop after capturing the request")
@@ -31,7 +32,7 @@ test("coverage checker fetches 100 days from the market attached by step 1", asy
   await assert.rejects(
     checker(client, coin, {
       chartSettleDelayMs: 10,
-      probeHours: 24,
+      nowTimestamp: 1_800_000_123,
       studySettleDelayMs: 20,
       timeoutMs: 30,
     }),
@@ -41,10 +42,11 @@ test("coverage checker fetches 100 days from the market attached by step 1", asy
   assert.equal(capturedClient, client)
   assert.equal(capturedOptions.symbol, coin.market.tradingViewSymbol)
   assert.equal(capturedOptions.timeframe, "60")
-  assert.equal(capturedOptions.range, 2_400)
+  assert.equal(capturedOptions.range, 2_401)
   assert.equal(capturedOptions.settleDelayMs, 10)
   assert.equal(capturedOptions.studySettleDelayMs, 20)
   assert.equal(capturedOptions.timeoutMs, 30)
+  assert.equal(capturedOptions.to, 1_800_000_123)
   assert.equal(capturedRequests.at(-1).inputs.in_0, coin.tradingViewSymbol)
 })
 
@@ -87,11 +89,17 @@ function createFetchedChartData () {
 
 function createCoin () {
   return {
+    rank: 1,
     baseCurrencyId: "XTVCBTC",
     symbol: "BTC",
     name: "Bitcoin",
     tradingViewSymbol: "CRYPTO:BTCUSD",
+    categories: [],
+    circulatingSupply: 20_000_000,
+    marketCap: 1_500_000_000_000,
+    fullyDilutedValuation: 1_575_000_000_000,
     market: {
+      baseCurrencyId: "XTVCBTC",
       tradingViewSymbol: "BINANCE:BTCUSDT.P",
     },
   }
@@ -121,7 +129,7 @@ test("bootstrap data keeps only closed hourly candles and metrics", () => {
   const hourlyData = createBootstrapHourlyData(
     chartData,
     createCoin(),
-    { fetchHours: 24, nowTimestamp },
+    { fetchHours: 1, nowTimestamp },
   )
 
   assert.deepEqual(
@@ -139,6 +147,143 @@ test("bootstrap data keeps only closed hourly candles and metrics", () => {
     partialPeriods: 0,
     missingPeriods: 0,
   })
+})
+
+test("bootstrap data keeps 2400-hour sources aligned with the shorter Volume Delta window", () => {
+  const nowTimestamp = 1_800_000_000
+  const chartData = createFetchedChartData()
+  const closedTimes = Array.from(
+    { length: 5 },
+    (_, index) => nowTimestamp - (5 - index) * 3_600,
+  )
+
+  chartData.chart.periods = closedTimes.map(time => ({
+    time,
+    open: 1,
+    max: 2,
+    min: 0.5,
+    close: 1.5,
+    volume: 10,
+  }))
+  chartData.studies.socialDominance.value.periods = closedTimes.map(time => ({
+    time,
+    percent: 1,
+  }))
+  chartData.studies.volumeDelta = {
+    status: "fulfilled",
+    value: {
+      request: { key: "volumeDelta" },
+      fields: { close: "plotcandle_0_ohlc_close" },
+      periods: closedTimes.map(time => ({ time, close: 0 })),
+      coverage: { sourcePeriodCount: closedTimes.length },
+    },
+  }
+
+  const hourlyData = createBootstrapHourlyData(
+    chartData,
+    createCoin(),
+    {
+      fetchHours: 4,
+      nowTimestamp,
+      volumeDeltaHours: 3,
+    },
+  )
+
+  assert.deepEqual(
+    hourlyData.chart.periods.map(period => period.time),
+    closedTimes.slice(-4),
+  )
+  assert.deepEqual(
+    hourlyData.studies.socialDominance.periods.map(period => period.time),
+    closedTimes.slice(-4),
+  )
+  assert.deepEqual(
+    hourlyData.studies.volumeDelta.periods.map(period => period.time),
+    closedTimes.slice(-3),
+  )
+})
+
+test("coverage checker validates and saves one anchored 2400/1668-hour snapshot", async () => {
+  const nowTimestamp = 1_800_000_123
+  const currentHour = Math.floor(nowTimestamp / 3_600) * 3_600
+  const latestClosedTime = currentHour - 3_600
+  const createPeriods = (hours, fields) => Array.from(
+    { length: hours },
+    (_, index) => ({
+      time: latestClosedTime - (hours - index - 1) * 3_600,
+      ...Object.fromEntries(fields.map(field => [field, 0])),
+    }),
+  )
+  const requests = createCoverageStudyRequests("CRYPTO:BTCUSD")
+  const chartData = {
+    chart: {
+      info: {
+        fullName: "BINANCE:BTCUSDT.P",
+        baseCurrencyId: "XTVCBTC",
+      },
+      periods: [
+        ...createPeriods(2_400, ["open", "max", "min", "close", "volume"]),
+        {
+          time: currentHour,
+          open: null,
+          max: null,
+          min: null,
+          close: null,
+          volume: null,
+        },
+      ],
+    },
+    studies: Object.fromEntries(requests.map((request) => {
+      const fields = Object.keys(request.fields)
+      const periods = createPeriods(
+        request.key === "volumeDelta" ? 1_668 : 2_400,
+        fields,
+      )
+
+      if (request.key !== "volumeDelta") {
+        periods.push({
+          time: currentHour,
+          ...Object.fromEntries(fields.map(field => [field, null])),
+        })
+      }
+
+      return [request.key, {
+        status: "fulfilled",
+        value: {
+          request,
+          fields: request.fields,
+          periods,
+          coverage: { sourcePeriodCount: periods.length },
+        },
+      }]
+    })),
+  }
+  let capturedOptions
+  let savedHourlyData
+  const checker = createCoinDataCoverageChecker({
+    fetchChartStudies: async (_client, _requests, options) => {
+      capturedOptions = options
+      return chartData
+    },
+    saveHourlyData: async (_coin, hourlyData) => {
+      savedHourlyData = hourlyData
+      return "tmp/step2-data-bootstrap/BTC--XTVCBTC/data.json"
+    },
+  })
+
+  const result = await checker({}, createCoin(), { nowTimestamp })
+
+  assert.equal(result.complete, true)
+  assert.equal(capturedOptions.range, 2_401)
+  assert.equal(capturedOptions.to, nowTimestamp)
+  assert.equal(savedHourlyData.chart.periods.length, 2_400)
+  assert.equal(savedHourlyData.studies.volumeDelta.periods.length, 1_668)
+  assert.equal(savedHourlyData.studies.openInterest.periods.length, 2_400)
+  assert.equal(savedHourlyData.chart.periods.at(-1).time, latestClosedTime)
+  assert.equal(
+    savedHourlyData.studies.openInterest.periods.at(-1).time,
+    latestClosedTime,
+  )
 })
 
 test("coverage checker saves one file only after accepting a coin", async () => {
@@ -190,8 +335,8 @@ test("coverage checker discards data for a rejected coin", async () => {
     evaluateCoverage: () => ({
       complete: false,
       retryable: false,
-      reasonCodes: ["ohlcv:insufficient_history"],
-      reasons: ["Insufficient history"],
+      reasonCodes: ["ohlcv:missing_hours"],
+      reasons: ["Missing hourly data"],
       unavailableMetrics: [],
       coverage: {},
     }),

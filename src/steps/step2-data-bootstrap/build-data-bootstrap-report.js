@@ -1,7 +1,6 @@
 import { connectTradingView, disconnectTradingView } from "../../api/tradingview/client.js"
 import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js"
 import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
-import { getMinimumHistoryValues } from "./data-coverage-helpers.js"
 
 function logProgress (event) {
   if (event.status === "retrying") {
@@ -23,34 +22,27 @@ function logProgress (event) {
   )
 }
 
-function describeHistoryRequirements () {
-  return Object.fromEntries(Object.entries({
-    ohlcv: 90 * 24,
-    volumeDelta: 30 * 24,
-    openInterest: 30 * 24,
-    fundingRate: 90 * 24,
-    premium: 30 * 24,
-    socialDominance: 30 * 24,
-    interactions: 30 * 24,
-    activeContributors: 30 * 24,
-    createdPosts: 30 * 24,
-  }).map(([key, hours]) => [key, {
-    hours,
-    minValues: getMinimumHistoryValues(hours, 120 / 168),
-  }]))
-}
-
 export function createDataBootstrapDescription () {
   return {
     timeframe: "1h",
-    requestedHours: 100 * 24,
+    requestedHours: 2_400,
+    requestRange: 2_401,
     dataDirectory: "tmp/step2-data-bootstrap",
-    recentCoverage: {
-      hours: 168,
-      minDenseValues: 120,
-      maxStalenessHours: 24,
+    requireCompleteHourlyGrid: true,
+    requiredHoursBySource: {
+      ohlcv: 2_400,
+      volumeDelta: 1_668,
+      openInterest: 2_400,
+      fundingRate: 2_400,
+      liquidations: 2_400,
+      longShortRatioAccounts: 2_400,
+      topTradersLongShortPositions: 2_400,
+      premium: 2_400,
+      socialDominance: 2_400,
+      interactions: 2_400,
+      activeContributors: 2_400,
+      createdPosts: 2_400,
     },
-    historyRequirements: describeHistoryRequirements(),
     unavailableMetricConfirmationAttempts: 2,
     requiredStudies: [
       "volumeDelta",

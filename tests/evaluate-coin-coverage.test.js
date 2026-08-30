@@ -3,8 +3,6 @@ import test from "node:test"
 import { evaluateCoinCoverage } from "../src/steps/step2-data-bootstrap/evaluate-coin-coverage.js"
 import { createCoverageStudyRequests } from "../src/steps/step2-data-bootstrap/coverage-study-definitions.js"
 
-const LATEST_TIME = 1_800_000_000
-
 function createMarket () {
   return {
     baseCurrencyId: "XTVCBTC",
@@ -27,9 +25,15 @@ function createCoin () {
   }
 }
 
-function createPeriods (count, createValues) {
-  return Array.from({ length: count }, (_, index) => ({
-    time: LATEST_TIME - (count - index - 1) * 3_600,
+function createPeriods (
+  hours,
+  createValues,
+  nowTimestamp = 1_800_000_000,
+) {
+  const latestClosedTime = Math.floor(nowTimestamp / 3_600) * 3_600 - 3_600
+
+  return Array.from({ length: hours }, (_, index) => ({
+    time: latestClosedTime - (hours - index - 1) * 3_600,
     ...createValues(index),
   }))
 }
@@ -37,8 +41,9 @@ function createPeriods (count, createValues) {
 function createChartData ({
   chartBaseCurrencyId = "XTVCBTC",
   emptyStudyKey,
-  periodCount = 4,
+  fetchHours = 4,
   rejectedStudyKey,
+  volumeDeltaHours = 3,
 } = {}) {
   const requests = createCoverageStudyRequests("CRYPTO:BTCUSD")
   const studies = Object.fromEntries(requests.map((request) => {
@@ -50,16 +55,13 @@ function createChartData ({
     }
 
     const fields = Object.keys(request.fields)
-    const periods = createPeriods(periodCount, index => Object.fromEntries(
-      fields.map(field => [
+    const periods = createPeriods(
+      request.key === "volumeDelta" ? volumeDeltaHours : fetchHours,
+      () => Object.fromEntries(fields.map(field => [
         field,
-        request.key === emptyStudyKey
-          ? null
-          : request.key === "liquidations" && index !== periodCount - 2
-            ? null
-            : 0,
-      ]),
-    ))
+        request.key === emptyStudyKey ? null : 0,
+      ])),
+    )
 
     return [request.key, {
       status: "fulfilled",
@@ -79,7 +81,7 @@ function createChartData ({
         fullName: "BINANCE:BTCUSDT.P",
         baseCurrencyId: chartBaseCurrencyId,
       },
-      periods: createPeriods(periodCount, () => ({
+      periods: createPeriods(fetchHours, () => ({
         open: 1,
         max: 2,
         min: 0.5,
@@ -96,209 +98,188 @@ function evaluate (chartData, coin = createCoin(), options = {}) {
     coin,
     chartData,
     {
-      fetchHours: 100,
-      historyRequirements: {},
-      maxStalenessHours: 2,
-      minDenseValues: 2,
-      nowTimestamp: LATEST_TIME,
-      probeHours: 4,
-      unavailableHistoryHours: 100,
+      fetchHours: 4,
+      nowTimestamp: 1_800_000_000,
+      volumeDeltaHours: 3,
       ...options,
     },
   )
 }
 
+test("coverage requires 2400 complete hours and 1668 Volume Delta hours", () => {
+  const result = evaluateCoinCoverage(
+    createCoin(),
+    createChartData({
+      fetchHours: 2_400,
+      volumeDeltaHours: 1_668,
+    }),
+    { nowTimestamp: 1_800_000_000 },
+  )
+
+  assert.equal(result.complete, true)
+  assert.equal(result.coverage.ohlcv.completePeriodCount, 2_400)
+  assert.equal(
+    result.coverage.studies.volumeDelta.completePeriodCount,
+    1_668,
+  )
+  assert.equal(
+    result.coverage.studies.openInterest.completePeriodCount,
+    2_400,
+  )
+})
+
 test("coverage accepts zero values and ignores the unfinished current hour", () => {
-  const result = evaluate(createChartData())
+  const chartData = createChartData()
+
+  chartData.chart.periods.push({
+    time: 1_800_000_000,
+    open: null,
+    max: null,
+    min: null,
+    close: null,
+    volume: null,
+  })
+  chartData.studies.premium.value.periods.push({
+    time: 1_800_000_000,
+    close: null,
+  })
+
+  const result = evaluate(chartData)
 
   assert.equal(result.complete, true)
   assert.equal(result.retryable, false)
   assert.deepEqual(result.reasonCodes, [])
-  assert.equal(
-    result.coverage.ohlcv.latestCompleteTime,
-    LATEST_TIME - 3_600,
-  )
-  assert.equal(result.coverage.studies.liquidations.availablePeriodCount, 1)
-  assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 3)
+  assert.equal(result.coverage.ohlcv.completePeriodCount, 4)
+  assert.equal(result.coverage.studies.liquidations.completePeriodCount, 4)
 })
 
-test("coverage accepts sufficient calculation history", () => {
-  const result = evaluate(createChartData({ periodCount: 10 }), createCoin(), {
-    fetchHours: 10,
-    historyMinRatio: 0.5,
-    historyRequirements: {
-      ohlcv: 8,
-      premium: 8,
-    },
-    nowTimestamp: LATEST_TIME + 1_800,
-    unavailableHistoryHours: 8,
-  })
+test("coverage rejects a missing OHLCV hour", () => {
+  const chartData = createChartData()
+  chartData.chart.periods.splice(1, 1)
 
-  assert.equal(result.complete, true)
-  assert.equal(result.coverage.ohlcv.history.complete, true)
-  assert.equal(result.coverage.studies.premium.history.complete, true)
-})
-
-test("coverage rejects Premium with no numeric values", () => {
-  const result = evaluate(createChartData({ emptyStudyKey: "premium" }))
+  const result = evaluate(chartData)
 
   assert.equal(result.complete, false)
-  assert.equal(result.retryable, false)
-  assert.deepEqual(result.unavailableMetrics, [])
-  assert.ok(result.reasonCodes.includes("premium:insufficient_values"))
-  assert.ok(result.reasonCodes.includes("premium:stale"))
+  assert.equal(result.coverage.ohlcv.missingPeriodCount, 1)
+  assert.ok(result.reasonCodes.includes("ohlcv:missing_hours"))
 })
 
-test("coverage marks a completely absent dense metric as unavailable for a mature coin", () => {
-  const result = evaluate(createChartData({
-    emptyStudyKey: "premium",
-    periodCount: 10,
-  }), createCoin(), {
-    fetchHours: 10,
-    historyMinRatio: 0.5,
-    unavailableHistoryHours: 8,
-  })
+test("coverage rejects duplicate and off-grid OHLCV hours", () => {
+  const duplicateData = createChartData()
+  duplicateData.chart.periods.push({ ...duplicateData.chart.periods[1] })
+
+  const duplicateResult = evaluate(duplicateData)
+
+  assert.equal(duplicateResult.coverage.ohlcv.duplicatePeriodCount, 1)
+  assert.ok(duplicateResult.reasonCodes.includes("ohlcv:duplicate_hours"))
+
+  const offGridData = createChartData()
+  offGridData.chart.periods[1].time += 1_800
+  const offGridResult = evaluate(offGridData)
+
+  assert.equal(offGridResult.coverage.ohlcv.offGridPeriodCount, 1)
+  assert.ok(offGridResult.reasonCodes.includes("ohlcv:off_grid_hours"))
+})
+
+test("coverage rejects duplicate and invalid study timestamps", () => {
+  const chartData = createChartData()
+  const premium = chartData.studies.premium.value
+
+  premium.periods.push({ ...premium.periods[1] })
+  premium.coverage.duplicatePeriodCount = 1
+  premium.coverage.invalidTimestampCount = 1
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, false)
+  assert.equal(result.coverage.studies.premium.duplicatePeriodCount, 1)
+  assert.equal(result.coverage.studies.premium.invalidTimestampCount, 1)
+  assert.ok(result.reasonCodes.includes("premium:duplicate_hours"))
+  assert.ok(result.reasonCodes.includes("premium:invalid_timestamps"))
+})
+
+test("coverage rejects null and NaN study values without treating them as zero", () => {
+  const chartData = createChartData()
+  chartData.studies.premium.value.periods[1].close = null
+  chartData.studies.openInterest.value.periods[2].close = Number.NaN
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, false)
+  assert.equal(
+    result.coverage.studies.premium.fieldMissingValueCounts.close,
+    1,
+  )
+  assert.equal(
+    result.coverage.studies.openInterest.fieldMissingValueCounts.close,
+    1,
+  )
+  assert.ok(result.reasonCodes.includes("premium:missing_values"))
+  assert.ok(result.reasonCodes.includes("openInterest:missing_values"))
+})
+
+test("coverage requires numeric values for both Liquidations sides in every hour", () => {
+  const chartData = createChartData()
+  chartData.studies.liquidations.value.periods[1].short = null
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, false)
+  assert.equal(
+    result.coverage.studies.liquidations.fieldMissingValueCounts.short,
+    1,
+  )
+  assert.ok(result.reasonCodes.includes("liquidations:missing_values"))
+  assert.deepEqual(result.unavailableMetrics, [])
+})
+
+test("coverage accepts the shorter Volume Delta window but requires every hour in it", () => {
+  const completeResult = evaluate(createChartData())
+
+  assert.equal(completeResult.complete, true)
+  assert.equal(
+    completeResult.coverage.studies.volumeDelta.requiredHours,
+    3,
+  )
+
+  const incompleteData = createChartData()
+  incompleteData.studies.volumeDelta.value.periods.splice(1, 1)
+  const incompleteResult = evaluate(incompleteData)
+
+  assert.equal(incompleteResult.complete, false)
+  assert.ok(incompleteResult.reasonCodes.includes("volumeDelta:missing_hours"))
+})
+
+test("coverage marks a completely absent dense metric as unavailable", () => {
+  const result = evaluate(createChartData({ emptyStudyKey: "premium" }))
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, true)
   assert.deepEqual(result.unavailableMetrics, ["premium"])
+  assert.ok(result.reasonCodes.includes("premium:missing_values"))
   assert.ok(result.reasonCodes.includes("premium:unavailable"))
 })
 
-test("coverage does not permanently exclude a metric with some history", () => {
-  const chartData = createChartData({
-    emptyStudyKey: "premium",
-    periodCount: 10,
-  })
+test("coverage does not permanently exclude a partially populated metric", () => {
+  const chartData = createChartData({ emptyStudyKey: "premium" })
   const premium = chartData.studies.premium.value
 
   for (const field of Object.keys(premium.fields)) {
-    premium.periods.at(-2)[field] = 0
-  }
-
-  const result = evaluate(chartData, createCoin(), {
-    fetchHours: 10,
-    historyMinRatio: 0.5,
-    historyRequirements: { premium: 8 },
-    unavailableHistoryHours: 8,
-  })
-
-  assert.equal(result.complete, false)
-  assert.equal(result.retryable, false)
-  assert.deepEqual(result.unavailableMetrics, [])
-  assert.ok(result.reasonCodes.includes("premium:insufficient_history"))
-  assert.equal(result.coverage.studies.premium.history.complete, false)
-})
-
-test("coverage rejects Liquidations with no numeric events in the window", () => {
-  const result = evaluate(createChartData({ emptyStudyKey: "liquidations" }))
-
-  assert.equal(result.complete, false)
-  assert.equal(result.retryable, false)
-  assert.ok(result.reasonCodes.includes("liquidations:no_values"))
-})
-
-test("coverage requires numeric values for both Liquidations sides", () => {
-  const chartData = createChartData()
-  const periods = chartData.studies.liquidations.value.periods
-
-  for (const period of periods) {
-    period.short = null
+    premium.periods[1][field] = 0
   }
 
   const result = evaluate(chartData)
 
   assert.equal(result.complete, false)
-  assert.equal(result.coverage.studies.liquidations.fieldValueCounts.long, 1)
-  assert.equal(result.coverage.studies.liquidations.fieldValueCounts.short, 0)
-  assert.ok(result.reasonCodes.includes("liquidations:no_values"))
+  assert.equal(result.retryable, false)
+  assert.deepEqual(result.unavailableMetrics, [])
+  assert.ok(result.reasonCodes.includes("premium:missing_values"))
 })
 
-test("coverage uses the latest complete OHLCV period for freshness", () => {
-  const chartData = createChartData()
-
-  chartData.chart.periods = createPeriods(6, index => (
-    index < 3
-      ? {
-          open: 1,
-          max: 2,
-          min: 0.5,
-          close: 1.5,
-          volume: 0,
-        }
-      : {
-          open: null,
-          max: null,
-          min: null,
-          close: null,
-          volume: null,
-        }
-  ))
-
-  const result = evaluate(chartData, createCoin(), {
-    minDenseValues: 2,
-    probeHours: 6,
-  })
-
-  assert.equal(result.coverage.ohlcv.completePeriodCount, 3)
-  assert.equal(
-    result.coverage.ohlcv.latestCompleteTime,
-    LATEST_TIME - 3 * 3_600,
-  )
-  assert.ok(result.reasonCodes.includes("ohlcv:stale"))
-})
-
-test("coverage checks dense study freshness for every field", () => {
-  const chartData = createChartData()
-  const periods = chartData.studies.premium.value.periods
-
-  periods[2].close = null
-  periods[3].close = null
-
-  const result = evaluate(chartData, createCoin(), {
-    maxStalenessHours: 1,
-  })
-
-  assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 2)
-  assert.equal(
-    result.reasonCodes.includes("premium:insufficient_values"),
-    false,
-  )
-  assert.ok(result.reasonCodes.includes("premium:stale"))
-})
-
-test("coverage measures study freshness from the current time", () => {
-  const chartData = createChartData()
-
-  for (const period of chartData.chart.periods) {
-    period.time -= 24 * 3_600
-  }
-
-  for (const period of chartData.studies.premium.value.periods) {
-    period.time -= 47 * 3_600
-  }
-
-  const result = evaluate(chartData, createCoin(), {
-    maxStalenessHours: 24,
-    probeHours: 72,
-  })
-
-  assert.equal(
-    result.reasonCodes.includes("ohlcv:stale"),
-    false,
-  )
-  assert.ok(result.reasonCodes.includes("premium:stale"))
-})
-
-test("coverage treats a rejected study as unavailable for a mature coin", () => {
+test("coverage treats a rejected study as unavailable when the chart and majority loaded", () => {
   const result = evaluate(createChartData({
-    periodCount: 10,
     rejectedStudyKey: "activeContributors",
-  }), createCoin(), {
-    fetchHours: 10,
-    historyMinRatio: 0.5,
-    unavailableHistoryHours: 8,
-  })
+  }))
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, true)
@@ -306,8 +287,19 @@ test("coverage treats a rejected study as unavailable for a mature coin", () => 
   assert.ok(result.reasonCodes.includes("activeContributors:request_failed"))
 })
 
+test("coverage classifies a rejected Liquidations study as unavailable", () => {
+  const result = evaluate(createChartData({
+    rejectedStudyKey: "liquidations",
+  }))
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, ["liquidations"])
+  assert.ok(result.reasonCodes.includes("liquidations:request_failed"))
+})
+
 test("coverage does not blacklist metrics during a systemic study failure", () => {
-  const chartData = createChartData({ periodCount: 10 })
+  const chartData = createChartData()
 
   for (const key of Object.keys(chartData.studies)) {
     chartData.studies[key] = {
@@ -316,26 +308,11 @@ test("coverage does not blacklist metrics during a systemic study failure", () =
     }
   }
 
-  const result = evaluate(chartData, createCoin(), {
-    fetchHours: 10,
-    historyMinRatio: 0.5,
-    unavailableHistoryHours: 8,
-  })
+  const result = evaluate(chartData)
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, true)
   assert.deepEqual(result.unavailableMetrics, [])
-})
-
-test("coverage marks a failed Active Contributors request as retryable", () => {
-  const result = evaluate(createChartData({
-    rejectedStudyKey: "activeContributors",
-  }))
-
-  assert.equal(result.complete, false)
-  assert.equal(result.retryable, true)
-  assert.deepEqual(result.unavailableMetrics, [])
-  assert.ok(result.reasonCodes.includes("activeContributors:request_failed"))
 })
 
 test("coverage rejects a chart whose live baseCurrencyId differs", () => {

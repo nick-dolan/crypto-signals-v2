@@ -2,26 +2,26 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { createDataBootstrapDescription } from "../src/steps/step2-data-bootstrap/build-data-bootstrap-report.js"
 
-test("data bootstrap report describes collection and coverage windows", () => {
+test("data bootstrap report describes strict hourly coverage", () => {
   assert.deepEqual(createDataBootstrapDescription(), {
     timeframe: "1h",
     requestedHours: 2_400,
+    requestRange: 2_401,
     dataDirectory: "tmp/step2-data-bootstrap",
-    recentCoverage: {
-      hours: 168,
-      minDenseValues: 120,
-      maxStalenessHours: 24,
-    },
-    historyRequirements: {
-      ohlcv: { hours: 2_160, minValues: 1_543 },
-      volumeDelta: { hours: 720, minValues: 515 },
-      openInterest: { hours: 720, minValues: 515 },
-      fundingRate: { hours: 2_160, minValues: 1_543 },
-      premium: { hours: 720, minValues: 515 },
-      socialDominance: { hours: 720, minValues: 515 },
-      interactions: { hours: 720, minValues: 515 },
-      activeContributors: { hours: 720, minValues: 515 },
-      createdPosts: { hours: 720, minValues: 515 },
+    requireCompleteHourlyGrid: true,
+    requiredHoursBySource: {
+      ohlcv: 2_400,
+      volumeDelta: 1_668,
+      openInterest: 2_400,
+      fundingRate: 2_400,
+      liquidations: 2_400,
+      longShortRatioAccounts: 2_400,
+      topTradersLongShortPositions: 2_400,
+      premium: 2_400,
+      socialDominance: 2_400,
+      interactions: 2_400,
+      activeContributors: 2_400,
+      createdPosts: 2_400,
     },
     unavailableMetricConfirmationAttempts: 2,
     requiredStudies: [

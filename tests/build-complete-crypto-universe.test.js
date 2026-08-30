@@ -79,12 +79,12 @@ function createCoverageResult (
   return {
     complete,
     retryable,
-    reasonCodes: complete ? [] : ["premium:insufficient_values"],
+    reasonCodes: complete ? [] : ["premium:missing_values"],
     reasons: complete ? [] : ["Premium is unavailable"],
     unavailableMetrics,
     coverage: {
       ohlcv: {
-        completePeriodCount: 168,
+        completePeriodCount: 2_400,
       },
     },
     ...(dataFile ? { dataFile } : {}),
@@ -119,7 +119,7 @@ test("complete universe checks attached markets by rank and stops at target", as
   )
   assert.deepEqual(
     report.rejected.map(coin => [coin.baseCurrencyId, coin.reasonCodes]),
-    [["XTVCEDGED", ["premium:insufficient_values"]]],
+    [["XTVCEDGED", ["premium:missing_values"]]],
   )
   assert.deepEqual(report.selection, {
     exchange: "BINANCE",

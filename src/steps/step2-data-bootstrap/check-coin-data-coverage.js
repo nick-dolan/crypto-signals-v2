@@ -35,13 +35,23 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
   }
 }
 
-function toBootstrapStudyData (settledStudy, nowTimestamp) {
+function toBootstrapStudyData (
+  key,
+  settledStudy,
+  nowTimestamp,
+  fetchHours,
+  volumeDeltaHours,
+) {
   if (settledStudy?.status !== "fulfilled") {
     throw new Error("Accepted coin contains an incomplete study")
   }
 
   const study = settledStudy.value
-  const periods = getClosedHourlyPeriods(study.periods, nowTimestamp)
+  const periods = getClosedHourlyPeriods(
+    study.periods,
+    nowTimestamp,
+    key === "volumeDelta" ? volumeDeltaHours : fetchHours,
+  )
 
   return {
     request: study.request,
@@ -91,6 +101,7 @@ export function createBootstrapHourlyData (
   {
     fetchHours,
     nowTimestamp,
+    volumeDeltaHours = Math.min(1_668, fetchHours),
   },
 ) {
   return {
@@ -106,12 +117,22 @@ export function createBootstrapHourlyData (
     requestedHours: fetchHours,
     chart: {
       ...chartData.chart,
-      periods: getClosedHourlyPeriods(chartData.chart.periods, nowTimestamp),
+      periods: getClosedHourlyPeriods(
+        chartData.chart.periods,
+        nowTimestamp,
+        fetchHours,
+      ),
     },
     studies: Object.fromEntries(Object.entries(chartData.studies)
       .map(([key, study]) => [
         key,
-        toBootstrapStudyData(study, nowTimestamp),
+        toBootstrapStudyData(
+          key,
+          study,
+          nowTimestamp,
+          fetchHours,
+          volumeDeltaHours,
+        ),
       ])),
   }
 }
@@ -146,11 +167,9 @@ export function createCoinDataCoverageChecker ({
     {
       chartSettleDelayMs = 500,
       fetchHours = 100 * 24,
-      maxStalenessHours = 24,
-      minDenseValues = 120,
       nowTimestamp = Math.floor(Date.now() / 1000),
-      probeHours = 168,
       studySettleDelayMs = 250,
+      volumeDeltaHours = Math.min(1_668, fetchHours),
       timeoutMs = 45_000,
     } = {},
   ) {
@@ -161,10 +180,11 @@ export function createCoinDataCoverageChecker ({
       {
         symbol: coin?.market?.tradingViewSymbol,
         timeframe: "60",
-        range: fetchHours,
+        range: fetchHours + 1,
         timeoutMs,
         settleDelayMs: chartSettleDelayMs,
         studySettleDelayMs,
+        to: nowTimestamp,
       },
     )
 
@@ -173,10 +193,8 @@ export function createCoinDataCoverageChecker ({
       chartData,
       {
         fetchHours,
-        maxStalenessHours,
-        minDenseValues,
         nowTimestamp,
-        probeHours,
+        volumeDeltaHours,
       },
     )
 
@@ -190,6 +208,7 @@ export function createCoinDataCoverageChecker ({
       {
         fetchHours,
         nowTimestamp,
+        volumeDeltaHours,
       },
     )
     const dataFile = await saveHourlyData(coin, hourlyData)

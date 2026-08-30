@@ -353,13 +353,17 @@ function normalizePlotValue (value) {
   return value
 }
 
-function getSourcePeriodsByTime (sourcePeriods, window) {
-  const periodsByTime = new Map()
+function normalizePeriods (sourcePeriods, fieldMap, window) {
+  const validSourcePeriods = []
+  const seenTimes = new Set()
+  let duplicatePeriodCount = 0
+  let invalidTimestampCount = 0
 
   for (const period of sourcePeriods) {
     const time = period?.$time
 
     if (!Number.isFinite(time)) {
+      invalidTimestampCount += 1
       continue
     }
 
@@ -367,48 +371,55 @@ function getSourcePeriodsByTime (sourcePeriods, window) {
       continue
     }
 
-    periodsByTime.set(time, period)
+    if (seenTimes.has(time)) {
+      duplicatePeriodCount += 1
+    }
+
+    seenTimes.add(time)
+    validSourcePeriods.push(period)
   }
 
-  return periodsByTime
-}
-
-function getPeriodTimes (sourcePeriodsByTime, window) {
-  if (!window) {
-    return [...sourcePeriodsByTime.keys()].sort((left, right) => left - right)
-  }
-
-  return Array.from(
-    { length: window.expectedPeriods },
-    (_, index) => window.start + index * window.timeframeSeconds,
+  const sourcesByTime = new Map(
+    validSourcePeriods.map(period => [period.$time, period]),
   )
-}
+  const periodSources = window
+    ? Array.from(
+        { length: window.expectedPeriods },
+        (_, index) => {
+          const time = window.start + index * window.timeframeSeconds
 
-function normalizePeriods (sourcePeriods, fieldMap, window) {
-  const sourcePeriodsByTime = getSourcePeriodsByTime(sourcePeriods, window)
-  const times = getPeriodTimes(sourcePeriodsByTime, window)
-  const periods = times.map((time) => {
-    const source = sourcePeriodsByTime.get(time)
-    const values = Object.fromEntries(
+          return { time, source: sourcesByTime.get(time) }
+        },
+      )
+    : validSourcePeriods.map(source => ({
+        time: source.$time,
+        source,
+      }))
+  const periods = periodSources.map(({ time, source }) => ({
+    time,
+    ...Object.fromEntries(
       Object.entries(fieldMap).map(([field, plot]) => [
         field,
         normalizePlotValue(source?.[plot]),
       ]),
-    )
-
-    return {
-      time,
-      ...values,
-    }
-  })
+    ),
+  })).sort((first, second) => first.time - second.time)
 
   return {
     periods,
-    sourcePeriodCount: sourcePeriodsByTime.size,
+    sourcePeriodCount: validSourcePeriods.length,
+    duplicatePeriodCount,
+    invalidTimestampCount,
   }
 }
 
-function getCoverage (periods, fields, sourcePeriodCount) {
+function getCoverage (
+  periods,
+  fields,
+  sourcePeriodCount,
+  duplicatePeriodCount,
+  invalidTimestampCount,
+) {
   let completePeriods = 0
   let partialPeriods = 0
   let missingPeriods = 0
@@ -433,11 +444,13 @@ function getCoverage (periods, fields, sourcePeriodCount) {
     completePeriods,
     partialPeriods,
     missingPeriods,
+    duplicatePeriodCount,
+    invalidTimestampCount,
   })
 }
 
 function validatePeriods (periods, coverage, request, label) {
-  if (periods.length === 0) {
+  if (periods.length === 0 && coverage.invalidTimestampCount === 0) {
     throw new Error(`${label}: no periods received`)
   }
 
@@ -519,6 +532,8 @@ export function createTradingViewStudyFetcher ({
         normalized.periods,
         fields,
         normalized.sourcePeriodCount,
+        normalized.duplicatePeriodCount,
+        normalized.invalidTimestampCount,
       )
 
       validatePeriods(

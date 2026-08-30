@@ -200,10 +200,6 @@ export function summarizeRejections (rejected) {
   )
 }
 
-function hoursToSeconds (hours) {
-  return hours * 3_600
-}
-
 function getLatestClosedHourlyPeriodTime (referenceTime) {
   if (!Number.isFinite(referenceTime)) {
     return null
@@ -212,205 +208,151 @@ function getLatestClosedHourlyPeriodTime (referenceTime) {
   return Math.floor(referenceTime / 3_600) * 3_600 - 3_600
 }
 
-export function getClosedHourlyPeriods (periods, referenceTime) {
+export function getClosedHourlyPeriods (periods, referenceTime, hours) {
   const latestClosedTime = getLatestClosedHourlyPeriodTime(referenceTime)
 
   if (latestClosedTime === null) {
     return []
   }
 
-  return periods.filter(period => (
-    Number.isFinite(period?.time) && period.time <= latestClosedTime
-  ))
+  const earliestTime = hours === undefined
+    ? -Infinity
+    : latestClosedTime - (hours - 1) * 3_600
+
+  return (Array.isArray(periods) ? periods : [])
+    .filter(period => (
+      Number.isFinite(period?.time)
+      && period.time >= earliestTime
+      && period.time <= latestClosedTime
+    ))
+    .sort((first, second) => first.time - second.time)
 }
 
-function getLatestTime (periods) {
-  const times = periods
-    .map(period => period?.time)
-    .filter(Number.isFinite)
+function summarizeHourlyCoverage (
+  periods,
+  fields,
+  referenceTime,
+  requiredHours,
+) {
+  const latestExpectedTime = getLatestClosedHourlyPeriodTime(referenceTime)
+  const earliestExpectedTime = latestExpectedTime - (requiredHours - 1) * 3_600
+  const expectedTimes = Array.from(
+    { length: requiredHours },
+    (_, index) => earliestExpectedTime + index * 3_600,
+  )
+  const expectedTimeSet = new Set(expectedTimes)
+  const sourcePeriods = Array.isArray(periods) ? periods : []
+  const windowPeriods = getClosedHourlyPeriods(
+    sourcePeriods,
+    referenceTime,
+    requiredHours,
+  )
+  const periodsByTime = new Map()
+  let offGridPeriodCount = 0
 
-  return times.length === 0 ? null : Math.max(...times)
-}
+  for (const period of windowPeriods) {
+    if (!expectedTimeSet.has(period.time)) {
+      offGridPeriodCount += 1
+      continue
+    }
 
-function getEarliestTime (periods) {
-  const times = periods
-    .map(period => period?.time)
-    .filter(Number.isFinite)
-
-  return times.length === 0 ? null : Math.min(...times)
-}
-
-function getRecentPeriods (periods, referenceTime, probeHours) {
-  const latestClosedTime = getLatestClosedHourlyPeriodTime(referenceTime)
-
-  if (latestClosedTime === null) {
-    return []
+    const matchingPeriods = periodsByTime.get(period.time) ?? []
+    matchingPeriods.push(period)
+    periodsByTime.set(period.time, matchingPeriods)
   }
 
-  const cutoff = latestClosedTime - hoursToSeconds(probeHours - 1)
-
-  return getClosedHourlyPeriods(periods, referenceTime)
-    .filter(period => period.time >= cutoff)
-}
-
-function isFiniteChartPeriod (period) {
-  return Number.isFinite(period?.time)
-    && Number.isFinite(period?.open)
-    && Number.isFinite(period?.max)
-    && Number.isFinite(period?.min)
-    && Number.isFinite(period?.close)
-    && Number.isFinite(period?.volume)
-}
-
-export function summarizeChartCoverage (periods, referenceTime, probeHours) {
-  const closedPeriods = getClosedHourlyPeriods(periods, referenceTime)
-  const latestTime = getLatestTime(closedPeriods)
-  const recentPeriods = getRecentPeriods(closedPeriods, referenceTime, probeHours)
-  const completePeriods = recentPeriods.filter(isFiniteChartPeriod)
-
-  return {
-    latestTime,
-    earliestCompleteTime: getEarliestTime(completePeriods),
-    latestCompleteTime: getLatestTime(completePeriods),
-    recentPeriodCount: recentPeriods.length,
-    completePeriodCount: completePeriods.length,
-  }
-}
-
-function summarizeStudyCoverage (study, referenceTime, probeHours) {
-  const fields = study?.fields && typeof study.fields === "object"
-    ? Object.keys(study.fields)
-    : []
-  const periods = Array.isArray(study?.periods) ? study.periods : []
-  const recentPeriods = getRecentPeriods(periods, referenceTime, probeHours)
-  const periodsByField = Object.fromEntries(fields.map(field => [
-    field,
-    recentPeriods.filter(period => Number.isFinite(period[field])),
-  ]))
+  const missingPeriodCount = expectedTimes.filter(
+    time => !periodsByTime.has(time),
+  ).length
+  const duplicatePeriodCount = [...periodsByTime.values()].reduce(
+    (count, matchingPeriods) => count + Math.max(0, matchingPeriods.length - 1),
+    0,
+  )
   const fieldValueCounts = Object.fromEntries(fields.map(field => [
     field,
-    periodsByField[field].length,
+    expectedTimes.filter(time => (
+      periodsByTime.get(time)?.some(period => Number.isFinite(period[field]))
+    )).length,
   ]))
-  const fieldEarliestValueTimes = Object.fromEntries(fields.map(field => [
+  const fieldMissingValueCounts = Object.fromEntries(fields.map(field => [
     field,
-    getEarliestTime(periodsByField[field]),
+    requiredHours - fieldValueCounts[field],
   ]))
-  const fieldLatestValueTimes = Object.fromEntries(fields.map(field => [
-    field,
-    getLatestTime(periodsByField[field]),
-  ]))
-  const availablePeriods = recentPeriods.filter(period => (
-    fields.some(field => Number.isFinite(period[field]))
-  ))
+  const completePeriodCount = expectedTimes.filter((time) => {
+    const matchingPeriods = periodsByTime.get(time)
+
+    return matchingPeriods?.length === 1
+      && fields.every(field => Number.isFinite(matchingPeriods[0][field]))
+  }).length
+  const invalidTimestampCount = sourcePeriods.filter(
+    period => !Number.isFinite(period?.time),
+  ).length
+  const complete = fields.length > 0
+    && missingPeriodCount === 0
+    && duplicatePeriodCount === 0
+    && offGridPeriodCount === 0
+    && invalidTimestampCount === 0
+    && Object.values(fieldMissingValueCounts).every(count => count === 0)
 
   return {
+    requiredHours,
+    earliestExpectedTime,
+    latestExpectedTime,
+    expectedPeriodCount: requiredHours,
+    periodCount: windowPeriods.length,
+    completePeriodCount,
+    missingPeriodCount,
+    duplicatePeriodCount,
+    offGridPeriodCount,
+    invalidTimestampCount,
     fields,
-    recentPeriodCount: recentPeriods.length,
-    availablePeriodCount: availablePeriods.length,
     fieldValueCounts,
-    fieldEarliestValueTimes,
-    fieldLatestValueTimes,
-    latestValueTime: getLatestTime(availablePeriods),
-    sourcePeriodCount: Number.isSafeInteger(study?.coverage?.sourcePeriodCount)
-      ? study.coverage.sourcePeriodCount
-      : periods.length,
-  }
-}
-
-function validateHistoryRatio (value) {
-  if (!Number.isFinite(value) || value <= 0 || value > 1) {
-    throw new Error("historyMinRatio must be greater than 0 and at most 1")
-  }
-}
-
-export function getMinimumHistoryValues (historyHours, historyMinRatio) {
-  validatePositiveInteger(historyHours, "historyHours")
-  validateHistoryRatio(historyMinRatio)
-
-  return Math.ceil(historyHours * historyMinRatio)
-}
-
-function isHistoryStartAvailable (earliestTime, nowTimestamp, historyHours) {
-  const oldestRequiredTime = nowTimestamp - hoursToSeconds(historyHours - 1)
-
-  return Number.isFinite(earliestTime)
-    && earliestTime <= oldestRequiredTime + hoursToSeconds(1)
-}
-
-export function hasSufficientChartHistory (
-  coverage,
-  {
-    historyHours,
-    historyMinRatio,
-    nowTimestamp,
-  },
-) {
-  const minimumValues = getMinimumHistoryValues(historyHours, historyMinRatio)
-
-  return coverage.completePeriodCount >= minimumValues
-    && isHistoryStartAvailable(
-      coverage.earliestCompleteTime,
-      nowTimestamp,
-      historyHours,
-    )
-}
-
-export function evaluateChartHistory (
-  coverage,
-  result,
-  options,
-) {
-  const minimumValues = getMinimumHistoryValues(
-    options.historyHours,
-    options.historyMinRatio,
-  )
-  const complete = hasSufficientChartHistory(coverage, options)
-
-  if (!complete) {
-    result.add(
-      "ohlcv:insufficient_history",
-      `OHLCV history has ${coverage.completePeriodCount}/${minimumValues} required values and starts at ${coverage.earliestCompleteTime ?? "missing"}`,
-    )
-  }
-
-  return {
-    ...coverage,
-    requiredHours: options.historyHours,
-    minimumValues,
+    fieldMissingValueCounts,
     complete,
   }
 }
 
-function evaluateStudyHistory (key, summary, result, options) {
-  const minimumValues = getMinimumHistoryValues(
-    options.historyHours,
-    options.historyMinRatio,
+export function summarizeChartCoverage (periods, referenceTime, requiredHours) {
+  return summarizeHourlyCoverage(
+    periods,
+    ["open", "max", "min", "close", "volume"],
+    referenceTime,
+    requiredHours,
   )
-  const insufficientFields = summary.fields.filter(field => (
-    summary.fieldValueCounts[field] < minimumValues
-    || !isHistoryStartAvailable(
-      summary.fieldEarliestValueTimes[field],
-      options.nowTimestamp,
-      options.historyHours,
-    )
-  ))
+}
 
-  if (insufficientFields.length > 0) {
-    const details = insufficientFields.map(field => (
-      `${field}=${summary.fieldValueCounts[field]}, oldest=${summary.fieldEarliestValueTimes[field] ?? "missing"}`
-    ))
+function summarizeStudyCoverage (
+  study,
+  referenceTime,
+  requiredHours,
+) {
+  const fields = study?.fields && typeof study.fields === "object"
+    ? Object.keys(study.fields)
+    : []
 
-    result.add(
-      `${key}:insufficient_history`,
-      `${key} has insufficient history: ${details.join(", ")}`,
-    )
-  }
+  const coverage = summarizeHourlyCoverage(
+    study?.periods,
+    fields,
+    referenceTime,
+    requiredHours,
+  )
+
+  const duplicatePeriodCount = coverage.duplicatePeriodCount
+  const invalidTimestampCount = Math.max(
+    coverage.invalidTimestampCount,
+    study?.coverage?.invalidTimestampCount ?? 0,
+  )
 
   return {
-    ...summary,
-    requiredHours: options.historyHours,
-    minimumValues,
-    complete: insufficientFields.length === 0,
+    ...coverage,
+    duplicatePeriodCount,
+    invalidTimestampCount,
+    complete: coverage.complete
+      && duplicatePeriodCount === 0
+      && invalidTimestampCount === 0,
+    sourcePeriodCount: Number.isSafeInteger(study?.coverage?.sourcePeriodCount)
+      ? study.coverage.sourcePeriodCount
+      : Array.isArray(study?.periods) ? study.periods.length : 0,
   }
 }
 
@@ -485,31 +427,56 @@ export function evaluateIdentity (coin, chartInfo, result) {
   }
 }
 
-export function evaluateChart (
-  chartCoverage,
-  result,
-  {
-    maxStalenessHours,
-    minDenseValues,
-    nowTimestamp,
-  },
-) {
-  if (chartCoverage.completePeriodCount < minDenseValues) {
+function evaluateHourlyCoverage (key, label, coverage, result) {
+  if (coverage.fields.length === 0) {
     result.add(
-      "ohlcv:insufficient_values",
-      `OHLCV has ${chartCoverage.completePeriodCount}/${minDenseValues} required recent values`,
+      `${key}:missing_fields`,
+      `${label} exposes no fields`,
     )
   }
 
-  if (
-    !Number.isFinite(chartCoverage.latestCompleteTime)
-    || nowTimestamp - chartCoverage.latestCompleteTime > hoursToSeconds(maxStalenessHours)
-  ) {
+  if (coverage.missingPeriodCount > 0) {
     result.add(
-      "ohlcv:stale",
-      `OHLCV latest complete timestamp is ${chartCoverage.latestCompleteTime ?? "missing"}`,
+      `${key}:missing_hours`,
+      `${label} is missing ${coverage.missingPeriodCount}/${coverage.requiredHours} required hours`,
     )
   }
+
+  if (coverage.duplicatePeriodCount > 0) {
+    result.add(
+      `${key}:duplicate_hours`,
+      `${label} contains ${coverage.duplicatePeriodCount} duplicate hourly periods`,
+    )
+  }
+
+  if (coverage.offGridPeriodCount > 0) {
+    result.add(
+      `${key}:off_grid_hours`,
+      `${label} contains ${coverage.offGridPeriodCount} periods outside the hourly grid`,
+    )
+  }
+
+  if (coverage.invalidTimestampCount > 0) {
+    result.add(
+      `${key}:invalid_timestamps`,
+      `${label} contains ${coverage.invalidTimestampCount} invalid timestamps`,
+    )
+  }
+
+  const fieldsWithMissingValues = Object.entries(coverage.fieldMissingValueCounts)
+    .filter(([, count]) => count > 0)
+    .map(([field, count]) => `${field}=${count}`)
+
+  if (fieldsWithMissingValues.length > 0) {
+    result.add(
+      `${key}:missing_values`,
+      `${label} has missing numeric values: ${fieldsWithMissingValues.join(", ")}`,
+    )
+  }
+}
+
+export function evaluateChart (chartCoverage, result) {
+  evaluateHourlyCoverage("ohlcv", "OHLCV", chartCoverage, result)
 }
 
 export function evaluateStudy (
@@ -532,6 +499,7 @@ export function evaluateStudy (
 
   if (settledStudy.status === "rejected") {
     const error = getErrorMessage(settledStudy.reason)
+    const unavailable = options.canClassifyRejectedStudyUnavailable
 
     result.add(
       `${key}:request_failed`,
@@ -542,7 +510,7 @@ export function evaluateStudy (
     return {
       status: "rejected",
       error,
-      unavailable: options.canClassifyRejectedStudyUnavailable,
+      unavailable,
     }
   }
 
@@ -558,102 +526,29 @@ export function evaluateStudy (
     }
   }
 
-  const summary = summarizeStudyCoverage(
+  const coverage = summarizeStudyCoverage(
     settledStudy.value,
     options.nowTimestamp,
-    options.probeHours,
+    options.requiredHours,
   )
-  const availability = summarizeStudyCoverage(
-    settledStudy.value,
-    options.nowTimestamp,
-    options.fetchHours,
-  )
-  const isSparse = options.sparseStudyKeys.has(key)
-  const isUnavailable = !isSparse
+  const unavailable = key !== "liquidations"
     && options.canClassifyUnavailable
-    && availability.fields.length > 0
-    && Object.values(availability.fieldValueCounts).every(count => count === 0)
-  const requiredHistoryHours = options.historyRequirements[key]
-  let history
+    && coverage.fields.length > 0
+    && Object.values(coverage.fieldValueCounts).every(count => count === 0)
 
-  if (summary.fields.length === 0) {
+  evaluateHourlyCoverage(key, key, coverage, result)
+
+  if (unavailable) {
     result.add(
-      `${key}:missing_fields`,
-      `${key} exposes no fields`,
+      `${key}:unavailable`,
+      `${key} has no numeric values in ${options.requiredHours} required hours`,
+      { canRetry: true },
     )
-  } else if (isSparse) {
-    const missingFields = Object.entries(summary.fieldValueCounts)
-      .filter(([, count]) => count === 0)
-      .map(([field]) => field)
-
-    if (missingFields.length > 0) {
-      result.add(
-        `${key}:no_values`,
-        `${key} has no numeric values for fields: ${missingFields.join(", ")}`,
-      )
-    }
-  } else {
-    const insufficientFields = Object.entries(summary.fieldValueCounts)
-      .filter(([, count]) => count < options.minDenseValues)
-      .map(([field, count]) => `${field}=${count}`)
-
-    if (insufficientFields.length > 0) {
-      result.add(
-        `${key}:insufficient_values`,
-        `${key} has insufficient recent values: ${insufficientFields.join(", ")}`,
-      )
-    }
-
-    const staleFields = Object.entries(summary.fieldLatestValueTimes)
-      .filter(([, latestValueTime]) => (
-        !Number.isFinite(latestValueTime)
-        || options.nowTimestamp - latestValueTime > hoursToSeconds(options.maxStalenessHours)
-      ))
-      .map(([field, latestValueTime]) => (
-        `${field}=${latestValueTime ?? "missing"}`
-      ))
-
-    if (staleFields.length > 0) {
-      result.add(
-        `${key}:stale`,
-        `${key} has stale fields: ${staleFields.join(", ")}`,
-      )
-    }
-
-    if (requiredHistoryHours) {
-      history = evaluateStudyHistory(
-        key,
-        summarizeStudyCoverage(
-          settledStudy.value,
-          options.nowTimestamp,
-          requiredHistoryHours,
-        ),
-        result,
-        {
-          historyHours: requiredHistoryHours,
-          historyMinRatio: options.historyMinRatio,
-          nowTimestamp: options.nowTimestamp,
-        },
-      )
-    }
-
-    if (isUnavailable) {
-      result.add(
-        `${key}:unavailable`,
-        `${key} has no numeric values in ${options.fetchHours} requested hours`,
-        { canRetry: true },
-      )
-    }
   }
 
   return {
     status: "fulfilled",
-    ...summary,
-    availability: {
-      ...availability,
-      checkedHours: options.fetchHours,
-    },
-    ...(history ? { history } : {}),
-    unavailable: isUnavailable,
+    ...coverage,
+    unavailable,
   }
 }

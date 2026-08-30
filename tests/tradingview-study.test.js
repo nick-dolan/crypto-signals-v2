@@ -97,8 +97,69 @@ test("study fetcher discovers raw plots and normalizes periods", async () => {
     completePeriods: 2,
     partialPeriods: 0,
     missingPeriods: 1,
+    duplicatePeriodCount: 0,
+    invalidTimestampCount: 0,
   })
   assert.equal(result.request.version, "last")
+  assert.equal(state.removed, 1)
+})
+
+test("study fetcher preserves duplicate and invalid timestamp anomalies", async () => {
+  const state = { removed: 0 }
+  const chart = createFakeChart([
+    { $time: 60, EMA: 2 },
+    { $time: 60, EMA: 3 },
+    { $time: null, EMA: 4 },
+  ], state)
+  const fetchStudy = createTradingViewStudyFetcher({
+    createIndicator: createIndicatorFactory({ plot_0: "EMA" }),
+  })
+
+  const result = await fetchStudy(
+    chart,
+    {
+      key: "ema50",
+      id: "STD;EMA",
+    },
+    {
+      timeoutMs: 100,
+      settleDelayMs: 0,
+    },
+  )
+
+  assert.deepEqual(result.periods, [
+    { time: 60, EMA: 2 },
+    { time: 60, EMA: 3 },
+  ])
+  assert.equal(result.coverage.duplicatePeriodCount, 1)
+  assert.equal(result.coverage.invalidTimestampCount, 1)
+  assert.equal(state.removed, 1)
+})
+
+test("study fetcher returns an invalid-timestamp-only series for coverage evaluation", async () => {
+  const state = { removed: 0 }
+  const chart = createFakeChart([
+    { $time: null, EMA: 4 },
+  ], state)
+  const fetchStudy = createTradingViewStudyFetcher({
+    createIndicator: createIndicatorFactory({ plot_0: "EMA" }),
+  })
+
+  const result = await fetchStudy(
+    chart,
+    {
+      key: "ema50",
+      id: "STD;EMA",
+      allowMissingValues: true,
+    },
+    {
+      timeoutMs: 100,
+      settleDelayMs: 0,
+    },
+  )
+
+  assert.deepEqual(result.periods, [])
+  assert.equal(result.coverage.invalidTimestampCount, 1)
   assert.equal(state.removed, 1)
 })
 
@@ -176,6 +237,8 @@ test("study fetcher applies a field contract to a fixed time window", async () =
     completePeriods: 3,
     partialPeriods: 0,
     missingPeriods: 0,
+    duplicatePeriodCount: 0,
+    invalidTimestampCount: 0,
   })
   assert.equal(state.removed, 1)
 })
