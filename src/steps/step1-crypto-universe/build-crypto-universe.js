@@ -87,12 +87,6 @@ export function buildCryptoUniverse (
     eligibleCandidates.push({ candidate, market })
   }
 
-  if (eligibleCandidates.length < targetCount) {
-    throw new Error(
-      `Crypto universe: expected ${targetCount} eligible Binance USDT perpetual coins, found ${eligibleCandidates.length}`,
-    )
-  }
-
   const coins = eligibleCandidates
     .slice(0, targetCount)
     .map(({ candidate, market }) => toUniverseCoin(candidate, market))

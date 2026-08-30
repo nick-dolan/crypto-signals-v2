@@ -154,20 +154,20 @@ test("market selection keeps the most liquid matching perpetual per identity", (
 })
 
 test("crypto universe joins coins and markets only by baseCurrencyId", () => {
-  assert.throws(
-    () => buildCryptoUniverse(
-      [createCandidate(1, { baseCurrencyId: "XTVCPEPE" })],
-      [createMarket(1, {
-        baseCurrencyId: "XTVC1000PEPE",
-        baseSymbol: "1000PEPE",
-      })],
-      {
-        candidateRankMax: 1,
-        targetCount: 1,
-      },
-    ),
-    /expected 1 eligible Binance USDT perpetual coins, found 0/,
+  const universe = buildCryptoUniverse(
+    [createCandidate(1, { baseCurrencyId: "XTVCPEPE" })],
+    [createMarket(1, {
+      baseCurrencyId: "XTVC1000PEPE",
+      baseSymbol: "1000PEPE",
+    })],
+    {
+      candidateRankMax: 1,
+      targetCount: 1,
+    },
   )
+
+  assert.equal(universe.coinCount, 0)
+  assert.equal(universe.excludedMissingMarketCount, 1)
 })
 
 test("crypto universe rejects duplicate baseCurrencyId values", () => {
@@ -187,16 +187,18 @@ test("crypto universe rejects duplicate baseCurrencyId values", () => {
   )
 })
 
-test("crypto universe requires the requested number of eligible markets", () => {
-  assert.throws(
-    () => buildCryptoUniverse(
-      [createCandidate(1), createCandidate(2)],
-      [createMarket(1)],
-      {
-        candidateRankMax: 2,
-        targetCount: 2,
-      },
-    ),
-    /expected 2 eligible Binance USDT perpetual coins, found 1/,
+test("crypto universe keeps every eligible market when fewer than target", () => {
+  const universe = buildCryptoUniverse(
+    [createCandidate(1), createCandidate(2)],
+    [createMarket(1)],
+    {
+      candidateRankMax: 2,
+      targetCount: 2,
+    },
   )
+
+  assert.equal(universe.marketMatchedCandidateCount, 1)
+  assert.equal(universe.coinCount, 1)
+  assert.equal(universe.unselectedEligibleCount, 0)
+  assert.deepEqual(universe.coins.map(coin => coin.rank), [1])
 })
