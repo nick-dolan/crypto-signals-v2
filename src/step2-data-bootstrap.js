@@ -1,12 +1,13 @@
-import path from "node:path"
-
 import { updateCoverageExclusions } from "./helpers/coverage-exclusions-helper.js"
 import {
   readTmpJson,
   resetTmpSubdirectory,
   writeTmpJson,
 } from "./helpers/fs-helper.js"
-import { buildDataBootstrapReport } from "./steps/step2-data-bootstrap/build-data-bootstrap-report.js"
+import {
+  buildDataBootstrapReport,
+  createDataBootstrapSummary,
+} from "./steps/step2-data-bootstrap/build-data-bootstrap-report.js"
 
 async function runDataBootstrapStep () {
   const sourceUniverse = await readTmpJson("step1-crypto-universe.json")
@@ -20,25 +21,17 @@ async function runDataBootstrapStep () {
       ...coin,
       unavailableMetrics: coin.confirmedUnavailableMetrics,
     }))
-  const exclusionUpdate = await updateCoverageExclusions({
+  await updateCoverageExclusions({
     checkedBaseCurrencyIds: checkedCoins.map(coin => coin.baseCurrencyId),
     excludedCoins,
   })
-  const output = {
-    ...report,
-    coverageExclusions: {
-      file: path.relative(process.cwd(), exclusionUpdate.filePath),
-      excludedNowCount: exclusionUpdate.excludedNowCount,
-      activeCount: exclusionUpdate.activeCount,
-    },
-  }
+  const output = createDataBootstrapSummary(report)
   const outputPath = await writeTmpJson("step2-data-bootstrap.json", output)
 
-  console.log(`✓ Saved ${output.coinCount}/${output.targetCoinCount} complete coins to ${outputPath}`)
+  console.log(`✓ Saved ${output.coinCount} complete coins to ${outputPath}`)
   console.log(`✓ Saved fetched hourly data under ${dataDirectoryPath}`)
-  console.log(`✓ Rejected ${output.rejected.length} checked candidates`)
+  console.log(`✓ Rejected ${report.rejected.length} candidates`)
   console.log(`✓ Recorded ${excludedCoins.length} unavailable coins in coverage exclusions`)
-  console.log(`✓ Left ${output.uncheckedCandidateCount} candidates unchecked`)
 }
 
 await runDataBootstrapStep()

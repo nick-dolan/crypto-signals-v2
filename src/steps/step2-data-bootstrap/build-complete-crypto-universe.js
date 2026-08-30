@@ -15,12 +15,10 @@ export async function buildCompleteCryptoUniverse (
     generatedAt = new Date().toISOString(),
     maxAttempts = 2,
     onProgress = () => {},
-    targetCount = 100,
   } = {},
 ) {
   const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)
 
-  validatePositiveInteger(targetCount, "targetCount")
   validatePositiveInteger(maxAttempts, "maxAttempts")
 
   if (typeof checkCoverage !== "function") {
@@ -36,15 +34,8 @@ export async function buildCompleteCryptoUniverse (
   )
   const coins = []
   const rejected = []
-  let liveCheckedCount = 0
 
   for (const coin of orderedCandidates) {
-    if (coins.length === targetCount) {
-      break
-    }
-
-    liveCheckedCount += 1
-
     const { attempts, result } = await checkWithRetry(
       checkCoverage,
       coin,
@@ -80,19 +71,12 @@ export async function buildCompleteCryptoUniverse (
     })
   }
 
-  const checkedCandidateCount = coins.length + rejected.length
-
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
     source,
     selection,
     candidateCount: orderedCandidates.length,
-    checkedCandidateCount,
-    liveCheckedCount,
-    uncheckedCandidateCount: orderedCandidates.length - checkedCandidateCount,
-    targetCoinCount: targetCount,
     coinCount: coins.length,
-    targetReached: coins.length === targetCount,
     rejectionSummary: summarizeRejections(rejected),
     coins,
     rejected,

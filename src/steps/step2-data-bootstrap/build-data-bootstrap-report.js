@@ -66,6 +66,22 @@ export function createDataBootstrapDescription () {
   }
 }
 
+export function createDataBootstrapSummary ({
+  generatedAt,
+  source,
+  selection,
+  candidateCount,
+  coinCount,
+}) {
+  return {
+    generatedAt,
+    source,
+    selection,
+    candidateCount,
+    coinCount,
+  }
+}
+
 export async function buildDataBootstrapReport (sourceUniverse) {
   const nowTimestamp = Math.floor(Date.now() / 1000)
 

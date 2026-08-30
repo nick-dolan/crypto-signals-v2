@@ -91,7 +91,7 @@ function createCoverageResult (
   }
 }
 
-test("complete universe checks attached markets by rank and stops at target", async () => {
+test("complete universe checks every attached market by rank", async () => {
   const candidates = [
     createCoin(5),
     createCoin(2, { baseCurrencyId: "XTVCEDGEX", symbol: "EDGE" }),
@@ -106,16 +106,18 @@ test("complete universe checks attached markets by rank and stops at target", as
 
       return createCoverageResult(coin.baseCurrencyId !== "XTVCEDGED")
     },
-    {
-      generatedAt: "2026-08-29T12:00:00Z",
-      targetCount: 2,
-    },
+    { generatedAt: "2026-08-29T12:00:00Z" },
   )
 
-  assert.deepEqual(checkedIds, ["XTVCEDGEX", "XTVCEDGED", "XTVCBTC"])
+  assert.deepEqual(checkedIds, [
+    "XTVCEDGEX",
+    "XTVCEDGED",
+    "XTVCBTC",
+    "XTVC5",
+  ])
   assert.deepEqual(
     report.coins.map(coin => coin.baseCurrencyId),
-    ["XTVCEDGEX", "XTVCBTC"],
+    ["XTVCEDGEX", "XTVCBTC", "XTVC5"],
   )
   assert.deepEqual(
     report.rejected.map(coin => [coin.baseCurrencyId, coin.reasonCodes]),
@@ -127,13 +129,11 @@ test("complete universe checks attached markets by rank and stops at target", as
     instrumentType: "swap",
     typeSpecification: "perpetual",
   })
-  assert.equal(report.targetReached, true)
-  assert.equal(report.checkedCandidateCount, 3)
-  assert.equal(report.uncheckedCandidateCount, 1)
-  assert.equal(report.liveCheckedCount, 3)
+  assert.equal(report.candidateCount, 4)
+  assert.equal(report.coinCount, 3)
 })
 
-test("complete universe allows fewer coins than target and retries transient failures", async () => {
+test("complete universe accepts every complete coin and retries transient failures", async () => {
   let attempts = 0
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse([createCoin(1)]),
@@ -147,16 +147,12 @@ test("complete universe allows fewer coins than target and retries transient fai
 
       return createCoverageResult(true)
     },
-    {
-      generatedAt: "2026-08-29T12:00:00Z",
-      targetCount: 2,
-    },
+    { generatedAt: "2026-08-29T12:00:00Z" },
   )
 
   assert.equal(attempts, 2)
+  assert.equal(report.candidateCount, 1)
   assert.equal(report.coinCount, 1)
-  assert.equal(report.targetReached, false)
-  assert.equal(report.uncheckedCandidateCount, 0)
   assert.equal(report.coins[0].attempts, 2)
 })
 
@@ -165,7 +161,6 @@ test("complete universe keeps the accepted coin data file reference", async () =
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse([createCoin(1)]),
     async () => createCoverageResult(true, false, { dataFile }),
-    { targetCount: 1 },
   )
 
   assert.equal(report.coins[0].dataFile, dataFile)
@@ -183,7 +178,6 @@ test("complete universe confirms unavailable metrics with a second attempt", asy
         unavailableMetrics: ["premium"],
       })
     },
-    { targetCount: 1 },
   )
 
   assert.equal(attempts, 2)
@@ -208,7 +202,6 @@ test("complete universe does not confirm absence after a failed first request", 
         unavailableMetrics: ["premium"],
       })
     },
-    { targetCount: 1 },
   )
 
   assert.deepEqual(report.rejected[0].unavailableMetrics, ["premium"])
@@ -242,7 +235,6 @@ test("complete universe only rechecks market identity needed by step 2", async (
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse([createCoin(1, { market: preselectedMarket })]),
     async () => createCoverageResult(true),
-    { targetCount: 1 },
   )
 
   assert.equal(report.coinCount, 1)
@@ -268,10 +260,7 @@ test("complete universe does not hardcode the market selection", async () => {
       { selection, source: "fixture" },
     ),
     async () => createCoverageResult(true),
-    {
-      generatedAt: "2026-08-29T12:00:00Z",
-      targetCount: 1,
-    },
+    { generatedAt: "2026-08-29T12:00:00Z" },
   )
 
   assert.equal(report.source, "fixture")
