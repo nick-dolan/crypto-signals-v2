@@ -4,6 +4,7 @@ import {
   resetTmpSubdirectory,
   writeTmpJson,
 } from "./helpers/fs-helper.js"
+import { runStep } from "./helpers/run-step-helper.js"
 import {
   buildDataBootstrapReport,
   createDataBootstrapSummary,
@@ -34,4 +35,4 @@ async function runDataBootstrapStep () {
   console.log(`✓ Recorded ${excludedCoins.length} unavailable coins in coverage exclusions`)
 }
 
-await runDataBootstrapStep()
+await runStep("step2-data-bootstrap.js", runDataBootstrapStep)

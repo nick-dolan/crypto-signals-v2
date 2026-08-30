@@ -5,6 +5,7 @@ import {
   readPermanentCoverageExclusions,
 } from "./helpers/coverage-exclusions-helper.js"
 import { writeTmpJson } from "./helpers/fs-helper.js"
+import { runStep } from "./helpers/run-step-helper.js"
 import { buildCryptoUniverse } from "./steps/step1-crypto-universe/build-crypto-universe.js"
 import { fetchCryptoUniverseData } from "./steps/step1-crypto-universe/fetch-crypto-universe-data.js"
 
@@ -31,4 +32,4 @@ async function runCryptoUniverseStep () {
   console.log(`✓ Excluded ${universe.excludedMissingMarketCount} coins without a matching market`)
 }
 
-await runCryptoUniverseStep()
+await runStep("step1-crypto-universe.js", runCryptoUniverseStep)

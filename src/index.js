@@ -13,13 +13,7 @@ function runStep (scriptPath) {
       env: process.env,
     })
 
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(new Error(`Step ${scriptPath} failed with exit code ${code}`))
-      }
-    })
+    child.on("close", code => resolve(code === 0))
 
     child.on("error", reject)
   })
@@ -33,7 +27,12 @@ async function runAll () {
     console.log("\n🧹 Cleared tmp directory")
 
     for (const step of ["step1-crypto-universe.js", "step2-data-bootstrap.js"]) {
-      await runStep(`src/${step}`)
+      const succeeded = await runStep(`src/${step}`)
+
+      if (!succeeded) {
+        process.exitCode = 1
+        return
+      }
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
