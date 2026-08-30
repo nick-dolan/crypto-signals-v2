@@ -25,9 +25,7 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
       seenTimes.add(period.time)
     }
 
-    const availableValueCount = fields.filter(
-      field => Number.isFinite(period[field]),
-    ).length
+    const availableValueCount = fields.filter(field => Number.isFinite(period[field])).length
 
     if (availableValueCount === fields.length) {
       coverage.completePeriods += 1
@@ -70,11 +68,9 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
     || (study?.coverage?.invalidTimestampCount ?? 0) > 0
 
   for (const period of windowPeriods) {
-    if (
-      (period.time - earliestTime) % 3_600 !== 0
-      || periodsByTime.has(period.time)
-    ) {
+    if ((period.time - earliestTime) % 3_600 !== 0 || periodsByTime.has(period.time)) {
       invalidGrid = true
+
       break
     }
 
@@ -96,10 +92,8 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
       const source = periodsByTime.get(time)
 
       return {
-        time,
-        ...Object.fromEntries(fields.map(field => [
-          field,
-          Number.isFinite(source?.[field]) ? source[field] : 0,
+        time, ...Object.fromEntries(fields.map(field => [
+          field, Number.isFinite(source?.[field]) ? source[field] : 0,
         ])),
       }
     },
@@ -120,13 +114,7 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
   }
 }
 
-function toBootstrapStudyData (
-  key,
-  settledStudy,
-  nowTimestamp,
-  fetchHours,
-  volumeDeltaHours,
-) {
+function toBootstrapStudyData (key, settledStudy, nowTimestamp, fetchHours, volumeDeltaHours) {
   if (settledStudy?.status !== "fulfilled") {
     throw new Error("Accepted coin contains an incomplete study")
   }
@@ -152,6 +140,7 @@ function toBootstrapStudyData (
 
 function toSafePathSegment (value, name) {
   const normalized = typeof value === "string" ? value.trim() : ""
+
   const safe = [...normalized].map(character => (
     character.charCodeAt(0) < 32 || "<>:\"/\\|?*".includes(character)
       ? "-"
@@ -167,10 +156,12 @@ function toSafePathSegment (value, name) {
 
 export function createBootstrapDataRelativePath (coin) {
   const symbol = toSafePathSegment(coin?.symbol, "Coin symbol")
+
   const baseCurrencyId = toSafePathSegment(
     coin?.baseCurrencyId,
     "Coin baseCurrencyId",
   )
+
   const directoryName = `${symbol}--${baseCurrencyId}`
 
   return path.join(
