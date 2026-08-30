@@ -531,8 +531,7 @@ export function evaluateStudy (
     options.nowTimestamp,
     options.requiredHours,
   )
-  const unavailable = key !== "liquidations"
-    && options.canClassifyUnavailable
+  const unavailable = options.canClassifyUnavailable
     && coverage.fields.length > 0
     && Object.values(coverage.fieldValueCounts).every(count => count === 0)
 

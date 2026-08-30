@@ -11,7 +11,7 @@ test("data bootstrap report describes strict hourly coverage", () => {
     requireCompleteHourlyGrid: true,
     requiredHoursBySource: {
       ohlcv: 2_400,
-      volumeDelta: 1_668,
+      volumeDelta: 1_666,
       openInterest: 2_400,
       fundingRate: 2_400,
       liquidations: 2_400,

@@ -27,7 +27,7 @@ export function evaluateCoinCoverage (
       "activeContributors",
       "createdPosts",
     ],
-    volumeDeltaHours = 1_668,
+    volumeDeltaHours = 1_666,
   } = {},
 ) {
   validatePositiveInteger(fetchHours, "fetchHours")

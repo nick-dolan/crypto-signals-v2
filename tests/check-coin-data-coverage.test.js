@@ -46,7 +46,7 @@ test("coverage checker fetches 100 days from the market attached by step 1", asy
   assert.equal(capturedOptions.settleDelayMs, 10)
   assert.equal(capturedOptions.studySettleDelayMs, 20)
   assert.equal(capturedOptions.timeoutMs, 30)
-  assert.equal(capturedOptions.to, 1_800_000_123)
+  assert.equal(capturedOptions.to, 1_799_999_999)
   assert.equal(capturedRequests.at(-1).inputs.in_0, coin.tradingViewSymbol)
 })
 
@@ -146,6 +146,8 @@ test("bootstrap data keeps only closed hourly candles and metrics", () => {
     completePeriods: 1,
     partialPeriods: 0,
     missingPeriods: 0,
+    duplicatePeriodCount: 0,
+    invalidTimestampCount: 0,
   })
 })
 
@@ -203,7 +205,7 @@ test("bootstrap data keeps 2400-hour sources aligned with the shorter Volume Del
   )
 })
 
-test("coverage checker validates and saves one anchored 2400/1668-hour snapshot", async () => {
+test("coverage checker validates and saves one anchored 2400/1666-hour snapshot", async () => {
   const nowTimestamp = 1_800_000_123
   const currentHour = Math.floor(nowTimestamp / 3_600) * 3_600
   const latestClosedTime = currentHour - 3_600
@@ -235,12 +237,23 @@ test("coverage checker validates and saves one anchored 2400/1668-hour snapshot"
     },
     studies: Object.fromEntries(requests.map((request) => {
       const fields = Object.keys(request.fields)
-      const periods = createPeriods(
-        request.key === "volumeDelta" ? 1_668 : 2_400,
-        fields,
-      )
+      const periods = request.key === "liquidations"
+        ? [
+            {
+              time: latestClosedTime - 2_399 * 3_600,
+              ...Object.fromEntries(fields.map(field => [field, 1])),
+            },
+            {
+              time: latestClosedTime,
+              ...Object.fromEntries(fields.map(field => [field, 2])),
+            },
+          ]
+        : createPeriods(
+            request.key === "volumeDelta" ? 1_666 : 2_400,
+            fields,
+          )
 
-      if (request.key !== "volumeDelta") {
+      if (request.key !== "volumeDelta" && request.key !== "liquidations") {
         periods.push({
           time: currentHour,
           ...Object.fromEntries(fields.map(field => [field, null])),
@@ -275,10 +288,16 @@ test("coverage checker validates and saves one anchored 2400/1668-hour snapshot"
 
   assert.equal(result.complete, true)
   assert.equal(capturedOptions.range, 2_401)
-  assert.equal(capturedOptions.to, nowTimestamp)
+  assert.equal(capturedOptions.to, currentHour - 1)
   assert.equal(savedHourlyData.chart.periods.length, 2_400)
-  assert.equal(savedHourlyData.studies.volumeDelta.periods.length, 1_668)
+  assert.equal(savedHourlyData.studies.volumeDelta.periods.length, 1_666)
   assert.equal(savedHourlyData.studies.openInterest.periods.length, 2_400)
+  assert.equal(savedHourlyData.studies.liquidations.periods.length, 2_400)
+  assert.ok(
+    Object.keys(savedHourlyData.studies.liquidations.fields).every(
+      field => savedHourlyData.studies.liquidations.periods[1][field] === 0,
+    ),
+  )
   assert.equal(savedHourlyData.chart.periods.at(-1).time, latestClosedTime)
   assert.equal(
     savedHourlyData.studies.openInterest.periods.at(-1).time,

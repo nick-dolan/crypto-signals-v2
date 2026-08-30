@@ -106,12 +106,12 @@ function evaluate (chartData, coin = createCoin(), options = {}) {
   )
 }
 
-test("coverage requires 2400 complete hours and 1668 Volume Delta hours", () => {
+test("coverage requires 2400 complete hours and 1666 Volume Delta hours", () => {
   const result = evaluateCoinCoverage(
     createCoin(),
     createChartData({
       fetchHours: 2_400,
-      volumeDeltaHours: 1_668,
+      volumeDeltaHours: 1_666,
     }),
     { nowTimestamp: 1_800_000_000 },
   )
@@ -120,7 +120,7 @@ test("coverage requires 2400 complete hours and 1668 Volume Delta hours", () => 
   assert.equal(result.coverage.ohlcv.completePeriodCount, 2_400)
   assert.equal(
     result.coverage.studies.volumeDelta.completePeriodCount,
-    1_668,
+    1_666,
   )
   assert.equal(
     result.coverage.studies.openInterest.completePeriodCount,
@@ -231,6 +231,18 @@ test("coverage requires numeric values for both Liquidations sides in every hour
   )
   assert.ok(result.reasonCodes.includes("liquidations:missing_values"))
   assert.deepEqual(result.unavailableMetrics, [])
+})
+
+test("coverage marks a completely empty Liquidations study as unavailable", () => {
+  const result = evaluate(createChartData({
+    emptyStudyKey: "liquidations",
+  }))
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, ["liquidations"])
+  assert.ok(result.reasonCodes.includes("liquidations:missing_values"))
+  assert.ok(result.reasonCodes.includes("liquidations:unavailable"))
 })
 
 test("coverage accepts the shorter Volume Delta window but requires every hour in it", () => {

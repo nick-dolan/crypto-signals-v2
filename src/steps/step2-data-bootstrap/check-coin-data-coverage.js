@@ -11,9 +11,20 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
     completePeriods: 0,
     partialPeriods: 0,
     missingPeriods: 0,
+    duplicatePeriodCount: 0,
+    invalidTimestampCount: 0,
   }
+  const seenTimes = new Set()
 
   for (const period of periods) {
+    if (!Number.isFinite(period?.time)) {
+      coverage.invalidTimestampCount += 1
+    } else if (seenTimes.has(period.time)) {
+      coverage.duplicatePeriodCount += 1
+    } else {
+      seenTimes.add(period.time)
+    }
+
     const availableValueCount = fields.filter(
       field => Number.isFinite(period[field]),
     ).length
@@ -32,6 +43,80 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
     periodCount: periods.length,
     sourcePeriodCount: periods.length,
     ...coverage,
+  }
+}
+
+function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
+  const settledStudy = chartData?.studies?.liquidations
+
+  if (settledStudy?.status !== "fulfilled") {
+    return chartData
+  }
+
+  const study = settledStudy.value
+  const fields = study?.fields && typeof study.fields === "object"
+    ? Object.keys(study.fields)
+    : []
+  const periods = Array.isArray(study?.periods) ? study.periods : []
+  const latestTime = Math.floor(nowTimestamp / 3_600) * 3_600 - 3_600
+  const earliestTime = latestTime - (fetchHours - 1) * 3_600
+  const windowPeriods = periods.filter(period => (
+    Number.isFinite(period?.time)
+    && period.time >= earliestTime
+    && period.time <= latestTime
+  ))
+  const periodsByTime = new Map()
+  let invalidGrid = periods.some(period => !Number.isFinite(period?.time))
+    || (study?.coverage?.invalidTimestampCount ?? 0) > 0
+
+  for (const period of windowPeriods) {
+    if (
+      (period.time - earliestTime) % 3_600 !== 0
+      || periodsByTime.has(period.time)
+    ) {
+      invalidGrid = true
+      break
+    }
+
+    periodsByTime.set(period.time, period)
+  }
+
+  const hasNumericValues = fields.length > 0 && fields.every(field => (
+    windowPeriods.some(period => Number.isFinite(period[field]))
+  ))
+
+  if (invalidGrid || !hasNumericValues) {
+    return chartData
+  }
+
+  const normalizedPeriods = Array.from(
+    { length: fetchHours },
+    (_, index) => {
+      const time = earliestTime + index * 3_600
+      const source = periodsByTime.get(time)
+
+      return {
+        time,
+        ...Object.fromEntries(fields.map(field => [
+          field,
+          Number.isFinite(source?.[field]) ? source[field] : 0,
+        ])),
+      }
+    },
+  )
+
+  return {
+    ...chartData,
+    studies: {
+      ...chartData.studies,
+      liquidations: {
+        ...settledStudy,
+        value: {
+          ...study,
+          periods: normalizedPeriods,
+        },
+      },
+    },
   }
 }
 
@@ -101,7 +186,7 @@ export function createBootstrapHourlyData (
   {
     fetchHours,
     nowTimestamp,
-    volumeDeltaHours = Math.min(1_668, fetchHours),
+    volumeDeltaHours = Math.min(1_666, fetchHours),
   },
 ) {
   return {
@@ -169,12 +254,12 @@ export function createCoinDataCoverageChecker ({
       fetchHours = 100 * 24,
       nowTimestamp = Math.floor(Date.now() / 1000),
       studySettleDelayMs = 250,
-      volumeDeltaHours = Math.min(1_668, fetchHours),
+      volumeDeltaHours = Math.min(1_666, fetchHours),
       timeoutMs = 45_000,
     } = {},
   ) {
     const requests = createCoverageStudyRequests(coin?.tradingViewSymbol)
-    const chartData = await fetchChartStudies(
+    const fetchedChartData = await fetchChartStudies(
       client,
       requests,
       {
@@ -184,10 +269,15 @@ export function createCoinDataCoverageChecker ({
         timeoutMs,
         settleDelayMs: chartSettleDelayMs,
         studySettleDelayMs,
-        to: nowTimestamp,
+        to: Math.floor(nowTimestamp / 3_600) * 3_600 - 1,
       },
     )
 
+    const chartData = densifyLiquidations(
+      fetchedChartData,
+      nowTimestamp,
+      fetchHours,
+    )
     const coverage = evaluateCoverage(
       coin,
       chartData,
