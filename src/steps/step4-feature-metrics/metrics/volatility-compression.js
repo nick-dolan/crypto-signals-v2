@@ -4,7 +4,16 @@ import { averageTrueRange } from "../../../scripts/atr.js"
 import { bollingerBandwidth } from "../../../scripts/bollinger-bandwidth.js"
 import { realizedVolatility } from "../../../scripts/realized-volatility.js"
 
-export function calculateVolatilityCompressionMetrics ({ high, low, close }) {
+export function calculateAtr24hPct ({ high, low, close }) {
+  return ratioSeries(averageTrueRange(high, low, close, 24), close)
+}
+
+export function calculateVolatilityCompressionMetrics ({
+  high,
+  low,
+  close,
+  atr24hPct = calculateAtr24hPct({ high, low, close }),
+}) {
   const rv24OverRv7 = ratioSeries(
     realizedVolatility(close, 24),
     realizedVolatility(close, 168),
@@ -13,10 +22,7 @@ export function calculateVolatilityCompressionMetrics ({ high, low, close }) {
     bollingerBandwidth(close, 20, 2),
     720,
   )
-  const atrPct90d = rollingPercentileRank(
-    ratioSeries(averageTrueRange(high, low, close, 24), close),
-    2_160,
-  )
+  const atrPct90d = rollingPercentileRank(atr24hPct, 2_160)
   const normalizedHourlyRange = combineSeries(
     [high, low, close],
     ([highValue, lowValue, closeValue]) => (

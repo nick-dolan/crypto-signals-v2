@@ -109,6 +109,7 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
     volume: Array(24).fill(2),
   }
   const calculated = {
+    atr24hPct: Array(24).fill(0.02),
     categoryContext: {
       applicable: false,
       status: "insufficient_peers",
@@ -128,6 +129,7 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
 
   assert.equal(result.rejection, null)
   assert.equal(result.profile.context.volume24hUsd, 480)
+  assert.equal(result.profile.context.atr24hPct, 0.02)
   assert.equal(result.profile.context.categoryStatus, "insufficient_peers")
   assert.equal(result.profile.features.volatilityCompression.sample_metric, 2)
   assert.equal("dataQuality" in result.profile, false)

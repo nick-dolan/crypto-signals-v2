@@ -81,6 +81,7 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
       },
       context: {
         price: coinSeries.close.at(-1),
+        atr24hPct: calculated.atr24hPct.at(-1),
         marketCap: baseCoin.metadata.marketCap,
         volume24hUsd: calculateVolume24hUsd(coinSeries),
         narrativeCategory: calculated.categoryContext.category,

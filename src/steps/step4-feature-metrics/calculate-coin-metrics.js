@@ -3,7 +3,10 @@ import { calculateDerivativesMetrics } from "./metrics/derivatives.js"
 import { calculateDivergenceFlags } from "./metrics/divergence-flags.js"
 import { calculateRelativeStrengthMetrics } from "./metrics/relative-strength.js"
 import { calculateSocialMetrics } from "./metrics/social.js"
-import { calculateVolatilityCompressionMetrics } from "./metrics/volatility-compression.js"
+import {
+  calculateAtr24hPct,
+  calculateVolatilityCompressionMetrics,
+} from "./metrics/volatility-compression.js"
 import { calculateVolumeOrderFlowMetrics } from "./metrics/volume-order-flow.js"
 
 export function calculateCoinMetrics (
@@ -11,7 +14,11 @@ export function calculateCoinMetrics (
   universeContext,
   baseCurrencyId,
 ) {
-  const volatilityCompression = calculateVolatilityCompressionMetrics(coinSeries)
+  const atr24hPct = calculateAtr24hPct(coinSeries)
+  const volatilityCompression = calculateVolatilityCompressionMetrics({
+    ...coinSeries,
+    atr24hPct,
+  })
   const volumeOrderFlow = calculateVolumeOrderFlowMetrics(coinSeries)
   const derivatives = calculateDerivativesMetrics({
     ...coinSeries,
@@ -43,6 +50,7 @@ export function calculateCoinMetrics (
   })
 
   return {
+    atr24hPct,
     categoryContext,
     featureSeries: {
       volatilityCompression,
