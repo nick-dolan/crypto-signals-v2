@@ -55,7 +55,7 @@ function createChartData ({
         field,
         request.key === emptyStudyKey
           ? null
-          : request.key === "liquidations" && index < periodCount - 1
+          : request.key === "liquidations" && index !== periodCount - 2
             ? null
             : 0,
       ]),
@@ -108,15 +108,18 @@ function evaluate (chartData, coin = createCoin(), options = {}) {
   )
 }
 
-test("coverage accepts all required studies and numeric zero values", () => {
+test("coverage accepts zero values and ignores the unfinished current hour", () => {
   const result = evaluate(createChartData())
 
   assert.equal(result.complete, true)
   assert.equal(result.retryable, false)
   assert.deepEqual(result.reasonCodes, [])
-  assert.equal(result.coverage.ohlcv.latestCompleteTime, LATEST_TIME)
+  assert.equal(
+    result.coverage.ohlcv.latestCompleteTime,
+    LATEST_TIME - 3_600,
+  )
   assert.equal(result.coverage.studies.liquidations.availablePeriodCount, 1)
-  assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 4)
+  assert.equal(result.coverage.studies.premium.fieldValueCounts.close, 3)
 })
 
 test("coverage accepts sufficient calculation history", () => {
@@ -170,7 +173,7 @@ test("coverage does not permanently exclude a metric with some history", () => {
   const premium = chartData.studies.premium.value
 
   for (const field of Object.keys(premium.fields)) {
-    premium.periods.at(-1)[field] = 0
+    premium.periods.at(-2)[field] = 0
   }
 
   const result = evaluate(chartData, createCoin(), {

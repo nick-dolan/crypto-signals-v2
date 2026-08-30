@@ -212,7 +212,7 @@ test("complete universe does not confirm absence after a failed first request", 
   assert.deepEqual(report.rejected[0].confirmedUnavailableMetrics, [])
 })
 
-test("complete universe validates markets against selection from step 1", async () => {
+test("complete universe only rechecks market identity needed by step 2", async () => {
   await assert.rejects(
     buildCompleteCryptoUniverse(
       createSourceUniverse([createCoin(1, { market: null })]),
@@ -224,14 +224,25 @@ test("complete universe validates markets against selection from step 1", async 
   await assert.rejects(
     buildCompleteCryptoUniverse(
       createSourceUniverse([
-        createCoin(1, {
-          market: createMarket("XTVC1", { exchange: "BYBIT" }),
-        }),
+        createCoin(1, { market: createMarket("XTVCOTHER") }),
       ]),
       async () => createCoverageResult(true),
     ),
-    /does not match crypto universe selection/,
+    /baseCurrencyId does not match its coin/,
   )
+
+  const preselectedMarket = createMarket("XTVC1", { exchange: "BYBIT" })
+  preselectedMarket.price = null
+  preselectedMarket.volume24hUsd = null
+  preselectedMarket.typeSpecifications = []
+
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse([createCoin(1, { market: preselectedMarket })]),
+    async () => createCoverageResult(true),
+    { targetCount: 1 },
+  )
+
+  assert.equal(report.coinCount, 1)
 })
 
 test("complete universe does not hardcode the market selection", async () => {

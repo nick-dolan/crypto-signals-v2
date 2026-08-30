@@ -3,6 +3,7 @@ import path from "node:path"
 import test from "node:test"
 import {
   createBootstrapDataRelativePath,
+  createBootstrapHourlyData,
   createCoinDataCoverageChecker,
 } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
 
@@ -95,6 +96,50 @@ function createCoin () {
     },
   }
 }
+
+test("bootstrap data keeps only closed hourly candles and metrics", () => {
+  const nowTimestamp = 1_800_000_000
+  const chartData = createFetchedChartData()
+  const closedTime = nowTimestamp - 3_600
+
+  chartData.chart.periods = [
+    { time: closedTime, open: 1, max: 2, min: 0.5, close: 1.5, volume: 10 },
+    { time: nowTimestamp, open: 1.5, max: 2, min: 1, close: 1.8, volume: 5 },
+  ]
+  chartData.studies.socialDominance.value.periods = [
+    { time: closedTime, percent: 1 },
+    { time: nowTimestamp, percent: 2 },
+  ]
+  chartData.studies.socialDominance.value.coverage = {
+    periodCount: 2,
+    sourcePeriodCount: 2,
+    completePeriods: 2,
+    partialPeriods: 0,
+    missingPeriods: 0,
+  }
+
+  const hourlyData = createBootstrapHourlyData(
+    chartData,
+    createCoin(),
+    { fetchHours: 24, nowTimestamp },
+  )
+
+  assert.deepEqual(
+    hourlyData.chart.periods.map(period => period.time),
+    [closedTime],
+  )
+  assert.deepEqual(
+    hourlyData.studies.socialDominance.periods.map(period => period.time),
+    [closedTime],
+  )
+  assert.deepEqual(hourlyData.studies.socialDominance.coverage, {
+    periodCount: 1,
+    sourcePeriodCount: 1,
+    completePeriods: 1,
+    partialPeriods: 0,
+    missingPeriods: 0,
+  })
+})
 
 test("coverage checker saves one file only after accepting a coin", async () => {
   const events = []

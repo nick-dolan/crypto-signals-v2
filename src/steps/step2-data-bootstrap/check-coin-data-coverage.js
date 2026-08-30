@@ -15,20 +15,55 @@ import {
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
+import { getClosedHourlyPeriods } from "./data-coverage-helpers.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
 
-function toBootstrapStudyData (settledStudy) {
+function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
+  const coverage = {
+    completePeriods: 0,
+    partialPeriods: 0,
+    missingPeriods: 0,
+  }
+
+  for (const period of periods) {
+    const availableValueCount = fields.filter(
+      field => Number.isFinite(period[field]),
+    ).length
+
+    if (availableValueCount === fields.length) {
+      coverage.completePeriods += 1
+    } else if (availableValueCount === 0) {
+      coverage.missingPeriods += 1
+    } else {
+      coverage.partialPeriods += 1
+    }
+  }
+
+  return {
+    ...sourceCoverage,
+    periodCount: periods.length,
+    sourcePeriodCount: periods.length,
+    ...coverage,
+  }
+}
+
+function toBootstrapStudyData (settledStudy, nowTimestamp) {
   if (settledStudy?.status !== "fulfilled") {
     throw new Error("Accepted coin contains an incomplete study")
   }
 
   const study = settledStudy.value
+  const periods = getClosedHourlyPeriods(study.periods, nowTimestamp)
 
   return {
     request: study.request,
     fields: study.fields,
-    periods: study.periods,
-    coverage: study.coverage,
+    periods,
+    coverage: summarizeBootstrapStudyCoverage(
+      periods,
+      Object.keys(study.fields),
+      study.coverage,
+    ),
   }
 }
 
@@ -81,9 +116,15 @@ export function createBootstrapHourlyData (
     },
     timeframe: DATA_COVERAGE_TIMEFRAME_LABEL,
     requestedHours: fetchHours,
-    chart: chartData.chart,
+    chart: {
+      ...chartData.chart,
+      periods: getClosedHourlyPeriods(chartData.chart.periods, nowTimestamp),
+    },
     studies: Object.fromEntries(Object.entries(chartData.studies)
-      .map(([key, study]) => [key, toBootstrapStudyData(study)])),
+      .map(([key, study]) => [
+        key,
+        toBootstrapStudyData(study, nowTimestamp),
+      ])),
   }
 }
 

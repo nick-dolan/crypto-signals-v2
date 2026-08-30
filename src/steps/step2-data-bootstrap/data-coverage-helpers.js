@@ -1,7 +1,4 @@
-import {
-  DATA_COVERAGE_REQUIRED_METADATA,
-  DATA_COVERAGE_REQUIRED_SELECTION_FIELDS,
-} from "./config.js"
+import { DATA_COVERAGE_REQUIRED_METADATA } from "./config.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 
 export function validatePositiveInteger (value, name) {
@@ -10,24 +7,7 @@ export function validatePositiveInteger (value, name) {
   }
 }
 
-function validatePositiveNumber (value, fieldName) {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`${fieldName} must be a positive number`)
-  }
-}
-
-function normalizeSelection (selection) {
-  if (!selection || typeof selection !== "object" || Array.isArray(selection)) {
-    throw new Error("Crypto universe selection is required")
-  }
-
-  return Object.fromEntries(DATA_COVERAGE_REQUIRED_SELECTION_FIELDS.map(field => [
-    field,
-    getRequiredString(selection[field], `Crypto universe selection ${field}`),
-  ]))
-}
-
-function validateCandidateMarket (candidate, index, selection) {
+function validateCandidateMarket (candidate, index) {
   const market = candidate.market
   const fieldName = `Crypto universe candidate at index ${index} market`
 
@@ -36,46 +16,20 @@ function validateCandidateMarket (candidate, index, selection) {
   }
 
   getRequiredString(market.tradingViewSymbol, `${fieldName} tradingViewSymbol`)
-  getRequiredString(market.symbol, `${fieldName} symbol`)
-  getRequiredString(market.baseSymbol, `${fieldName} baseSymbol`)
   getRequiredString(market.baseCurrencyId, `${fieldName} baseCurrencyId`)
-  getRequiredString(market.quoteSymbol, `${fieldName} quoteSymbol`)
-  getRequiredString(market.exchange, `${fieldName} exchange`)
-  getRequiredString(market.instrumentType, `${fieldName} instrumentType`)
-  validatePositiveNumber(market.price, `${fieldName} price`)
-  validatePositiveNumber(market.volume24hUsd, `${fieldName} volume24hUsd`)
-
-  if (
-    !Array.isArray(market.typeSpecifications)
-    || market.typeSpecifications.some(specification => (
-      typeof specification !== "string" || !specification.trim()
-    ))
-  ) {
-    throw new Error(`${fieldName} typeSpecifications must be an array of strings`)
-  }
 
   if (market.baseCurrencyId !== candidate.baseCurrencyId) {
     throw new Error(`${fieldName} baseCurrencyId does not match its coin`)
   }
-
-  if (
-    market.exchange !== selection.exchange
-    || market.quoteSymbol !== selection.quoteSymbol
-    || market.instrumentType !== selection.instrumentType
-    || !market.typeSpecifications.includes(selection.typeSpecification)
-  ) {
-    throw new Error(`${fieldName} does not match crypto universe selection`)
-  }
 }
 
-function validateCandidates (candidates, selection) {
+function validateCandidates (candidates) {
   if (!Array.isArray(candidates)) {
     throw new Error("Crypto universe candidates must be an array")
   }
 
   const ranks = new Set()
   const baseCurrencyIds = new Set()
-  const marketSymbols = new Set()
 
   for (const [index, candidate] of candidates.entries()) {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
@@ -90,7 +44,7 @@ function validateCandidates (candidates, selection) {
       candidate.baseCurrencyId,
       `Crypto universe candidate at index ${index} baseCurrencyId`,
     )
-    validateCandidateMarket(candidate, index, selection)
+    validateCandidateMarket(candidate, index)
 
     if (ranks.has(candidate.rank)) {
       throw new Error(`Crypto universe contains duplicate rank: ${candidate.rank}`)
@@ -102,15 +56,8 @@ function validateCandidates (candidates, selection) {
       )
     }
 
-    if (marketSymbols.has(candidate.market.tradingViewSymbol)) {
-      throw new Error(
-        `Crypto universe contains duplicate market: ${candidate.market.tradingViewSymbol}`,
-      )
-    }
-
     ranks.add(candidate.rank)
     baseCurrencyIds.add(candidate.baseCurrencyId)
-    marketSymbols.add(candidate.market.tradingViewSymbol)
   }
 }
 
@@ -120,13 +67,17 @@ export function normalizeSourceUniverse (sourceUniverse) {
   }
 
   const source = getRequiredString(sourceUniverse.source, "Crypto universe source")
-  const selection = normalizeSelection(sourceUniverse.selection)
+  const selection = sourceUniverse.selection
 
-  validateCandidates(sourceUniverse.coins, selection)
+  if (!selection || typeof selection !== "object" || Array.isArray(selection)) {
+    throw new Error("Crypto universe selection is required")
+  }
+
+  validateCandidates(sourceUniverse.coins)
 
   return {
     source,
-    selection,
+    selection: { ...selection },
     candidates: sourceUniverse.coins,
   }
 }
@@ -250,8 +201,31 @@ export function summarizeRejections (rejected) {
   )
 }
 
+const SECONDS_PER_HOUR = 60 * 60
+
 function hoursToSeconds (hours) {
-  return hours * 60 * 60
+  return hours * SECONDS_PER_HOUR
+}
+
+function getLatestClosedHourlyPeriodTime (referenceTime) {
+  if (!Number.isFinite(referenceTime)) {
+    return null
+  }
+
+  return Math.floor(referenceTime / SECONDS_PER_HOUR) * SECONDS_PER_HOUR
+    - SECONDS_PER_HOUR
+}
+
+export function getClosedHourlyPeriods (periods, referenceTime) {
+  const latestClosedTime = getLatestClosedHourlyPeriodTime(referenceTime)
+
+  if (latestClosedTime === null) {
+    return []
+  }
+
+  return periods.filter(period => (
+    Number.isFinite(period?.time) && period.time <= latestClosedTime
+  ))
 }
 
 function getLatestTime (periods) {
@@ -271,17 +245,16 @@ function getEarliestTime (periods) {
 }
 
 function getRecentPeriods (periods, referenceTime, probeHours) {
-  if (!Number.isFinite(referenceTime)) {
+  const latestClosedTime = getLatestClosedHourlyPeriodTime(referenceTime)
+
+  if (latestClosedTime === null) {
     return []
   }
 
-  const cutoff = referenceTime - hoursToSeconds(probeHours - 1)
+  const cutoff = latestClosedTime - hoursToSeconds(probeHours - 1)
 
-  return periods.filter(period => (
-    Number.isFinite(period?.time)
-    && period.time >= cutoff
-    && period.time <= referenceTime
-  ))
+  return getClosedHourlyPeriods(periods, referenceTime)
+    .filter(period => period.time >= cutoff)
 }
 
 function isFiniteChartPeriod (period) {
@@ -294,8 +267,9 @@ function isFiniteChartPeriod (period) {
 }
 
 export function summarizeChartCoverage (periods, referenceTime, probeHours) {
-  const latestTime = getLatestTime(periods)
-  const recentPeriods = getRecentPeriods(periods, referenceTime, probeHours)
+  const closedPeriods = getClosedHourlyPeriods(periods, referenceTime)
+  const latestTime = getLatestTime(closedPeriods)
+  const recentPeriods = getRecentPeriods(closedPeriods, referenceTime, probeHours)
   const completePeriods = recentPeriods.filter(isFiniteChartPeriod)
 
   return {

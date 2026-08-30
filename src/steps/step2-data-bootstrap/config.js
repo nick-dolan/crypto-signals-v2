@@ -18,13 +18,6 @@ export const DATA_COVERAGE_TIMEOUT_MS = 45_000
 export const DATA_COVERAGE_CHART_SETTLE_DELAY_MS = 500
 export const DATA_COVERAGE_STUDY_SETTLE_DELAY_MS = 250
 
-export const DATA_COVERAGE_REQUIRED_SELECTION_FIELDS = Object.freeze([
-  "exchange",
-  "quoteSymbol",
-  "instrumentType",
-  "typeSpecification",
-])
-
 export const DATA_COVERAGE_REQUIRED_STUDY_KEYS = Object.freeze([
   "volumeDelta",
   "openInterest",
