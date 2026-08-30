@@ -39,7 +39,8 @@ export function createMarketContextFetcher ({
   return async function fetchMarketContext (
     client,
     {
-      nowTimestamp = Math.floor(Date.now() / 1_000),
+      nowTimestamp = Number(process.env.PIPELINE_STARTED_AT)
+        || Math.floor(Date.now() / 1_000),
       requestedHours = 100 * 24,
       settleDelayMs = 500,
       timeoutMs = 45_000,

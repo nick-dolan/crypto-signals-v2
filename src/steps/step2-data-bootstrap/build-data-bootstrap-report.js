@@ -83,7 +83,7 @@ export function createDataBootstrapSummary ({
 }
 
 export async function buildDataBootstrapReport (sourceUniverse) {
-  const nowTimestamp = Math.floor(Date.now() / 1000)
+  const nowTimestamp = Number(process.env.PIPELINE_STARTED_AT) || Math.floor(Date.now() / 1_000)
 
   try {
     const report = await buildCompleteCryptoUniverse(

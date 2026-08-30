@@ -21,6 +21,7 @@ function runStep (scriptPath) {
 
 async function runAll () {
   const startTime = Date.now()
+  process.env.PIPELINE_STARTED_AT = String(Math.floor(startTime / 1_000))
 
   try {
     await resetTmpDirectory()
