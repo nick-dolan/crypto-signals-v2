@@ -26,7 +26,11 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
-    for (const step of ["step1-crypto-universe.js", "step2-data-bootstrap.js"]) {
+    for (const step of [
+      "step1-crypto-universe.js",
+      "step2-data-bootstrap.js",
+      "step3-market-context.js",
+    ]) {
       const succeeded = await runStep(`src/${step}`)
 
       if (!succeeded) {
