@@ -105,10 +105,8 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
     metadata: { marketCap: 1_000 },
   }
   const coinSeries = {
-    times: Array.from({ length: 24 }, (_, index) => (index + 1) * 3_600),
     close: Array(24).fill(10),
     volume: Array(24).fill(2),
-    volumeDelta: [...Array(8).fill(null), ...Array(16).fill(1)],
   }
   const calculated = {
     categoryContext: {
@@ -132,8 +130,7 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
   assert.equal(result.profile.context.volume24hUsd, 480)
   assert.equal(result.profile.context.categoryStatus, "insufficient_peers")
   assert.equal(result.profile.features.volatilityCompression.sample_metric, 2)
-  assert.equal(result.profile.dataQuality.volumeDeltaHours, 16)
-  assert.equal(result.profile.dataQuality.historyHours, 24)
+  assert.equal("dataQuality" in result.profile, false)
 })
 
 test("createFeatureProfile rejects an unavailable required latest metric", () => {
@@ -144,10 +141,8 @@ test("createFeatureProfile rejects an unavailable required latest metric", () =>
       metadata: { marketCap: 1_000 },
     },
     {
-      times: [3_600],
       close: [10],
       volume: [2],
-      volumeDelta: [1],
     },
     {
       categoryContext: {

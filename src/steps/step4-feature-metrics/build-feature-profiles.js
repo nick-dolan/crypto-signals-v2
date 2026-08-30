@@ -87,13 +87,6 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
         categoryStatus: calculated.categoryContext.status,
       },
       features,
-      dataQuality: {
-        status: "complete",
-        asOf: new Date(coinSeries.times.at(-1) * 1_000).toISOString(),
-        historyHours: coinSeries.times.length,
-        volumeDeltaHours: coinSeries.volumeDelta.filter(Number.isFinite).length,
-        gapCount: 0,
-      },
     },
     rejection: null,
   }
