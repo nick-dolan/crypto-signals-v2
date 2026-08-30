@@ -2,10 +2,6 @@ import { zipToObject } from "radash"
 import { getRequiredString, parseInteger } from "../../helpers/normalization-helper.js"
 import { requestTradingViewJson } from "./request.js"
 
-const COIN_SCREENER_URL = "https://scanner.tradingview.com/coin/scan"
-const TRADINGVIEW_ORIGIN = "https://www.tradingview.com"
-const DEFAULT_TIMEOUT_MS = 15_000
-
 const COIN_COLUMNS = Object.freeze([
   "crypto_total_rank",
   "base_currency_id",
@@ -183,19 +179,19 @@ function validateUniqueCoins (coins) {
 
 export async function fetchTradingViewCoins ({
   rankMax,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = 15_000,
 } = {}) {
   validatePositiveInteger(rankMax, "rankMax")
 
   const payload = await requestTradingViewJson(
-    COIN_SCREENER_URL,
+    "https://scanner.tradingview.com/coin/scan",
     {
       label: "TradingView coin screener",
       timeoutMs,
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "origin": TRADINGVIEW_ORIGIN,
+        "origin": "https://www.tradingview.com",
       },
       body: JSON.stringify(createScreenerRequest(rankMax)),
     },

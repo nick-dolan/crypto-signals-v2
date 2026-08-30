@@ -1,10 +1,4 @@
 import { getRequiredString, parseInteger } from "../../helpers/normalization-helper.js"
-import {
-  CRYPTO_UNIVERSE_EXCHANGE,
-  CRYPTO_UNIVERSE_INSTRUMENT_TYPE,
-  CRYPTO_UNIVERSE_QUOTE_SYMBOL,
-  CRYPTO_UNIVERSE_TYPE_SPECIFICATION,
-} from "./config.js"
 
 export function validatePositiveInteger (value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -116,13 +110,13 @@ export function isStablecoin (candidate) {
 }
 
 function isRequiredMarket (market) {
-  return market?.exchange === CRYPTO_UNIVERSE_EXCHANGE
-    && market?.quoteSymbol === CRYPTO_UNIVERSE_QUOTE_SYMBOL
-    && market?.instrumentType === CRYPTO_UNIVERSE_INSTRUMENT_TYPE
+  return market?.exchange === "BINANCE"
+    && market?.quoteSymbol === "USDT"
+    && market?.instrumentType === "swap"
     && Array.isArray(market?.typeSpecifications)
     && market.typeSpecifications.some(specification => (
       typeof specification === "string"
-      && specification.toLowerCase() === CRYPTO_UNIVERSE_TYPE_SPECIFICATION
+      && specification.toLowerCase() === "perpetual"
     ))
     && Number.isFinite(market?.volume24hUsd)
     && market.volume24hUsd > 0

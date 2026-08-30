@@ -2,21 +2,14 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { buildCompleteCryptoUniverse } from "../src/steps/step2-data-bootstrap/build-complete-crypto-universe.js"
 
-const DEFAULT_SELECTION = Object.freeze({
-  exchange: "BINANCE",
-  quoteSymbol: "USDT",
-  instrumentType: "swap",
-  typeSpecification: "perpetual",
-})
-
 function createMarket (
   baseCurrencyId,
   {
-    exchange = DEFAULT_SELECTION.exchange,
-    instrumentType = DEFAULT_SELECTION.instrumentType,
-    quoteSymbol = DEFAULT_SELECTION.quoteSymbol,
+    exchange = "BINANCE",
+    instrumentType = "swap",
+    quoteSymbol = "USDT",
     symbol = `${baseCurrencyId}${quoteSymbol}.P`,
-    typeSpecifications = ["crypto", DEFAULT_SELECTION.typeSpecification],
+    typeSpecifications = ["crypto", "perpetual"],
     volume24hUsd = 1_000_000,
   } = {},
 ) {
@@ -59,7 +52,12 @@ function createCoin (
 function createSourceUniverse (
   coins,
   {
-    selection = DEFAULT_SELECTION,
+    selection = {
+      exchange: "BINANCE",
+      quoteSymbol: "USDT",
+      instrumentType: "swap",
+      typeSpecification: "perpetual",
+    },
     source = "tradingview",
   } = {},
 ) {
@@ -123,7 +121,12 @@ test("complete universe checks attached markets by rank and stops at target", as
     report.rejected.map(coin => [coin.baseCurrencyId, coin.reasonCodes]),
     [["XTVCEDGED", ["premium:insufficient_values"]]],
   )
-  assert.deepEqual(report.selection, DEFAULT_SELECTION)
+  assert.deepEqual(report.selection, {
+    exchange: "BINANCE",
+    quoteSymbol: "USDT",
+    instrumentType: "swap",
+    typeSpecification: "perpetual",
+  })
   assert.equal(report.targetReached, true)
   assert.equal(report.checkedCandidateCount, 3)
   assert.equal(report.uncheckedCandidateCount, 1)

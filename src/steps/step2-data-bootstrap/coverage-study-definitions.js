@@ -1,7 +1,6 @@
 import { DERIVATIVE_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/derivatives.js"
 import { SOCIAL_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/social.js"
 import { VOLUME_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/volume.js"
-import { DATA_COVERAGE_REQUIRED_STUDY_KEYS } from "./config.js"
 
 function getRequiredStudyDefinitions () {
   const definitionsByKey = new Map([
@@ -10,7 +9,19 @@ function getRequiredStudyDefinitions () {
     ...SOCIAL_INDICATOR_DEFINITIONS,
   ].map(definition => [definition.key, definition]))
 
-  return Object.freeze(DATA_COVERAGE_REQUIRED_STUDY_KEYS.map((key) => {
+  return Object.freeze([
+    "volumeDelta",
+    "openInterest",
+    "fundingRate",
+    "liquidations",
+    "longShortRatioAccounts",
+    "topTradersLongShortPositions",
+    "premium",
+    "socialDominance",
+    "interactions",
+    "activeContributors",
+    "createdPosts",
+  ].map((key) => {
     const definition = definitionsByKey.get(key)
 
     if (!definition) {

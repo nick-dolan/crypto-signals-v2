@@ -1,12 +1,5 @@
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
-import {
-  CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
-  CRYPTO_UNIVERSE_EXCHANGE,
-  CRYPTO_UNIVERSE_INSTRUMENT_TYPE,
-  CRYPTO_UNIVERSE_QUOTE_SYMBOL,
-  CRYPTO_UNIVERSE_TARGET_COUNT,
-  CRYPTO_UNIVERSE_TYPE_SPECIFICATION,
-} from "./config.js"
+
 import {
   isStablecoin,
   normalizeUniverseCandidate,
@@ -38,10 +31,10 @@ export function buildCryptoUniverse (
   candidates,
   markets,
   {
-    candidateRankMax = CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
+    candidateRankMax = 500,
     coverageExcludedBaseCurrencyIds = [],
     generatedAt = new Date().toISOString(),
-    targetCount = CRYPTO_UNIVERSE_TARGET_COUNT,
+    targetCount = 250,
   } = {},
 ) {
   if (!Array.isArray(candidates)) {
@@ -108,10 +101,10 @@ export function buildCryptoUniverse (
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
     source: "tradingview",
     selection: {
-      exchange: CRYPTO_UNIVERSE_EXCHANGE,
-      quoteSymbol: CRYPTO_UNIVERSE_QUOTE_SYMBOL,
-      instrumentType: CRYPTO_UNIVERSE_INSTRUMENT_TYPE,
-      typeSpecification: CRYPTO_UNIVERSE_TYPE_SPECIFICATION,
+      exchange: "BINANCE",
+      quoteSymbol: "USDT",
+      instrumentType: "swap",
+      typeSpecification: "perpetual",
     },
     candidateCount: orderedCandidates.length,
     marketMatchedCandidateCount: eligibleCandidates.length,

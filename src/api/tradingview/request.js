@@ -1,6 +1,3 @@
-const DEFAULT_USER_AGENT = "crypto-signals/1.0"
-const ERROR_DETAILS_MAX_LENGTH = 300
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -29,7 +26,7 @@ function createHeaders (headers, accept) {
   }
 
   if (!requestHeaders.has("user-agent")) {
-    requestHeaders.set("user-agent", DEFAULT_USER_AGENT)
+    requestHeaders.set("user-agent", "crypto-signals/1.0")
   }
 
   return Object.fromEntries(requestHeaders.entries())
@@ -97,13 +94,13 @@ async function getResponseErrorDetails (
       : ""
 
     if (message) {
-      return `: ${message.slice(0, ERROR_DETAILS_MAX_LENGTH)}`
+      return `: ${message.slice(0, 300)}`
     }
   } catch {
     // The response is not JSON, so use its text as the error details.
   }
 
-  return `: ${responseText.slice(0, ERROR_DETAILS_MAX_LENGTH)}`
+  return `: ${responseText.slice(0, 300)}`
 }
 
 async function readResponseBody (

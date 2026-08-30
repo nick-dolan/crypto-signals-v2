@@ -1,7 +1,3 @@
-import {
-  DATA_COVERAGE_MAX_ATTEMPTS,
-  DATA_COVERAGE_TARGET_COUNT,
-} from "./config.js"
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import {
   checkWithRetry,
@@ -17,9 +13,9 @@ export async function buildCompleteCryptoUniverse (
   checkCoverage,
   {
     generatedAt = new Date().toISOString(),
-    maxAttempts = DATA_COVERAGE_MAX_ATTEMPTS,
+    maxAttempts = 2,
     onProgress = () => {},
-    targetCount = DATA_COVERAGE_TARGET_COUNT,
+    targetCount = 100,
   } = {},
 ) {
   const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)

@@ -1,10 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { buildCryptoUniverse } from "../src/steps/step1-crypto-universe/build-crypto-universe.js"
-import {
-  CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX,
-  CRYPTO_UNIVERSE_TARGET_COUNT,
-} from "../src/steps/step1-crypto-universe/config.js"
+
 import { selectUniverseMarketsByBaseCurrencyId } from "../src/steps/step1-crypto-universe/crypto-universe-helpers.js"
 
 function createCandidate (
@@ -57,7 +54,7 @@ function createMarket (
 
 test("crypto universe uses the production collection defaults", () => {
   const candidates = Array.from(
-    { length: CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX },
+    { length: 500 },
     (_, index) => createCandidate(index + 1),
   )
   const markets = candidates.map(candidate => createMarket(candidate.rank))
@@ -65,12 +62,14 @@ test("crypto universe uses the production collection defaults", () => {
     generatedAt: "2026-08-28T12:00:00Z",
   })
 
-  assert.equal(CRYPTO_UNIVERSE_CANDIDATE_RANK_MAX, 500)
-  assert.equal(CRYPTO_UNIVERSE_TARGET_COUNT, 250)
   assert.equal(universe.candidateCount, 500)
   assert.equal(universe.marketMatchedCandidateCount, 500)
   assert.equal(universe.coinCount, 250)
   assert.equal(universe.coins.at(-1).rank, 250)
+  assert.throws(
+    () => buildCryptoUniverse([createCandidate(501)], [createMarket(501)]),
+    /must be between 1 and 500/,
+  )
 })
 
 test("crypto universe keeps ranked non-stable coins with Binance perpetual markets", () => {

@@ -1,10 +1,6 @@
 import { cluster, isObject, select } from "radash"
 import { fetchTradingViewStudy } from "./study.js"
 
-const DEFAULT_MAX_STUDIES_PER_CHART = 25
-const DEFAULT_TIMEOUT_MS = 20_000
-const DEFAULT_SETTLE_DELAY_MS = 50
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -94,9 +90,9 @@ function normalizeOptions ({
   to,
   window,
   timeframeSeconds,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  settleDelayMs = DEFAULT_SETTLE_DELAY_MS,
-  maxStudiesPerChart = DEFAULT_MAX_STUDIES_PER_CHART,
+  timeoutMs = 20_000,
+  settleDelayMs = 50,
+  maxStudiesPerChart = 25,
 } = {}) {
   if (range !== undefined) {
     validatePositiveInteger(range, "TradingView chart range")

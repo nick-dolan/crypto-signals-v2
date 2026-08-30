@@ -1,10 +1,3 @@
-export const ALTERNATIVE_ME_API_URL = "https://api.alternative.me/"
-
-const DEFAULT_TIMEOUT_MS = 15_000
-const DEFAULT_USER_AGENT = "crypto-signals/1.0"
-const ERROR_DETAILS_MAX_LENGTH = 300
-const ALTERNATIVE_ME_API_ORIGIN = new URL(ALTERNATIVE_ME_API_URL).origin
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -33,7 +26,7 @@ function createHeaders (headers) {
   }
 
   if (!requestHeaders.has("user-agent")) {
-    requestHeaders.set("user-agent", DEFAULT_USER_AGENT)
+    requestHeaders.set("user-agent", "crypto-signals/1.0")
   }
 
   return Object.fromEntries(requestHeaders.entries())
@@ -90,10 +83,10 @@ function createAlternativeMeUrl (endpoint, searchParams) {
 
   const url = new URL(
     normalizedEndpoint.replace(/^\/+/, ""),
-    ALTERNATIVE_ME_API_URL,
+    "https://api.alternative.me/",
   )
 
-  if (url.origin !== ALTERNATIVE_ME_API_ORIGIN) {
+  if (url.origin !== "https://api.alternative.me") {
     throw new Error("Alternative.me endpoint must use the Alternative.me API origin")
   }
 
@@ -108,7 +101,7 @@ function createTimeoutError (label, timeoutMs) {
 
 function normalizeErrorDetails (value) {
   if (typeof value === "string") {
-    return value.trim().slice(0, ERROR_DETAILS_MAX_LENGTH)
+    return value.trim().slice(0, 300)
   }
 
   if (value === undefined || value === null || value === false) {
@@ -116,13 +109,13 @@ function normalizeErrorDetails (value) {
   }
 
   if (typeof value?.message === "string") {
-    return value.message.trim().slice(0, ERROR_DETAILS_MAX_LENGTH)
+    return value.message.trim().slice(0, 300)
   }
 
   try {
-    return JSON.stringify(value).slice(0, ERROR_DETAILS_MAX_LENGTH)
+    return JSON.stringify(value).slice(0, 300)
   } catch {
-    return String(value).slice(0, ERROR_DETAILS_MAX_LENGTH)
+    return String(value).slice(0, 300)
   }
 }
 
@@ -159,7 +152,7 @@ async function getResponseErrorDetails (response, controller, label, timeoutMs) 
     // The response is not JSON, so use its text as the error details.
   }
 
-  return `: ${responseText.slice(0, ERROR_DETAILS_MAX_LENGTH)}`
+  return `: ${responseText.slice(0, 300)}`
 }
 
 async function fetchAlternativeMeResponse (
@@ -205,7 +198,7 @@ export async function requestAlternativeMeJson (
   {
     headers,
     searchParams,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
+    timeoutMs = 15_000,
   } = {},
 ) {
   validateTimeout(timeoutMs)

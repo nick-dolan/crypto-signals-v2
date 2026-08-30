@@ -1,6 +1,3 @@
-const DEFAULT_TIMEOUT_MS = 45_000
-const DEFAULT_SETTLE_DELAY_MS = 500
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -45,10 +42,10 @@ function formatChartError (messages) {
 
 function normalizeOptions ({
   range,
-  settleDelayMs = DEFAULT_SETTLE_DELAY_MS,
+  settleDelayMs = 500,
   symbol,
   timeframe,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = 45_000,
   to,
 } = {}) {
   if (to !== undefined) {

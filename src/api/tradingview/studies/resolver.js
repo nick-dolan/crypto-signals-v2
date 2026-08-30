@@ -2,8 +2,6 @@ import TradingView from "@mathieuc/tradingview"
 import { isObject } from "radash"
 import { getTradingViewIndicator } from "../client.js"
 
-const DEFAULT_INDICATOR_VERSION = "last"
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -80,7 +78,7 @@ function normalizeIndicatorRequest (request) {
   return {
     id: getRequiredString(request.id, "TradingView indicator id"),
     version: request.version === undefined
-      ? DEFAULT_INDICATOR_VERSION
+      ? "last"
       : getRequiredString(request.version, "TradingView indicator version"),
     inputs: normalizeInputOverrides(request.inputs),
   }
@@ -193,7 +191,7 @@ export function createTradingViewIndicatorResolver ({
     }
   }
 
-  async function resolve (id, version = DEFAULT_INDICATOR_VERSION) {
+  async function resolve (id, version = "last") {
     const normalizedId = getRequiredString(id, "TradingView indicator id")
     const normalizedVersion = getRequiredString(
       version,

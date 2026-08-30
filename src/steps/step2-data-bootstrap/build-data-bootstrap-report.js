@@ -1,17 +1,3 @@
-import {
-  DATA_BOOTSTRAP_HISTORY_HOURS,
-  DATA_BOOTSTRAP_TMP_DIRECTORY,
-  DATA_COVERAGE_HISTORY_MIN_RATIO,
-  DATA_COVERAGE_HISTORY_REQUIREMENTS,
-  DATA_COVERAGE_MAX_STALENESS_HOURS,
-  DATA_COVERAGE_MIN_DENSE_VALUES,
-  DATA_COVERAGE_OPTIONAL_METADATA,
-  DATA_COVERAGE_PROBE_HOURS,
-  DATA_COVERAGE_REQUIRED_METADATA,
-  DATA_COVERAGE_REQUIRED_STUDY_KEYS,
-  DATA_COVERAGE_TIMEFRAME_LABEL,
-  DATA_COVERAGE_UNAVAILABLE_CONFIRMATION_ATTEMPTS,
-} from "./config.js"
 import { connectTradingView, disconnectTradingView } from "../../api/tradingview/client.js"
 import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js"
 import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
@@ -38,31 +24,53 @@ function logProgress (event) {
 }
 
 function describeHistoryRequirements () {
-  return Object.fromEntries(Object.entries(DATA_COVERAGE_HISTORY_REQUIREMENTS)
-    .map(([key, hours]) => [key, {
-      hours,
-      minValues: getMinimumHistoryValues(
-        hours,
-        DATA_COVERAGE_HISTORY_MIN_RATIO,
-      ),
-    }]))
+  return Object.fromEntries(Object.entries({
+    ohlcv: 90 * 24,
+    volumeDelta: 30 * 24,
+    openInterest: 30 * 24,
+    fundingRate: 90 * 24,
+    premium: 30 * 24,
+    socialDominance: 30 * 24,
+    interactions: 30 * 24,
+    activeContributors: 30 * 24,
+    createdPosts: 30 * 24,
+  }).map(([key, hours]) => [key, {
+    hours,
+    minValues: getMinimumHistoryValues(hours, 120 / 168),
+  }]))
 }
 
 export function createDataBootstrapDescription () {
   return {
-    timeframe: DATA_COVERAGE_TIMEFRAME_LABEL,
-    requestedHours: DATA_BOOTSTRAP_HISTORY_HOURS,
-    dataDirectory: `tmp/${DATA_BOOTSTRAP_TMP_DIRECTORY}`,
+    timeframe: "1h",
+    requestedHours: 100 * 24,
+    dataDirectory: "tmp/step2-data-bootstrap",
     recentCoverage: {
-      hours: DATA_COVERAGE_PROBE_HOURS,
-      minDenseValues: DATA_COVERAGE_MIN_DENSE_VALUES,
-      maxStalenessHours: DATA_COVERAGE_MAX_STALENESS_HOURS,
+      hours: 168,
+      minDenseValues: 120,
+      maxStalenessHours: 24,
     },
     historyRequirements: describeHistoryRequirements(),
-    unavailableMetricConfirmationAttempts: DATA_COVERAGE_UNAVAILABLE_CONFIRMATION_ATTEMPTS,
-    requiredStudies: [...DATA_COVERAGE_REQUIRED_STUDY_KEYS],
-    requiredMetadata: DATA_COVERAGE_REQUIRED_METADATA.map(({ field }) => field),
-    optionalMetadata: [...DATA_COVERAGE_OPTIONAL_METADATA],
+    unavailableMetricConfirmationAttempts: 2,
+    requiredStudies: [
+      "volumeDelta",
+      "openInterest",
+      "fundingRate",
+      "liquidations",
+      "longShortRatioAccounts",
+      "topTradersLongShortPositions",
+      "premium",
+      "socialDominance",
+      "interactions",
+      "activeContributors",
+      "createdPosts",
+    ],
+    requiredMetadata: [
+      "circulatingSupply",
+      "marketCap",
+      "fullyDilutedValuation",
+    ],
+    optionalMetadata: ["categories"],
   }
 }
 

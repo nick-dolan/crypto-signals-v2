@@ -3,8 +3,6 @@ import dotenv from "dotenv"
 
 dotenv.config({ quiet: true })
 
-const DEFAULT_CONNECTION_TIMEOUT_MS = 15_000
-
 let activeClient = null
 let connectionPromise = null
 
@@ -108,7 +106,7 @@ function waitForConnection (client, timeoutMs) {
 
 async function createConnection (options) {
   const {
-    connectionTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS,
+    connectionTimeoutMs = 15_000,
     ...clientOptions
   } = options
 

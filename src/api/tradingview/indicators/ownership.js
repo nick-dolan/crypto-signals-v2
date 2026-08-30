@@ -1,9 +1,5 @@
 import { defineIndicator } from "./definition.js"
 
-const USD_THRESHOLD = "≥ $100 (USD)"
-const TOKEN_THRESHOLD = "≥ 1 (tokens)"
-const SUPPLY_THRESHOLD = "≥ 0.001% (%)"
-
 function defineOwnershipIndicator ({ inputs = {}, plot, ...definition }) {
   return defineIndicator("ownership", {
     ...definition,
@@ -22,7 +18,7 @@ export const OWNERSHIP_INDICATOR_DEFINITIONS = Object.freeze([
     name: "Held tokens in addresses ≥ X (USD)",
     plot: "Held_tokens_in_addresses__X_in_USD",
     inputs: {
-      in_1: USD_THRESHOLD,
+      in_1: "≥ $100 (USD)",
     },
   }),
   defineOwnershipIndicator({
@@ -32,7 +28,7 @@ export const OWNERSHIP_INDICATOR_DEFINITIONS = Object.freeze([
     name: "Held tokens in addresses ≥ X (tokens)",
     plot: "Held_tokens_in_addresses__X_in_native_units",
     inputs: {
-      in_1: TOKEN_THRESHOLD,
+      in_1: "≥ 1 (tokens)",
     },
   }),
   defineOwnershipIndicator({
@@ -42,7 +38,7 @@ export const OWNERSHIP_INDICATOR_DEFINITIONS = Object.freeze([
     name: "Held tokens in addresses ≥ X (% of supply)",
     plot: "Held_tokens_in_addresses__X__of_supply",
     inputs: {
-      in_1: SUPPLY_THRESHOLD,
+      in_1: "≥ 0.001% (%)",
     },
   }),
   defineOwnershipIndicator({
@@ -52,7 +48,7 @@ export const OWNERSHIP_INDICATOR_DEFINITIONS = Object.freeze([
     name: "Addresses with balance ≥ X (USD)",
     plot: "Addresses_with_balance__X_USD",
     inputs: {
-      in_1: USD_THRESHOLD,
+      in_1: "≥ $100 (USD)",
     },
   }),
   defineOwnershipIndicator({
@@ -62,7 +58,7 @@ export const OWNERSHIP_INDICATOR_DEFINITIONS = Object.freeze([
     name: "Addresses with balance ≥ X (% of supply)",
     plot: "Addresses_with_balance__X__of_supply",
     inputs: {
-      in_1: SUPPLY_THRESHOLD,
+      in_1: "≥ 0.001% (%)",
     },
   }),
   defineOwnershipIndicator({

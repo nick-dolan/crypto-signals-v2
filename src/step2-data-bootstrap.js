@@ -7,17 +7,11 @@ import {
   writeTmpJson,
 } from "./helpers/fs-helper.js"
 import { buildDataBootstrapReport } from "./steps/step2-data-bootstrap/build-data-bootstrap-report.js"
-import {
-  DATA_BOOTSTRAP_REPORT_FILENAME,
-  DATA_BOOTSTRAP_TMP_DIRECTORY,
-} from "./steps/step2-data-bootstrap/config.js"
 
 async function runDataBootstrapStep () {
   const sourceUniverse = await readTmpJson("step1-crypto-universe.json")
 
-  const dataDirectoryPath = await resetTmpSubdirectory(
-    DATA_BOOTSTRAP_TMP_DIRECTORY,
-  )
+  const dataDirectoryPath = await resetTmpSubdirectory("step2-data-bootstrap")
   const report = await buildDataBootstrapReport(sourceUniverse)
   const checkedCoins = [...report.coins, ...report.rejected]
   const excludedCoins = report.rejected
@@ -38,7 +32,7 @@ async function runDataBootstrapStep () {
       activeCount: exclusionUpdate.activeCount,
     },
   }
-  const outputPath = await writeTmpJson(DATA_BOOTSTRAP_REPORT_FILENAME, output)
+  const outputPath = await writeTmpJson("step2-data-bootstrap.json", output)
 
   console.log(`✓ Saved ${output.coinCount}/${output.targetCoinCount} complete coins to ${outputPath}`)
   console.log(`✓ Saved fetched hourly data under ${dataDirectoryPath}`)

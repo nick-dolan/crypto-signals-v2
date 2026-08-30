@@ -1,4 +1,3 @@
-import { DATA_COVERAGE_REQUIRED_METADATA } from "./config.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 
 export function validatePositiveInteger (value, name) {
@@ -201,10 +200,8 @@ export function summarizeRejections (rejected) {
   )
 }
 
-const SECONDS_PER_HOUR = 60 * 60
-
 function hoursToSeconds (hours) {
-  return hours * SECONDS_PER_HOUR
+  return hours * 3_600
 }
 
 function getLatestClosedHourlyPeriodTime (referenceTime) {
@@ -212,8 +209,7 @@ function getLatestClosedHourlyPeriodTime (referenceTime) {
     return null
   }
 
-  return Math.floor(referenceTime / SECONDS_PER_HOUR) * SECONDS_PER_HOUR
-    - SECONDS_PER_HOUR
+  return Math.floor(referenceTime / 3_600) * 3_600 - 3_600
 }
 
 export function getClosedHourlyPeriods (periods, referenceTime) {
@@ -442,7 +438,11 @@ export function createResultBuilder () {
 }
 
 export function evaluateMetadata (coin, result) {
-  for (const { field, label } of DATA_COVERAGE_REQUIRED_METADATA) {
+  for (const { field, label } of [
+    { field: "circulatingSupply", label: "circulating supply" },
+    { field: "marketCap", label: "market cap" },
+    { field: "fullyDilutedValuation", label: "fully diluted valuation" },
+  ]) {
     if (!Number.isFinite(coin[field]) || coin[field] <= 0) {
       result.add(
         `metadata:${field}_missing`,

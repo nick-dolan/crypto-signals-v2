@@ -1,17 +1,5 @@
 import path from "node:path"
 
-import {
-  DATA_BOOTSTRAP_HISTORY_HOURS,
-  DATA_BOOTSTRAP_TMP_DIRECTORY,
-  DATA_COVERAGE_CHART_SETTLE_DELAY_MS,
-  DATA_COVERAGE_MAX_STALENESS_HOURS,
-  DATA_COVERAGE_MIN_DENSE_VALUES,
-  DATA_COVERAGE_PROBE_HOURS,
-  DATA_COVERAGE_STUDY_SETTLE_DELAY_MS,
-  DATA_COVERAGE_TIMEFRAME,
-  DATA_COVERAGE_TIMEFRAME_LABEL,
-  DATA_COVERAGE_TIMEOUT_MS,
-} from "./config.js"
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
@@ -91,7 +79,7 @@ export function createBootstrapDataRelativePath (coin) {
   const directoryName = `${symbol}--${baseCurrencyId}`
 
   return path.join(
-    DATA_BOOTSTRAP_TMP_DIRECTORY,
+    "step2-data-bootstrap",
     directoryName,
     "data.json",
   )
@@ -114,7 +102,7 @@ export function createBootstrapHourlyData (
       tradingViewSymbol: coin.tradingViewSymbol,
       marketSymbol: coin.market.tradingViewSymbol,
     },
-    timeframe: DATA_COVERAGE_TIMEFRAME_LABEL,
+    timeframe: "1h",
     requestedHours: fetchHours,
     chart: {
       ...chartData.chart,
@@ -156,14 +144,14 @@ export function createCoinDataCoverageChecker ({
     client,
     coin,
     {
-      chartSettleDelayMs = DATA_COVERAGE_CHART_SETTLE_DELAY_MS,
-      fetchHours = DATA_BOOTSTRAP_HISTORY_HOURS,
-      maxStalenessHours = DATA_COVERAGE_MAX_STALENESS_HOURS,
-      minDenseValues = DATA_COVERAGE_MIN_DENSE_VALUES,
+      chartSettleDelayMs = 500,
+      fetchHours = 100 * 24,
+      maxStalenessHours = 24,
+      minDenseValues = 120,
       nowTimestamp = Math.floor(Date.now() / 1000),
-      probeHours = DATA_COVERAGE_PROBE_HOURS,
-      studySettleDelayMs = DATA_COVERAGE_STUDY_SETTLE_DELAY_MS,
-      timeoutMs = DATA_COVERAGE_TIMEOUT_MS,
+      probeHours = 168,
+      studySettleDelayMs = 250,
+      timeoutMs = 45_000,
     } = {},
   ) {
     const requests = createCoverageStudyRequests(coin?.tradingViewSymbol)
@@ -172,7 +160,7 @@ export function createCoinDataCoverageChecker ({
       requests,
       {
         symbol: coin?.market?.tradingViewSymbol,
-        timeframe: DATA_COVERAGE_TIMEFRAME,
+        timeframe: "60",
         range: fetchHours,
         timeoutMs,
         settleDelayMs: chartSettleDelayMs,

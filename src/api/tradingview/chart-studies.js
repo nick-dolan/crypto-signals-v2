@@ -1,9 +1,5 @@
 import { fetchTradingViewStudy } from "./studies/index.js"
 
-const DEFAULT_TIMEOUT_MS = 45_000
-const DEFAULT_CHART_SETTLE_DELAY_MS = 500
-const DEFAULT_STUDY_SETTLE_DELAY_MS = 250
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -74,11 +70,11 @@ function normalizeRequests (requests) {
 
 function normalizeOptions ({
   range,
-  settleDelayMs = DEFAULT_CHART_SETTLE_DELAY_MS,
-  studySettleDelayMs = DEFAULT_STUDY_SETTLE_DELAY_MS,
+  settleDelayMs = 500,
+  studySettleDelayMs = 250,
   symbol,
   timeframe,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = 45_000,
   to,
 } = {}) {
   validatePositiveInteger(range, "TradingView chart range")

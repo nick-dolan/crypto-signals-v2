@@ -1,9 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import {
-  ALTERNATIVE_ME_API_URL,
-  requestAlternativeMeJson,
-} from "../src/api/alternative-me/index.js"
+import { requestAlternativeMeJson } from "../src/api/alternative-me/index.js"
 
 const SUCCESS_PAYLOAD = {
   name: "Fear and Greed Index",
@@ -51,7 +48,6 @@ test("Alternative.me requester builds a GET request and returns JSON", async (co
   const headers = new Headers(capturedOptions.headers)
 
   assert.deepEqual(payload, SUCCESS_PAYLOAD)
-  assert.equal(ALTERNATIVE_ME_API_URL, "https://api.alternative.me/")
   assert.equal(url.origin, "https://api.alternative.me")
   assert.equal(url.pathname, "/fng/")
   assert.equal(url.searchParams.get("format"), "json")

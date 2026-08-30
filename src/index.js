@@ -1,11 +1,6 @@
 import { spawn } from "node:child_process"
 import { resetTmpDirectory } from "./helpers/fs-helper.js"
 
-const computationalSteps = [
-  "step1-crypto-universe.js",
-  "step2-data-bootstrap.js",
-]
-
 function runStep (scriptPath) {
   return new Promise((resolve, reject) => {
     console.log("\n================================================")
@@ -37,7 +32,7 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
-    for (const step of computationalSteps) {
+    for (const step of ["step1-crypto-universe.js", "step2-data-bootstrap.js"]) {
       await runStep(`src/${step}`)
     }
 

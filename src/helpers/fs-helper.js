@@ -1,18 +1,21 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-const TMP_DIR = path.resolve(process.cwd(), "tmp")
-const OUTPUT_DIR = path.resolve(process.cwd(), "output")
-
 export async function resetTmpDirectory () {
-  await fs.rm(TMP_DIR, { recursive: true, force: true })
-  await fs.mkdir(TMP_DIR, { recursive: true })
+  await fs.rm(path.resolve(process.cwd(), "tmp"), {
+    recursive: true,
+    force: true,
+  })
+  await fs.mkdir(path.resolve(process.cwd(), "tmp"), { recursive: true })
 
-  return TMP_DIR
+  return path.resolve(process.cwd(), "tmp")
 }
 
 export async function resetTmpSubdirectory (directoryName) {
-  const directoryPath = path.join(TMP_DIR, directoryName)
+  const directoryPath = path.join(
+    path.resolve(process.cwd(), "tmp"),
+    directoryName,
+  )
 
   await fs.rm(directoryPath, { recursive: true, force: true })
   await fs.mkdir(directoryPath, { recursive: true })
@@ -21,7 +24,7 @@ export async function resetTmpSubdirectory (directoryName) {
 }
 
 export async function readTmpJson (filename) {
-  const filePath = path.join(TMP_DIR, filename)
+  const filePath = path.join(path.resolve(process.cwd(), "tmp"), filename)
   const rawData = await fs.readFile(filePath, "utf-8")
 
   return JSON.parse(rawData)
@@ -44,9 +47,15 @@ async function writeJson (filePath, data) {
 }
 
 export async function writeTmpJson (filename, data) {
-  return writeJson(path.join(TMP_DIR, filename), data)
+  return writeJson(
+    path.join(path.resolve(process.cwd(), "tmp"), filename),
+    data,
+  )
 }
 
 export async function writeOutputJson (filename, data) {
-  return writeJson(path.join(OUTPUT_DIR, filename), data)
+  return writeJson(
+    path.join(path.resolve(process.cwd(), "output"), filename),
+    data,
+  )
 }

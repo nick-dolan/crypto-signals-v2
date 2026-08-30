@@ -1,11 +1,6 @@
 import { zipToObject } from "radash"
 import { requestTradingViewJson } from "./request.js"
 
-const CRYPTO_MARKET_SCREENER_URL = "https://scanner.tradingview.com/crypto/scan"
-const TRADINGVIEW_ORIGIN = "https://www.tradingview.com"
-const DEFAULT_TIMEOUT_MS = 20_000
-const DEFAULT_MAX_ROWS = 10_000
-
 const MARKET_COLUMNS = Object.freeze([
   "name",
   "description",
@@ -202,9 +197,9 @@ export async function fetchTradingViewCryptoMarkets ({
   baseCurrencyIds,
   exchanges,
   instrumentTypes,
-  maxRows = DEFAULT_MAX_ROWS,
+  maxRows = 10_000,
   quoteSymbols,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = 20_000,
 } = {}) {
   const normalizedBaseCurrencyIds = normalizeStringArray(
     baseCurrencyIds,
@@ -223,14 +218,14 @@ export async function fetchTradingViewCryptoMarkets ({
   validatePositiveInteger(maxRows, "maxRows")
 
   const payload = await requestTradingViewJson(
-    CRYPTO_MARKET_SCREENER_URL,
+    "https://scanner.tradingview.com/crypto/scan",
     {
       label: "TradingView crypto market screener",
       timeoutMs,
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "origin": TRADINGVIEW_ORIGIN,
+        "origin": "https://www.tradingview.com",
       },
       body: JSON.stringify(createScreenerRequest({
         baseCurrencyIds: normalizedBaseCurrencyIds,

@@ -2,11 +2,6 @@ import { isObject } from "radash"
 
 import { createTradingViewIndicatorInstance } from "./resolver.js"
 
-const DEFAULT_TIMEOUT_MS = 20_000
-const DEFAULT_SETTLE_DELAY_MS = 50
-const PERIOD_TIME_FIELD = "time"
-const TRADINGVIEW_MISSING_VALUE = 1e100
-
 function getRequiredString (value, name) {
   const normalizedValue = typeof value === "string" ? value.trim() : ""
 
@@ -84,8 +79,8 @@ function normalizeFields (fields) {
       `TradingView study plot for ${normalizedField}`,
     )
 
-    if (normalizedField === PERIOD_TIME_FIELD) {
-      throw new Error(`TradingView study field ${PERIOD_TIME_FIELD} is reserved`)
+    if (normalizedField === "time") {
+      throw new Error("TradingView study field time is reserved")
     }
 
     if (fieldNames.has(normalizedField)) {
@@ -180,8 +175,8 @@ function normalizeWindow (window, timeframeSeconds) {
 function normalizeStudyOptions ({
   window,
   timeframeSeconds,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  settleDelayMs = DEFAULT_SETTLE_DELAY_MS,
+  timeoutMs = 20_000,
+  settleDelayMs = 50,
 } = {}) {
   return Object.freeze({
     window: normalizeWindow(window, timeframeSeconds),
@@ -335,9 +330,9 @@ function getFieldMap (request, metadata, sourcePeriods) {
     )
   }
 
-  if (availablePlots.has(PERIOD_TIME_FIELD)) {
+  if (availablePlots.has("time")) {
     throw new Error(
-      `${request.name || metadata.name}: plot ${PERIOD_TIME_FIELD} conflicts with the period timestamp; provide a fields alias`,
+      `${request.name || metadata.name}: plot time conflicts with the period timestamp; provide a fields alias`,
     )
   }
 
@@ -350,7 +345,7 @@ function normalizePlotValue (value) {
   if (
     typeof value !== "number"
     || !Number.isFinite(value)
-    || Math.abs(value) >= TRADINGVIEW_MISSING_VALUE
+    || Math.abs(value) >= 1e100
   ) {
     return null
   }
@@ -402,7 +397,7 @@ function normalizePeriods (sourcePeriods, fieldMap, window) {
     )
 
     return {
-      [PERIOD_TIME_FIELD]: time,
+      time,
       ...values,
     }
   })

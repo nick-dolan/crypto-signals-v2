@@ -3,15 +3,6 @@ import path from "node:path"
 
 import { getRequiredString, toIsoTimestamp } from "./normalization-helper.js"
 
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000
-
-export const COVERAGE_EXCLUSION_RECHECK_DAYS = 30
-export const COVERAGE_EXCLUSIONS_FILE_PATH = path.resolve(
-  process.cwd(),
-  "data",
-  "coverage-exclusions.json",
-)
-
 function normalizeCoverageExclusion (value, index) {
   const fieldName = `Coverage exclusion at index ${index}`
 
@@ -57,7 +48,7 @@ export function normalizeCoverageExclusions (value) {
 }
 
 export async function readCoverageExclusions ({
-  filePath = COVERAGE_EXCLUSIONS_FILE_PATH,
+  filePath = path.resolve(process.cwd(), "data", "coverage-exclusions.json"),
 } = {}) {
   try {
     const rawData = await fs.readFile(filePath, "utf-8")
@@ -105,7 +96,7 @@ function createCoverageExclusion (coin, now, recheckDays) {
     name: coin?.name,
     baseCurrencyId: coin?.baseCurrencyId,
     recheckAfter: new Date(
-      now.getTime() + recheckDays * MILLISECONDS_PER_DAY,
+      now.getTime() + recheckDays * (24 * 60 * 60 * 1_000),
     ).toISOString(),
   }, 0)
 }
@@ -131,9 +122,9 @@ async function writeCoverageExclusions (exclusions, filePath) {
 export async function updateCoverageExclusions ({
   checkedBaseCurrencyIds,
   excludedCoins,
-  filePath = COVERAGE_EXCLUSIONS_FILE_PATH,
+  filePath = path.resolve(process.cwd(), "data", "coverage-exclusions.json"),
   now = new Date(),
-  recheckDays = COVERAGE_EXCLUSION_RECHECK_DAYS,
+  recheckDays = 30,
 }) {
   if (!Array.isArray(checkedBaseCurrencyIds)) {
     throw new Error("checkedBaseCurrencyIds must be an array")
