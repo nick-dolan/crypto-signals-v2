@@ -112,6 +112,11 @@ export function evaluateCoinCoverage (
       nowTimestamp,
     },
   )
+  const fulfilledStudyCount = requiredStudyKeys.filter(
+    key => studies[key]?.status === "fulfilled",
+  ).length
+  const canClassifyRejectedStudyUnavailable = canClassifyUnavailable
+    && fulfilledStudyCount > requiredStudyKeys.length / 2
   const studyCoverage = {}
   const unavailableMetrics = []
   const normalizedSparseStudyKeys = new Set(sparseStudyKeys)
@@ -130,6 +135,7 @@ export function evaluateCoinCoverage (
       studies[key],
       result,
       {
+        canClassifyRejectedStudyUnavailable,
         canClassifyUnavailable,
         fetchHours,
         historyMinRatio,

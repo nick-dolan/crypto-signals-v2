@@ -1,5 +1,8 @@
+import path from "node:path"
+
 import {
   DATA_BOOTSTRAP_HISTORY_HOURS,
+  DATA_BOOTSTRAP_TMP_DIRECTORY,
   DATA_COVERAGE_CHART_SETTLE_DELAY_MS,
   DATA_COVERAGE_MAX_STALENESS_HOURS,
   DATA_COVERAGE_MIN_DENSE_VALUES,
@@ -10,12 +13,13 @@ import {
   DATA_COVERAGE_TIMEOUT_MS,
 } from "./config.js"
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
+import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
 
 function toBootstrapStudyData (settledStudy) {
   if (settledStudy?.status !== "fulfilled") {
-    return null
+    throw new Error("Accepted coin contains an incomplete study")
   }
 
   const study = settledStudy.value
@@ -28,8 +32,39 @@ function toBootstrapStudyData (settledStudy) {
   }
 }
 
+function toSafePathSegment (value, name) {
+  const normalized = typeof value === "string" ? value.trim() : ""
+  const safe = [...normalized].map(character => (
+    character.charCodeAt(0) < 32 || "<>:\"/\\|?*".includes(character)
+      ? "-"
+      : character
+  )).join("")
+
+  if (!safe || safe === "." || safe === "..") {
+    throw new Error(`${name} cannot be used in a data directory name`)
+  }
+
+  return safe
+}
+
+export function createBootstrapDataRelativePath (coin) {
+  const symbol = toSafePathSegment(coin?.symbol, "Coin symbol")
+  const baseCurrencyId = toSafePathSegment(
+    coin?.baseCurrencyId,
+    "Coin baseCurrencyId",
+  )
+  const directoryName = `${symbol}--${baseCurrencyId}`
+
+  return path.join(
+    DATA_BOOTSTRAP_TMP_DIRECTORY,
+    directoryName,
+    "data.json",
+  )
+}
+
 export function createBootstrapHourlyData (
   chartData,
+  coin,
   {
     fetchHours,
     nowTimestamp,
@@ -37,20 +72,43 @@ export function createBootstrapHourlyData (
 ) {
   return {
     collectedAt: new Date(nowTimestamp * 1_000).toISOString(),
+    coin: {
+      baseCurrencyId: coin.baseCurrencyId,
+      symbol: coin.symbol,
+      name: coin.name,
+      tradingViewSymbol: coin.tradingViewSymbol,
+      marketSymbol: coin.market.tradingViewSymbol,
+    },
     timeframe: DATA_COVERAGE_TIMEFRAME_LABEL,
     requestedHours: fetchHours,
     chart: chartData.chart,
     studies: Object.fromEntries(Object.entries(chartData.studies)
-      .map(([key, study]) => [key, toBootstrapStudyData(study)])
-      .filter(([, study]) => study !== null)),
+      .map(([key, study]) => [key, toBootstrapStudyData(study)])),
   }
 }
 
+export async function saveBootstrapHourlyData (coin, hourlyData) {
+  const relativePath = createBootstrapDataRelativePath(coin)
+  const filePath = await writeTmpJson(relativePath, hourlyData)
+
+  return path.relative(process.cwd(), filePath)
+}
+
 export function createCoinDataCoverageChecker ({
+  evaluateCoverage = evaluateCoinCoverage,
   fetchChartStudies = fetchTradingViewChartStudies,
+  saveHourlyData = saveBootstrapHourlyData,
 } = {}) {
+  if (typeof evaluateCoverage !== "function") {
+    throw new Error("evaluateCoverage must be a function")
+  }
+
   if (typeof fetchChartStudies !== "function") {
     throw new Error("fetchChartStudies must be a function")
+  }
+
+  if (typeof saveHourlyData !== "function") {
+    throw new Error("saveHourlyData must be a function")
   }
 
   return async function checkCoinDataCoverage (
@@ -81,7 +139,7 @@ export function createCoinDataCoverageChecker ({
       },
     )
 
-    const coverage = evaluateCoinCoverage(
+    const coverage = evaluateCoverage(
       coin,
       chartData,
       {
@@ -93,12 +151,23 @@ export function createCoinDataCoverageChecker ({
       },
     )
 
-    return {
-      ...coverage,
-      hourlyData: createBootstrapHourlyData(chartData, {
+    if (!coverage.complete) {
+      return coverage
+    }
+
+    const hourlyData = createBootstrapHourlyData(
+      chartData,
+      coin,
+      {
         fetchHours,
         nowTimestamp,
-      }),
+      },
+    )
+    const dataFile = await saveHourlyData(coin, hourlyData)
+
+    return {
+      ...coverage,
+      dataFile,
     }
   }
 }

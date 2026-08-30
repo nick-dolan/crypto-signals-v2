@@ -287,6 +287,43 @@ test("coverage measures study freshness from the current time", () => {
   assert.ok(result.reasonCodes.includes("premium:stale"))
 })
 
+test("coverage treats a rejected study as unavailable for a mature coin", () => {
+  const result = evaluate(createChartData({
+    periodCount: 10,
+    rejectedStudyKey: "activeContributors",
+  }), createCoin(), {
+    fetchHours: 10,
+    historyMinRatio: 0.5,
+    unavailableHistoryHours: 8,
+  })
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, ["activeContributors"])
+  assert.ok(result.reasonCodes.includes("activeContributors:request_failed"))
+})
+
+test("coverage does not blacklist metrics during a systemic study failure", () => {
+  const chartData = createChartData({ periodCount: 10 })
+
+  for (const key of Object.keys(chartData.studies)) {
+    chartData.studies[key] = {
+      status: "rejected",
+      reason: new Error("Study subsystem unavailable"),
+    }
+  }
+
+  const result = evaluate(chartData, createCoin(), {
+    fetchHours: 10,
+    historyMinRatio: 0.5,
+    unavailableHistoryHours: 8,
+  })
+
+  assert.equal(result.complete, false)
+  assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, [])
+})
+
 test("coverage marks a failed Active Contributors request as retryable", () => {
   const result = evaluate(createChartData({
     rejectedStudyKey: "activeContributors",
@@ -294,6 +331,7 @@ test("coverage marks a failed Active Contributors request as retryable", () => {
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, true)
+  assert.deepEqual(result.unavailableMetrics, [])
   assert.ok(result.reasonCodes.includes("activeContributors:request_failed"))
 })
 

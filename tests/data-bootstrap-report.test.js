@@ -6,6 +6,7 @@ test("data bootstrap report describes collection and coverage windows", () => {
   assert.deepEqual(createDataBootstrapDescription(), {
     timeframe: "1h",
     requestedHours: 2_400,
+    dataDirectory: "tmp/step2-data-bootstrap",
     recentCoverage: {
       hours: 168,
       minDenseValues: 120,

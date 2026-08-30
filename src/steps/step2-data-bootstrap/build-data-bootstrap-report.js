@@ -1,5 +1,6 @@
 import {
   DATA_BOOTSTRAP_HISTORY_HOURS,
+  DATA_BOOTSTRAP_TMP_DIRECTORY,
   DATA_COVERAGE_HISTORY_MIN_RATIO,
   DATA_COVERAGE_HISTORY_REQUIREMENTS,
   DATA_COVERAGE_MAX_STALENESS_HOURS,
@@ -51,6 +52,7 @@ export function createDataBootstrapDescription () {
   return {
     timeframe: DATA_COVERAGE_TIMEFRAME_LABEL,
     requestedHours: DATA_BOOTSTRAP_HISTORY_HOURS,
+    dataDirectory: `tmp/${DATA_BOOTSTRAP_TMP_DIRECTORY}`,
     recentCoverage: {
       hours: DATA_COVERAGE_PROBE_HOURS,
       minDenseValues: DATA_COVERAGE_MIN_DENSE_VALUES,

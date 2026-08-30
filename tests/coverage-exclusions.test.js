@@ -15,11 +15,6 @@ function createExcludedCoin () {
     baseCurrencyId: "XTVCMISSING",
     symbol: "MISS",
     name: "Missing Coin",
-    tradingViewSymbol: "CRYPTO:MISSUSD",
-    market: {
-      tradingViewSymbol: "BINANCE:MISSUSDT.P",
-    },
-    unavailableMetrics: ["socialDominance", "interactions"],
   }
 }
 
@@ -40,11 +35,12 @@ test("coverage exclusions persist, expire, and clear after a recheck", async (co
 
   assert.equal(firstUpdate.excludedNowCount, 1)
   assert.equal(firstUpdate.activeCount, 1)
-  assert.equal(persisted.coins[0].baseCurrencyId, "XTVCMISSING")
-  assert.deepEqual(
-    persisted.coins[0].unavailableMetrics,
-    ["interactions", "socialDominance"],
-  )
+  assert.deepEqual(persisted, [{
+    symbol: "MISS",
+    name: "Missing Coin",
+    baseCurrencyId: "XTVCMISSING",
+    recheckAfter: "2026-09-29T12:00:00.000Z",
+  }])
   assert.deepEqual(
     [...getActiveCoverageExclusionIds(persisted, { now: excludedAt })],
     ["XTVCMISSING"],
@@ -63,5 +59,5 @@ test("coverage exclusions persist, expire, and clear after a recheck", async (co
     now: new Date("2026-09-30T12:00:00Z"),
   })
 
-  assert.deepEqual((await readCoverageExclusions({ filePath })).coins, [])
+  assert.deepEqual(await readCoverageExclusions({ filePath }), [])
 })

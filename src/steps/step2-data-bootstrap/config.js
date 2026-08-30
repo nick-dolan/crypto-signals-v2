@@ -1,5 +1,7 @@
 export const DATA_COVERAGE_TARGET_COUNT = 100
 export const DATA_BOOTSTRAP_HISTORY_HOURS = 100 * 24
+export const DATA_BOOTSTRAP_TMP_DIRECTORY = "step2-data-bootstrap"
+export const DATA_BOOTSTRAP_REPORT_FILENAME = "step2-data-bootstrap.json"
 export const DATA_COVERAGE_PROBE_HOURS = 168
 export const DATA_COVERAGE_MIN_DENSE_VALUES = 120
 export const DATA_COVERAGE_MAX_STALENESS_HOURS = 24

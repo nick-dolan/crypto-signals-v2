@@ -3,7 +3,6 @@ import path from "node:path"
 
 import { getRequiredString, toIsoTimestamp } from "./normalization-helper.js"
 
-const COVERAGE_EXCLUSIONS_VERSION = 1
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000
 
 export const COVERAGE_EXCLUSION_RECHECK_DAYS = 30
@@ -13,101 +12,48 @@ export const COVERAGE_EXCLUSIONS_FILE_PATH = path.resolve(
   "coverage-exclusions.json",
 )
 
-function createEmptyCoverageExclusions () {
-  return {
-    version: COVERAGE_EXCLUSIONS_VERSION,
-    updatedAt: null,
-    coins: [],
-  }
-}
-
-function normalizeOptionalTimestamp (value, name) {
-  return value === null || value === undefined
-    ? null
-    : toIsoTimestamp(value, name)
-}
-
-function normalizeUnavailableMetrics (value, name) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${name} must be a non-empty array`)
-  }
-
-  return [...new Set(value.map((metric, index) => (
-    getRequiredString(metric, `${name}[${index}]`)
-  )))].sort()
-}
-
 function normalizeCoverageExclusion (value, index) {
-  const name = `Coverage exclusion at index ${index}`
+  const fieldName = `Coverage exclusion at index ${index}`
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`)
-  }
-
-  const excludedAt = toIsoTimestamp(value.excludedAt, `${name} excludedAt`)
-  const recheckAfter = toIsoTimestamp(value.recheckAfter, `${name} recheckAfter`)
-
-  if (new Date(recheckAfter).getTime() <= new Date(excludedAt).getTime()) {
-    throw new Error(`${name} recheckAfter must be later than excludedAt`)
+    throw new Error(`${fieldName} must be an object`)
   }
 
   return {
-    baseCurrencyId: getRequiredString(value.baseCurrencyId, `${name} baseCurrencyId`),
-    symbol: getRequiredString(value.symbol, `${name} symbol`),
-    name: getRequiredString(value.name, `${name} name`),
-    tradingViewSymbol: getRequiredString(
-      value.tradingViewSymbol,
-      `${name} tradingViewSymbol`,
+    symbol: getRequiredString(value.symbol, `${fieldName} symbol`),
+    name: getRequiredString(value.name, `${fieldName} name`),
+    baseCurrencyId: getRequiredString(
+      value.baseCurrencyId,
+      `${fieldName} baseCurrencyId`,
     ),
-    marketSymbol: getRequiredString(value.marketSymbol, `${name} marketSymbol`),
-    reason: "required_metrics_unavailable",
-    unavailableMetrics: normalizeUnavailableMetrics(
-      value.unavailableMetrics,
-      `${name} unavailableMetrics`,
+    recheckAfter: toIsoTimestamp(
+      value.recheckAfter,
+      `${fieldName} recheckAfter`,
     ),
-    excludedAt,
-    recheckAfter,
   }
 }
 
 export function normalizeCoverageExclusions (value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Coverage exclusions must be an object")
+  if (!Array.isArray(value)) {
+    throw new Error("Coverage exclusions must be an array")
   }
 
-  if (value.version !== COVERAGE_EXCLUSIONS_VERSION) {
-    throw new Error(
-      `Coverage exclusions version must be ${COVERAGE_EXCLUSIONS_VERSION}`,
-    )
-  }
-
-  if (!Array.isArray(value.coins)) {
-    throw new Error("Coverage exclusions coins must be an array")
-  }
-
-  const coins = value.coins.map(normalizeCoverageExclusion)
+  const exclusions = value.map(normalizeCoverageExclusion)
   const baseCurrencyIds = new Set()
 
-  for (const coin of coins) {
-    if (baseCurrencyIds.has(coin.baseCurrencyId)) {
+  for (const exclusion of exclusions) {
+    if (baseCurrencyIds.has(exclusion.baseCurrencyId)) {
       throw new Error(
-        `Coverage exclusions contain duplicate baseCurrencyId: ${coin.baseCurrencyId}`,
+        `Coverage exclusions contain duplicate baseCurrencyId: ${exclusion.baseCurrencyId}`,
       )
     }
 
-    baseCurrencyIds.add(coin.baseCurrencyId)
+    baseCurrencyIds.add(exclusion.baseCurrencyId)
   }
 
-  return {
-    version: COVERAGE_EXCLUSIONS_VERSION,
-    updatedAt: normalizeOptionalTimestamp(
-      value.updatedAt,
-      "Coverage exclusions updatedAt",
-    ),
-    coins: coins.sort((first, second) => (
-      first.baseCurrencyId.localeCompare(second.baseCurrencyId)
-    )),
-  }
+  return exclusions.sort((first, second) => (
+    first.baseCurrencyId.localeCompare(second.baseCurrencyId)
+  ))
 }
 
 export async function readCoverageExclusions ({
@@ -119,7 +65,7 @@ export async function readCoverageExclusions ({
     return normalizeCoverageExclusions(JSON.parse(rawData))
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return createEmptyCoverageExclusions()
+      return []
     }
 
     throw error
@@ -140,45 +86,34 @@ export function getActiveCoverageExclusionIds (
   exclusions,
   { now = new Date() } = {},
 ) {
-  const normalized = normalizeCoverageExclusions(exclusions)
   const currentTime = getNow(now).getTime()
 
-  return new Set(normalized.coins
-    .filter(coin => new Date(coin.recheckAfter).getTime() > currentTime)
-    .map(coin => coin.baseCurrencyId))
+  return new Set(normalizeCoverageExclusions(exclusions)
+    .filter(exclusion => (
+      new Date(exclusion.recheckAfter).getTime() > currentTime
+    ))
+    .map(exclusion => exclusion.baseCurrencyId))
 }
 
 function createCoverageExclusion (coin, now, recheckDays) {
-  if (!coin || typeof coin !== "object" || Array.isArray(coin)) {
-    throw new Error("Excluded coin must be an object")
-  }
-
   if (!Number.isSafeInteger(recheckDays) || recheckDays <= 0) {
     throw new Error("Coverage exclusion recheckDays must be a positive integer")
   }
 
-  const excludedAt = now.toISOString()
-  const recheckAfter = new Date(
-    now.getTime() + recheckDays * MILLISECONDS_PER_DAY,
-  ).toISOString()
-
   return normalizeCoverageExclusion({
-    baseCurrencyId: coin.baseCurrencyId,
-    symbol: coin.symbol,
-    name: coin.name,
-    tradingViewSymbol: coin.tradingViewSymbol,
-    marketSymbol: coin.market?.tradingViewSymbol,
-    unavailableMetrics: coin.unavailableMetrics,
-    excludedAt,
-    recheckAfter,
+    symbol: coin?.symbol,
+    name: coin?.name,
+    baseCurrencyId: coin?.baseCurrencyId,
+    recheckAfter: new Date(
+      now.getTime() + recheckDays * MILLISECONDS_PER_DAY,
+    ).toISOString(),
   }, 0)
 }
 
 async function writeCoverageExclusions (exclusions, filePath) {
-  const directory = path.dirname(filePath)
   const temporaryPath = `${filePath}.${process.pid}.tmp`
 
-  await fs.mkdir(directory, { recursive: true })
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
 
   try {
     await fs.writeFile(
@@ -213,20 +148,16 @@ export async function updateCoverageExclusions ({
   const checkedIds = new Set(checkedBaseCurrencyIds.map((baseCurrencyId, index) => (
     getRequiredString(baseCurrencyId, `checkedBaseCurrencyIds[${index}]`)
   )))
-  const coinsById = new Map(current.coins
-    .filter(coin => !checkedIds.has(coin.baseCurrencyId))
-    .map(coin => [coin.baseCurrencyId, coin]))
+  const exclusionsById = new Map(current
+    .filter(exclusion => !checkedIds.has(exclusion.baseCurrencyId))
+    .map(exclusion => [exclusion.baseCurrencyId, exclusion]))
 
   for (const coin of excludedCoins) {
     const exclusion = createCoverageExclusion(coin, currentTime, recheckDays)
-    coinsById.set(exclusion.baseCurrencyId, exclusion)
+    exclusionsById.set(exclusion.baseCurrencyId, exclusion)
   }
 
-  const updated = normalizeCoverageExclusions({
-    version: COVERAGE_EXCLUSIONS_VERSION,
-    updatedAt: currentTime.toISOString(),
-    coins: [...coinsById.values()],
-  })
+  const updated = normalizeCoverageExclusions([...exclusionsById.values()])
 
   await writeCoverageExclusions(updated, filePath)
 

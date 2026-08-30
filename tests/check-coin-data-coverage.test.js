@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
+import path from "node:path"
 import test from "node:test"
-import { createCoinDataCoverageChecker } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
+import {
+  createBootstrapDataRelativePath,
+  createCoinDataCoverageChecker,
+} from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
 
 test("coverage checker fetches 100 days from the market attached by step 1", async () => {
   const expectedError = new Error("Stop after capturing the request")
@@ -41,4 +45,119 @@ test("coverage checker fetches 100 days from the market attached by step 1", asy
   assert.equal(capturedOptions.studySettleDelayMs, 20)
   assert.equal(capturedOptions.timeoutMs, 30)
   assert.equal(capturedRequests.at(-1).inputs.in_0, coin.tradingViewSymbol)
+})
+
+test("bootstrap data path uses symbol and unique baseCurrencyId", () => {
+  assert.equal(
+    createBootstrapDataRelativePath({
+      symbol: "BTC",
+      baseCurrencyId: "XTVCBTC",
+    }),
+    path.join(
+      "step2-data-bootstrap",
+      "BTC--XTVCBTC",
+      "data.json",
+    ),
+  )
+})
+
+function createFetchedChartData () {
+  return {
+    chart: {
+      info: {
+        fullName: "BINANCE:BTCUSDT.P",
+        baseCurrencyId: "XTVCBTC",
+      },
+      periods: [],
+    },
+    studies: {
+      socialDominance: {
+        status: "fulfilled",
+        value: {
+          request: { key: "socialDominance" },
+          fields: { percent: "Social_dominance_" },
+          periods: [],
+          coverage: { periodCount: 0 },
+        },
+      },
+    },
+  }
+}
+
+function createCoin () {
+  return {
+    baseCurrencyId: "XTVCBTC",
+    symbol: "BTC",
+    name: "Bitcoin",
+    tradingViewSymbol: "CRYPTO:BTCUSD",
+    market: {
+      tradingViewSymbol: "BINANCE:BTCUSDT.P",
+    },
+  }
+}
+
+test("coverage checker saves one file only after accepting a coin", async () => {
+  const events = []
+  const nowTimestamp = 1_800_000_000
+  let saved
+  const checker = createCoinDataCoverageChecker({
+    fetchChartStudies: async () => {
+      events.push("fetched")
+      return createFetchedChartData()
+    },
+    evaluateCoverage: () => {
+      events.push("evaluated")
+      return {
+        complete: true,
+        retryable: false,
+        reasonCodes: [],
+        reasons: [],
+        unavailableMetrics: [],
+        coverage: {},
+      }
+    },
+    saveHourlyData: async (coin, hourlyData) => {
+      events.push("saved")
+      saved = { coin, hourlyData }
+      return "tmp/step2-data-bootstrap/BTC--XTVCBTC/data.json"
+    },
+  })
+  const coin = createCoin()
+  const result = await checker({}, coin, {
+    fetchHours: 24,
+    nowTimestamp,
+  })
+
+  assert.deepEqual(events, ["fetched", "evaluated", "saved"])
+  assert.equal(result.dataFile, "tmp/step2-data-bootstrap/BTC--XTVCBTC/data.json")
+  assert.equal(saved.coin, coin)
+  assert.equal(
+    saved.hourlyData.collectedAt,
+    new Date(nowTimestamp * 1_000).toISOString(),
+  )
+  assert.equal(saved.hourlyData.coin.marketSymbol, "BINANCE:BTCUSDT.P")
+})
+
+test("coverage checker discards data for a rejected coin", async () => {
+  let saveCount = 0
+  const checker = createCoinDataCoverageChecker({
+    fetchChartStudies: async () => createFetchedChartData(),
+    evaluateCoverage: () => ({
+      complete: false,
+      retryable: false,
+      reasonCodes: ["ohlcv:insufficient_history"],
+      reasons: ["Insufficient history"],
+      unavailableMetrics: [],
+      coverage: {},
+    }),
+    saveHourlyData: async () => {
+      saveCount += 1
+    },
+  })
+
+  const result = await checker({}, createCoin())
+
+  assert.equal(result.complete, false)
+  assert.equal(saveCount, 0)
+  assert.equal("dataFile" in result, false)
 })

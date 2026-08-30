@@ -1,5 +1,56 @@
-{
-  "version": 1,
-  "updatedAt": null,
-  "coins": []
-}
+[
+  {
+    "symbol": "BIANRENSHENG",
+    "name": "Bi An Ren Sheng",
+    "baseCurrencyId": "XTVCBIANRENSHENG",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "CC",
+    "name": "Canton",
+    "baseCurrencyId": "XTVCCCCA",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "H",
+    "name": "Humanity",
+    "baseCurrencyId": "XTVCH",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "KITE",
+    "name": "Kite",
+    "baseCurrencyId": "XTVCKITE",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "LIT",
+    "name": "Lighter",
+    "baseCurrencyId": "XTVCLITL",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "MON",
+    "name": "Monad",
+    "baseCurrencyId": "XTVCMONAD",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "NIGHT",
+    "name": "Midnight",
+    "baseCurrencyId": "XTVCNIGHTMI",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "PIEVERSE",
+    "name": "Pieverse",
+    "baseCurrencyId": "XTVCPIEVERSE",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "STABLE",
+    "name": "Stable",
+    "baseCurrencyId": "XTVCSTABLE3",
+    "recheckAfter": "2026-09-29T09:59:44.199Z"
+  }
+]

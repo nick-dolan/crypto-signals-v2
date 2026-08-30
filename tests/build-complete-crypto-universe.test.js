@@ -74,7 +74,7 @@ function createCoverageResult (
   complete,
   retryable = false,
   {
-    hourlyData,
+    dataFile,
     unavailableMetrics = [],
   } = {},
 ) {
@@ -89,7 +89,7 @@ function createCoverageResult (
         completePeriodCount: 168,
       },
     },
-    ...(hourlyData ? { hourlyData } : {}),
+    ...(dataFile ? { dataFile } : {}),
   }
 }
 
@@ -157,20 +157,16 @@ test("complete universe allows fewer coins than target and retries transient fai
   assert.equal(report.coins[0].attempts, 2)
 })
 
-test("complete universe keeps downloaded history for accepted coins", async () => {
-  const hourlyData = {
-    timeframe: "1h",
-    requestedHours: 2_400,
-    chart: { periods: [{ time: 1, close: 1 }] },
-    studies: {},
-  }
+test("complete universe keeps the accepted coin data file reference", async () => {
+  const dataFile = "tmp/step2-data-bootstrap/COIN1--XTVC1/data.json"
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse([createCoin(1)]),
-    async () => createCoverageResult(true, false, { hourlyData }),
+    async () => createCoverageResult(true, false, { dataFile }),
     { targetCount: 1 },
   )
 
-  assert.equal(report.coins[0].hourlyData, hourlyData)
+  assert.equal(report.coins[0].dataFile, dataFile)
+  assert.equal("hourlyData" in report.coins[0], false)
 })
 
 test("complete universe confirms unavailable metrics with a second attempt", async () => {
@@ -191,6 +187,7 @@ test("complete universe confirms unavailable metrics with a second attempt", asy
   assert.equal(report.rejected[0].attempts, 2)
   assert.deepEqual(report.rejected[0].unavailableMetrics, ["premium"])
   assert.deepEqual(report.rejected[0].confirmedUnavailableMetrics, ["premium"])
+  assert.equal("dataFile" in report.rejected[0], false)
 })
 
 test("complete universe does not confirm absence after a failed first request", async () => {

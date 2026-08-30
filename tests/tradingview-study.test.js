@@ -15,6 +15,11 @@ function createFakeChart (sourcePeriods, state) {
         this.updateCallbacks = []
 
         queueMicrotask(() => {
+          if (state.errorMessages) {
+            this.errorCallbacks.forEach(callback => callback(...state.errorMessages))
+            return
+          }
+
           this.readyCallbacks.forEach(callback => callback())
           this.updateCallbacks.forEach(callback => callback(["plots"]))
         })
@@ -94,6 +99,33 @@ test("study fetcher discovers raw plots and normalizes periods", async () => {
     missingPeriods: 1,
   })
   assert.equal(result.request.version, "last")
+  assert.equal(state.removed, 1)
+})
+
+test("study fetcher preserves structured TradingView error details", async () => {
+  const state = {
+    removed: 0,
+    errorMessages: [{ code: "study_not_supported" }, undefined],
+  }
+  const fetchStudy = createTradingViewStudyFetcher({
+    createIndicator: createIndicatorFactory({ plot_0: "Value" }),
+  })
+
+  await assert.rejects(
+    fetchStudy(
+      createFakeChart([], state),
+      {
+        key: "missingMetric",
+        id: "STD;Missing_Metric",
+      },
+      {
+        timeoutMs: 100,
+        settleDelayMs: 0,
+      },
+    ),
+    /\{"code":"study_not_supported"\}/,
+  )
+
   assert.equal(state.removed, 1)
 })
 

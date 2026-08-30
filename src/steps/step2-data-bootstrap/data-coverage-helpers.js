@@ -568,6 +568,7 @@ export function evaluateStudy (
     return {
       status: "rejected",
       error,
+      unavailable: options.canClassifyRejectedStudyUnavailable,
     }
   }
 

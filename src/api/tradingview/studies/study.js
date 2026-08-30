@@ -18,7 +18,23 @@ function getRequiredString (value, name) {
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === "string") {
+    return error
+  }
+
+  if (error === undefined || error === null) {
+    return ""
+  }
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
 }
 
 function validatePositiveNumber (value, name) {
@@ -232,7 +248,7 @@ function waitForStudy (
     }
 
     study.onError((...messages) => {
-      const details = messages.map(getErrorMessage).join(" ")
+      const details = messages.map(getErrorMessage).filter(Boolean).join(" ")
       finish(
         reject,
         new Error(`TradingView ${label} error: ${details || "Unknown error"}`),
