@@ -3,8 +3,8 @@ import path from "node:path"
 
 import { getRequiredString, toIsoTimestamp } from "./normalization-helper.js"
 
-function normalizeCoverageExclusion (value, index) {
-  const fieldName = `Coverage exclusion at index ${index}`
+function normalizeCoverageExclusionIdentity (value, index, label) {
+  const fieldName = `${label} at index ${index}`
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${fieldName} must be an object`)
@@ -17,25 +17,37 @@ function normalizeCoverageExclusion (value, index) {
       value.baseCurrencyId,
       `${fieldName} baseCurrencyId`,
     ),
+  }
+}
+
+function normalizeCoverageExclusion (value, index) {
+  const exclusion = normalizeCoverageExclusionIdentity(
+    value,
+    index,
+    "Coverage exclusion",
+  )
+
+  return {
+    ...exclusion,
     recheckAfter: toIsoTimestamp(
       value.recheckAfter,
-      `${fieldName} recheckAfter`,
+      `Coverage exclusion at index ${index} recheckAfter`,
     ),
   }
 }
 
-export function normalizeCoverageExclusions (value) {
+function normalizeExclusions (value, label, normalizeExclusion) {
   if (!Array.isArray(value)) {
-    throw new Error("Coverage exclusions must be an array")
+    throw new Error(`${label} must be an array`)
   }
 
-  const exclusions = value.map(normalizeCoverageExclusion)
+  const exclusions = value.map(normalizeExclusion)
   const baseCurrencyIds = new Set()
 
   for (const exclusion of exclusions) {
     if (baseCurrencyIds.has(exclusion.baseCurrencyId)) {
       throw new Error(
-        `Coverage exclusions contain duplicate baseCurrencyId: ${exclusion.baseCurrencyId}`,
+        `${label} contain duplicate baseCurrencyId: ${exclusion.baseCurrencyId}`,
       )
     }
 
@@ -45,6 +57,26 @@ export function normalizeCoverageExclusions (value) {
   return exclusions.sort((first, second) => (
     first.baseCurrencyId.localeCompare(second.baseCurrencyId)
   ))
+}
+
+export function normalizeCoverageExclusions (value) {
+  return normalizeExclusions(
+    value,
+    "Coverage exclusions",
+    normalizeCoverageExclusion,
+  )
+}
+
+export function normalizePermanentCoverageExclusions (value) {
+  return normalizeExclusions(
+    value,
+    "Permanent coverage exclusions",
+    (exclusion, index) => normalizeCoverageExclusionIdentity(
+      exclusion,
+      index,
+      "Permanent coverage exclusion",
+    ),
+  )
 }
 
 export async function readCoverageExclusions ({
@@ -61,6 +93,18 @@ export async function readCoverageExclusions ({
 
     throw error
   }
+}
+
+export async function readPermanentCoverageExclusions ({
+  filePath = path.resolve(
+    process.cwd(),
+    "data",
+    "permanent-coverage-exclusions.json",
+  ),
+} = {}) {
+  const rawData = await fs.readFile(filePath, "utf-8")
+
+  return normalizePermanentCoverageExclusions(JSON.parse(rawData))
 }
 
 function getNow (value) {
@@ -83,6 +127,11 @@ export function getActiveCoverageExclusionIds (
     .filter(exclusion => (
       new Date(exclusion.recheckAfter).getTime() > currentTime
     ))
+    .map(exclusion => exclusion.baseCurrencyId))
+}
+
+export function getPermanentCoverageExclusionIds (exclusions) {
+  return new Set(normalizePermanentCoverageExclusions(exclusions)
     .map(exclusion => exclusion.baseCurrencyId))
 }
 

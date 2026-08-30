@@ -1,6 +1,8 @@
 import {
   getActiveCoverageExclusionIds,
+  getPermanentCoverageExclusionIds,
   readCoverageExclusions,
+  readPermanentCoverageExclusions,
 } from "./helpers/coverage-exclusions-helper.js"
 import { writeTmpJson } from "./helpers/fs-helper.js"
 import { buildCryptoUniverse } from "./steps/step1-crypto-universe/build-crypto-universe.js"
@@ -8,12 +10,16 @@ import { fetchCryptoUniverseData } from "./steps/step1-crypto-universe/fetch-cry
 
 async function runCryptoUniverseStep () {
   const { candidates, markets } = await fetchCryptoUniverseData()
-  const coverageExclusions = await readCoverageExclusions()
-  const activeCoverageExclusionIds = getActiveCoverageExclusionIds(
-    coverageExclusions,
-  )
+  const [coverageExclusions, permanentCoverageExclusions] = await Promise.all([
+    readCoverageExclusions(),
+    readPermanentCoverageExclusions(),
+  ])
+  const coverageExcludedBaseCurrencyIds = new Set([
+    ...getActiveCoverageExclusionIds(coverageExclusions),
+    ...getPermanentCoverageExclusionIds(permanentCoverageExclusions),
+  ])
   const universe = buildCryptoUniverse(candidates, markets, {
-    coverageExcludedBaseCurrencyIds: activeCoverageExclusionIds,
+    coverageExcludedBaseCurrencyIds,
   })
   const outputPath = await writeTmpJson("step1-crypto-universe.json", universe)
 
