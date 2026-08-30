@@ -1,15 +1,111 @@
 [
   {
+    "symbol": "ALLO",
+    "name": "Allora",
+    "baseCurrencyId": "XTVCALLO",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "APR",
+    "name": "Capricorn",
+    "baseCurrencyId": "XTVCAPR",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "BAN",
+    "name": "Comedian",
+    "baseCurrencyId": "XTVCBANC",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "BAS",
+    "name": "BNB Attestation Service",
+    "baseCurrencyId": "XTVCBASBN",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "BEAT",
+    "name": "Audiera",
+    "baseCurrencyId": "XTVCBEATA",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
     "symbol": "BIANRENSHENG",
     "name": "Bi An Ren Sheng",
     "baseCurrencyId": "XTVCBIANRENSHENG",
     "recheckAfter": "2026-09-29T09:59:44.199Z"
   },
   {
+    "symbol": "BILL",
+    "name": "Billions Network",
+    "baseCurrencyId": "XTVCBILLIONSN",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "BR",
+    "name": "Bedrock",
+    "baseCurrencyId": "XTVCBRBE",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "BTR",
+    "name": "Bitlayer",
+    "baseCurrencyId": "XTVCBTRBIT",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
     "symbol": "CC",
     "name": "Canton",
     "baseCurrencyId": "XTVCCCCA",
     "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "CHIP",
+    "name": "USD.AI",
+    "baseCurrencyId": "XTVCCHIPUS",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "COLLECT",
+    "name": "Collect on Fanable",
+    "baseCurrencyId": "XTVCCOLLECTO",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "CYS",
+    "name": "Cysic",
+    "baseCurrencyId": "XTVCCYSI",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "DYDX",
+    "name": "dYdX",
+    "baseCurrencyId": "XTVCDYDXN",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "EDGE",
+    "name": "edgeX",
+    "baseCurrencyId": "XTVCEDGEX",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "ESP",
+    "name": "Espresso",
+    "baseCurrencyId": "XTVCESPRES",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "GENIUS",
+    "name": "Genius Terminal",
+    "baseCurrencyId": "XTVCGENIUS",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "GWEI",
+    "name": "ETHGas",
+    "baseCurrencyId": "XTVCGWEI",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
   },
   {
     "symbol": "H",
@@ -24,10 +120,40 @@
     "recheckAfter": "2026-09-29T09:59:44.199Z"
   },
   {
+    "symbol": "LAB",
+    "name": "LAB",
+    "baseCurrencyId": "XTVCLAB2",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
     "symbol": "LIT",
     "name": "Lighter",
     "baseCurrencyId": "XTVCLITL",
     "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "LONGXIA",
+    "name": "Long Xia  (Lobster)",
+    "baseCurrencyId": "XTVCLONGXIA",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "MAGMA",
+    "name": "Magma Finance",
+    "baseCurrencyId": "XTVCMAGMA",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "MEGA",
+    "name": "MegaETH",
+    "baseCurrencyId": "XTVCMEGAE",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "MET",
+    "name": "Meteora",
+    "baseCurrencyId": "XTVCMETE",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
   },
   {
     "symbol": "MON",
@@ -42,15 +168,75 @@
     "recheckAfter": "2026-09-29T09:59:44.199Z"
   },
   {
+    "symbol": "OPEN",
+    "name": "OpenLedger",
+    "baseCurrencyId": "XTVCOPENL",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
     "symbol": "PIEVERSE",
     "name": "Pieverse",
     "baseCurrencyId": "XTVCPIEVERSE",
     "recheckAfter": "2026-09-29T09:59:44.199Z"
   },
   {
+    "symbol": "PROS",
+    "name": "Pharos",
+    "baseCurrencyId": "XTVCPROSPH",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "Q",
+    "name": "Quack AI",
+    "baseCurrencyId": "XTVCQUAC",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "RAVE",
+    "name": "RaveDAO",
+    "baseCurrencyId": "XTVCRAVED",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "SENT",
+    "name": "Sentient",
+    "baseCurrencyId": "XTVCSENTIE",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "SKR",
+    "name": "Seeker",
+    "baseCurrencyId": "XTVCSKRS",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "SOON",
+    "name": "SOON",
+    "baseCurrencyId": "XTVCSOON2",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
     "symbol": "STABLE",
     "name": "Stable",
     "baseCurrencyId": "XTVCSTABLE3",
     "recheckAfter": "2026-09-29T09:59:44.199Z"
+  },
+  {
+    "symbol": "TAG",
+    "name": "Tagger",
+    "baseCurrencyId": "XTVCTAGG",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "UAI",
+    "name": "UnifAI Network",
+    "baseCurrencyId": "XTVCUAIU",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
+  },
+  {
+    "symbol": "ZAMA",
+    "name": "Zama",
+    "baseCurrencyId": "XTVCZAMA",
+    "recheckAfter": "2026-09-29T14:19:28.992Z"
   }
 ]
