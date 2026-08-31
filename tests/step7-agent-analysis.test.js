@@ -30,7 +30,7 @@ function createShortlist () {
   }
 }
 
-function createAnalysis () {
+function createAgentResponse () {
   return {
     schemaVersion: 1,
     asOf: "2026-08-31T09:00:00.000Z",
@@ -52,7 +52,9 @@ function createAnalysis () {
         movementProbability: 0.7,
         estimateConfidence: "medium",
         directionBias: "unclear",
-        drivers: ["rvRatio=0.6: волатильность сжата"],
+        drivers: [
+          { fields: ["rvRatio"], text: "волатильность сжата" },
+        ],
         counterSignals: [],
       },
       {
@@ -60,19 +62,35 @@ function createAnalysis () {
         movementProbability: 0.4,
         estimateConfidence: "low",
         directionBias: "up",
-        drivers: ["rvRatio=0.9: присутствует умеренное сжатие"],
-        counterSignals: ["volumeZ=0.2: свежий объёмный триггер слаб"],
+        drivers: [
+          { fields: ["rvRatio"], text: "присутствует умеренное сжатие" },
+        ],
+        counterSignals: [
+          { fields: ["volumeZ"], text: "свежий объёмный триггер слаб" },
+        ],
       },
     ],
   }
 }
 
-test("agent analysis parser accepts the exact response contract", () => {
-  const analysis = createAnalysis()
+function createAnalysis () {
+  const analysis = createAgentResponse()
 
+  analysis.assessments[0].drivers = ["rvRatio=0.6: волатильность сжата"]
+  analysis.assessments[1].drivers = [
+    "rvRatio=0.9: присутствует умеренное сжатие",
+  ]
+  analysis.assessments[1].counterSignals = [
+    "volumeZ=0.2: свежий объёмный триггер слаб",
+  ]
+
+  return analysis
+}
+
+test("agent analysis parser inserts exact payload values into evidence", () => {
   assert.deepEqual(
-    parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
-    analysis,
+    parseAgentAnalysis(JSON.stringify(createAgentResponse()), createPayload()),
+    createAnalysis(),
   )
 })
 
@@ -82,7 +100,7 @@ test("agent analysis parser rejects invalid JSON and inconsistent top candidates
     /not valid JSON/,
   )
 
-  const analysis = createAnalysis()
+  const analysis = createAgentResponse()
   analysis.topCandidates.reverse()
 
   assert.throws(
@@ -92,7 +110,7 @@ test("agent analysis parser rejects invalid JSON and inconsistent top candidates
 })
 
 test("agent analysis parser keeps explanations grounded and human-readable", () => {
-  const analysis = createAnalysis()
+  const analysis = createAgentResponse()
   analysis.topCandidates[0].explanation = "rvRatio=0.6 указывает на движение"
 
   assert.throws(
@@ -101,34 +119,31 @@ test("agent analysis parser keeps explanations grounded and human-readable", () 
   )
 
   analysis.topCandidates[0].explanation = "Торговая активность оживает"
-  analysis.assessments[0].drivers = ["madeUpMetric=999: сильный сигнал"]
-
-  assert.throws(
-    () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
-    /known field/,
-  )
-
-  analysis.assessments[0].drivers = ["rvRatio=0.7: волатильность сжата"]
-
-  assert.throws(
-    () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
-    /does not match rvRatio/,
-  )
-
-  analysis.assessments[0].drivers = ["openInterest=999999: позиции растут"]
-
-  assert.throws(
-    () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
-    /unknown field openInterest/,
-  )
-
   analysis.assessments[0].drivers = [
-    "rvRatio=0.6; madeUpMetric=999: сильный сигнал",
+    { fields: ["madeUpMetric"], text: "сильный сигнал" },
   ]
 
   assert.throws(
     () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
     /unknown field madeUpMetric/,
+  )
+
+  analysis.assessments[0].drivers = [
+    { fields: ["rvRatio", "rvRatio"], text: "волатильность сжата" },
+  ]
+
+  assert.throws(
+    () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
+    /one to three unique payload fields/,
+  )
+
+  analysis.assessments[0].drivers = [
+    { fields: ["rvRatio"], text: "rvRatio=0.7 означает сжатие" },
+  ]
+
+  assert.throws(
+    () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
+    /short interpretation text/,
   )
 })
 
@@ -140,7 +155,7 @@ test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe too
   const result = await analyzeCandidates(payload, shortlist, "system prompt", {
     callAgent: async (systemPrompt, userMessage, options) => {
       captured = { systemPrompt, userMessage, options }
-      return JSON.stringify(expected)
+      return JSON.stringify(createAgentResponse())
     },
   })
 
@@ -151,6 +166,29 @@ test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe too
   assert.equal(captured.options.reasoningEffort, "medium")
   assert.equal(captured.options.tools.length, 1)
   assert.equal(captured.options.tools[0].name, "get_coin_history")
+})
+
+test("candidate analysis exposes one invalid response without retrying", async () => {
+  const analysis = createAgentResponse()
+  analysis.assessments[0].drivers[0].fields = ["madeUpMetric"]
+  const response = JSON.stringify(analysis)
+  let callCount = 0
+
+  await assert.rejects(
+    analyzeCandidates(createPayload(), createShortlist(), "system prompt", {
+      callAgent: async () => {
+        callCount += 1
+        return response
+      },
+    }),
+    (error) => {
+      assert.match(error.message, /unknown field madeUpMetric/)
+      assert.equal(error.response, response)
+      return true
+    },
+  )
+
+  assert.equal(callCount, 1)
 })
 
 test("candidate analysis rejects mismatched step 5 and step 6 snapshots", async () => {

@@ -1,6 +1,9 @@
 import { callCopilotWithTools } from "../../api/copilot/chat.js"
 import { createCoinHistoryTool, validateAgentInputs } from "./create-coin-history-tool.js"
-import { parseAgentAnalysis } from "./parse-agent-analysis.js"
+import {
+  InvalidCopilotAnalysisError,
+  parseAgentAnalysis,
+} from "./parse-agent-analysis.js"
 
 export async function analyzeCandidates (
   payload,
@@ -22,5 +25,13 @@ export async function analyzeCandidates (
     tools,
   })
 
-  return parseAgentAnalysis(content, payload)
+  try {
+    return parseAgentAnalysis(content, payload)
+  } catch (error) {
+    if (error instanceof InvalidCopilotAnalysisError) {
+      error.response = content
+    }
+
+    throw error
+  }
 }

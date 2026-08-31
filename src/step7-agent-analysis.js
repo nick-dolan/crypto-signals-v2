@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { analyzeCandidates } from "./steps/step7-agent-analysis/analyze-candidates.js"
+import { InvalidCopilotAnalysisError } from "./steps/step7-agent-analysis/parse-agent-analysis.js"
 
 async function runAgentAnalysisStep () {
   const [payload, shortlist, systemPrompt] = await Promise.all([
@@ -13,7 +14,30 @@ async function runAgentAnalysisStep () {
       "utf8",
     ),
   ])
-  const analysis = await analyzeCandidates(payload, shortlist, systemPrompt)
+  let analysis
+
+  try {
+    analysis = await analyzeCandidates(payload, shortlist, systemPrompt)
+  } catch (error) {
+    if (
+      error instanceof InvalidCopilotAnalysisError
+      && typeof error.response === "string"
+    ) {
+      const invalidOutputPath = await writeTmpJson(
+        "step7-agent-analysis.invalid.json",
+        {
+          asOf: payload.asOf,
+          error: error.message,
+          response: error.response,
+        },
+      )
+
+      console.error(`Saved invalid Copilot response to ${invalidOutputPath}`)
+    }
+
+    throw error
+  }
+
   const outputPath = await writeTmpJson("step7-agent-analysis.json", analysis)
 
   console.log(

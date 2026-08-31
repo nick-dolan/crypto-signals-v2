@@ -1,5 +1,12 @@
+export class InvalidCopilotAnalysisError extends Error {
+  constructor (message) {
+    super(`Invalid Copilot analysis: ${message}`)
+    this.name = "InvalidCopilotAnalysisError"
+  }
+}
+
 function invalidAnalysis (message) {
-  throw new Error(`Invalid Copilot analysis: ${message}`)
+  throw new InvalidCopilotAnalysisError(message)
 }
 
 function isObject (value) {
@@ -33,61 +40,55 @@ function assertProbability (value, label) {
   }
 }
 
-function assertStringArray (value, maxLength, label) {
+function formatEvidenceValue (value) {
+  return Array.isArray(value) ? JSON.stringify(value) : String(value)
+}
+
+function normalizeObservations (value, maxLength, payload, row, label) {
   if (!Array.isArray(value) || value.length > maxLength) {
     invalidAnalysis(`${label} must contain at most ${maxLength} items`)
   }
 
-  if (value.some(item => (
-    typeof item !== "string"
-    || !item.trim()
-    || item.length > 500
-  ))) {
-    invalidAnalysis(`${label} must contain short non-empty strings`)
-  }
-}
+  return value.map((observation, index) => {
+    const observationLabel = `${label} ${index}`
 
-function evidenceValueMatches (token, value) {
-  const normalized = token.replace(
-    /^[^\p{L}\p{N}_+.-]+|[^\p{L}\p{N}_+.-]+$/gu,
-    "",
-  )
+    assertExactKeys(observation, ["fields", "text"], observationLabel)
 
-  if (Number.isFinite(value)) {
-    return Number(normalized) === value
-  }
-
-  if (typeof value === "string" || typeof value === "boolean" || value === null) {
-    return normalized === String(value)
-  }
-
-  return Array.isArray(value) && value.some(item => (
-    normalized === String(item)
-  ))
-}
-
-function assertEvidenceReferences (observations, payload, row, label) {
-  for (const observation of observations) {
-    const references = [...observation.matchAll(
-      /(?:^|[\s,(;])([A-Za-z][A-Za-z0-9_]*)\s*=\s*([^\s,;:)]+)/g,
-    )]
-
-    if (references.length === 0) {
-      invalidAnalysis(`${label} must reference a payload field as field=value`)
+    if (
+      !Array.isArray(observation.fields)
+      || observation.fields.length === 0
+      || observation.fields.length > 3
+      || observation.fields.some(field => typeof field !== "string" || !field)
+      || new Set(observation.fields).size !== observation.fields.length
+    ) {
+      invalidAnalysis(
+        `${observationLabel} fields must contain one to three unique payload fields`,
+      )
     }
 
-    for (const [, field, token] of references) {
-      const fieldIndex = payload.schema.indexOf(field)
+    const unknownField = observation.fields.find(field => !payload.schema.includes(field))
 
-      if (fieldIndex < 0) {
-        invalidAnalysis(`${label} references unknown field ${field}`)
-      }
-
-      if (!evidenceValueMatches(token, row[fieldIndex])) {
-        invalidAnalysis(`${label} contains a value that does not match ${field}`)
-      }
+    if (unknownField) {
+      invalidAnalysis(`${observationLabel} references unknown field ${unknownField}`)
     }
-  }
+
+    if (
+      typeof observation.text !== "string"
+      || !observation.text.trim()
+      || observation.text.length > 400
+      || observation.text.includes("=")
+    ) {
+      invalidAnalysis(`${observationLabel} must contain short interpretation text`)
+    }
+
+    const evidence = observation.fields.map((field) => {
+      const value = row[payload.schema.indexOf(field)]
+
+      return `${field}=${formatEvidenceValue(value)}`
+    })
+
+    return `${evidence.join(" и ")}: ${observation.text.trim()}`
+  })
 }
 
 function getCandidateSymbols (payload) {
@@ -179,20 +180,16 @@ export function parseAgentAnalysis (content, payload) {
       invalidAnalysis(`assessment ${assessment.symbol} has invalid directionBias`)
     }
 
-    assertStringArray(assessment.drivers, 3, `assessment ${assessment.symbol} drivers`)
-    assertStringArray(
-      assessment.counterSignals,
-      2,
-      `assessment ${assessment.symbol} counterSignals`,
-    )
-    assertEvidenceReferences(
+    assessment.drivers = normalizeObservations(
       assessment.drivers,
+      3,
       payload,
       payload.candidates[index],
       `assessment ${assessment.symbol} drivers`,
     )
-    assertEvidenceReferences(
+    assessment.counterSignals = normalizeObservations(
       assessment.counterSignals,
+      2,
       payload,
       payload.candidates[index],
       `assessment ${assessment.symbol} counterSignals`,
