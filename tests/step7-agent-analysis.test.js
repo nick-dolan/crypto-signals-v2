@@ -24,8 +24,20 @@ function createShortlist () {
     timeframe: "1h",
     candidateCount: 2,
     candidates: [
-      { coin: { symbol: "SOL", baseCurrencyId: "XTVCSOL" } },
-      { coin: { symbol: "BTC", baseCurrencyId: "XTVCBTC" } },
+      {
+        coin: {
+          symbol: "SOL",
+          baseCurrencyId: "XTVCSOL",
+          marketSymbol: "BINANCE:SOLUSDT.P",
+        },
+      },
+      {
+        coin: {
+          symbol: "BTC",
+          baseCurrencyId: "XTVCBTC",
+          marketSymbol: "BINANCE:BTCUSDT.P",
+        },
+      },
     ],
   }
 }
@@ -151,6 +163,8 @@ test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe too
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
+  expected.topCandidates[0].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:SOLUSDT.P"
+  expected.topCandidates[1].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:BTCUSDT.P"
   let captured
   const result = await analyzeCandidates(payload, shortlist, "system prompt", {
     callAgent: async (systemPrompt, userMessage, options) => {
@@ -189,6 +203,20 @@ test("candidate analysis exposes one invalid response without retrying", async (
   )
 
   assert.equal(callCount, 1)
+})
+
+test("candidate analysis requires market symbols before calling Copilot", async () => {
+  const shortlist = createShortlist()
+  delete shortlist.candidates[0].coin.marketSymbol
+
+  await assert.rejects(
+    analyzeCandidates(createPayload(), shortlist, "system prompt", {
+      callAgent: async () => {
+        throw new Error("Copilot must not be called")
+      },
+    }),
+    /do not define market symbols/,
+  )
 })
 
 test("candidate analysis rejects mismatched step 5 and step 6 snapshots", async () => {
