@@ -1,3 +1,4 @@
+import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 
 export function validatePositiveInteger (value, name) {
@@ -200,30 +201,22 @@ export function summarizeRejections (rejected) {
   )
 }
 
-function getLatestClosedHourlyPeriodTime (referenceTime) {
-  if (!Number.isFinite(referenceTime)) {
-    return null
-  }
-
-  return Math.floor(referenceTime / 3_600) * 3_600 - 3_600
-}
-
 export function getClosedHourlyPeriods (periods, referenceTime, hours) {
-  const latestClosedTime = getLatestClosedHourlyPeriodTime(referenceTime)
+  const boundary = getClosedHourlyBoundary(referenceTime)
 
-  if (latestClosedTime === null) {
+  if (!boundary) {
     return []
   }
 
   const earliestTime = hours === undefined
     ? -Infinity
-    : latestClosedTime - (hours - 1) * 3_600
+    : boundary.latestClosedTime - (hours - 1) * 3_600
 
   return (Array.isArray(periods) ? periods : [])
     .filter(period => (
       Number.isFinite(period?.time)
       && period.time >= earliestTime
-      && period.time <= latestClosedTime
+      && period.time <= boundary.latestClosedTime
     ))
     .sort((first, second) => first.time - second.time)
 }
@@ -234,7 +227,7 @@ function summarizeHourlyCoverage (
   referenceTime,
   requiredHours,
 ) {
-  const latestExpectedTime = getLatestClosedHourlyPeriodTime(referenceTime)
+  const latestExpectedTime = getClosedHourlyBoundary(referenceTime)?.latestClosedTime ?? null
   const earliestExpectedTime = latestExpectedTime - (requiredHours - 1) * 3_600
   const expectedTimes = Array.from(
     { length: requiredHours },

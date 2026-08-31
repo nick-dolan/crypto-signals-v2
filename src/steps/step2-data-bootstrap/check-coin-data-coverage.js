@@ -2,6 +2,7 @@ import path from "node:path"
 
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
+import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
 import { getClosedHourlyPeriods } from "./data-coverage-helpers.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
@@ -56,7 +57,7 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
     ? Object.keys(study.fields)
     : []
   const periods = Array.isArray(study?.periods) ? study.periods : []
-  const latestTime = Math.floor(nowTimestamp / 3_600) * 3_600 - 3_600
+  const latestTime = getClosedHourlyBoundary(nowTimestamp)?.latestClosedTime
   const earliestTime = latestTime - (fetchHours - 1) * 3_600
   const windowPeriods = periods.filter(period => (
     Number.isFinite(period?.time)
@@ -250,6 +251,12 @@ export function createCoinDataCoverageChecker ({
     } = {},
   ) {
     const requests = createCoverageStudyRequests(coin?.tradingViewSymbol)
+    const boundary = getClosedHourlyBoundary(nowTimestamp)
+
+    if (!boundary) {
+      throw new Error("nowTimestamp must be finite")
+    }
+
     const fetchedChartData = await fetchChartStudies(
       client,
       requests,
@@ -260,7 +267,7 @@ export function createCoinDataCoverageChecker ({
         timeoutMs,
         settleDelayMs: chartSettleDelayMs,
         studySettleDelayMs,
-        to: Math.floor(nowTimestamp / 3_600) * 3_600 - 1,
+        to: boundary.requestTo,
       },
     )
 

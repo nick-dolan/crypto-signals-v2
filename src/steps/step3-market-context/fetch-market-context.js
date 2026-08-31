@@ -1,7 +1,8 @@
 import { fetchTradingViewChartPeriods } from "../../api/tradingview/chart-candles.js"
+import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 
 function normalizeMarketContextPeriods (symbol, periods, nowTimestamp, requestedHours) {
-  const latestClosedTime = Math.floor(nowTimestamp / 3_600) * 3_600 - 3_600
+  const { latestClosedTime } = getClosedHourlyBoundary(nowTimestamp)
   const earliestTime = latestClosedTime - (requestedHours - 1) * 3_600
 
   const normalizedPeriods = (Array.isArray(periods) ? periods : [])
@@ -54,7 +55,7 @@ export function createMarketContextFetcher ({
       throw new Error("requestedHours must be a positive integer")
     }
 
-    const to = Math.floor(nowTimestamp / 3_600) * 3_600 - 1
+    const { requestTo } = getClosedHourlyBoundary(nowTimestamp)
     const series = await Promise.all([
       ["total", "CRYPTOCAP:TOTAL"],
       ["totales", "CRYPTOCAP:TOTALES"],
@@ -67,7 +68,7 @@ export function createMarketContextFetcher ({
         symbol,
         timeframe: "60",
         timeoutMs,
-        to,
+        to: requestTo,
       })
 
       return [key, {
