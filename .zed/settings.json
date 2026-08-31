@@ -1,0 +1,32 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+  "format_on_save": "on",
+  "languages": {
+    "JavaScript": {
+      "formatter": {
+        "code_action": "source.fixAll.eslint"
+      },
+      // "code_actions_on_format": {
+      //   "source.fixAll.eslint": true
+      // }
+    },
+    "JSON": {
+      "formatter": "language_server"
+    }
+  },
+  "lsp": {
+    "eslint": {
+      "settings": {
+        "rulesCustomizations": [
+          {
+            "rule": "@stylistic/no-trailing-spaces",
+            "severity": "off"
+          }
+        ]
+      }
+    }
+  }
+}
