@@ -1,9 +1,10 @@
-function roundNumber (value) {
+function roundNumber (value, precision = 3) {
   if (!Number.isFinite(value)) {
     throw new Error(`Agent payload cannot format non-finite value: ${value}`)
   }
 
-  const rounded = Math.round(value * 1_000) / 1_000
+  const factor = 10 ** precision
+  const rounded = Math.round(value * factor) / factor
 
   return Object.is(rounded, -0) ? 0 : rounded
 }
@@ -57,7 +58,7 @@ function createCandidateRow (profile) {
     roundNumber(volume.volume_acceleration_3h * 100),
     roundNumber(volume.rel_volume_at_time),
     roundNumber(volume.vd_net_4h_over_volume),
-    roundNumber(volume.cvd_divergence_12h),
+    roundNumber(volume.cvd_minus_price_z_12h),
     roundNumber(derivatives.oi_change_1h * 100),
     roundNumber(derivatives.oi_change_4h * 100),
     roundNumber(derivatives.oi_change_12h * 100),
@@ -65,9 +66,9 @@ function createCandidateRow (profile) {
     roundNumber(derivatives.oi_change_4h_z_30d),
     derivatives.oi_up_while_rv_down,
     roundNumber(derivatives.funding_percentile_90d),
-    roundNumber(derivatives.funding_oi_divergence),
+    roundNumber(derivatives.funding_minus_oi_z_4h),
     roundNumber(derivatives.premium_z_30d),
-    roundNumber(derivatives.liq_total_4h_over_oi * 100),
+    roundNumber(derivatives.liquidations_4h_over_oi, 6),
     roundNumber(derivatives.liq_imbalance_4h),
     roundNumber(derivatives.crowd_vs_top_traders),
     roundNumber(social.social_dominance_z_30d),
@@ -75,11 +76,11 @@ function createCandidateRow (profile) {
     roundNumber(social.interactions_acceleration_3h * 100),
     roundNumber(social.interactions_per_contributor_z),
     roundNumber(social.created_posts_per_active_contributor),
-    roundNumber(social.social_leads_price),
+    roundNumber(social.social_minus_price_z_3h),
     roundNumber(relative.beta_btc_7d),
     roundNumber(relative.corr_btc_24h),
     roundNumber(relative.corr_btc_change_24h_vs_7d),
-    roundNumber(relative.residual_return_4h * 100),
+    roundNumber(relative.residual_log_return_4h * 100),
     roundNumber(relative.residual_z_30d),
     roundNumber(relative.rs_vs_total3es_12h * 100),
     normalizeToAtr(narrative.category_momentum_4h, context.atr24hPct),
@@ -109,7 +110,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -140,7 +141,7 @@ export function buildAgentPayload (shortlist) {
       stablecap24hPct: "Изменение капитализации стейблкоинов за 24 часа, %",
     },
     conventions: {
-      rounding: "Числа округлены до трёх знаков после запятой",
+      rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
       null: "Narrative-метрика или зависимый от неё флаг недоступны; причину показывает categoryStatus",
@@ -173,7 +174,7 @@ export function buildAgentPayload (shortlist) {
       "fundingPctile",
       "fundingMinusOiZ4h",
       "premiumZ",
-      "liqOiIndex",
+      "liquidations4hOverOi",
       "liqImbalance",
       "crowdVsTop",
       "socialDominanceZ",
@@ -181,7 +182,7 @@ export function buildAgentPayload (shortlist) {
       "socialAccel3hPct",
       "interactionsPerContributorZ",
       "postsPerContributor",
-      "socialVsPriceZ",
+      "socialMinusPriceZ3h",
       "btcBeta7d",
       "btcCorr24h",
       "btcCorrChange",
@@ -221,7 +222,7 @@ export function buildAgentPayload (shortlist) {
       fundingPctile: "Derivatives: перцентиль Funding Rate в полном скользящем окне 90 дней",
       fundingMinusOiZ4h: "Derivatives: z30d(изменение Funding Rate за 4h) минус z30d(изменение OI за 4h); плюс означает более сильный сдвиг funding",
       premiumZ: "Derivatives: z30d(futures premium / close)",
-      liqOiIndex: "Trigger: 100 × сумма модулей long и short ликвидаций за 4h / OI; относительный индекс, а не точный процент, пока единицы studies не подтверждены",
+      liquidations4hOverOi: "Trigger: сумма модулей long и short ликвидаций за 4h / OI; относительное отношение, точная экономическая доля требует совпадения единиц studies",
       liqImbalance: "Trigger: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long",
       crowdVsTop: "Context: позиционирование обычных аккаунтов относительно top traders; плюс означает более long-настроенную толпу",
       socialDominanceZ: "Trigger: z-score доли внимания к монете за 30 дней",
@@ -229,7 +230,7 @@ export function buildAgentPayload (shortlist) {
       socialAccel3hPct: "Trigger: изменение взаимодействий последних 3 часов к предыдущим 3 часам, %",
       interactionsPerContributorZ: "Context: z30d(log1p(interactions / max(active contributors, 1))); высокий уровень может означать концентрацию или накрутку",
       postsPerContributor: "Context: новых публикаций / max(active contributors, 1) в текущем часу",
-      socialVsPriceZ: "Trigger: z30d(ускорение interactions за 3h) минус z30d(abs price return за те же 3h); выше 1 означает необычно сильный social относительно одновременного движения цены",
+      socialMinusPriceZ3h: "Trigger: z30d(ускорение interactions за 3h) минус z30d(abs price return за те же 3h); выше 1 означает необычно сильный social относительно одновременного движения цены",
       btcBeta7d: "Context: чувствительность часовых доходностей монеты к BTC за 7 дней",
       btcCorr24h: "Context: корреляция часовых доходностей монеты с BTC за 24 часа",
       btcCorrChange: "Context: корреляция с BTC за 24 часа минус корреляция за 7 дней; отрицательное значение означает расцепление",

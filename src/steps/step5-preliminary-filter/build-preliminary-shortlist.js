@@ -36,19 +36,19 @@ function calculateVolumeOrderFlowAxis (profile) {
     volume_acceleration_3h: acceleration,
     rel_volume_at_time: relativeVolume,
     vd_net_4h_over_volume: volumeDeltaShare,
-    cvd_divergence_12h: cvdDivergence,
+    cvd_minus_price_z_12h: cvdMinusPriceZ,
   } = profile.features.volumeOrderFlow
   const levelScore = softPositive(relativeVolume - 1, 1)
   const flowScore = Math.max(
     softPositive(Math.abs(volumeDeltaShare), 0.15),
-    softPositive(Math.abs(cvdDivergence), 1),
+    softPositive(Math.abs(cvdMinusPriceZ), 1),
   )
 
   return {
     active: acceleration >= 0.25 && (
       relativeVolume >= 1.5
       || Math.abs(volumeDeltaShare) >= 0.1
-      || Math.abs(cvdDivergence) >= 0.75
+      || Math.abs(cvdMinusPriceZ) >= 0.75
     ),
     score: geometricMean(
       softPositive(acceleration, 0.5),
@@ -64,14 +64,14 @@ function calculateDerivativesAxis (profile) {
     oi_change_4h_z_30d: oiChangeZ,
     oi_up_while_rv_down: oiBuildsQuietly,
     funding_percentile_90d: fundingPercentile,
-    liq_total_4h_over_oi: liquidationShare,
+    liquidations_4h_over_oi: liquidationsOverOi,
     liq_imbalance_4h: liquidationImbalance,
     crowd_vs_top_traders: crowdPositioning,
   } = profile.features.derivatives
   const alignedCrowd = Math.sign(fundingPercentile - 0.5) * crowdPositioning
   const oiSetup = oiChangeZ >= 0.75 && oiBuildsQuietly
   const oiTrigger = oiChangeZ >= 0.75 && oiAcceleration >= 0.005
-  const liquidationTrigger = liquidationShare >= 0.0005
+  const liquidationTrigger = liquidationsOverOi >= 0.0005
     && Math.abs(liquidationImbalance) >= 0.5
   const crowdSetup = Math.abs(fundingPercentile - 0.5) >= 0.4
     && alignedCrowd >= 0.15
@@ -80,7 +80,7 @@ function calculateDerivativesAxis (profile) {
     Math.max(Number(oiBuildsQuietly), softPositive(oiAcceleration, 0.015)),
   )
   const liquidationScore = geometricMean(
-    softPositive(liquidationShare, 0.0015),
+    softPositive(liquidationsOverOi, 0.0015),
     softPositive(Math.abs(liquidationImbalance), 0.5),
   )
   const crowdScore = geometricMean(
@@ -102,14 +102,14 @@ function calculateDerivativesAxis (profile) {
 function calculateSocialAxis (profile) {
   const {
     interactions_acceleration_3h: acceleration,
-    social_leads_price: leadsPrice,
+    social_minus_price_z_3h: socialMinusPriceZ,
   } = profile.features.social
 
   return {
-    active: acceleration >= 0.25 || leadsPrice >= 1,
+    active: acceleration >= 0.25 || socialMinusPriceZ >= 1,
     score: Math.max(
       softPositive(acceleration, 0.5),
-      softPositive(leadsPrice, 1),
+      softPositive(socialMinusPriceZ, 1),
     ),
     secondaryScore: 0,
   }

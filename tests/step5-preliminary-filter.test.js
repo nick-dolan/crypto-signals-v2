@@ -13,20 +13,20 @@ function createProfile (baseCurrencyId, overrides = {}) {
       volume_acceleration_3h: 0,
       rel_volume_at_time: 1,
       vd_net_4h_over_volume: 0,
-      cvd_divergence_12h: 0,
+      cvd_minus_price_z_12h: 0,
     },
     derivatives: {
       oi_acceleration_4h: 0,
       oi_change_4h_z_30d: 0,
       oi_up_while_rv_down: false,
       funding_percentile_90d: 0.5,
-      liq_total_4h_over_oi: 0,
+      liquidations_4h_over_oi: 0,
       liq_imbalance_4h: 0,
       crowd_vs_top_traders: 0,
     },
     social: {
       interactions_acceleration_3h: 0,
-      social_leads_price: 0,
+      social_minus_price_z_3h: 0,
     },
     relativeStrength: {
       corr_btc_change_24h_vs_7d: 0,
@@ -186,7 +186,7 @@ test("preliminary shortlist deduplicates overlapping reasons", () => {
     createProfile("overlap", {
       features: {
         volatilityCompression: { squeeze_age_hours: 6 },
-        social: { social_leads_price: 1.2 },
+        social: { social_minus_price_z_3h: 1.2 },
         divergences: { coiling: true },
       },
     }),

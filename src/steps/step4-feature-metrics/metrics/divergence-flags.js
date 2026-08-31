@@ -43,8 +43,8 @@ export function calculateDivergenceFlags ({
     )),
     attention_ahead: calculateFlag(
       length,
-      [social.social_leads_price],
-      socialLeadsPrice => socialLeadsPrice > 1,
+      [social.social_minus_price_z_3h],
+      socialMinusPriceZ => socialMinusPriceZ > 1,
     ),
     unconfirmed_move: calculateFlag(length, [
       return4hZ,

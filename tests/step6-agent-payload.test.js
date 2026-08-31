@@ -17,7 +17,7 @@ function createCandidate (symbol, overrides = {}) {
       volume_acceleration_3h: 0.25123,
       rel_volume_at_time: 1.87654,
       vd_net_4h_over_volume: -0.12345,
-      cvd_divergence_12h: 1.23456,
+      cvd_minus_price_z_12h: 1.23456,
     },
     derivatives: {
       oi_change_1h: 0.00123,
@@ -27,9 +27,9 @@ function createCandidate (symbol, overrides = {}) {
       oi_change_4h_z_30d: 1.2678,
       oi_up_while_rv_down: true,
       funding_percentile_90d: 0.91234,
-      funding_oi_divergence: -1.23456,
+      funding_minus_oi_z_4h: -1.23456,
       premium_z_30d: 0.45678,
-      liq_total_4h_over_oi: 0.0004567,
+      liquidations_4h_over_oi: 0.0004567,
       liq_imbalance_4h: -0.81234,
       crowd_vs_top_traders: 0.12345,
     },
@@ -39,13 +39,13 @@ function createCandidate (symbol, overrides = {}) {
       interactions_acceleration_3h: 0.4321,
       interactions_per_contributor_z: 2.34567,
       created_posts_per_active_contributor: 0.12345,
-      social_leads_price: 1.14567,
+      social_minus_price_z_3h: 1.14567,
     },
     relativeStrength: {
       beta_btc_7d: 1.12345,
       corr_btc_24h: 0.65432,
       corr_btc_change_24h_vs_7d: -0.34567,
-      residual_return_4h: 0.01234,
+      residual_log_return_4h: 0.01234,
       residual_z_30d: 1.14567,
       rs_vs_total3es_12h: 0.02345,
     },
@@ -126,7 +126,7 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 1)
+  assert.equal(payload.schemaVersion, 2)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
@@ -169,7 +169,7 @@ test("agent payload creates documented compact rows", () => {
     fundingPctile: 0.912,
     fundingMinusOiZ4h: -1.235,
     premiumZ: 0.457,
-    liqOiIndex: 0.046,
+    liquidations4hOverOi: 0.000457,
     liqImbalance: -0.812,
     crowdVsTop: 0.123,
     socialDominanceZ: 0.923,
@@ -177,7 +177,7 @@ test("agent payload creates documented compact rows", () => {
     socialAccel3hPct: 43.21,
     interactionsPerContributorZ: 2.346,
     postsPerContributor: 0.123,
-    socialVsPriceZ: 1.146,
+    socialMinusPriceZ3h: 1.146,
     btcBeta7d: 1.123,
     btcCorr24h: 0.654,
     btcCorrChange: -0.346,

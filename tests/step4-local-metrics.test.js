@@ -90,7 +90,7 @@ test("volume and order-flow metrics use USD volume and base-volume delta shares"
     "volume_acceleration_3h",
     "rel_volume_at_time",
     "vd_net_4h_over_volume",
-    "cvd_divergence_12h",
+    "cvd_minus_price_z_12h",
   ])
   assertClose(latest(metrics.volume_acceleration_3h), 1)
   assertClose(latest(metrics.vd_net_4h_over_volume), 1 / 7)
@@ -142,15 +142,15 @@ test("derivatives metrics expose OI flags, liquidation fallbacks, and trader dis
     "oi_change_4h_z_30d",
     "oi_up_while_rv_down",
     "funding_percentile_90d",
-    "funding_oi_divergence",
+    "funding_minus_oi_z_4h",
     "premium_z_30d",
-    "liq_total_4h_over_oi",
+    "liquidations_4h_over_oi",
     "liq_imbalance_4h",
     "crowd_vs_top_traders",
   ])
   assert.equal(metrics.oi_up_while_rv_down[0], null)
   assert.equal(latest(metrics.oi_up_while_rv_down), true)
-  assert.equal(latest(metrics.liq_total_4h_over_oi), 0)
+  assert.equal(latest(metrics.liquidations_4h_over_oi), 0)
   assert.equal(latest(metrics.liq_imbalance_4h), 0)
   assertClose(latest(metrics.crowd_vs_top_traders), -0.1)
 })
@@ -187,7 +187,7 @@ test("social metrics use adjacent windows and zero-contributor fallbacks", () =>
     "interactions_acceleration_3h",
     "interactions_per_contributor_z",
     "created_posts_per_active_contributor",
-    "social_leads_price",
+    "social_minus_price_z_3h",
   ])
   assertClose(latest(metrics.interactions_acceleration_3h), 1)
   assert.equal(latest(metrics.created_posts_per_active_contributor), 7)

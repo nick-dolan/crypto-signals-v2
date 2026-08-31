@@ -27,7 +27,7 @@ export function calculateRelativeStrengthMetrics ({
     btcLogReturns1h,
     168,
   )
-  const residualReturn4h = combine(
+  const residualLogReturn4h = combine(
     logReturns(coinClose, 4),
     combine(betaBtc7d, logReturns(btcClose, 4), (beta, value) => beta * value),
     (coinReturn, expectedReturn) => coinReturn - expectedReturn,
@@ -41,8 +41,8 @@ export function calculateRelativeStrengthMetrics ({
       correlation7d,
       (short, long) => short - long,
     ),
-    residual_return_4h: residualReturn4h,
-    residual_z_30d: rollingZScore(residualReturn4h, 720),
+    residual_log_return_4h: residualLogReturn4h,
+    residual_z_30d: rollingZScore(residualLogReturn4h, 720),
     rs_vs_total3es_12h: combine(
       simpleReturns(coinClose, 12),
       simpleReturns(total3esClose, 12),

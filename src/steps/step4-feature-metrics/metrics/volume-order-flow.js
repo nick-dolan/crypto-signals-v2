@@ -13,7 +13,7 @@ export function calculateVolumeOrderFlowMetrics ({ close, volume, volumeDelta })
     rollingSum(volumeDelta, 12),
     rollingSum(volume, 12),
   )
-  const cvdDivergence12h = combineSeries(
+  const cvdMinusPriceZ12h = combineSeries(
     [
       rollingZScore(volumeDeltaShare12h, 720),
       rollingZScore(simpleReturns(close, 12), 720),
@@ -34,6 +34,6 @@ export function calculateVolumeOrderFlowMetrics ({ close, volume, volumeDelta })
       rollingSum(volumeDelta, 4),
       rollingSum(volume, 4),
     ),
-    cvd_divergence_12h: cvdDivergence12h,
+    cvd_minus_price_z_12h: cvdMinusPriceZ12h,
   }
 }

@@ -37,7 +37,7 @@ export function calculateSocialMetrics ({
         postCount / (contributorCount === 0 ? 1 : contributorCount)
       ),
     ),
-    social_leads_price: combineSeries(
+    social_minus_price_z_3h: combineSeries(
       [
         rollingZScore(interactionsAcceleration3h, 720),
         rollingZScore(absolutePriceReturn3h, 720),

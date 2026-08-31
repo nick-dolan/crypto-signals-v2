@@ -197,7 +197,7 @@ test("calculateRelativeStrengthMetrics calculates aligned rolling market metrics
     "beta_btc_7d",
     "corr_btc_24h",
     "corr_btc_change_24h_vs_7d",
-    "residual_return_4h",
+    "residual_log_return_4h",
     "residual_z_30d",
     "rs_vs_total3es_12h",
   ])
@@ -208,7 +208,7 @@ test("calculateRelativeStrengthMetrics calculates aligned rolling market metrics
   assertClose(metrics.corr_btc_24h[last], 1)
   assertClose(metrics.corr_btc_change_24h_vs_7d[last], 0)
   assertClose(
-    metrics.residual_return_4h[last],
+    metrics.residual_log_return_4h[last],
     coinReturn4h - 2 * btcReturn4h,
   )
   assert.ok(Number.isFinite(metrics.residual_z_30d[last]))
@@ -254,7 +254,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   const oiChangeZ = filled(0)
   const volumeAcceleration = filled(1)
   const volumeZ = filled(0)
-  const socialLeadsPrice = filled(2)
+  const socialMinusPriceZ = filled(2)
   const socialDominanceZ = filled(0)
   const interactionsZ = filled(0)
   const interactionsAcceleration = filled(0)
@@ -264,7 +264,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   const crowdVsTopTraders = filled(0)
   const residualZ = filled(0)
 
-  socialLeadsPrice[0] = 1
+  socialMinusPriceZ[0] = 1
   socialDominanceZ[calm] = 2
   interactionsAcceleration[calm] = -1
   fundingPercentile[drop] = 0.05
@@ -291,7 +291,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
       crowd_vs_top_traders: crowdVsTopTraders,
     },
     social: {
-      social_leads_price: socialLeadsPrice,
+      social_minus_price_z_3h: socialMinusPriceZ,
       social_dominance_z_30d: socialDominanceZ,
       interactions_z_30d: interactionsZ,
       interactions_acceleration_3h: interactionsAcceleration,

@@ -42,14 +42,14 @@ export function calculateDerivativesMetrics ({
       ([oiChange, rvRatio]) => oiChange > 0 && rvRatio < 1,
     ),
     funding_percentile_90d: rollingPercentileRank(fundingRate, 2_160),
-    funding_oi_divergence: combineSeries(
+    funding_minus_oi_z_4h: combineSeries(
       [rollingZScore(difference(fundingRate, 4), 720), oiChange4hZ30d],
       ([fundingChangeZScore, oiChangeZScore]) => (
         fundingChangeZScore - oiChangeZScore
       ),
     ),
     premium_z_30d: rollingZScore(ratioSeries(premium, close), 720),
-    liq_total_4h_over_oi: ratioSeries(liquidationTotal4h, openInterest),
+    liquidations_4h_over_oi: ratioSeries(liquidationTotal4h, openInterest),
     liq_imbalance_4h: combineSeries(
       [longLiquidations4h, shortLiquidations4h],
       ([longTotal, shortTotal]) => (
