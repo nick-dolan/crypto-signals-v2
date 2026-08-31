@@ -33,6 +33,7 @@ async function runAll () {
       "step3-market-context.js",
       "step4-feature-metrics.js",
       "step5-preliminary-filter.js",
+      "step6-agent-payload.js",
     ]) {
       const succeeded = await runStep(`src/${step}`)
 

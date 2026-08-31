@@ -30,13 +30,17 @@ export async function readTmpJson (filename) {
   return JSON.parse(rawData)
 }
 
-async function writeJson (filePath, data) {
+async function writeJson (filePath, data, indentation = 2) {
   const temporaryPath = `${filePath}.${process.pid}.tmp`
 
   await fs.mkdir(path.dirname(filePath), { recursive: true })
 
   try {
-    await fs.writeFile(temporaryPath, JSON.stringify(data, null, 2), "utf-8")
+    await fs.writeFile(
+      temporaryPath,
+      JSON.stringify(data, null, indentation),
+      "utf-8",
+    )
     await fs.rename(temporaryPath, filePath)
   } catch (error) {
     await fs.rm(temporaryPath, { force: true })
@@ -50,6 +54,14 @@ export async function writeTmpJson (filename, data) {
   return writeJson(
     path.join(path.resolve(process.cwd(), "tmp"), filename),
     data,
+  )
+}
+
+export async function writeTmpCompactJson (filename, data) {
+  return writeJson(
+    path.join(path.resolve(process.cwd(), "tmp"), filename),
+    data,
+    0,
   )
 }
 

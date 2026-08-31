@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import test from "node:test"
 
-import { resetTmpSubdirectory, writeTmpJson } from "../src/helpers/fs-helper.js"
+import { resetTmpSubdirectory, writeTmpCompactJson, writeTmpJson } from "../src/helpers/fs-helper.js"
 
 test("writeTmpJson creates nested data directories", async (context) => {
   const directoryName = `fs-helper-test-${process.pid}-${Date.now()}`
@@ -17,6 +17,13 @@ test("writeTmpJson creates nested data directories", async (context) => {
 
   assert.deepEqual(saved, { saved: true })
   assert.equal(filePath, path.resolve(process.cwd(), "tmp", relativePath))
+
+  const compactPath = await writeTmpCompactJson(
+    path.join(directoryName, "compact.json"),
+    { saved: true },
+  )
+
+  assert.equal(await fs.readFile(compactPath, "utf-8"), "{\"saved\":true}")
 
   await resetTmpSubdirectory(directoryName)
 
