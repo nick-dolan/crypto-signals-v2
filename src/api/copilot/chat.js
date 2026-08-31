@@ -3,10 +3,50 @@ import { homedir } from "node:os"
 import path from "node:path"
 import { CopilotClient } from "@github/copilot-sdk"
 
-export async function callCopilot (
+export function resolveCopilotModel (models, requestedModel, reasoningEffort) {
+  if (!Array.isArray(models)) {
+    throw new Error("Copilot model list is unavailable")
+  }
+
+  const requested = typeof requestedModel === "string" ? requestedModel.trim() : ""
+  const selected = models.find(model => (
+    model.id === requested || model.name === requested
+  )) ?? models.find(model => (
+    model.id.toLowerCase() === requested.toLowerCase()
+    || model.name.toLowerCase() === requested.toLowerCase()
+  ))
+
+  if (!selected) {
+    throw new Error(`Copilot model is unavailable for this account: ${requested}`)
+  }
+
+  if (selected.policy && selected.policy.state !== "enabled") {
+    throw new Error(
+      `Copilot model ${selected.name} is ${selected.policy.state} for this account`,
+    )
+  }
+
+  if (reasoningEffort && !selected.capabilities?.supports?.reasoningEffort) {
+    throw new Error(`Copilot model ${selected.name} does not support reasoning effort`)
+  }
+
+  if (
+    reasoningEffort
+    && Array.isArray(selected.supportedReasoningEfforts)
+    && !selected.supportedReasoningEfforts.includes(reasoningEffort)
+  ) {
+    throw new Error(
+      `Copilot model ${selected.name} does not support reasoning effort ${reasoningEffort}`,
+    )
+  }
+
+  return selected
+}
+
+async function sendCopilotRequest (
   systemPrompt,
   userMessage,
-  { model = "claude-sonnet-4.6", reasoningEffort = null } = {},
+  { model, reasoningEffort, tools },
 ) {
   const client = new CopilotClient({
     mode: "empty",
@@ -17,22 +57,36 @@ export async function callCopilot (
   try {
     await client.start()
 
-    console.log(`Calling ${model} via GitHub Copilot SDK...`)
+    const selectedModel = resolveCopilotModel(
+      await client.listModels(),
+      model,
+      reasoningEffort,
+    )
+    const hasTools = tools.length > 0
+
+    console.log(`Calling ${selectedModel.name} via GitHub Copilot SDK...`)
 
     const session = await client.createSession({
       clientName: "crypto-signals-v2",
-      model,
+      model: selectedModel.id,
       ...(reasoningEffort ? { reasoningEffort } : {}),
-      availableTools: [],
+      ...(hasTools
+        ? {
+            tools,
+            toolSearch: { enabled: false },
+          }
+        : {}),
+      availableTools: tools.map(tool => `custom:${tool.name}`),
+      enableConfigDiscovery: false,
       onPermissionRequest: () => ({
         kind: "reject",
-        feedback: "Tool use is disabled for market analysis.",
+        feedback: "Only explicitly registered read-only market tools are allowed.",
       }),
       systemMessage: {
         mode: "customize",
         sections: {
           identity: { action: "remove" },
-          tool_instructions: { action: "remove" },
+          ...(hasTools ? {} : { tool_instructions: { action: "remove" } }),
           code_change_rules: { action: "remove" },
         },
         content: systemPrompt,
@@ -56,4 +110,32 @@ export async function callCopilot (
   } finally {
     await client.stop()
   }
+}
+
+export async function callCopilot (
+  systemPrompt,
+  userMessage,
+  { model = "GPT-5.6 Sol", reasoningEffort = "medium" } = {},
+) {
+  return sendCopilotRequest(systemPrompt, userMessage, {
+    model,
+    reasoningEffort,
+    tools: [],
+  })
+}
+
+export async function callCopilotWithTools (
+  systemPrompt,
+  userMessage,
+  {
+    model = "GPT-5.6 Sol",
+    reasoningEffort = "medium",
+    tools = [],
+  } = {},
+) {
+  return sendCopilotRequest(systemPrompt, userMessage, {
+    model,
+    reasoningEffort,
+    tools,
+  })
 }
