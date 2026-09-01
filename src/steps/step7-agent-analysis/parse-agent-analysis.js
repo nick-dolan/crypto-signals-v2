@@ -47,6 +47,12 @@ function normalizeObservations (value, maxLength, payload, row, label) {
     invalidAnalysis(`${label} must contain at most ${maxLength} items`)
   }
 
+  const marketContext = isObject(payload.marketContext) ? payload.marketContext : {}
+  const evidenceByField = new Map([
+    ...Object.entries(marketContext),
+    ...payload.schema.map((field, index) => [field, row[index]]),
+  ])
+
   return value.map((observation, index) => {
     const observationLabel = `${label} ${index}`
 
@@ -64,7 +70,7 @@ function normalizeObservations (value, maxLength, payload, row, label) {
       )
     }
 
-    const unknownField = observation.fields.find(field => !payload.schema.includes(field))
+    const unknownField = observation.fields.find(field => !evidenceByField.has(field))
 
     if (unknownField) {
       invalidAnalysis(`${observationLabel} references unknown field ${unknownField}`)
@@ -79,11 +85,9 @@ function normalizeObservations (value, maxLength, payload, row, label) {
       invalidAnalysis(`${observationLabel} must contain short interpretation text`)
     }
 
-    const evidence = observation.fields.map((field) => {
-      const value = row[payload.schema.indexOf(field)]
-
-      return `${field}=${formatEvidenceValue(value)}`
-    })
+    const evidence = observation.fields.map(field => (
+      `${field}=${formatEvidenceValue(evidenceByField.get(field))}`
+    ))
 
     return `${evidence.join(" и ")}: ${observation.text.trim()}`
   })
@@ -235,7 +239,10 @@ export function parseAgentAnalysis (content, payload) {
       invalidAnalysis(`top candidate ${candidate.symbol} has an invalid explanation`)
     }
 
-    const technicalField = payload.schema.find(field => (
+    const marketFields = isObject(payload.marketContext)
+      ? Object.keys(payload.marketContext)
+      : []
+    const technicalField = [...payload.schema, ...marketFields].find(field => (
       candidate.explanation.includes(field)
     ))
 

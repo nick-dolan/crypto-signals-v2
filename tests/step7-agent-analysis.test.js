@@ -10,6 +10,9 @@ function createPayload () {
     asOf: "2026-08-31T09:00:00.000Z",
     timeframe: "1h",
     candidateCount: 2,
+    marketContext: {
+      breadth4h: 0.199,
+    },
     schema: ["symbol", "rvRatio", "volumeZ"],
     candidates: [
       ["SOL", 0.6, 1.4],
@@ -103,6 +106,23 @@ test("agent analysis parser inserts exact payload values into evidence", () => {
   assert.deepEqual(
     parseAgentAnalysis(JSON.stringify(createAgentResponse()), createPayload()),
     createAnalysis(),
+  )
+})
+
+test("agent analysis parser inserts exact market context values into evidence", () => {
+  const response = createAgentResponse()
+  response.assessments[1].counterSignals = [
+    {
+      fields: ["volumeZ", "breadth4h"],
+      text: "слабый объём совпадает с узким рынком",
+    },
+  ]
+
+  const analysis = parseAgentAnalysis(JSON.stringify(response), createPayload())
+
+  assert.deepEqual(
+    analysis.assessments[1].counterSignals,
+    ["volumeZ=0.2 и breadth4h=0.199: слабый объём совпадает с узким рынком"],
   )
 })
 
