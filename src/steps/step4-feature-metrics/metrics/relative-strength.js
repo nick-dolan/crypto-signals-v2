@@ -1,9 +1,10 @@
+import { isFinite } from "../../../helpers/utils.typed.js"
 import { rollingBeta, rollingCorrelation, rollingZScore } from "../../../scripts/rolling-statistics.js"
 import { logReturns, simpleReturns } from "../../../scripts/returns.js"
 
 function combine (left, right, calculate) {
   return left.map((value, index) => (
-    Number.isFinite(value) && Number.isFinite(right[index])
+    isFinite(value) && isFinite(right[index])
       ? calculate(value, right[index])
       : null
   ))

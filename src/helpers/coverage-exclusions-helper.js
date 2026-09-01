@@ -2,11 +2,12 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 import { getRequiredString, toIsoTimestamp } from "./normalization-helper.js"
+import { isArray, isNaN, isObject, isSafeInteger } from "./utils.typed.js"
 
 function normalizeCoverageExclusionIdentity (value, index, label) {
   const fieldName = `${label} at index ${index}`
 
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isObject(value)) {
     throw new Error(`${fieldName} must be an object`)
   }
 
@@ -25,7 +26,7 @@ function normalizeOptionalStringArray (value, label) {
     return []
   }
 
-  if (!Array.isArray(value)) {
+  if (!isArray(value)) {
     throw new Error(`${label} must be an array`)
   }
 
@@ -66,7 +67,7 @@ function normalizeCoverageExclusion (value, index) {
 }
 
 function normalizeExclusions (value, label, normalizeExclusion) {
-  if (!Array.isArray(value)) {
+  if (!isArray(value)) {
     throw new Error(`${label} must be an array`)
   }
 
@@ -139,7 +140,7 @@ export async function readPermanentCoverageExclusions ({
 function getNow (value) {
   const now = new Date(value)
 
-  if (Number.isNaN(now.getTime())) {
+  if (isNaN(now.getTime())) {
     throw new Error("Coverage exclusions now must be a valid timestamp")
   }
 
@@ -165,7 +166,7 @@ export function getPermanentCoverageExclusionIds (exclusions) {
 }
 
 function createCoverageExclusion (coin, now, recheckDays) {
-  if (!Number.isSafeInteger(recheckDays) || recheckDays <= 0) {
+  if (!isSafeInteger(recheckDays) || recheckDays <= 0) {
     throw new Error("Coverage exclusion recheckDays must be a positive integer")
   }
 
@@ -206,11 +207,11 @@ export async function updateCoverageExclusions ({
   now = new Date(),
   recheckDays = 30,
 }) {
-  if (!Array.isArray(checkedBaseCurrencyIds)) {
+  if (!isArray(checkedBaseCurrencyIds)) {
     throw new Error("checkedBaseCurrencyIds must be an array")
   }
 
-  if (!Array.isArray(excludedCoins)) {
+  if (!isArray(excludedCoins)) {
     throw new Error("excludedCoins must be an array")
   }
 

@@ -1,4 +1,5 @@
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
+import { isArray, isSet, isString } from "../../helpers/utils.typed.js"
 
 import {
   isStablecoin,
@@ -10,14 +11,14 @@ import {
 } from "./crypto-universe-helpers.js"
 
 function normalizeCoverageExcludedBaseCurrencyIds (value) {
-  if (!Array.isArray(value) && !(value instanceof Set)) {
+  if (!isArray(value) && !isSet(value)) {
     throw new Error("coverageExcludedBaseCurrencyIds must be an array or Set")
   }
 
   const normalized = new Set()
 
   for (const baseCurrencyId of value) {
-    if (typeof baseCurrencyId !== "string" || !baseCurrencyId.trim()) {
+    if (!isString(baseCurrencyId) || !baseCurrencyId.trim()) {
       throw new Error("coverageExcludedBaseCurrencyIds must contain strings")
     }
 
@@ -37,7 +38,7 @@ export function buildCryptoUniverse (
     targetCount = 250,
   } = {},
 ) {
-  if (!Array.isArray(candidates)) {
+  if (!isArray(candidates)) {
     throw new Error("Crypto universe candidates must be an array")
   }
 

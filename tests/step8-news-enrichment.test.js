@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { isNaN } from "../src/helpers/utils.typed.js"
 import { enrichTopCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-top-candidates-with-news.js"
 
 function createAnalysis () {
@@ -165,7 +166,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
   )
   assert.equal(result.schemaVersion, 2)
   assert.equal(result.asOf, "2027-01-15T08:00:00.000Z")
-  assert.ok(!Number.isNaN(Date.parse(result.generatedAt)))
+  assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.newsEnrichment, {
     source: "tradingview",
     asOf: new Date(referenceTimestamp * 1_000).toISOString(),

@@ -1,5 +1,7 @@
+import { isError, isFinite, isString } from "../../helpers/utils.typed.js"
+
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -9,13 +11,13 @@ function getRequiredString (value, name) {
 }
 
 function validateTimeout (timeoutMs) {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  if (!isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Error("timeoutMs must be a positive number")
   }
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : "Unknown error"
+  return isError(error) ? error.message : "Unknown error"
 }
 
 function createHeaders (headers, accept) {
@@ -89,7 +91,7 @@ async function getResponseErrorDetails (
 
   try {
     const payload = JSON.parse(responseText)
-    const message = typeof payload?.message === "string"
+    const message = isString(payload?.message)
       ? payload.message.trim()
       : ""
 

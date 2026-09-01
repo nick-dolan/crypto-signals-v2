@@ -1,4 +1,11 @@
 import { zipToObject } from "radash"
+import {
+  isArray,
+  isFinite,
+  isObject,
+  isSafeInteger,
+  isString,
+} from "../../helpers/utils.typed.js"
 import { requestTradingViewJson } from "./request.js"
 
 const MARKET_COLUMNS = Object.freeze([
@@ -16,18 +23,18 @@ const MARKET_COLUMNS = Object.freeze([
 ])
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
 
 function normalizeStringArray (values, name) {
-  if (!Array.isArray(values) || values.length === 0) {
+  if (!isArray(values) || values.length === 0) {
     throw new Error(`${name} must be a non-empty array`)
   }
 
   const normalizedValues = [...new Set(values.map(value => (
-    typeof value === "string" ? value.trim().toUpperCase() : ""
+    isString(value) ? value.trim().toUpperCase() : ""
   )))]
 
   if (normalizedValues.includes("")) {
@@ -92,7 +99,7 @@ function getRowFieldName (index, field) {
 }
 
 function getRequiredString (value, index, field) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${getRowFieldName(index, field)} is required`)
@@ -102,7 +109,7 @@ function getRequiredString (value, index, field) {
 }
 
 function getPositiveNumber (value, index, field) {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${getRowFieldName(index, field)} must be a positive number`)
   }
 
@@ -114,7 +121,7 @@ function normalizeTypeSpecifications (value, index) {
     return []
   }
 
-  if (!Array.isArray(value)) {
+  if (!isArray(value)) {
     throw new Error(
       `${getRowFieldName(index, "typeSpecifications")} must be an array`,
     )
@@ -128,7 +135,7 @@ function normalizeTypeSpecifications (value, index) {
 }
 
 function normalizeMarket (row, index) {
-  if (!row || typeof row !== "object" || Array.isArray(row) || !Array.isArray(row.d)) {
+  if (!isObject(row) || !isArray(row.d)) {
     throw new Error(
       `TradingView crypto market row at index ${index} must contain a data array`,
     )
@@ -167,16 +174,11 @@ function normalizeMarket (row, index) {
 }
 
 function validateResponse (payload, maxRows) {
-  if (
-    !payload
-    || typeof payload !== "object"
-    || Array.isArray(payload)
-    || !Array.isArray(payload.data)
-  ) {
+  if (!isObject(payload) || !isArray(payload.data)) {
     throw new Error("TradingView crypto market response does not contain a data array")
   }
 
-  if (!Number.isSafeInteger(payload.totalCount) || payload.totalCount < 0) {
+  if (!isSafeInteger(payload.totalCount) || payload.totalCount < 0) {
     throw new Error("TradingView crypto market response has invalid totalCount")
   }
 

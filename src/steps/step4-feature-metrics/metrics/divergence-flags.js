@@ -1,10 +1,11 @@
+import { isArray, isFinite } from "../../../helpers/utils.typed.js"
 import { rollingPercentileRank, rollingZScore } from "../../../scripts/rolling-statistics.js"
 import { simpleReturns } from "../../../scripts/returns.js"
 
 function calculateFlag (length, required, condition) {
   return Array.from({ length }, (_, index) => {
     const values = required.map(series => series?.[index])
-    return values.every(Number.isFinite) ? condition(...values) : null
+    return values.every(isFinite) ? condition(...values) : null
   })
 }
 
@@ -22,14 +23,14 @@ export function calculateDivergenceFlags ({
   const length = close.length
   const nulls = () => Array(length).fill(null)
   const return4hZ = rollingZScore(simpleReturns(close, 4), 720)
-  const btcReturn4hZ = Array.isArray(btcClose)
+  const btcReturn4hZ = isArray(btcClose)
     ? rollingZScore(simpleReturns(btcClose, 4), 720)
     : nulls()
-  const oiLevelPercentile90d = Array.isArray(openInterest)
+  const oiLevelPercentile90d = isArray(openInterest)
     ? rollingPercentileRank(openInterest, 2_160)
     : nulls()
   const categoryMomentum = breadthNarrative.category_momentum_4h
-  const categoryMomentumZ = Array.isArray(categoryMomentum)
+  const categoryMomentumZ = isArray(categoryMomentum)
     ? rollingZScore(categoryMomentum, 720)
     : nulls()
 

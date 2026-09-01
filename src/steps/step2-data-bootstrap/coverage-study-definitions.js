@@ -1,6 +1,7 @@
 import { DERIVATIVE_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/derivatives.js"
 import { SOCIAL_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/social.js"
 import { VOLUME_INDICATOR_DEFINITIONS } from "../../api/tradingview/indicators/volume.js"
+import { isString } from "../../helpers/utils.typed.js"
 
 function getRequiredStudyDefinitions () {
   const definitionsByKey = new Map([
@@ -48,7 +49,7 @@ function toCoverageRequest (definition, tradingViewSymbol) {
 }
 
 export function createCoverageStudyRequests (tradingViewSymbol) {
-  const normalizedSymbol = typeof tradingViewSymbol === "string"
+  const normalizedSymbol = isString(tradingViewSymbol)
     ? tradingViewSymbol.trim()
     : ""
 

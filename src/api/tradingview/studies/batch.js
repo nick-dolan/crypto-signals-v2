@@ -1,8 +1,17 @@
-import { cluster, isObject, select } from "radash"
+import { cluster, select } from "radash"
+import {
+  isArray,
+  isError,
+  isFinite,
+  isFunction,
+  isInt,
+  isObject,
+  isString,
+} from "../../../helpers/utils.typed.js"
 import { fetchTradingViewStudy } from "./study.js"
 
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -12,11 +21,11 @@ function getRequiredString (value, name) {
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  return isError(error) ? error.message : String(error)
 }
 
 function validatePositiveNumber (value, name) {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`)
   }
 
@@ -24,7 +33,7 @@ function validatePositiveNumber (value, name) {
 }
 
 function validateNonNegativeNumber (value, name) {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!isFinite(value) || value < 0) {
     throw new Error(`${name} must be a non-negative number`)
   }
 
@@ -32,7 +41,7 @@ function validateNonNegativeNumber (value, name) {
 }
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!isInt(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 
@@ -40,7 +49,7 @@ function validatePositiveInteger (value, name) {
 }
 
 function snapshotObject (value) {
-  if (Array.isArray(value)) {
+  if (isArray(value)) {
     return Object.freeze([...value])
   }
 
@@ -52,7 +61,7 @@ function snapshotObject (value) {
 }
 
 function normalizeRequests (requests) {
-  if (!Array.isArray(requests)) {
+  if (!isArray(requests)) {
     throw new Error("TradingView study requests must be an array")
   }
 
@@ -98,7 +107,7 @@ function normalizeOptions ({
     validatePositiveInteger(range, "TradingView chart range")
   }
 
-  if (to !== undefined && !Number.isFinite(to)) {
+  if (to !== undefined && !isFinite(to)) {
     throw new Error("TradingView chart to must be a finite timestamp")
   }
 
@@ -203,7 +212,7 @@ function createStudyOptions (options) {
 export function createTradingViewStudiesFetcher ({
   fetchStudy = fetchTradingViewStudy,
 } = {}) {
-  if (typeof fetchStudy !== "function") {
+  if (!isFunction(fetchStudy)) {
     throw new Error("fetchStudy must be a function")
   }
 

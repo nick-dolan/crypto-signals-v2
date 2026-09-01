@@ -1,17 +1,19 @@
+import { isArray, isFinite, isInt } from "../helpers/utils.typed.js"
+
 function validateSeries (source, name) {
-  if (!Array.isArray(source)) {
+  if (!isArray(source)) {
     throw new Error(`${name} must be an array`)
   }
 
   for (const [index, value] of source.entries()) {
-    if (value !== null && !Number.isFinite(value)) {
+    if (value !== null && !isFinite(value)) {
       throw new Error(`${name} at index ${index} must be a finite number or null`)
     }
   }
 }
 
 function validateWindow (window) {
-  if (!Number.isInteger(window) || window <= 0) {
+  if (!isInt(window) || window <= 0) {
     throw new Error("window must be a positive integer")
   }
 }
@@ -36,12 +38,12 @@ function rollingValues (source, window, calculate) {
 
     const values = source.slice(index - window + 1, index + 1)
 
-    if (!values.every(Number.isFinite)) {
+    if (!values.every(isFinite)) {
       return null
     }
 
     const result = calculate(values)
-    return Number.isFinite(result) ? result : null
+    return isFinite(result) ? result : null
   })
 }
 
@@ -54,7 +56,7 @@ function rollingMoments (source, window) {
   let missing = 0
 
   return source.map((value, index) => {
-    if (Number.isFinite(value)) {
+    if (isFinite(value)) {
       total += value
       totalSquares += value ** 2
     } else {
@@ -64,7 +66,7 @@ function rollingMoments (source, window) {
     if (index >= window) {
       const expired = source[index - window]
 
-      if (Number.isFinite(expired)) {
+      if (isFinite(expired)) {
         total -= expired
         totalSquares -= expired ** 2
       } else {
@@ -113,7 +115,7 @@ function rollingPairMoments (first, second, window) {
   return first.map((firstValue, index) => {
     const secondValue = second[index]
 
-    if (Number.isFinite(firstValue) && Number.isFinite(secondValue)) {
+    if (isFinite(firstValue) && isFinite(secondValue)) {
       firstTotal += firstValue
       secondTotal += secondValue
       firstSquares += firstValue ** 2
@@ -127,7 +129,7 @@ function rollingPairMoments (first, second, window) {
       const expiredFirst = first[index - window]
       const expiredSecond = second[index - window]
 
-      if (Number.isFinite(expiredFirst) && Number.isFinite(expiredSecond)) {
+      if (isFinite(expiredFirst) && isFinite(expiredSecond)) {
         firstTotal -= expiredFirst
         secondTotal -= expiredSecond
         firstSquares -= expiredFirst ** 2

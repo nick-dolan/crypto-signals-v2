@@ -1,7 +1,16 @@
+import {
+  isArray,
+  isError,
+  isFinite,
+  isFunction,
+  isObject,
+  isSafeInteger,
+  isString,
+} from "../../helpers/utils.typed.js"
 import { fetchTradingViewStudy } from "./studies/index.js"
 
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -11,36 +20,36 @@ function getRequiredString (value, name) {
 }
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
 
 function validatePositiveNumber (value, name) {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`)
   }
 }
 
 function validateNonNegativeNumber (value, name) {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!isFinite(value) || value < 0) {
     throw new Error(`${name} must be a non-negative number`)
   }
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  return isError(error) ? error.message : String(error)
 }
 
 function normalizeRequests (requests) {
-  if (!Array.isArray(requests) || requests.length === 0) {
+  if (!isArray(requests) || requests.length === 0) {
     throw new Error("TradingView study requests must be a non-empty array")
   }
 
   const keys = new Set()
 
   return requests.map((request, index) => {
-    if (!request || typeof request !== "object" || Array.isArray(request)) {
+    if (!isObject(request)) {
       throw new Error(`TradingView study request at index ${index} must be an object`)
     }
 
@@ -148,7 +157,7 @@ function waitForChart (chart, options) {
       resolveAfterUpdates()
     })
     chart.onUpdate((changes) => {
-      if (!Array.isArray(changes) || !changes.includes("$prices")) {
+      if (!isArray(changes) || !changes.includes("$prices")) {
         return
       }
 
@@ -185,23 +194,23 @@ function waitForChart (chart, options) {
 
 function normalizeChartPeriods (periods) {
   return periods
-    .filter(period => period && typeof period === "object")
+    .filter(isObject)
     .map(period => ({ ...period }))
     .sort((first, second) => first.time - second.time)
 }
 
 function getChartInfo (infos) {
   return Object.freeze({
-    fullName: typeof infos?.full_name === "string" ? infos.full_name : null,
-    exchange: typeof infos?.exchange === "string" ? infos.exchange : null,
-    baseCurrencyId: typeof infos?.base_currency_id === "string"
+    fullName: isString(infos?.full_name) ? infos.full_name : null,
+    exchange: isString(infos?.exchange) ? infos.exchange : null,
+    baseCurrencyId: isString(infos?.base_currency_id)
       ? infos.base_currency_id
       : null,
-    quoteCurrency: typeof infos?.currency_code === "string"
+    quoteCurrency: isString(infos?.currency_code)
       ? infos.currency_code
       : null,
-    instrumentType: typeof infos?.type === "string" ? infos.type : null,
-    typeSpecifications: Array.isArray(infos?.typespecs)
+    instrumentType: isString(infos?.type) ? infos.type : null,
+    typeSpecifications: isArray(infos?.typespecs)
       ? Object.freeze([...infos.typespecs])
       : Object.freeze([]),
   })
@@ -210,7 +219,7 @@ function getChartInfo (infos) {
 export function createTradingViewChartStudiesFetcher ({
   fetchStudy = fetchTradingViewStudy,
 } = {}) {
-  if (typeof fetchStudy !== "function") {
+  if (!isFunction(fetchStudy)) {
     throw new Error("fetchStudy must be a function")
   }
 

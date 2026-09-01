@@ -3,36 +3,41 @@ import { token_sort_ratio as getTitleSimilarity } from "fuzzball"
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
-
-function isObject (value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-}
+import {
+  isArray,
+  isError,
+  isFunction,
+  isInt,
+  isObject,
+  isSafeInteger,
+  isString,
+} from "../../helpers/utils.typed.js"
 
 function getDefaultReferenceTimestamp () {
   const pipelineStartedAt = Number(process.env.PIPELINE_STARTED_AT)
 
-  return Number.isSafeInteger(pipelineStartedAt) && pipelineStartedAt > 0
+  return isSafeInteger(pipelineStartedAt) && pipelineStartedAt > 0
     ? pipelineStartedAt
     : Math.floor(Date.now() / 1_000)
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  return isError(error) ? error.message : String(error)
 }
 
 function mergeStrings (...values) {
   return [...new Set(values
     .flat()
-    .filter(value => typeof value === "string" && value))]
+    .filter(value => isString(value) && value))]
     .sort()
 }
 
 function validateInputs (analysis, shortlist) {
-  if (!isObject(analysis) || !Array.isArray(analysis.topCandidates)) {
+  if (!isObject(analysis) || !isArray(analysis.topCandidates)) {
     throw new Error("Step 7 top candidates are required")
   }
 
-  if (!isObject(shortlist) || !Array.isArray(shortlist.candidates)) {
+  if (!isObject(shortlist) || !isArray(shortlist.candidates)) {
     throw new Error("Step 5 candidates are required")
   }
 
@@ -91,7 +96,7 @@ function validateInputs (analysis, shortlist) {
 }
 
 function normalizeTitle (value) {
-  return typeof value === "string"
+  return isString(value)
     ? value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
     : ""
 }
@@ -114,7 +119,7 @@ function haveDifferentTitleNumbers (firstTitle, secondTitle) {
 
 function haveSameArticleUrl (first, second) {
   return ["tradingViewUrl", "externalUrl"].some(field => (
-    typeof first[field] === "string"
+    isString(first[field])
     && first[field]
     && first[field] === second[field]
   ))
@@ -155,13 +160,13 @@ function deduplicateNewsItems (items) {
 }
 
 function selectNewsItems (items, referenceTimestamp) {
-  if (!Array.isArray(items)) {
+  if (!isArray(items)) {
     throw new Error("TradingView news response does not contain an items array")
   }
 
   const recentItems = items
     .filter(item => (
-      Number.isInteger(item?.published)
+      isInt(item?.published)
       && item.published >= referenceTimestamp - 24 * 60 * 60
       && item.published <= referenceTimestamp
     ))
@@ -304,11 +309,11 @@ export async function enrichTopCandidatesWithNews (
     referenceTimestamp = getDefaultReferenceTimestamp(),
   } = {},
 ) {
-  if (typeof fetchNews !== "function" || typeof fetchStory !== "function") {
+  if (!isFunction(fetchNews) || !isFunction(fetchStory)) {
     throw new Error("News fetchers must be functions")
   }
 
-  if (!Number.isSafeInteger(referenceTimestamp) || referenceTimestamp <= 0) {
+  if (!isSafeInteger(referenceTimestamp) || referenceTimestamp <= 0) {
     throw new Error("News referenceTimestamp must be a positive Unix timestamp")
   }
 

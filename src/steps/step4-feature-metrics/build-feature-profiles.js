@@ -1,10 +1,11 @@
+import { isArray, isFinite, isNaN, isNumber, isObject } from "../../helpers/utils.typed.js"
 import { buildAlignedCoinSeries } from "./build-base-series.js"
 import { calculateCoinMetrics } from "./calculate-coin-metrics.js"
 
 function latestValues (seriesByName) {
   return Object.fromEntries(Object.entries(seriesByName).map(([name, series]) => [
     name,
-    Array.isArray(series) ? series.at(-1) : series,
+    isArray(series) ? series.at(-1) : series,
   ]))
 }
 
@@ -29,12 +30,12 @@ function findUnavailableMetrics (features, categoryApplicable) {
       return
     }
 
-    if (typeof value === "number" && !Number.isFinite(value)) {
+    if ((isNumber(value) || isNaN(value)) && !isFinite(value)) {
       unavailable.push(path)
       return
     }
 
-    if (value && typeof value === "object") {
+    if (isObject(value)) {
       for (const [key, nestedValue] of Object.entries(value)) {
         visit(nestedValue, path ? `${path}.${key}` : key)
       }

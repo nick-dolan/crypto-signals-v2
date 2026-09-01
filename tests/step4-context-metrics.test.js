@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { isFinite } from "../src/helpers/utils.typed.js"
 import { buildUniverseContext } from "../src/steps/step4-feature-metrics/build-universe-context.js"
 import { calculateBreadthNarrativeMetrics } from "../src/steps/step4-feature-metrics/metrics/breadth-narrative.js"
 import { calculateDivergenceFlags } from "../src/steps/step4-feature-metrics/metrics/divergence-flags.js"
@@ -211,7 +212,7 @@ test("calculateRelativeStrengthMetrics calculates aligned rolling market metrics
     metrics.residual_log_return_4h[last],
     coinReturn4h - 2 * btcReturn4h,
   )
-  assert.ok(Number.isFinite(metrics.residual_z_30d[last]))
+  assert.ok(isFinite(metrics.residual_z_30d[last]))
   assertClose(
     metrics.rs_vs_total3es_12h[last],
     coinReturn12h - marketReturn12h,

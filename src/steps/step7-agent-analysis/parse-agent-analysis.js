@@ -1,3 +1,5 @@
+import { isArray, isError, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
+
 export class InvalidCopilotAnalysisError extends Error {
   constructor (message) {
     super(`Invalid Copilot analysis: ${message}`)
@@ -7,10 +9,6 @@ export class InvalidCopilotAnalysisError extends Error {
 
 function invalidAnalysis (message) {
   throw new InvalidCopilotAnalysisError(message)
-}
-
-function isObject (value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
 function assertExactKeys (value, expectedKeys, label) {
@@ -31,7 +29,7 @@ function assertExactKeys (value, expectedKeys, label) {
 
 function assertProbability (value, label) {
   if (
-    !Number.isFinite(value)
+    !isFinite(value)
     || value < 0
     || value > 1
     || Number(value.toFixed(2)) !== value
@@ -41,11 +39,11 @@ function assertProbability (value, label) {
 }
 
 function formatEvidenceValue (value) {
-  return Array.isArray(value) ? JSON.stringify(value) : String(value)
+  return isArray(value) ? JSON.stringify(value) : String(value)
 }
 
 function normalizeObservations (value, maxLength, payload, row, label) {
-  if (!Array.isArray(value) || value.length > maxLength) {
+  if (!isArray(value) || value.length > maxLength) {
     invalidAnalysis(`${label} must contain at most ${maxLength} items`)
   }
 
@@ -55,10 +53,10 @@ function normalizeObservations (value, maxLength, payload, row, label) {
     assertExactKeys(observation, ["fields", "text"], observationLabel)
 
     if (
-      !Array.isArray(observation.fields)
+      !isArray(observation.fields)
       || observation.fields.length === 0
       || observation.fields.length > 3
-      || observation.fields.some(field => typeof field !== "string" || !field)
+      || observation.fields.some(field => !isString(field) || !field)
       || new Set(observation.fields).size !== observation.fields.length
     ) {
       invalidAnalysis(
@@ -73,7 +71,7 @@ function normalizeObservations (value, maxLength, payload, row, label) {
     }
 
     if (
-      typeof observation.text !== "string"
+      !isString(observation.text)
       || !observation.text.trim()
       || observation.text.length > 400
       || observation.text.includes("=")
@@ -92,7 +90,7 @@ function normalizeObservations (value, maxLength, payload, row, label) {
 }
 
 function getCandidateSymbols (payload) {
-  if (!Array.isArray(payload?.schema) || !Array.isArray(payload?.candidates)) {
+  if (!isArray(payload?.schema) || !isArray(payload?.candidates)) {
     invalidAnalysis("step 6 payload is incomplete")
   }
 
@@ -105,7 +103,7 @@ function getCandidateSymbols (payload) {
   const symbols = payload.candidates.map(row => row?.[symbolIndex])
 
   if (
-    symbols.some(symbol => typeof symbol !== "string" || !symbol)
+    symbols.some(symbol => !isString(symbol) || !symbol)
     || payload.candidateCount !== symbols.length
   ) {
     invalidAnalysis("step 6 payload contains invalid candidates")
@@ -115,7 +113,7 @@ function getCandidateSymbols (payload) {
 }
 
 export function parseAgentAnalysis (content, payload) {
-  if (typeof content !== "string" || !content.trim()) {
+  if (!isString(content) || !content.trim()) {
     invalidAnalysis("response must be a non-empty string")
   }
 
@@ -124,7 +122,7 @@ export function parseAgentAnalysis (content, payload) {
   try {
     analysis = JSON.parse(content)
   } catch (error) {
-    const details = error instanceof Error ? error.message : "unknown JSON error"
+    const details = isError(error) ? error.message : "unknown JSON error"
 
     invalidAnalysis(`response is not valid JSON: ${details}`)
   }
@@ -145,7 +143,7 @@ export function parseAgentAnalysis (content, payload) {
 
   const symbols = getCandidateSymbols(payload)
 
-  if (!Array.isArray(analysis.assessments) || analysis.assessments.length !== symbols.length) {
+  if (!isArray(analysis.assessments) || analysis.assessments.length !== symbols.length) {
     invalidAnalysis("assessments must contain every candidate")
   }
 
@@ -208,7 +206,7 @@ export function parseAgentAnalysis (content, payload) {
     ))
     .slice(0, Math.min(5, symbols.length))
 
-  if (!Array.isArray(analysis.topCandidates) || analysis.topCandidates.length !== expectedTop.length) {
+  if (!isArray(analysis.topCandidates) || analysis.topCandidates.length !== expectedTop.length) {
     invalidAnalysis("topCandidates has an unexpected length")
   }
 
@@ -229,7 +227,7 @@ export function parseAgentAnalysis (content, payload) {
     }
 
     if (
-      typeof candidate.explanation !== "string"
+      !isString(candidate.explanation)
       || !candidate.explanation.trim()
       || candidate.explanation.length > 500
       || /\d/.test(candidate.explanation)

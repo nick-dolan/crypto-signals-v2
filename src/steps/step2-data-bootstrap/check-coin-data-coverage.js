@@ -3,6 +3,7 @@ import path from "node:path"
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
+import { isArray, isFinite, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
 import { getClosedHourlyPeriods } from "./data-coverage-helpers.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
@@ -18,7 +19,7 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
   const seenTimes = new Set()
 
   for (const period of periods) {
-    if (!Number.isFinite(period?.time)) {
+    if (!isFinite(period?.time)) {
       coverage.invalidTimestampCount += 1
     } else if (seenTimes.has(period.time)) {
       coverage.duplicatePeriodCount += 1
@@ -26,7 +27,7 @@ function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
       seenTimes.add(period.time)
     }
 
-    const availableValueCount = fields.filter(field => Number.isFinite(period[field])).length
+    const availableValueCount = fields.filter(field => isFinite(period[field])).length
 
     if (availableValueCount === fields.length) {
       coverage.completePeriods += 1
@@ -53,19 +54,17 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
   }
 
   const study = settledStudy.value
-  const fields = study?.fields && typeof study.fields === "object"
-    ? Object.keys(study.fields)
-    : []
-  const periods = Array.isArray(study?.periods) ? study.periods : []
+  const fields = isObject(study?.fields) ? Object.keys(study.fields) : []
+  const periods = isArray(study?.periods) ? study.periods : []
   const latestTime = getClosedHourlyBoundary(nowTimestamp)?.latestClosedTime
   const earliestTime = latestTime - (fetchHours - 1) * 3_600
   const windowPeriods = periods.filter(period => (
-    Number.isFinite(period?.time)
+    isFinite(period?.time)
     && period.time >= earliestTime
     && period.time <= latestTime
   ))
   const periodsByTime = new Map()
-  let invalidGrid = periods.some(period => !Number.isFinite(period?.time))
+  let invalidGrid = periods.some(period => !isFinite(period?.time))
     || (study?.coverage?.invalidTimestampCount ?? 0) > 0
 
   for (const period of windowPeriods) {
@@ -79,7 +78,7 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
   }
 
   const hasNumericValues = fields.length > 0 && fields.every(field => (
-    windowPeriods.some(period => Number.isFinite(period[field]))
+    windowPeriods.some(period => isFinite(period[field]))
   ))
 
   if (invalidGrid || !hasNumericValues) {
@@ -94,7 +93,7 @@ function densifyLiquidations (chartData, nowTimestamp, fetchHours) {
 
       return {
         time, ...Object.fromEntries(fields.map(field => [
-          field, Number.isFinite(source?.[field]) ? source[field] : 0,
+          field, isFinite(source?.[field]) ? source[field] : 0,
         ])),
       }
     },
@@ -140,7 +139,7 @@ function toBootstrapStudyData (key, settledStudy, nowTimestamp, fetchHours, volu
 }
 
 function toSafePathSegment (value, name) {
-  const normalized = typeof value === "string" ? value.trim() : ""
+  const normalized = isString(value) ? value.trim() : ""
 
   const safe = [...normalized].map(character => (
     character.charCodeAt(0) < 32 || "<>:\"/\\|?*".includes(character)
@@ -226,15 +225,15 @@ export function createCoinDataCoverageChecker ({
   fetchChartStudies = fetchTradingViewChartStudies,
   saveHourlyData = saveBootstrapHourlyData,
 } = {}) {
-  if (typeof evaluateCoverage !== "function") {
+  if (!isFunction(evaluateCoverage)) {
     throw new Error("evaluateCoverage must be a function")
   }
 
-  if (typeof fetchChartStudies !== "function") {
+  if (!isFunction(fetchChartStudies)) {
     throw new Error("fetchChartStudies must be a function")
   }
 
-  if (typeof saveHourlyData !== "function") {
+  if (!isFunction(saveHourlyData)) {
     throw new Error("saveHourlyData must be a function")
   }
 

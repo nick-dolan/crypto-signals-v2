@@ -1,4 +1,5 @@
 import { callCopilotWithTools } from "../../api/copilot/chat.js"
+import { isString } from "../../helpers/utils.typed.js"
 import { createCoinHistoryTool, validateAgentInputs } from "./create-coin-history-tool.js"
 import {
   InvalidCopilotAnalysisError,
@@ -17,7 +18,7 @@ export async function analyzeCandidates (
   const { shortlistedCoins } = validateAgentInputs(payload, shortlist)
 
   if (shortlistedCoins.some(coin => (
-    typeof coin.marketSymbol !== "string" || !coin.marketSymbol
+    !isString(coin.marketSymbol) || !coin.marketSymbol
   ))) {
     throw new Error("Step 5 candidates do not define market symbols")
   }

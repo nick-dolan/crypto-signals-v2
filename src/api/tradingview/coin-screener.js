@@ -1,5 +1,6 @@
 import { zipToObject } from "radash"
 import { getRequiredString, parseInteger } from "../../helpers/normalization-helper.js"
+import { isArray, isFinite, isObject, isSafeInteger } from "../../helpers/utils.typed.js"
 import { requestTradingViewJson } from "./request.js"
 
 const COIN_COLUMNS = Object.freeze([
@@ -14,7 +15,7 @@ const COIN_COLUMNS = Object.freeze([
 ])
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
@@ -52,7 +53,7 @@ function normalizeOptionalPositiveNumber (value, index, field) {
     return null
   }
 
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${getRowFieldName(index, field)} must be a positive number`)
   }
 
@@ -64,7 +65,7 @@ function normalizeCategories (value, index) {
     return []
   }
 
-  if (!Array.isArray(value)) {
+  if (!isArray(value)) {
     throw new Error(`${getRowFieldName(index, "categories")} must be an array`)
   }
 
@@ -75,7 +76,7 @@ function normalizeCategories (value, index) {
 }
 
 function normalizeCoin (row, index, rankMax) {
-  if (!row || typeof row !== "object" || Array.isArray(row) || !Array.isArray(row.d)) {
+  if (!isObject(row) || !isArray(row.d)) {
     throw new Error(
       `TradingView coin screener row at index ${index} must contain a data array`,
     )
@@ -137,16 +138,11 @@ function normalizeCoin (row, index, rankMax) {
 }
 
 function validateResponse (payload) {
-  if (
-    !payload
-    || typeof payload !== "object"
-    || Array.isArray(payload)
-    || !Array.isArray(payload.data)
-  ) {
+  if (!isObject(payload) || !isArray(payload.data)) {
     throw new Error("TradingView coin screener response does not contain a data array")
   }
 
-  if (!Number.isSafeInteger(payload.totalCount) || payload.totalCount < 0) {
+  if (!isSafeInteger(payload.totalCount) || payload.totalCount < 0) {
     throw new Error("TradingView coin screener response has invalid totalCount")
   }
 

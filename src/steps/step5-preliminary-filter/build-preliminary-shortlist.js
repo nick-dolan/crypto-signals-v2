@@ -1,3 +1,5 @@
+import { isArray, isFinite, isString } from "../../helpers/utils.typed.js"
+
 function softPositive (value, scale) {
   const positive = Math.max(value, 0)
 
@@ -140,8 +142,8 @@ function calculateNarrativeAxis (profile) {
   const { atr24hPct } = profile.context
 
   if (
-    ![categoryMomentum, categoryBreadth, coinLead].every(Number.isFinite)
-    || !Number.isFinite(atr24hPct)
+    ![categoryMomentum, categoryBreadth, coinLead].every(isFinite)
+    || !isFinite(atr24hPct)
     || atr24hPct <= 0
   ) {
     return {
@@ -261,7 +263,7 @@ function addSelectionReason (selectionReasonsById, evaluation, reason) {
 }
 
 function validateProfiles (profiles) {
-  if (!Array.isArray(profiles)) {
+  if (!isArray(profiles)) {
     throw new Error("Feature profiles must be an array")
   }
 
@@ -270,7 +272,7 @@ function validateProfiles (profiles) {
   for (const [index, profile] of profiles.entries()) {
     const baseCurrencyId = profile?.coin?.baseCurrencyId
 
-    if (typeof baseCurrencyId !== "string" || !baseCurrencyId) {
+    if (!isString(baseCurrencyId) || !baseCurrencyId) {
       throw new Error(`Feature profile at index ${index} has no baseCurrencyId`)
     }
 

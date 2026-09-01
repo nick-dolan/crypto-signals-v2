@@ -1,3 +1,4 @@
+import { isArray, isFinite, isObject } from "../../helpers/utils.typed.js"
 import {
   createResultBuilder,
   evaluateChart,
@@ -37,25 +38,18 @@ export function evaluateCoinCoverage (
     throw new Error("volumeDeltaHours must not exceed fetchHours")
   }
 
-  if (!Number.isFinite(nowTimestamp)) {
+  if (!isFinite(nowTimestamp)) {
     throw new Error("nowTimestamp must be finite")
   }
 
-  if (
-    !coin
-    || typeof coin !== "object"
-    || Array.isArray(coin)
-    || !coin.market
-    || typeof coin.market !== "object"
-    || Array.isArray(coin.market)
-  ) {
+  if (!isObject(coin) || !isObject(coin.market)) {
     throw new Error("Coin with market is required")
   }
 
   const chart = chartData?.chart
   const studies = chartData?.studies
 
-  if (!chart || !Array.isArray(chart.periods) || !studies) {
+  if (!chart || !isArray(chart.periods) || !studies) {
     throw new Error("TradingView chart coverage data is incomplete")
   }
 

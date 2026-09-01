@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process"
+
 import { resetTmpDirectory } from "./helpers/fs-helper.js"
+import { isError } from "./helpers/utils.typed.js"
 
 function runStep (scriptPath) {
   return new Promise((resolve, reject) => {
@@ -49,7 +51,7 @@ async function runAll () {
 
     console.log(`\n✨ All steps completed successfully in ${duration}s!`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error"
+    const message = isError(error) ? error.message : "Unknown error"
 
     console.error(`\n❌ Pipeline failed: ${message}`)
     process.exitCode = 1

@@ -1,6 +1,8 @@
+import { isArray, isFinite } from "../../helpers/utils.typed.js"
+
 function isHourlyGrid (times) {
   return times.length > 0 && times.every((time, index) => (
-    Number.isFinite(time)
+    isFinite(time)
     && (index === 0 || time === times[index - 1] + 3_600)
   ))
 }
@@ -8,7 +10,7 @@ function isHourlyGrid (times) {
 function getChartPeriods (hourlyData) {
   const periods = hourlyData?.chart?.periods
 
-  if (!Array.isArray(periods)) {
+  if (!isArray(periods)) {
     throw new Error("Coin OHLCV periods are required")
   }
 
@@ -22,14 +24,14 @@ function getChartPeriods (hourlyData) {
 }
 
 function alignPeriods (periods, field, times) {
-  if (!Array.isArray(periods)) {
+  if (!isArray(periods)) {
     throw new Error(`Study periods for ${field} are required`)
   }
 
   const valuesByTime = new Map()
 
   for (const period of periods) {
-    if (!Number.isFinite(period?.time) || valuesByTime.has(period.time)) {
+    if (!isFinite(period?.time) || valuesByTime.has(period.time)) {
       throw new Error(`Study field ${field} contains an invalid hourly grid`)
     }
 
@@ -37,7 +39,7 @@ function alignPeriods (periods, field, times) {
 
     valuesByTime.set(
       period.time,
-      Number.isFinite(value) ? Object.is(value, -0) ? 0 : value : null,
+      isFinite(value) ? Object.is(value, -0) ? 0 : value : null,
     )
   }
 
@@ -53,7 +55,7 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
   const times = chartPeriods.map(period => period.time)
 
   if (
-    !Array.isArray(expectedTimes)
+    !isArray(expectedTimes)
     || times.length !== expectedTimes.length
     || !times.every((time, index) => time === expectedTimes[index])
   ) {

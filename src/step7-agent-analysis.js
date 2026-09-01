@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
+import { isPrimitive, isString } from "./helpers/utils.typed.js"
 import { analyzeCandidates } from "./steps/step7-agent-analysis/analyze-candidates.js"
 import { InvalidCopilotAnalysisError } from "./steps/step7-agent-analysis/parse-agent-analysis.js"
 
@@ -21,7 +22,8 @@ async function runAgentAnalysisStep () {
   } catch (error) {
     if (
       error instanceof InvalidCopilotAnalysisError
-      && typeof error.response === "string"
+      && isPrimitive(error.response)
+      && isString(error.response)
     ) {
       const invalidOutputPath = await writeTmpJson(
         "step7-agent-analysis.invalid.json",

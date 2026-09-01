@@ -1,7 +1,8 @@
 import { getRequiredString, parseInteger } from "../../helpers/normalization-helper.js"
+import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 
 export function validatePositiveInteger (value, name) {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
@@ -11,7 +12,7 @@ function normalizeOptionalPositiveNumber (value, fieldName) {
     return null
   }
 
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${fieldName} must be a positive number`)
   }
 
@@ -23,7 +24,7 @@ function getCandidateFieldName (index, field) {
 }
 
 function normalizeCandidateCategories (value, index) {
-  if (!Array.isArray(value)) {
+  if (!isArray(value)) {
     throw new Error(`${getCandidateFieldName(index, "categories")} must be an array`)
   }
 
@@ -34,7 +35,7 @@ function normalizeCandidateCategories (value, index) {
 }
 
 export function normalizeUniverseCandidate (candidate, index, candidateRankMax) {
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+  if (!isObject(candidate)) {
     throw new Error(`Crypto universe candidate at index ${index} must be an object`)
   }
 
@@ -113,17 +114,17 @@ function isRequiredMarket (market) {
   return market?.exchange === "BINANCE"
     && market?.quoteSymbol === "USDT"
     && market?.instrumentType === "swap"
-    && Array.isArray(market?.typeSpecifications)
+    && isArray(market?.typeSpecifications)
     && market.typeSpecifications.some(specification => (
-      typeof specification === "string"
+      isString(specification)
       && specification.toLowerCase() === "perpetual"
     ))
-    && Number.isFinite(market?.volume24hUsd)
+    && isFinite(market?.volume24hUsd)
     && market.volume24hUsd > 0
 }
 
 export function selectUniverseMarketsByBaseCurrencyId (markets) {
-  if (!Array.isArray(markets)) {
+  if (!isArray(markets)) {
     throw new Error("Crypto universe markets must be an array")
   }
 
@@ -132,7 +133,7 @@ export function selectUniverseMarketsByBaseCurrencyId (markets) {
   for (const market of markets) {
     if (
       !isRequiredMarket(market)
-      || typeof market.baseCurrencyId !== "string"
+      || !isString(market.baseCurrencyId)
       || !market.baseCurrencyId.trim()
     ) {
       continue

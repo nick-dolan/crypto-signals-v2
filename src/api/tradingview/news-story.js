@@ -1,11 +1,12 @@
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import { isArray, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
 import { getTradingViewCookieHeader } from "./client.js"
 import { requestTradingViewText } from "./request.js"
 
 export const TRADINGVIEW_NEWS_CONTENT_PARSER_VERSION = 1
 
 function getOptionalString (value) {
-  if (typeof value !== "string") {
+  if (!isString(value)) {
     return null
   }
 
@@ -27,7 +28,7 @@ function normalizeDocumentText (value) {
 
 function registerUnknownNodeType (node, unknownNodeTypes) {
   if (
-    typeof node?.type === "string"
+    isString(node?.type)
     && ![
       "*",
       "b",
@@ -55,15 +56,15 @@ function registerUnknownNodeType (node, unknownNodeTypes) {
 }
 
 function renderInlineNode (node, unknownNodeTypes) {
-  if (typeof node === "string") {
+  if (isString(node)) {
     return node
   }
 
-  if (Array.isArray(node)) {
+  if (isArray(node)) {
     return node.map(child => renderInlineNode(child, unknownNodeTypes)).join("")
   }
 
-  if (!node || typeof node !== "object") {
+  if (!isObject(node)) {
     return ""
   }
 
@@ -97,7 +98,7 @@ function renderTableNode (node, unknownNodeTypes) {
   const rows = []
 
   function collectRows (value) {
-    if (Array.isArray(value)) {
+    if (isArray(value)) {
       for (const child of value) {
         collectRows(child)
       }
@@ -105,14 +106,14 @@ function renderTableNode (node, unknownNodeTypes) {
       return
     }
 
-    if (!value || typeof value !== "object") {
+    if (!isObject(value)) {
       return
     }
 
     registerUnknownNodeType(value, unknownNodeTypes)
 
     if (value.type === "table-row") {
-      const cells = Array.isArray(value.children) ? value.children : []
+      const cells = isArray(value.children) ? value.children : []
       const row = cells
         .map(cell => normalizeInlineText(
           renderInlineNode(cell?.children ?? cell, unknownNodeTypes),
@@ -135,18 +136,18 @@ function renderTableNode (node, unknownNodeTypes) {
 }
 
 function renderBlockNode (node, unknownNodeTypes) {
-  if (typeof node === "string") {
+  if (isString(node)) {
     return normalizeInlineText(node)
   }
 
-  if (Array.isArray(node)) {
+  if (isArray(node)) {
     return node
       .map(child => renderBlockNode(child, unknownNodeTypes))
       .filter(Boolean)
       .join("\n\n")
   }
 
-  if (!node || typeof node !== "object") {
+  if (!isObject(node)) {
     return ""
   }
 
@@ -161,7 +162,7 @@ function renderBlockNode (node, unknownNodeTypes) {
   }
 
   if (node.type === "list") {
-    const items = Array.isArray(node.children) ? node.children : []
+    const items = isArray(node.children) ? node.children : []
 
     return items
       .map((item) => {
@@ -201,7 +202,7 @@ function convertAstToPlainText (ast) {
 }
 
 function findStoryCandidates (value, candidates) {
-  if (Array.isArray(value)) {
+  if (isArray(value)) {
     for (const item of value) {
       findStoryCandidates(item, candidates)
     }
@@ -209,11 +210,11 @@ function findStoryCandidates (value, candidates) {
     return
   }
 
-  if (!value || typeof value !== "object") {
+  if (!isObject(value)) {
     return
   }
 
-  if (value.story && typeof value.story === "object") {
+  if (isObject(value.story)) {
     candidates.push(value.story)
   }
 
@@ -269,7 +270,7 @@ function normalizeStoryUrl (value) {
 }
 
 function getReadTimeSeconds (value) {
-  return Number.isFinite(value) && value >= 0 ? value : null
+  return isFinite(value) && value >= 0 ? value : null
 }
 
 export function parseTradingViewNewsStoryHtml (html, expectedId) {

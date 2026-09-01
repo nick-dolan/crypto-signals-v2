@@ -1,9 +1,17 @@
-import { isObject } from "radash"
-
+import {
+  isArray,
+  isBoolean,
+  isError,
+  isFinite,
+  isFunction,
+  isInt,
+  isObject,
+  isString,
+} from "../../../helpers/utils.typed.js"
 import { createTradingViewIndicatorInstance } from "./resolver.js"
 
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -13,11 +21,11 @@ function getRequiredString (value, name) {
 }
 
 function getErrorMessage (error) {
-  if (error instanceof Error) {
+  if (isError(error)) {
     return error.message
   }
 
-  if (typeof error === "string") {
+  if (isString(error)) {
     return error
   }
 
@@ -33,7 +41,7 @@ function getErrorMessage (error) {
 }
 
 function validatePositiveNumber (value, name) {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`)
   }
 
@@ -41,7 +49,7 @@ function validatePositiveNumber (value, name) {
 }
 
 function validateNonNegativeNumber (value, name) {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!isFinite(value) || value < 0) {
     throw new Error(`${name} must be a non-negative number`)
   }
 
@@ -101,7 +109,7 @@ function normalizeStudyRequest (request) {
 
   if (
     request.allowMissingValues !== undefined
-    && typeof request.allowMissingValues !== "boolean"
+    && !isBoolean(request.allowMissingValues)
   ) {
     throw new Error("allowMissingValues must be a boolean")
   }
@@ -144,8 +152,8 @@ function normalizeWindow (window, timeframeSeconds) {
   }
 
   if (
-    !Number.isFinite(window.start)
-    || !Number.isFinite(window.end)
+    !isFinite(window.start)
+    || !isFinite(window.end)
     || window.end <= window.start
   ) {
     throw new Error("TradingView study window must have valid start and end timestamps")
@@ -158,7 +166,7 @@ function normalizeWindow (window, timeframeSeconds) {
 
   const expectedPeriods = (window.end - window.start) / timeframeSeconds
 
-  if (!Number.isInteger(expectedPeriods)) {
+  if (!isInt(expectedPeriods)) {
     throw new Error(
       "TradingView study window must be divisible by timeframeSeconds",
     )
@@ -197,7 +205,7 @@ function getSourcePeriodCount (periods, window) {
   }
 
   return periods.filter(period => (
-    Number.isFinite(period?.$time)
+    isFinite(period?.$time)
     && period.$time >= window.start
     && period.$time < window.end
   )).length
@@ -251,7 +259,7 @@ function waitForStudy (
     })
 
     study.onUpdate((changes) => {
-      if (!Array.isArray(changes) || !changes.includes("plots")) {
+      if (!isArray(changes) || !changes.includes("plots")) {
         return
       }
 
@@ -297,7 +305,7 @@ function getObservedPlotNames (sourcePeriods) {
 function getAvailablePlotNames (metadata, sourcePeriods) {
   const plotNames = new Set(
     Object.values(metadata.plots).filter(
-      plot => typeof plot === "string" && plot.trim(),
+      plot => isString(plot) && plot.trim(),
     ),
   )
 
@@ -343,8 +351,7 @@ function getFieldMap (request, metadata, sourcePeriods) {
 
 function normalizePlotValue (value) {
   if (
-    typeof value !== "number"
-    || !Number.isFinite(value)
+    !isFinite(value)
     || Math.abs(value) >= 1e100
   ) {
     return null
@@ -362,7 +369,7 @@ function normalizePeriods (sourcePeriods, fieldMap, window) {
   for (const period of sourcePeriods) {
     const time = period?.$time
 
-    if (!Number.isFinite(time)) {
+    if (!isFinite(time)) {
       invalidTimestampCount += 1
       continue
     }
@@ -426,7 +433,7 @@ function getCoverage (
 
   for (const period of periods) {
     const availableValues = fields.filter(
-      field => Number.isFinite(period[field]),
+      field => isFinite(period[field]),
     ).length
 
     if (availableValues === fields.length) {
@@ -492,7 +499,7 @@ function createPublicRequest (request) {
 export function createTradingViewStudyFetcher ({
   createIndicator = createTradingViewIndicatorInstance,
 } = {}) {
-  if (typeof createIndicator !== "function") {
+  if (!isFunction(createIndicator)) {
     throw new Error("createIndicator must be a function")
   }
 

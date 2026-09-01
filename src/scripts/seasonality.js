@@ -1,7 +1,8 @@
+import { isFinite, isInt } from "../helpers/utils.typed.js"
 import { mapSeries } from "./series.js"
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!isInt(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
@@ -33,14 +34,14 @@ export function relativeToSeasonalMedian (
       (_, observation) => source[index - seasonLength * (observation + 1)],
     )
 
-    if (!baseline.every(Number.isFinite)) {
+    if (!baseline.every(isFinite)) {
       return null
     }
 
     const seasonalMedian = median(baseline)
     const relative = current / seasonalMedian
 
-    return seasonalMedian === 0 || !Number.isFinite(relative)
+    return seasonalMedian === 0 || !isFinite(relative)
       ? null
       : relative
   })

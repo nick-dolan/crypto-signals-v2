@@ -1,11 +1,13 @@
+import { isDate, isNaN, isNumber, isPrimitive, isSafeInteger, isString } from "./utils.typed.js"
+
 export function parseInteger (value, name) {
-  const parsedValue = typeof value === "number"
+  const parsedValue = isNumber(value)
     ? value
-    : typeof value === "string" && value.trim()
+    : isPrimitive(value) && isString(value) && value.trim()
       ? Number(value)
       : Number.NaN
 
-  if (!Number.isSafeInteger(parsedValue)) {
+  if (!isSafeInteger(parsedValue)) {
     throw new Error(`${name} must be an integer`)
   }
 
@@ -13,7 +15,7 @@ export function parseInteger (value, name) {
 }
 
 export function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isPrimitive(value) && isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -23,13 +25,13 @@ export function getRequiredString (value, name) {
 }
 
 export function toIsoTimestamp (value, name) {
-  const date = value instanceof Date
+  const date = isDate(value)
     ? value
-    : typeof value === "string" && value.trim()
+    : isPrimitive(value) && isString(value) && value.trim()
       ? new Date(value)
       : new Date(Number.NaN)
 
-  if (Number.isNaN(date.getTime())) {
+  if (isNaN(date.getTime())) {
     throw new Error(`${name} must be a valid timestamp`)
   }
 

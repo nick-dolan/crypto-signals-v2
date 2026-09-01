@@ -1,4 +1,5 @@
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
+import { isFunction, isString } from "../../helpers/utils.typed.js"
 import {
   checkWithRetry,
   createCoverageRejection,
@@ -21,11 +22,11 @@ export async function buildCompleteCryptoUniverse (
 
   validatePositiveInteger(maxAttempts, "maxAttempts")
 
-  if (typeof checkCoverage !== "function") {
+  if (!isFunction(checkCoverage)) {
     throw new Error("checkCoverage must be a function")
   }
 
-  if (typeof onProgress !== "function") {
+  if (!isFunction(onProgress)) {
     throw new Error("onProgress must be a function")
   }
 
@@ -49,7 +50,7 @@ export async function buildCompleteCryptoUniverse (
         market: toPublicMarket(coin.market),
         attempts,
         coverage: result.coverage,
-        dataFile: typeof result.dataFile === "string" ? result.dataFile : null,
+        dataFile: isString(result.dataFile) ? result.dataFile : null,
       }
       coins.push(accepted)
       onProgress({

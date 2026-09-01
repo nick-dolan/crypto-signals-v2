@@ -1,3 +1,4 @@
+import { isFinite } from "../helpers/utils.typed.js"
 import { combineSeries } from "./series.js"
 import {
   rollingMean,
@@ -9,7 +10,7 @@ export function bollingerBandwidth (
   length = 20,
   standardDeviations = 2,
 ) {
-  if (!Number.isFinite(standardDeviations) || standardDeviations < 0) {
+  if (!isFinite(standardDeviations) || standardDeviations < 0) {
     throw new Error("standardDeviations must be a non-negative finite number")
   }
 

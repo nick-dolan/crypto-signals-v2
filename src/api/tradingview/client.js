@@ -1,5 +1,6 @@
 import TradingView from "@mathieuc/tradingview"
 import dotenv from "dotenv"
+import { isError, isFinite, isString } from "../../helpers/utils.typed.js"
 
 dotenv.config({ quiet: true })
 
@@ -35,7 +36,7 @@ function getPublicUser (user) {
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : "Unknown error"
+  return isError(error) ? error.message : "Unknown error"
 }
 
 async function authenticate (location) {
@@ -110,7 +111,7 @@ async function createConnection (options) {
     ...clientOptions
   } = options
 
-  if (!Number.isFinite(connectionTimeoutMs) || connectionTimeoutMs <= 0) {
+  if (!isFinite(connectionTimeoutMs) || connectionTimeoutMs <= 0) {
     throw new Error("connectionTimeoutMs must be a positive number")
   }
 
@@ -148,8 +149,8 @@ export function getTradingViewCookieHeader () {
 }
 
 export async function getTradingViewIndicator (id, version = "last") {
-  const normalizedId = typeof id === "string" ? id.trim() : ""
-  const normalizedVersion = typeof version === "string" ? version.trim() : ""
+  const normalizedId = isString(id) ? id.trim() : ""
+  const normalizedVersion = isString(version) ? version.trim() : ""
 
   if (!normalizedId) {
     throw new Error("TradingView indicator id is required")

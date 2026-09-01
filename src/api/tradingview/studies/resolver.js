@@ -1,9 +1,15 @@
 import TradingView from "@mathieuc/tradingview"
-import { isObject } from "radash"
+import {
+  isArray,
+  isError,
+  isFunction,
+  isObject,
+  isString,
+} from "../../../helpers/utils.typed.js"
 import { getTradingViewIndicator } from "../client.js"
 
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -13,7 +19,7 @@ function getRequiredString (value, name) {
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  return isError(error) ? error.message : String(error)
 }
 
 function cloneIndicatorInput (input) {
@@ -23,7 +29,7 @@ function cloneIndicatorInput (input) {
 
   return {
     ...input,
-    ...(Array.isArray(input.options) ? { options: [...input.options] } : {}),
+    ...(isArray(input.options) ? { options: [...input.options] } : {}),
   }
 }
 
@@ -47,7 +53,7 @@ function freezeIndicatorInputs (inputs) {
         return [key, input]
       }
 
-      if (Array.isArray(input.options)) {
+      if (isArray(input.options)) {
         Object.freeze(input.options)
       }
 
@@ -97,17 +103,17 @@ function createIndicatorTemplate (indicator, requestedId, requestedVersion) {
     indicator.pineVersion || requestedVersion,
     "Resolved TradingView indicator version",
   )
-  const script = typeof indicator.script === "string" ? indicator.script : ""
+  const script = isString(indicator.script) ? indicator.script : ""
 
   if (!script.trim()) {
     throw new Error(`TradingView indicator ${id} script is required`)
   }
 
-  const name = typeof indicator.description === "string"
+  const name = isString(indicator.description)
     && indicator.description.trim()
     ? indicator.description.trim()
     : id
-  const shortName = typeof indicator.shortDescription === "string"
+  const shortName = isString(indicator.shortDescription)
     && indicator.shortDescription.trim()
     ? indicator.shortDescription.trim()
     : name
@@ -156,11 +162,11 @@ export function createTradingViewIndicatorResolver ({
   loadIndicator = getTradingViewIndicator,
   PineIndicator = TradingView.PineIndicator,
 } = {}) {
-  if (typeof loadIndicator !== "function") {
+  if (!isFunction(loadIndicator)) {
     throw new Error("loadIndicator must be a function")
   }
 
-  if (typeof PineIndicator !== "function") {
+  if (!isFunction(PineIndicator)) {
     throw new Error("PineIndicator must be a constructor")
   }
 

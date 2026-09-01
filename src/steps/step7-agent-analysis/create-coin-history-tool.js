@@ -1,10 +1,11 @@
 import { defineTool } from "@github/copilot-sdk"
 
 import { readTmpJson } from "../../helpers/fs-helper.js"
+import { isArray, isError, isFinite, isInt, isObject, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
 
 function normalizeNumber (value) {
-  if (!Number.isFinite(value)) {
+  if (!isFinite(value)) {
     return null
   }
 
@@ -12,7 +13,7 @@ function normalizeNumber (value) {
 }
 
 function getCandidateSymbols (payload) {
-  if (!Array.isArray(payload?.schema) || !Array.isArray(payload?.candidates)) {
+  if (!isArray(payload?.schema) || !isArray(payload?.candidates)) {
     throw new Error("Step 6 agent payload is incomplete")
   }
 
@@ -24,7 +25,7 @@ function getCandidateSymbols (payload) {
 
   const symbols = payload.candidates.map(row => row?.[symbolIndex])
 
-  if (symbols.some(symbol => typeof symbol !== "string" || !symbol)) {
+  if (symbols.some(symbol => !isString(symbol) || !symbol)) {
     throw new Error("Step 6 agent payload contains an invalid symbol")
   }
 
@@ -40,7 +41,7 @@ export function validateAgentInputs (payload, shortlist) {
   const shortlistedCoins = shortlist?.candidates?.map(candidate => candidate?.coin)
 
   if (
-    !Array.isArray(shortlistedCoins)
+    !isArray(shortlistedCoins)
     || shortlist.candidateCount !== shortlistedCoins.length
     || shortlistedCoins.length !== symbols.length
     || shortlistedCoins.some((coin, index) => coin?.symbol !== symbols[index])
@@ -117,12 +118,12 @@ export function buildCoinHistory (
   const asOfTimestamp = Date.parse(asOf) / 1_000
   const chartPeriods = hourlyData?.chart?.periods
 
-  if (!Number.isInteger(asOfTimestamp) || !Array.isArray(chartPeriods)) {
+  if (!isInt(asOfTimestamp) || !isArray(chartPeriods)) {
     throw new Error(`${symbol} raw history is incomplete`)
   }
 
   const selectedPeriods = chartPeriods
-    .filter(period => Number.isFinite(period?.time) && period.time <= asOfTimestamp)
+    .filter(period => isFinite(period?.time) && period.time <= asOfTimestamp)
     .slice(-hours)
 
   if (
@@ -142,9 +143,9 @@ export function buildCoinHistory (
 
       studyPeriodsByKey.set(
         key,
-        new Map(Array.isArray(periods)
+        new Map(isArray(periods)
           ? periods
-              .filter(period => Number.isFinite(period?.time))
+              .filter(period => isFinite(period?.time))
               .map(period => [period.time, period])
           : []),
       )
@@ -245,7 +246,7 @@ export function createCoinHistoryTool (
       }
 
       try {
-        if (!args || typeof args !== "object" || Array.isArray(args)) {
+        if (!isObject(args)) {
           throw new Error("Аргументы инструмента должны быть объектом")
         }
 
@@ -265,7 +266,7 @@ export function createCoinHistoryTool (
         }
 
         if (
-          !Array.isArray(fields)
+          !isArray(fields)
           || fields.length < 1
           || fields.length > 6
           || fields.some(field => !allowedFields.includes(field))
@@ -274,7 +275,7 @@ export function createCoinHistoryTool (
           throw new Error("Запрошен недопустимый набор рядов")
         }
 
-        if (!Number.isInteger(hours) || hours < 12 || hours > 168) {
+        if (!isInt(hours) || hours < 12 || hours > 168) {
           throw new Error("Глубина истории должна быть целым числом от 12 до 168")
         }
 
@@ -303,7 +304,7 @@ export function createCoinHistoryTool (
         }
       } catch (error) {
         return createToolFailure(
-          error instanceof Error ? error.message : "Не удалось прочитать историю",
+          isError(error) ? error.message : "Не удалось прочитать историю",
         )
       }
     },

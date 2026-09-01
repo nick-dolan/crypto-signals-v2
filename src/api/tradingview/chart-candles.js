@@ -1,5 +1,7 @@
+import { isArray, isError, isFinite, isInt, isString } from "../../helpers/utils.typed.js"
+
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -9,7 +11,7 @@ function getRequiredString (value, name) {
 }
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!isInt(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 
@@ -17,7 +19,7 @@ function validatePositiveInteger (value, name) {
 }
 
 function validatePositiveNumber (value, name) {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`)
   }
 
@@ -25,7 +27,7 @@ function validatePositiveNumber (value, name) {
 }
 
 function validateNonNegativeNumber (value, name) {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!isFinite(value) || value < 0) {
     throw new Error(`${name} must be a non-negative number`)
   }
 
@@ -34,7 +36,7 @@ function validateNonNegativeNumber (value, name) {
 
 function formatChartError (messages) {
   const details = messages
-    .map(message => message instanceof Error ? message.message : String(message))
+    .map(message => isError(message) ? message.message : String(message))
     .join(" ")
 
   return details || "Unknown error"
@@ -111,7 +113,7 @@ export async function fetchTradingViewChartPeriods (client, options = {}) {
       })
 
       chart.onUpdate((changes) => {
-        if (!Array.isArray(changes) || !changes.includes("$prices")) {
+        if (!isArray(changes) || !changes.includes("$prices")) {
           return
         }
 
@@ -138,7 +140,7 @@ export async function fetchTradingViewChartPeriods (client, options = {}) {
           ...(to === undefined ? {} : { to }),
         })
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = isError(error) ? error.message : String(error)
 
         finish(
           reject,

@@ -1,7 +1,8 @@
+import { isArray, isFinite } from "../../helpers/utils.typed.js"
 import { simpleReturns } from "../../scripts/returns.js"
 
 function median (values) {
-  const finite = values.filter(Number.isFinite).sort((left, right) => left - right)
+  const finite = values.filter(isFinite).sort((left, right) => left - right)
 
   if (finite.length === 0) {
     return null
@@ -14,16 +15,16 @@ function median (values) {
 }
 
 function isHourlyGrid (times) {
-  return Array.isArray(times)
+  return isArray(times)
     && times.length > 0
     && times.every((time, index) => (
-      Number.isFinite(time)
+      isFinite(time)
       && (index === 0 || time === times[index - 1] + 3_600)
     ))
 }
 
 function hasGrid (times, expected) {
-  return Array.isArray(times)
+  return isArray(times)
     && times.length === expected.length
     && times.every((time, index) => time === expected[index])
 }
@@ -31,7 +32,7 @@ function hasGrid (times, expected) {
 function marketClose (marketContext, key, times) {
   const periods = marketContext?.series?.[key]?.periods
 
-  if (!Array.isArray(periods) || !hasGrid(periods.map(period => period?.time), times)) {
+  if (!isArray(periods) || !hasGrid(periods.map(period => period?.time), times)) {
     throw new Error(`Market context ${key} must use the universe hourly grid`)
   }
 
@@ -40,14 +41,14 @@ function marketClose (marketContext, key, times) {
 
 function subtractSeries (left, right) {
   return left.map((value, index) => (
-    Number.isFinite(value) && Number.isFinite(right[index])
+    isFinite(value) && isFinite(right[index])
       ? value - right[index]
       : null
   ))
 }
 
 function categoryNames (baseCoin) {
-  return [...new Set(Array.isArray(baseCoin.categories) ? baseCoin.categories : [])]
+  return [...new Set(isArray(baseCoin.categories) ? baseCoin.categories : [])]
 }
 
 function emptyCategoryContext (length, status) {
@@ -79,7 +80,7 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
         context.peerIndices.map(index => returns4h[index][length - 1]),
       ),
     }))
-    .filter(({ latestMomentum }) => Number.isFinite(latestMomentum))
+    .filter(({ latestMomentum }) => isFinite(latestMomentum))
     .sort((left, right) => (
       Math.abs(right.latestMomentum) - Math.abs(left.latestMomentum)
       || left.category.localeCompare(right.category)
@@ -103,9 +104,9 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
     }))
 
     if (
-      !Number.isFinite(momentum)
+      !isFinite(momentum)
       || !peerMoves.every(({ current, previous }) => (
-        Number.isFinite(current) && Number.isFinite(previous)
+        isFinite(current) && isFinite(previous)
       ))
     ) {
       return null
@@ -121,7 +122,7 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
     )).length / peerMoves.length
   })
   const coinLeadsCategory = momentum4h.map((momentum, index) => (
-    Number.isFinite(momentum) && Number.isFinite(returns4h[coinIndex][index])
+    isFinite(momentum) && isFinite(returns4h[coinIndex][index])
       ? returns4h[coinIndex][index] - momentum
       : null
   ))
@@ -137,7 +138,7 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
 }
 
 export function buildUniverseContext (baseCoins, marketContext) {
-  if (!Array.isArray(baseCoins) || baseCoins.length === 0) {
+  if (!isArray(baseCoins) || baseCoins.length === 0) {
     throw new Error("baseCoins must be a nonempty array")
   }
 
@@ -147,7 +148,7 @@ export function buildUniverseContext (baseCoins, marketContext) {
     !isHourlyGrid(times)
     || !baseCoins.every(baseCoin => (
       hasGrid(baseCoin?.times, times)
-      && Array.isArray(baseCoin?.close)
+      && isArray(baseCoin?.close)
       && baseCoin.close.length === times.length
     ))
   ) {
@@ -177,7 +178,7 @@ export function buildUniverseContext (baseCoins, marketContext) {
     Object.entries(segmentCaps).map(([key, values]) => [
       key,
       values.map((value, index) => (
-        Number.isFinite(value) && Number.isFinite(total[index]) && total[index] !== 0
+        isFinite(value) && isFinite(total[index]) && total[index] !== 0
           ? value / total[index]
           : null
       )),
@@ -185,8 +186,8 @@ export function buildUniverseContext (baseCoins, marketContext) {
   )
   const segmentRotation4h = times.map((_, index) => {
     const change = key => (
-      Number.isFinite(segmentShares[key][index])
-      && Number.isFinite(segmentShares[key][index - 4])
+      isFinite(segmentShares[key][index])
+      && isFinite(segmentShares[key][index - 4])
         ? segmentShares[key][index] - segmentShares[key][index - 4]
         : null
     )
@@ -197,11 +198,11 @@ export function buildUniverseContext (baseCoins, marketContext) {
       stables: change("stables"),
     }
 
-    return Object.values(rotation).every(Number.isFinite) ? rotation : null
+    return Object.values(rotation).every(isFinite) ? rotation : null
   })
   const returns4h = baseCoins.map(({ close }) => simpleReturns(close, 4))
   const universeBreadth4h = times.map((_, index) => {
-    const finite = returns4h.map(values => values[index]).filter(Number.isFinite)
+    const finite = returns4h.map(values => values[index]).filter(isFinite)
     return finite.length === 0
       ? null
       : finite.filter(value => value > 0).length / finite.length

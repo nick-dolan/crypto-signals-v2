@@ -1,17 +1,19 @@
+import { isArray, isFinite, isInt } from "../helpers/utils.typed.js"
+
 function validateSource (source) {
-  if (!Array.isArray(source)) {
+  if (!isArray(source)) {
     throw new Error("Pivot source must be an array")
   }
 
   source.forEach((value, index) => {
-    if (!Number.isFinite(value)) {
+    if (!isFinite(value)) {
       throw new Error(`Pivot source at index ${index} must be a finite number`)
     }
   })
 }
 
 function validateLength (value, name) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!isInt(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }

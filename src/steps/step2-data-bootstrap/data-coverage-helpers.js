@@ -1,8 +1,9 @@
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import { isArray, isError, isFinite, isObject, isSafeInteger } from "../../helpers/utils.typed.js"
 
 export function validatePositiveInteger (value, name) {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+  if (!isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
@@ -11,7 +12,7 @@ function validateCandidateMarket (candidate, index) {
   const market = candidate.market
   const fieldName = `Crypto universe candidate at index ${index} market`
 
-  if (!market || typeof market !== "object" || Array.isArray(market)) {
+  if (!isObject(market)) {
     throw new Error(`${fieldName} is required`)
   }
 
@@ -24,7 +25,7 @@ function validateCandidateMarket (candidate, index) {
 }
 
 function validateCandidates (candidates) {
-  if (!Array.isArray(candidates)) {
+  if (!isArray(candidates)) {
     throw new Error("Crypto universe candidates must be an array")
   }
 
@@ -32,11 +33,11 @@ function validateCandidates (candidates) {
   const baseCurrencyIds = new Set()
 
   for (const [index, candidate] of candidates.entries()) {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    if (!isObject(candidate)) {
       throw new Error(`Crypto universe candidate at index ${index} must be an object`)
     }
 
-    if (!Number.isSafeInteger(candidate.rank) || candidate.rank <= 0) {
+    if (!isSafeInteger(candidate.rank) || candidate.rank <= 0) {
       throw new Error(`Crypto universe candidate at index ${index} rank is invalid`)
     }
 
@@ -62,14 +63,14 @@ function validateCandidates (candidates) {
 }
 
 export function normalizeSourceUniverse (sourceUniverse) {
-  if (!sourceUniverse || typeof sourceUniverse !== "object" || Array.isArray(sourceUniverse)) {
+  if (!isObject(sourceUniverse)) {
     throw new Error("Source crypto universe must be an object")
   }
 
   const source = getRequiredString(sourceUniverse.source, "Crypto universe source")
   const selection = sourceUniverse.selection
 
-  if (!selection || typeof selection !== "object" || Array.isArray(selection)) {
+  if (!isObject(selection)) {
     throw new Error("Crypto universe selection is required")
   }
 
@@ -83,7 +84,7 @@ export function normalizeSourceUniverse (sourceUniverse) {
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : String(error)
+  return isError(error) ? error.message : String(error)
 }
 
 function createFailedCheckResult (error) {
@@ -116,7 +117,7 @@ export async function checkWithRetry (
     }
 
     const unavailableMetrics = new Set(
-      Array.isArray(result?.unavailableMetrics)
+      isArray(result?.unavailableMetrics)
         ? result.unavailableMetrics
         : [],
     )
@@ -169,16 +170,16 @@ export function createCoverageRejection (coin, attempts, result) {
     ...coin,
     market: toPublicMarket(coin.market),
     attempts,
-    reasonCodes: Array.isArray(result?.reasonCodes)
+    reasonCodes: isArray(result?.reasonCodes)
       ? [...result.reasonCodes]
       : ["coverage:invalid_result"],
-    reasons: Array.isArray(result?.reasons)
+    reasons: isArray(result?.reasons)
       ? [...result.reasons]
       : ["Coverage check returned an invalid result"],
-    unavailableMetrics: Array.isArray(result?.unavailableMetrics)
+    unavailableMetrics: isArray(result?.unavailableMetrics)
       ? [...result.unavailableMetrics]
       : [],
-    confirmedUnavailableMetrics: Array.isArray(result?.confirmedUnavailableMetrics)
+    confirmedUnavailableMetrics: isArray(result?.confirmedUnavailableMetrics)
       ? [...result.confirmedUnavailableMetrics]
       : [],
     coverage: result?.coverage ?? null,
@@ -212,9 +213,9 @@ export function getClosedHourlyPeriods (periods, referenceTime, hours) {
     ? -Infinity
     : boundary.latestClosedTime - (hours - 1) * 3_600
 
-  return (Array.isArray(periods) ? periods : [])
+  return (isArray(periods) ? periods : [])
     .filter(period => (
-      Number.isFinite(period?.time)
+      isFinite(period?.time)
       && period.time >= earliestTime
       && period.time <= boundary.latestClosedTime
     ))
@@ -234,7 +235,7 @@ function summarizeHourlyCoverage (
     (_, index) => earliestExpectedTime + index * 3_600,
   )
   const expectedTimeSet = new Set(expectedTimes)
-  const sourcePeriods = Array.isArray(periods) ? periods : []
+  const sourcePeriods = isArray(periods) ? periods : []
   const windowPeriods = getClosedHourlyPeriods(
     sourcePeriods,
     referenceTime,
@@ -264,7 +265,7 @@ function summarizeHourlyCoverage (
   const fieldValueCounts = Object.fromEntries(fields.map(field => [
     field,
     expectedTimes.filter(time => (
-      periodsByTime.get(time)?.some(period => Number.isFinite(period[field]))
+      periodsByTime.get(time)?.some(period => isFinite(period[field]))
     )).length,
   ]))
   const fieldMissingValueCounts = Object.fromEntries(fields.map(field => [
@@ -275,10 +276,10 @@ function summarizeHourlyCoverage (
     const matchingPeriods = periodsByTime.get(time)
 
     return matchingPeriods?.length === 1
-      && fields.every(field => Number.isFinite(matchingPeriods[0][field]))
+      && fields.every(field => isFinite(matchingPeriods[0][field]))
   }).length
   const invalidTimestampCount = sourcePeriods.filter(
-    period => !Number.isFinite(period?.time),
+    period => !isFinite(period?.time),
   ).length
   const complete = fields.length > 0
     && missingPeriodCount === 0
@@ -319,9 +320,7 @@ function summarizeStudyCoverage (
   referenceTime,
   requiredHours,
 ) {
-  const fields = study?.fields && typeof study.fields === "object"
-    ? Object.keys(study.fields)
-    : []
+  const fields = isObject(study?.fields) ? Object.keys(study.fields) : []
 
   const coverage = summarizeHourlyCoverage(
     study?.periods,
@@ -343,9 +342,9 @@ function summarizeStudyCoverage (
     complete: coverage.complete
       && duplicatePeriodCount === 0
       && invalidTimestampCount === 0,
-    sourcePeriodCount: Number.isSafeInteger(study?.coverage?.sourcePeriodCount)
+    sourcePeriodCount: isSafeInteger(study?.coverage?.sourcePeriodCount)
       ? study.coverage.sourcePeriodCount
-      : Array.isArray(study?.periods) ? study.periods.length : 0,
+      : isArray(study?.periods) ? study.periods.length : 0,
   }
 }
 
@@ -378,7 +377,7 @@ export function evaluateMetadata (coin, result) {
     { field: "marketCap", label: "market cap" },
     { field: "fullyDilutedValuation", label: "fully diluted valuation" },
   ]) {
-    if (!Number.isFinite(coin[field]) || coin[field] <= 0) {
+    if (!isFinite(coin[field]) || coin[field] <= 0) {
       result.add(
         `metadata:${field}_missing`,
         `Coin ${label} is missing`,

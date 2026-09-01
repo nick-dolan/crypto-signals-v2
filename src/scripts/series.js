@@ -1,25 +1,27 @@
+import { isArray, isBoolean, isFinite, isInt } from "../helpers/utils.typed.js"
+
 function validateNumericSeries (source, name) {
-  if (!Array.isArray(source)) {
+  if (!isArray(source)) {
     throw new Error(`${name} must be an array`)
   }
 
   for (const [index, value] of source.entries()) {
-    if (value !== null && !Number.isFinite(value)) {
+    if (value !== null && !isFinite(value)) {
       throw new Error(`${name} at index ${index} must be a finite number or null`)
     }
   }
 }
 
 function validateCountSeries (source) {
-  if (!Array.isArray(source)) {
+  if (!isArray(source)) {
     throw new Error("Source must be an array")
   }
 
   for (const [index, value] of source.entries()) {
     if (
       value !== null
-      && typeof value !== "boolean"
-      && !Number.isFinite(value)
+      && !isBoolean(value)
+      && !isFinite(value)
     ) {
       throw new Error(
         `Source at index ${index} must be a finite number, boolean, or null`,
@@ -29,25 +31,25 @@ function validateCountSeries (source) {
 }
 
 function validatePositiveInteger (value, name) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!isInt(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`)
   }
 }
 
 function finiteOrNull (value) {
-  return Number.isFinite(value) ? value : null
+  return isFinite(value) ? value : null
 }
 
 export function mapSeries (source, mapper) {
   validateNumericSeries(source, "Source")
 
   return source.map((value, index) => (
-    Number.isFinite(value) ? mapper(value, index) : null
+    isFinite(value) ? mapper(value, index) : null
   ))
 }
 
 export function combineSeries (sources, mapper) {
-  if (!Array.isArray(sources) || sources.length === 0) {
+  if (!isArray(sources) || sources.length === 0) {
     throw new Error("Sources must be a non-empty array of arrays")
   }
 
@@ -62,7 +64,7 @@ export function combineSeries (sources, mapper) {
   return sources[0].map((_, index) => {
     const values = sources.map(source => source[index])
 
-    return values.every(Number.isFinite) ? mapper(values, index) : null
+    return values.every(isFinite) ? mapper(values, index) : null
   })
 }
 

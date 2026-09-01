@@ -1,13 +1,14 @@
 import { fetchTradingViewChartPeriods } from "../../api/tradingview/chart-candles.js"
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
+import { isArray, isFinite, isFunction, isSafeInteger } from "../../helpers/utils.typed.js"
 
 function normalizeMarketContextPeriods (symbol, periods, nowTimestamp, requestedHours) {
   const { latestClosedTime } = getClosedHourlyBoundary(nowTimestamp)
   const earliestTime = latestClosedTime - (requestedHours - 1) * 3_600
 
-  const normalizedPeriods = (Array.isArray(periods) ? periods : [])
+  const normalizedPeriods = (isArray(periods) ? periods : [])
     .filter(period => (
-      Number.isFinite(period?.time)
+      isFinite(period?.time)
       && period.time >= earliestTime
       && period.time <= latestClosedTime
     ))
@@ -17,7 +18,7 @@ function normalizeMarketContextPeriods (symbol, periods, nowTimestamp, requested
     && normalizedPeriods.every((period, index) => (
       period.time === earliestTime + index * 3_600
       && ["open", "max", "min", "close"].every(
-        field => Number.isFinite(period[field]),
+        field => isFinite(period[field]),
       )
     ))
 
@@ -33,7 +34,7 @@ function normalizeMarketContextPeriods (symbol, periods, nowTimestamp, requested
 export function createMarketContextFetcher ({
   fetchChartPeriods = fetchTradingViewChartPeriods,
 } = {}) {
-  if (typeof fetchChartPeriods !== "function") {
+  if (!isFunction(fetchChartPeriods)) {
     throw new Error("fetchChartPeriods must be a function")
   }
 
@@ -47,11 +48,11 @@ export function createMarketContextFetcher ({
       timeoutMs = 45_000,
     } = {},
   ) {
-    if (!Number.isFinite(nowTimestamp)) {
+    if (!isFinite(nowTimestamp)) {
       throw new Error("nowTimestamp must be finite")
     }
 
-    if (!Number.isSafeInteger(requestedHours) || requestedHours <= 0) {
+    if (!isSafeInteger(requestedHours) || requestedHours <= 0) {
       throw new Error("requestedHours must be a positive integer")
     }
 

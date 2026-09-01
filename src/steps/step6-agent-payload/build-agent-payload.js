@@ -1,5 +1,7 @@
+import { isArray, isFinite, isNaN, isNumber, isObject } from "../../helpers/utils.typed.js"
+
 function roundNumber (value, precision = 3) {
-  if (!Number.isFinite(value)) {
+  if (!isFinite(value)) {
     throw new Error(`Agent payload cannot format non-finite value: ${value}`)
   }
 
@@ -18,7 +20,7 @@ function normalizeToAtr (value, atr24hPct) {
     return null
   }
 
-  if (!Number.isFinite(atr24hPct) || atr24hPct <= 0) {
+  if (!isFinite(atr24hPct) || atr24hPct <= 0) {
     throw new Error(`Agent payload requires a positive atr24hPct: ${atr24hPct}`)
   }
 
@@ -91,11 +93,11 @@ function createCandidateRow (profile) {
 }
 
 function validateShortlist (shortlist) {
-  if (!shortlist || typeof shortlist !== "object" || Array.isArray(shortlist)) {
+  if (!isObject(shortlist)) {
     throw new Error("Step 5 output must be an object")
   }
 
-  if (!Array.isArray(shortlist.candidates)) {
+  if (!isArray(shortlist.candidates)) {
     throw new Error("Step 5 candidates must be an array")
   }
 
@@ -265,7 +267,7 @@ export function buildAgentPayload (shortlist) {
       )
     }
 
-    if (row.some(value => typeof value === "number" && !Number.isFinite(value))) {
+    if (row.some(value => (isNumber(value) || isNaN(value)) && !isFinite(value))) {
       throw new Error(`Agent candidate at index ${index} contains a non-finite number`)
     }
   }

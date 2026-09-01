@@ -2,13 +2,14 @@ import "dotenv/config"
 import { homedir } from "node:os"
 import path from "node:path"
 import { CopilotClient } from "@github/copilot-sdk"
+import { isArray, isString } from "../../helpers/utils.typed.js"
 
 export function resolveCopilotModel (models, requestedModel, reasoningEffort) {
-  if (!Array.isArray(models)) {
+  if (!isArray(models)) {
     throw new Error("Copilot model list is unavailable")
   }
 
-  const requested = typeof requestedModel === "string" ? requestedModel.trim() : ""
+  const requested = isString(requestedModel) ? requestedModel.trim() : ""
   const selected = models.find(model => (
     model.id === requested || model.name === requested
   )) ?? models.find(model => (
@@ -32,7 +33,7 @@ export function resolveCopilotModel (models, requestedModel, reasoningEffort) {
 
   if (
     reasoningEffort
-    && Array.isArray(selected.supportedReasoningEfforts)
+    && isArray(selected.supportedReasoningEfforts)
     && !selected.supportedReasoningEfforts.includes(reasoningEffort)
   ) {
     throw new Error(
@@ -102,7 +103,7 @@ async function sendCopilotRequest (
     )
     const content = response?.data.content
 
-    if (typeof content !== "string" || !content.trim()) {
+    if (!isString(content) || !content.trim()) {
       throw new Error("Empty response from LLM")
     }
 

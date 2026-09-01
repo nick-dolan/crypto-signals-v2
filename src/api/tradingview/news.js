@@ -1,8 +1,16 @@
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import {
+  isArray,
+  isBoolean,
+  isFinite,
+  isInt,
+  isObject,
+  isString,
+} from "../../helpers/utils.typed.js"
 import { requestTradingViewJson } from "./request.js"
 
 function getOptionalString (value) {
-  if (typeof value !== "string") {
+  if (!isString(value)) {
     return null
   }
 
@@ -25,7 +33,7 @@ function getItemError (index, message) {
 }
 
 function normalizeProvider (provider, index) {
-  if (!provider || typeof provider !== "object" || Array.isArray(provider)) {
+  if (!isObject(provider)) {
     throw getItemError(index, "provider is missing")
   }
 
@@ -47,7 +55,7 @@ function normalizeProvider (provider, index) {
 }
 
 function normalizeRelatedSymbols (relatedSymbols) {
-  if (!Array.isArray(relatedSymbols)) {
+  if (!isArray(relatedSymbols)) {
     return []
   }
 
@@ -71,7 +79,7 @@ function createTradingViewUrl (storyPath, index) {
 }
 
 function normalizeNewsItem (item, requestedSymbol, index) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
+  if (!isObject(item)) {
     throw getItemError(index, "expected an object")
   }
 
@@ -85,15 +93,15 @@ function normalizeNewsItem (item, requestedSymbol, index) {
     throw getItemError(index, error.message)
   }
 
-  if (!Number.isInteger(item.published) || item.published <= 0) {
+  if (!isInt(item.published) || item.published <= 0) {
     throw getItemError(index, "published must be a positive Unix timestamp")
   }
 
-  if (!Number.isFinite(item.urgency)) {
+  if (!isFinite(item.urgency)) {
     throw getItemError(index, "urgency must be a finite number")
   }
 
-  if (typeof item.paywall !== "boolean") {
+  if (!isBoolean(item.paywall)) {
     throw getItemError(index, "paywall must be a boolean")
   }
 
@@ -134,7 +142,7 @@ export async function fetchTradingViewNews ({
     timeoutMs,
   })
 
-  if (!payload || typeof payload !== "object" || !Array.isArray(payload.items)) {
+  if (!isObject(payload) || !isArray(payload.items)) {
     throw new Error("TradingView news response does not contain an items array")
   }
 
@@ -142,6 +150,6 @@ export async function fetchTradingViewNews ({
     items: payload.items.map((item, index) => (
       normalizeNewsItem(item, normalizedSymbol, index)
     )),
-    sections: Array.isArray(payload.sections) ? payload.sections : [],
+    sections: isArray(payload.sections) ? payload.sections : [],
   }
 }

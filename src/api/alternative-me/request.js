@@ -1,5 +1,14 @@
+import {
+  isArray,
+  isError,
+  isFinite,
+  isObject,
+  isString,
+  isURLSearchParams,
+} from "../../helpers/utils.typed.js"
+
 function getRequiredString (value, name) {
-  const normalizedValue = typeof value === "string" ? value.trim() : ""
+  const normalizedValue = isString(value) ? value.trim() : ""
 
   if (!normalizedValue) {
     throw new Error(`${name} is required`)
@@ -9,13 +18,13 @@ function getRequiredString (value, name) {
 }
 
 function validateTimeout (timeoutMs) {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  if (!isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Error("timeoutMs must be a positive number")
   }
 }
 
 function getErrorMessage (error) {
-  return error instanceof Error ? error.message : "Unknown error"
+  return isError(error) ? error.message : "Unknown error"
 }
 
 function createHeaders (headers) {
@@ -37,7 +46,7 @@ function appendSearchParam (url, key, value) {
     return
   }
 
-  if (Array.isArray(value)) {
+  if (isArray(value)) {
     for (const item of value) {
       appendSearchParam(url, key, item)
     }
@@ -52,14 +61,14 @@ function appendSearchParams (url, searchParams) {
     return
   }
 
-  if (searchParams instanceof URLSearchParams) {
+  if (isURLSearchParams(searchParams)) {
     for (const [key, value] of searchParams) {
       url.searchParams.append(key, value)
     }
     return
   }
 
-  if (!searchParams || typeof searchParams !== "object" || Array.isArray(searchParams)) {
+  if (!isObject(searchParams)) {
     throw new Error("searchParams must be an object or URLSearchParams")
   }
 
@@ -100,7 +109,7 @@ function createTimeoutError (label, timeoutMs) {
 }
 
 function normalizeErrorDetails (value) {
-  if (typeof value === "string") {
+  if (isString(value)) {
     return value.trim().slice(0, 300)
   }
 
@@ -108,7 +117,7 @@ function normalizeErrorDetails (value) {
     return ""
   }
 
-  if (typeof value?.message === "string") {
+  if (isString(value?.message)) {
     return value.message.trim().slice(0, 300)
   }
 

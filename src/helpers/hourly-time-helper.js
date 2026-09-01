@@ -1,5 +1,7 @@
+import { isFinite } from "./utils.typed.js"
+
 export function getClosedHourlyBoundary (referenceTime) {
-  if (!Number.isFinite(referenceTime)) {
+  if (!isFinite(referenceTime)) {
     return null
   }
 

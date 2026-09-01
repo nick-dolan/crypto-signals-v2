@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { isBoolean, isFinite } from "../src/helpers/utils.typed.js"
 import { calculateDerivativesMetrics } from "../src/steps/step4-feature-metrics/metrics/derivatives.js"
 import { calculateSocialMetrics } from "../src/steps/step4-feature-metrics/metrics/social.js"
 import { calculateVolatilityCompressionMetrics } from "../src/steps/step4-feature-metrics/metrics/volatility-compression.js"
@@ -24,7 +25,7 @@ function assertMetricShape (metrics, expectedKeys) {
 
     series.forEach((value, index) => {
       assert.ok(
-        value === null || typeof value === "boolean" || Number.isFinite(value),
+        value === null || isBoolean(value) || isFinite(value),
         `${name}[${index}] must be null, boolean, or finite`,
       )
     })
