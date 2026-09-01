@@ -20,18 +20,47 @@ function normalizeCoverageExclusionIdentity (value, index, label) {
   }
 }
 
+function normalizeOptionalStringArray (value, label) {
+  if (value === undefined) {
+    return []
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array`)
+  }
+
+  const items = value.map((item, index) => (
+    getRequiredString(item, `${label}[${index}]`)
+  ))
+
+  if (new Set(items).size !== items.length) {
+    throw new Error(`${label} must not contain duplicates`)
+  }
+
+  return items
+}
+
 function normalizeCoverageExclusion (value, index) {
   const exclusion = normalizeCoverageExclusionIdentity(
     value,
     index,
     "Coverage exclusion",
   )
+  const fieldName = `Coverage exclusion at index ${index}`
 
   return {
     ...exclusion,
+    unavailableMetrics: normalizeOptionalStringArray(
+      value.unavailableMetrics,
+      `${fieldName} unavailableMetrics`,
+    ),
+    reasonCodes: normalizeOptionalStringArray(
+      value.reasonCodes,
+      `${fieldName} reasonCodes`,
+    ),
     recheckAfter: toIsoTimestamp(
       value.recheckAfter,
-      `Coverage exclusion at index ${index} recheckAfter`,
+      `${fieldName} recheckAfter`,
     ),
   }
 }
@@ -144,6 +173,8 @@ function createCoverageExclusion (coin, now, recheckDays) {
     symbol: coin?.symbol,
     name: coin?.name,
     baseCurrencyId: coin?.baseCurrencyId,
+    unavailableMetrics: coin?.unavailableMetrics,
+    reasonCodes: coin?.reasonCodes,
     recheckAfter: new Date(
       now.getTime() + recheckDays * (24 * 60 * 60 * 1_000),
     ).toISOString(),

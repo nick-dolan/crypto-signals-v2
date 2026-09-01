@@ -17,6 +17,8 @@ function createExcludedCoin () {
     baseCurrencyId: "XTVCMISSING",
     symbol: "MISS",
     name: "Missing Coin",
+    unavailableMetrics: ["volumeDelta"],
+    reasonCodes: ["volumeDelta:request_failed"],
   }
 }
 
@@ -51,6 +53,29 @@ test("permanent coverage exclusions load without an expiration", async (context)
   )
 })
 
+test("legacy coverage exclusions load with empty diagnostics", async (context) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "coverage-exclusions-"))
+  const filePath = path.join(directory, "coverage-exclusions.json")
+
+  context.after(() => fs.rm(directory, { recursive: true, force: true }))
+
+  await fs.writeFile(filePath, JSON.stringify([{
+    symbol: "LEGACY",
+    name: "Legacy Coin",
+    baseCurrencyId: "XTVCLEGACY",
+    recheckAfter: "2026-09-29T12:00:00.000Z",
+  }]))
+
+  assert.deepEqual(await readCoverageExclusions({ filePath }), [{
+    symbol: "LEGACY",
+    name: "Legacy Coin",
+    baseCurrencyId: "XTVCLEGACY",
+    unavailableMetrics: [],
+    reasonCodes: [],
+    recheckAfter: "2026-09-29T12:00:00.000Z",
+  }])
+})
+
 test("coverage exclusions persist, expire, and clear after a recheck", async (context) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "coverage-exclusions-"))
   const filePath = path.join(directory, "coverage-exclusions.json")
@@ -72,6 +97,8 @@ test("coverage exclusions persist, expire, and clear after a recheck", async (co
     symbol: "MISS",
     name: "Missing Coin",
     baseCurrencyId: "XTVCMISSING",
+    unavailableMetrics: ["volumeDelta"],
+    reasonCodes: ["volumeDelta:request_failed"],
     recheckAfter: "2026-09-29T12:00:00.000Z",
   }])
   assert.deepEqual(
