@@ -334,6 +334,7 @@ test("calculateDivergenceFlags returns null when a required series is absent", (
   const flags = calculateDivergenceFlags({
     close: Array(length).fill(100),
     btcClose: Array(length).fill(100),
+    social: null,
   })
 
   assert.deepEqual(flags.coiling, Array(length).fill(null))

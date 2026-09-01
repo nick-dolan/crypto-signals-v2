@@ -24,7 +24,9 @@ export function calculateCoinMetrics (
     ...coinSeries,
     rv24OverRv7: volatilityCompression.rv_24h_over_rv_7d,
   })
-  const social = calculateSocialMetrics(coinSeries)
+  const social = coinSeries.socialStatus === "available"
+    ? calculateSocialMetrics(coinSeries)
+    : null
   const relativeStrength = calculateRelativeStrengthMetrics({
     coinClose: coinSeries.close,
     btcClose: universeContext.btcClose,

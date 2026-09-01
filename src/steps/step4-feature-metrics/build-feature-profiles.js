@@ -3,23 +3,34 @@ import { buildAlignedCoinSeries } from "./build-base-series.js"
 import { calculateCoinMetrics } from "./calculate-coin-metrics.js"
 
 function latestValues (seriesByName) {
+  if (seriesByName === null) {
+    return null
+  }
+
   return Object.fromEntries(Object.entries(seriesByName).map(([name, series]) => [
     name,
     isArray(series) ? series.at(-1) : series,
   ]))
 }
 
-function findUnavailableMetrics (features, categoryApplicable) {
-  const allowedNulls = new Set(
-    categoryApplicable
+function findUnavailableMetrics (features, categoryApplicable, socialAvailable) {
+  const allowedNulls = new Set([
+    ...(categoryApplicable
       ? []
       : [
           "breadthNarrative.category_momentum_4h",
           "breadthNarrative.category_breadth",
           "breadthNarrative.coin_leads_category",
           "divergences.laggard",
-        ],
-  )
+        ]),
+    ...(socialAvailable
+      ? []
+      : [
+          "social",
+          "divergences.attention_ahead",
+          "divergences.exhausted_hype",
+        ]),
+  ])
   const unavailable = []
 
   function visit (value, path) {
@@ -53,15 +64,44 @@ function calculateVolume24hUsd ({ close, volume }) {
 }
 
 export function createFeatureProfile (baseCoin, coinSeries, calculated) {
-  const features = Object.fromEntries(
+  const sourceSocialAvailable = coinSeries.socialStatus === "available"
+
+  if (
+    !["available", "unavailable"].includes(coinSeries.socialStatus)
+    || sourceSocialAvailable !== isObject(calculated.featureSeries.social)
+  ) {
+    throw new Error("Calculated social features do not match source availability")
+  }
+
+  const latestFeatures = Object.fromEntries(
     Object.entries(calculated.featureSeries).map(([group, seriesByName]) => [
       group,
       latestValues(seriesByName),
     ]),
   )
+  const socialAvailable = sourceSocialAvailable && [
+    latestFeatures.social.social_dominance_z_30d,
+    latestFeatures.social.interactions_z_30d,
+    latestFeatures.social.interactions_acceleration_3h,
+    latestFeatures.social.interactions_per_contributor_z,
+    latestFeatures.social.created_posts_per_active_contributor,
+    latestFeatures.social.social_minus_price_z_3h,
+  ].every(isFinite)
+  const features = socialAvailable
+    ? latestFeatures
+    : {
+        ...latestFeatures,
+        social: null,
+        divergences: {
+          ...latestFeatures.divergences,
+          attention_ahead: null,
+          exhausted_hype: null,
+        },
+      }
   const unavailableMetrics = findUnavailableMetrics(
     features,
     calculated.categoryContext.applicable,
+    socialAvailable,
   )
 
   if (unavailableMetrics.length > 0) {
@@ -87,6 +127,7 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
         volume24hUsd: calculateVolume24hUsd(coinSeries),
         narrativeCategory: calculated.categoryContext.category,
         categoryStatus: calculated.categoryContext.status,
+        socialStatus: socialAvailable ? "available" : "unavailable",
       },
       features,
     },

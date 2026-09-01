@@ -23,6 +23,8 @@ export function evaluateCoinCoverage (
       "longShortRatioAccounts",
       "topTradersLongShortPositions",
       "premium",
+    ],
+    optionalSocialStudyKeys = [
       "socialDominance",
       "interactions",
       "activeContributors",
@@ -54,6 +56,7 @@ export function evaluateCoinCoverage (
   }
 
   const result = createResultBuilder()
+  const socialResult = createResultBuilder()
   const chartCoverage = summarizeChartCoverage(
     chart.periods,
     nowTimestamp,
@@ -91,10 +94,35 @@ export function evaluateCoinCoverage (
     }
   }
 
+  for (const key of optionalSocialStudyKeys) {
+    studyCoverage[key] = evaluateStudy(
+      key,
+      studies[key],
+      socialResult,
+      {
+        canClassifyRejectedStudyUnavailable: chartCoverage.complete,
+        canClassifyUnavailable: chartCoverage.complete,
+        nowTimestamp,
+        requiredHours: fetchHours,
+      },
+    )
+  }
+
+  const socialEvaluation = socialResult.build()
+  const incompleteSocialMetrics = optionalSocialStudyKeys.filter(
+    key => studyCoverage[key]?.complete !== true,
+  )
+
   return {
     ...result.build({
       ohlcv: chartCoverage,
       studies: studyCoverage,
+      social: {
+        status: socialEvaluation.complete ? "available" : "unavailable",
+        unavailableMetrics: incompleteSocialMetrics,
+        reasonCodes: socialEvaluation.reasonCodes,
+        reasons: socialEvaluation.reasons,
+      },
     }),
     unavailableMetrics,
   }

@@ -63,11 +63,19 @@ test("data bootstrap report describes strict hourly coverage", () => {
       "longShortRatioAccounts",
       "topTradersLongShortPositions",
       "premium",
-      "socialDominance",
-      "interactions",
-      "activeContributors",
-      "createdPosts",
     ],
+    optionalStudyGroups: {
+      social: {
+        mode: "all_or_none",
+        requiredHours: 2_400,
+        studies: [
+          "socialDominance",
+          "interactions",
+          "activeContributors",
+          "createdPosts",
+        ],
+      },
+    },
     requiredMetadata: [
       "circulatingSupply",
       "marketCap",

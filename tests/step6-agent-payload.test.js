@@ -83,12 +83,14 @@ function createCandidate (symbol, overrides = {}) {
       volume24hUsd: 987_654_321,
       narrativeCategory: "layer-1",
       categoryStatus: "available",
+      socialStatus: "available",
       ...overrides.context,
     },
-    features: Object.fromEntries(Object.entries(features).map(([group, values]) => [
-      group,
-      { ...values, ...overrides.features?.[group] },
-    ])),
+    features: Object.fromEntries(Object.entries(features).map(([group, values]) => {
+      const override = overrides.features?.[group]
+
+      return [group, override === null ? null : { ...values, ...override }]
+    })),
     selection: {
       priority: 1,
       selectedBy: ["social"],
@@ -126,11 +128,11 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 2)
+  assert.equal(payload.schemaVersion, 3)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 46)
+  assert.equal(payload.schema.length, 47)
   assert.deepEqual(Object.keys(payload.definitions), payload.schema)
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
@@ -172,6 +174,7 @@ test("agent payload creates documented compact rows", () => {
     liquidations4hOverOi: 0.000457,
     liqImbalance: -0.812,
     crowdVsTop: 0.123,
+    socialStatus: "available",
     socialDominanceZ: 0.923,
     interactionsZ: 1.235,
     socialAccel3hPct: 43.21,
@@ -256,6 +259,51 @@ test("agent payload preserves order and nullable narrative metrics", () => {
     "resilient",
     "squeeze_fuel",
   ])
+})
+
+test("agent payload marks the entire unavailable social block with nulls", () => {
+  const payload = buildAgentPayload(createShortlist([
+    createCandidate("DYDX", {
+      context: { socialStatus: "unavailable" },
+      features: {
+        social: null,
+        divergences: {
+          attention_ahead: null,
+          exhausted_hype: null,
+        },
+      },
+    }),
+  ]))
+  const values = Object.fromEntries(payload.schema.map((name, index) => [
+    name,
+    payload.candidates[0][index],
+  ]))
+
+  assert.equal(values.socialStatus, "unavailable")
+
+  for (const field of [
+    "socialDominanceZ",
+    "interactionsZ",
+    "socialAccel3hPct",
+    "interactionsPerContributorZ",
+    "postsPerContributor",
+    "socialMinusPriceZ3h",
+  ]) {
+    assert.equal(values[field], null)
+  }
+})
+
+test("agent payload rejects incomplete social features marked available", () => {
+  assert.throws(
+    () => buildAgentPayload(createShortlist([
+      createCandidate("SOL", {
+        features: {
+          social: { social_minus_price_z_3h: null },
+        },
+      }),
+    ])),
+    /social features do not match their status/,
+  )
 })
 
 test("agent payload rejects an inconsistent shortlist count", () => {

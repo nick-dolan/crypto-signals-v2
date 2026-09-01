@@ -147,6 +147,16 @@ function getNow (value) {
   return now
 }
 
+function isSocialOnlyCoverageExclusion (exclusion) {
+  return exclusion.unavailableMetrics.length > 0
+    && exclusion.unavailableMetrics.every(metric => [
+      "socialDominance",
+      "interactions",
+      "activeContributors",
+      "createdPosts",
+    ].includes(metric))
+}
+
 export function getActiveCoverageExclusionIds (
   exclusions,
   { now = new Date() } = {},
@@ -156,6 +166,7 @@ export function getActiveCoverageExclusionIds (
   return new Set(normalizeCoverageExclusions(exclusions)
     .filter(exclusion => (
       new Date(exclusion.recheckAfter).getTime() > currentTime
+        && !isSocialOnlyCoverageExclusion(exclusion)
     ))
     .map(exclusion => exclusion.baseCurrencyId))
 }

@@ -102,6 +102,14 @@ function calculateDerivativesAxis (profile) {
 }
 
 function calculateSocialAxis (profile) {
+  if (profile.features.social === null) {
+    return {
+      active: false,
+      score: 0,
+      secondaryScore: 0,
+    }
+  }
+
   const {
     interactions_acceleration_3h: acceleration,
     social_minus_price_z_3h: socialMinusPriceZ,

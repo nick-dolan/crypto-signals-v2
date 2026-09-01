@@ -171,15 +171,37 @@ export function createBootstrapDataRelativePath (coin) {
   )
 }
 
+function isSocialStudy (key) {
+  return [
+    "socialDominance",
+    "interactions",
+    "activeContributors",
+    "createdPosts",
+  ].includes(key)
+}
+
 export function createBootstrapHourlyData (
   chartData,
   coin,
   {
     fetchHours,
     nowTimestamp,
+    socialCoverage,
     volumeDeltaHours = Math.min(1_666, fetchHours),
   },
 ) {
+  if (!["available", "unavailable"].includes(socialCoverage?.status)) {
+    throw new Error("Social coverage status is required")
+  }
+
+  const availableSocialStudyCount = Object.keys(chartData.studies ?? {})
+    .filter(isSocialStudy)
+    .length
+
+  if (socialCoverage.status === "available" && availableSocialStudyCount !== 4) {
+    throw new Error("Available social coverage requires all four studies")
+  }
+
   return {
     collectedAt: new Date(nowTimestamp * 1_000).toISOString(),
     coin: {
@@ -191,6 +213,17 @@ export function createBootstrapHourlyData (
     },
     timeframe: "1h",
     requestedHours: fetchHours,
+    availability: {
+      social: {
+        status: socialCoverage.status,
+        unavailableMetrics: isArray(socialCoverage.unavailableMetrics)
+          ? [...socialCoverage.unavailableMetrics]
+          : [],
+        reasonCodes: isArray(socialCoverage.reasonCodes)
+          ? [...socialCoverage.reasonCodes]
+          : [],
+      },
+    },
     chart: {
       ...chartData.chart,
       periods: getClosedHourlyPeriods(
@@ -200,6 +233,9 @@ export function createBootstrapHourlyData (
       ),
     },
     studies: Object.fromEntries(Object.entries(chartData.studies)
+      .filter(([key]) => (
+        socialCoverage.status === "available" || !isSocialStudy(key)
+      ))
       .map(([key, study]) => [
         key,
         toBootstrapStudyData(
@@ -295,6 +331,7 @@ export function createCoinDataCoverageChecker ({
       {
         fetchHours,
         nowTimestamp,
+        socialCoverage: coverage.coverage.social,
         volumeDeltaHours,
       },
     )

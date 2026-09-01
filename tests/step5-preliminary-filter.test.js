@@ -57,12 +57,14 @@ function createProfile (baseCurrencyId, overrides = {}) {
     },
     context: {
       atr24hPct: 0.02,
+      socialStatus: "available",
       ...overrides.context,
     },
-    features: Object.fromEntries(Object.entries(features).map(([group, values]) => [
-      group,
-      { ...values, ...overrides.features?.[group] },
-    ])),
+    features: Object.fromEntries(Object.entries(features).map(([group, values]) => {
+      const override = overrides.features?.[group]
+
+      return [group, override === null ? null : { ...values, ...override }]
+    })),
   }
 }
 
@@ -179,6 +181,29 @@ test("preliminary shortlist represents all six active axes", () => {
     assert.deepEqual(candidate.selection.selectedBy, [axisName])
     assert.deepEqual(candidate.selection.activeAxes, [axisName])
   }
+})
+
+test("preliminary shortlist keeps a social-unavailable coin eligible by core axes", () => {
+  const result = buildPreliminaryShortlist([
+    createProfile("no-social", {
+      context: { socialStatus: "unavailable" },
+      features: {
+        volatilityCompression: { squeeze_age_hours: 6 },
+        social: null,
+        divergences: {
+          attention_ahead: null,
+          exhausted_hype: null,
+        },
+      },
+    }),
+  ])
+  const candidate = result.candidates[0]
+
+  assert.equal(result.candidateCount, 1)
+  assert.deepEqual(candidate.selection.selectedBy, ["compression"])
+  assert.deepEqual(candidate.selection.activeAxes, ["compression"])
+  assert.deepEqual(candidate.selection.triggerSignals, [])
+  assert.equal(result.filter.eligibleCoinCountByAxis.social, 0)
 })
 
 test("preliminary shortlist deduplicates overlapping reasons", () => {

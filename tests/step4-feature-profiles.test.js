@@ -28,6 +28,9 @@ function createHourlyData () {
       symbol: "BTC",
       marketSymbol: "BINANCE:BTCUSDT.P",
     },
+    availability: {
+      social: { status: "available" },
+    },
     chart: { periods },
     studies: {
       volumeDelta: study([{ time: times[2], close: 3 }]),
@@ -63,6 +66,27 @@ test("buildAlignedCoinSeries aligns the shorter Volume Delta history", () => {
   assert.deepEqual(series.volumeDelta, [null, null, 3])
   assert.deepEqual(series.shortLiquidations, [0, -1, -2])
   assert.deepEqual(series.topTradersShort, [-50, -49, -48])
+})
+
+test("buildAlignedCoinSeries omits an unavailable atomic social group", () => {
+  const hourlyData = createHourlyData()
+  hourlyData.availability.social.status = "unavailable"
+
+  for (const key of [
+    "socialDominance",
+    "interactions",
+    "activeContributors",
+    "createdPosts",
+  ]) {
+    delete hourlyData.studies[key]
+  }
+
+  const times = hourlyData.chart.periods.map(period => period.time)
+  const series = buildAlignedCoinSeries(hourlyData, times)
+
+  assert.equal(series.socialStatus, "unavailable")
+  assert.equal("socialDominance" in series, false)
+  assert.equal("interactions" in series, false)
 })
 
 test("buildBaseSeries joins accepted data with step 1 metadata and preserves rank", () => {
@@ -107,6 +131,7 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
   const coinSeries = {
     close: Array(24).fill(10),
     volume: Array(24).fill(2),
+    socialStatus: "unavailable",
   }
   const calculated = {
     atr24hPct: Array(24).fill(0.02),
@@ -117,12 +142,17 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
     },
     featureSeries: {
       volatilityCompression: { sample_metric: Array(24).fill(2) },
+      social: null,
       breadthNarrative: {
         category_momentum_4h: Array(24).fill(null),
         category_breadth: Array(24).fill(null),
         coin_leads_category: Array(24).fill(null),
       },
-      divergences: { laggard: Array(24).fill(null) },
+      divergences: {
+        attention_ahead: Array(24).fill(null),
+        exhausted_hype: Array(24).fill(null),
+        laggard: Array(24).fill(null),
+      },
     },
   }
   const result = createFeatureProfile(baseCoin, coinSeries, calculated)
@@ -131,8 +161,53 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
   assert.equal(result.profile.context.volume24hUsd, 480)
   assert.equal(result.profile.context.atr24hPct, 0.02)
   assert.equal(result.profile.context.categoryStatus, "insufficient_peers")
+  assert.equal(result.profile.context.socialStatus, "unavailable")
+  assert.equal(result.profile.features.social, null)
   assert.equal(result.profile.features.volatilityCompression.sample_metric, 2)
   assert.equal("dataQuality" in result.profile, false)
+})
+
+test("createFeatureProfile downgrades an incomplete derived social block", () => {
+  const result = createFeatureProfile(
+    {
+      coin: { rank: 1, baseCurrencyId: "XTVCBTC", symbol: "BTC" },
+      categories: [],
+      metadata: { marketCap: 1_000 },
+    },
+    {
+      close: Array(24).fill(10),
+      volume: Array(24).fill(2),
+      socialStatus: "available",
+    },
+    {
+      atr24hPct: Array(24).fill(0.02),
+      categoryContext: {
+        applicable: false,
+        status: "not_applicable",
+        category: null,
+      },
+      featureSeries: {
+        social: {
+          social_dominance_z_30d: [0],
+          interactions_z_30d: [0],
+          interactions_acceleration_3h: [null],
+          interactions_per_contributor_z: [0],
+          created_posts_per_active_contributor: [0],
+          social_minus_price_z_3h: [null],
+        },
+        divergences: {
+          attention_ahead: [null],
+          exhausted_hype: [null],
+        },
+      },
+    },
+  )
+
+  assert.equal(result.rejection, null)
+  assert.equal(result.profile.context.socialStatus, "unavailable")
+  assert.equal(result.profile.features.social, null)
+  assert.equal(result.profile.features.divergences.attention_ahead, null)
+  assert.equal(result.profile.features.divergences.exhausted_hype, null)
 })
 
 test("createFeatureProfile rejects an unavailable required latest metric", () => {
@@ -145,6 +220,7 @@ test("createFeatureProfile rejects an unavailable required latest metric", () =>
     {
       close: [10],
       volume: [2],
+      socialStatus: "unavailable",
     },
     {
       categoryContext: {
@@ -154,6 +230,7 @@ test("createFeatureProfile rejects an unavailable required latest metric", () =>
       },
       featureSeries: {
         volatilityCompression: { sample_metric: [null] },
+        social: null,
       },
     },
   )

@@ -44,7 +44,7 @@ export function calculateDivergenceFlags ({
     )),
     attention_ahead: calculateFlag(
       length,
-      [social.social_minus_price_z_3h],
+      [social?.social_minus_price_z_3h],
       socialMinusPriceZ => socialMinusPriceZ > 1,
     ),
     unconfirmed_move: calculateFlag(length, [
@@ -57,9 +57,9 @@ export function calculateDivergenceFlags ({
       && Math.abs(oiChangeZ) < 0.5
     )),
     exhausted_hype: calculateFlag(length, [
-      social.social_dominance_z_30d,
-      social.interactions_z_30d,
-      social.interactions_acceleration_3h,
+      social?.social_dominance_z_30d,
+      social?.interactions_z_30d,
+      social?.interactions_acceleration_3h,
       return4hZ,
     ], (socialDominanceZ, interactionsZ, interactionsAcceleration, returnZ) => (
       Math.max(socialDominanceZ, interactionsZ) > 1.5

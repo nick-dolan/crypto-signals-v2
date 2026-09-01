@@ -76,6 +76,31 @@ test("legacy coverage exclusions load with empty diagnostics", async (context) =
   }])
 })
 
+test("social-only coverage exclusions do not block a coin", () => {
+  const now = new Date("2026-08-30T12:00:00Z")
+  const createExclusion = (baseCurrencyId, unavailableMetrics) => ({
+    symbol: baseCurrencyId,
+    name: baseCurrencyId,
+    baseCurrencyId,
+    unavailableMetrics,
+    reasonCodes: [],
+    recheckAfter: "2026-09-29T12:00:00.000Z",
+  })
+  const activeIds = getActiveCoverageExclusionIds([
+    createExclusion("XTVCSOCIAL", [
+      "socialDominance",
+      "interactions",
+      "activeContributors",
+      "createdPosts",
+    ]),
+    createExclusion("XTVCMIXED", ["socialDominance", "premium"]),
+    createExclusion("XTVCCORE", ["premium"]),
+    createExclusion("XTVCLEGACY", []),
+  ], { now })
+
+  assert.deepEqual([...activeIds], ["XTVCCORE", "XTVCLEGACY", "XTVCMIXED"])
+})
+
 test("coverage exclusions persist, expire, and clear after a recheck", async (context) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "coverage-exclusions-"))
   const filePath = path.join(directory, "coverage-exclusions.json")

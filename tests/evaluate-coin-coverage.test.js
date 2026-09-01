@@ -117,6 +117,7 @@ test("coverage requires 2400 complete hours and 1666 Volume Delta hours", () => 
   )
 
   assert.equal(result.complete, true)
+  assert.equal(result.coverage.social.status, "available")
   assert.equal(result.coverage.ohlcv.completePeriodCount, 2_400)
   assert.equal(
     result.coverage.studies.volumeDelta.completePeriodCount,
@@ -288,15 +289,38 @@ test("coverage does not permanently exclude a partially populated metric", () =>
   assert.ok(result.reasonCodes.includes("premium:missing_values"))
 })
 
-test("coverage treats a rejected study as unavailable when the chart and majority loaded", () => {
+test("coverage accepts a coin when one social study is rejected", () => {
   const result = evaluate(createChartData({
     rejectedStudyKey: "activeContributors",
   }))
 
-  assert.equal(result.complete, false)
-  assert.equal(result.retryable, true)
-  assert.deepEqual(result.unavailableMetrics, ["activeContributors"])
-  assert.ok(result.reasonCodes.includes("activeContributors:request_failed"))
+  assert.equal(result.complete, true)
+  assert.equal(result.retryable, false)
+  assert.deepEqual(result.unavailableMetrics, [])
+  assert.equal(result.coverage.social.status, "unavailable")
+  assert.deepEqual(
+    result.coverage.social.unavailableMetrics,
+    ["activeContributors"],
+  )
+  assert.deepEqual(
+    result.coverage.social.reasonCodes,
+    ["activeContributors:request_failed"],
+  )
+})
+
+test("coverage treats a partially populated social study as unavailable", () => {
+  const chartData = createChartData()
+  chartData.studies.interactions.value.periods[1].value = null
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.complete, true)
+  assert.equal(result.coverage.social.status, "unavailable")
+  assert.deepEqual(result.coverage.social.unavailableMetrics, ["interactions"])
+  assert.deepEqual(
+    result.coverage.social.reasonCodes,
+    ["interactions:missing_values"],
+  )
 })
 
 test("coverage classifies a rejected Liquidations study as unavailable", () => {

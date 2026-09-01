@@ -73,17 +73,20 @@ function createFetchedChartData () {
       },
       periods: [],
     },
-    studies: {
-      socialDominance: {
-        status: "fulfilled",
-        value: {
-          request: { key: "socialDominance" },
-          fields: { percent: "Social_dominance_" },
-          periods: [],
-          coverage: { periodCount: 0 },
-        },
+    studies: Object.fromEntries([
+      ["socialDominance", "percent", "Social_dominance_"],
+      ["interactions", "value", "Interactions"],
+      ["activeContributors", "value", "Active_contributors"],
+      ["createdPosts", "value", "Created_posts"],
+    ].map(([key, field, sourceField]) => [key, {
+      status: "fulfilled",
+      value: {
+        request: { key },
+        fields: { [field]: sourceField },
+        periods: [],
+        coverage: { periodCount: 0 },
       },
-    },
+    }])),
   }
 }
 
@@ -129,7 +132,15 @@ test("bootstrap data keeps only closed hourly candles and metrics", () => {
   const hourlyData = createBootstrapHourlyData(
     chartData,
     createCoin(),
-    { fetchHours: 1, nowTimestamp },
+    {
+      fetchHours: 1,
+      nowTimestamp,
+      socialCoverage: {
+        status: "available",
+        unavailableMetrics: [],
+        reasonCodes: [],
+      },
+    },
   )
 
   assert.deepEqual(
@@ -187,6 +198,11 @@ test("bootstrap data keeps 2400-hour sources aligned with the shorter Volume Del
     {
       fetchHours: 4,
       nowTimestamp,
+      socialCoverage: {
+        status: "available",
+        unavailableMetrics: [],
+        reasonCodes: [],
+      },
       volumeDeltaHours: 3,
     },
   )
@@ -322,7 +338,13 @@ test("coverage checker saves one file only after accepting a coin", async () => 
         reasonCodes: [],
         reasons: [],
         unavailableMetrics: [],
-        coverage: {},
+        coverage: {
+          social: {
+            status: "available",
+            unavailableMetrics: [],
+            reasonCodes: [],
+          },
+        },
       }
     },
     saveHourlyData: async (coin, hourlyData) => {
@@ -345,6 +367,45 @@ test("coverage checker saves one file only after accepting a coin", async () => 
     new Date(nowTimestamp * 1_000).toISOString(),
   )
   assert.equal(saved.hourlyData.coin.marketSymbol, "BINANCE:BTCUSDT.P")
+})
+
+test("coverage checker omits the entire unavailable social group", async () => {
+  const chartData = createFetchedChartData()
+  let savedHourlyData
+  const checker = createCoinDataCoverageChecker({
+    fetchChartStudies: async () => chartData,
+    evaluateCoverage: () => ({
+      complete: true,
+      retryable: false,
+      reasonCodes: [],
+      reasons: [],
+      unavailableMetrics: [],
+      coverage: {
+        social: {
+          status: "unavailable",
+          unavailableMetrics: ["activeContributors"],
+          reasonCodes: ["activeContributors:request_failed"],
+        },
+      },
+    }),
+    saveHourlyData: async (_coin, hourlyData) => {
+      savedHourlyData = hourlyData
+      return "tmp/step2-data-bootstrap/BTC--XTVCBTC/data.json"
+    },
+  })
+
+  const result = await checker({}, createCoin(), {
+    fetchHours: 1,
+    nowTimestamp: 1_800_000_000,
+  })
+
+  assert.equal(result.complete, true)
+  assert.deepEqual(savedHourlyData.studies, {})
+  assert.deepEqual(savedHourlyData.availability.social, {
+    status: "unavailable",
+    unavailableMetrics: ["activeContributors"],
+    reasonCodes: ["activeContributors:request_failed"],
+  })
 })
 
 test("coverage checker discards data for a rejected coin", async () => {

@@ -71,7 +71,7 @@ test("coin history tool lazily returns only requested rows and fields", async ()
 
   const result = await tool.handler({
     symbol: "SOL",
-    fields: ["close", "volumeDelta", "openInterest"],
+    fields: ["close", "volumeDelta", "openInterest", "socialDominance"],
     hours: 12,
   })
   const history = JSON.parse(result.textResultForLlm)
@@ -86,6 +86,7 @@ test("coin history tool lazily returns only requested rows and fields", async ()
     "close",
     "volumeDelta",
     "openInterest",
+    "socialDominance",
   ])
   assert.equal(history.rows.length, 12)
   assert.equal(history.rows[0][0], times[1])
@@ -94,6 +95,7 @@ test("coin history tool lazily returns only requested rows and fields", async ()
     113,
     120,
     10_012,
+    null,
   ])
 })
 

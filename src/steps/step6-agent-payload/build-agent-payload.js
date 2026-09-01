@@ -15,6 +15,10 @@ function roundNullable (value) {
   return value === null ? null : roundNumber(value)
 }
 
+function roundScaledNullable (value, scale) {
+  return value === null ? null : roundNumber(value * scale)
+}
+
 function normalizeToAtr (value, atr24hPct) {
   if (value === null) {
     return null
@@ -41,6 +45,25 @@ function createCandidateRow (profile) {
   const social = features.social
   const relative = features.relativeStrength
   const narrative = features.breadthNarrative
+  const socialAvailable = context.socialStatus === "available"
+
+  if (
+    !["available", "unavailable"].includes(context.socialStatus)
+    || (socialAvailable && (
+      !isObject(social)
+      || ![
+        social.social_dominance_z_30d,
+        social.interactions_z_30d,
+        social.interactions_acceleration_3h,
+        social.interactions_per_contributor_z,
+        social.created_posts_per_active_contributor,
+        social.social_minus_price_z_3h,
+      ].every(isFinite)
+    ))
+    || (!socialAvailable && social !== null)
+  ) {
+    throw new Error("Agent payload social features do not match their status")
+  }
 
   return [
     coin.symbol,
@@ -73,12 +96,13 @@ function createCandidateRow (profile) {
     roundNumber(derivatives.liquidations_4h_over_oi, 6),
     roundNumber(derivatives.liq_imbalance_4h),
     roundNumber(derivatives.crowd_vs_top_traders),
-    roundNumber(social.social_dominance_z_30d),
-    roundNumber(social.interactions_z_30d),
-    roundNumber(social.interactions_acceleration_3h * 100),
-    roundNumber(social.interactions_per_contributor_z),
-    roundNumber(social.created_posts_per_active_contributor),
-    roundNumber(social.social_minus_price_z_3h),
+    context.socialStatus,
+    roundNullable(social?.social_dominance_z_30d ?? null),
+    roundNullable(social?.interactions_z_30d ?? null),
+    roundScaledNullable(social?.interactions_acceleration_3h ?? null, 100),
+    roundNullable(social?.interactions_per_contributor_z ?? null),
+    roundNullable(social?.created_posts_per_active_contributor ?? null),
+    roundNullable(social?.social_minus_price_z_3h ?? null),
     roundNumber(relative.beta_btc_7d),
     roundNumber(relative.corr_btc_24h),
     roundNumber(relative.corr_btc_change_24h_vs_7d),
@@ -112,7 +136,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -146,7 +170,7 @@ export function buildAgentPayload (shortlist) {
       rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
-      null: "Narrative-метрика или зависимый от неё флаг недоступны; причину показывает categoryStatus",
+      null: "Метрика недоступна; это не ноль и не отрицательный сигнал. Причину блока показывают categoryStatus или socialStatus",
     },
     schema: [
       "symbol",
@@ -179,6 +203,7 @@ export function buildAgentPayload (shortlist) {
       "liquidations4hOverOi",
       "liqImbalance",
       "crowdVsTop",
+      "socialStatus",
       "socialDominanceZ",
       "interactionsZ",
       "socialAccel3hPct",
@@ -227,6 +252,7 @@ export function buildAgentPayload (shortlist) {
       liquidations4hOverOi: "Trigger: сумма модулей long и short ликвидаций за 4h / OI; относительное отношение, точная экономическая доля требует совпадения единиц studies",
       liqImbalance: "Trigger: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long",
       crowdVsTop: "Context: позиционирование обычных аккаунтов относительно top traders; плюс означает более long-настроенную толпу",
+      socialStatus: "available при наличии всех четырёх полных social-рядов и шести рассчитанных признаков; иначе unavailable для всего Social-блока",
       socialDominanceZ: "Trigger: z-score доли внимания к монете за 30 дней",
       interactionsZ: "Trigger: z-score логарифма social-взаимодействий за 30 дней",
       socialAccel3hPct: "Trigger: изменение взаимодействий последних 3 часов к предыдущим 3 часам, %",

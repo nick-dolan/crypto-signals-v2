@@ -50,9 +50,34 @@ function studyField (hourlyData, key, field, times) {
   return alignPeriods(hourlyData?.studies?.[key]?.periods, field, times)
 }
 
+function getSocialStatus (hourlyData) {
+  const status = hourlyData?.availability?.social?.status
+
+  if (!["available", "unavailable"].includes(status)) {
+    throw new Error("Coin social availability is required")
+  }
+
+  const studyCount = [
+    "socialDominance",
+    "interactions",
+    "activeContributors",
+    "createdPosts",
+  ].filter(key => hourlyData?.studies?.[key]).length
+
+  if (
+    (status === "available" && studyCount !== 4)
+    || (status === "unavailable" && studyCount !== 0)
+  ) {
+    throw new Error("Coin social studies do not match their availability")
+  }
+
+  return status
+}
+
 export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
   const chartPeriods = getChartPeriods(hourlyData)
   const times = chartPeriods.map(period => period.time)
+  const socialStatus = getSocialStatus(hourlyData)
 
   if (
     !isArray(expectedTimes)
@@ -92,20 +117,25 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
       times,
     ),
     premium: studyField(hourlyData, "premium", "close", times),
-    socialDominance: studyField(
-      hourlyData,
-      "socialDominance",
-      "percent",
-      times,
-    ),
-    interactions: studyField(hourlyData, "interactions", "value", times),
-    activeContributors: studyField(
-      hourlyData,
-      "activeContributors",
-      "value",
-      times,
-    ),
-    createdPosts: studyField(hourlyData, "createdPosts", "value", times),
+    socialStatus,
+    ...(socialStatus === "available"
+      ? {
+          socialDominance: studyField(
+            hourlyData,
+            "socialDominance",
+            "percent",
+            times,
+          ),
+          interactions: studyField(hourlyData, "interactions", "value", times),
+          activeContributors: studyField(
+            hourlyData,
+            "activeContributors",
+            "value",
+            times,
+          ),
+          createdPosts: studyField(hourlyData, "createdPosts", "value", times),
+        }
+      : {}),
   }
 }
 
