@@ -1,1 +1,1 @@
-# Crypto Signals
+# Crypto Signals v2
