@@ -163,7 +163,11 @@ test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe too
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
+  expected.topCandidates[0].directionBias = "unclear"
+  expected.topCandidates[0].estimateConfidence = "medium"
   expected.topCandidates[0].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:SOLUSDT.P"
+  expected.topCandidates[1].directionBias = "up"
+  expected.topCandidates[1].estimateConfidence = "low"
   expected.topCandidates[1].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:BTCUSDT.P"
   let captured
   const result = await analyzeCandidates(payload, shortlist, "system prompt", {

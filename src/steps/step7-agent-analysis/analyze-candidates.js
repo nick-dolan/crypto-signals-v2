@@ -36,11 +36,16 @@ export async function analyzeCandidates (
 
   try {
     const analysis = parseAgentAnalysis(content, payload)
+    const assessmentBySymbol = new Map(
+      analysis.assessments.map(assessment => [assessment.symbol, assessment]),
+    )
 
     return {
       ...analysis,
       topCandidates: analysis.topCandidates.map(candidate => ({
         ...candidate,
+        directionBias: assessmentBySymbol.get(candidate.symbol).directionBias,
+        estimateConfidence: assessmentBySymbol.get(candidate.symbol).estimateConfidence,
         tradingViewUrl: `https://www.tradingview.com/chart/?symbol=${marketSymbolBySymbol.get(candidate.symbol)}`,
       })),
     }
