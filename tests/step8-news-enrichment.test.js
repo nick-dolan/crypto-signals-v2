@@ -52,14 +52,16 @@ function createShortlist () {
 
 function createNewsItem ({
   id,
+  title = `Title ${id}`,
   published,
   requestedSymbol,
+  externalUrl = `https://provider.example/${id}`,
   relatedSymbols = [],
   tradingViewUrl = `https://www.tradingview.com/news/${id}/`,
 }) {
   return {
     id,
-    title: `Title ${id}`,
+    title,
     published,
     publishedAt: new Date(published * 1_000).toISOString(),
     provider: {
@@ -67,7 +69,7 @@ function createNewsItem ({
       name: "Provider",
       url: "https://provider.example",
     },
-    externalUrl: `https://provider.example/${id}`,
+    externalUrl,
     tradingViewUrl,
     paywall: false,
     permission: "free",
@@ -169,7 +171,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
     asOf: new Date(referenceTimestamp * 1_000).toISOString(),
     from: new Date((referenceTimestamp - 24 * 60 * 60) * 1_000).toISOString(),
     lookbackHours: 24,
-    maxItemsPerCandidate: 5,
+    maxItemsPerCandidate: 3,
   })
   assert.deepEqual(result.assessments, createAnalysis().assessments)
 
@@ -178,6 +180,10 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
   assert.equal(sushi.news.requestedSymbol, "CRYPTO:SUSHIUSD")
   assert.equal(sushi.news.status, "available")
   assert.equal(sushi.news.error, null)
+  assert.equal(sushi.news.recentItemCount, 2)
+  assert.equal(sushi.news.uniqueItemCount, 2)
+  assert.equal(btc.news.recentItemCount, 2)
+  assert.equal(btc.news.uniqueItemCount, 2)
   assert.deepEqual(
     sushi.news.items.map(item => item.id),
     [sharedId, "provider:sushi:0"],
@@ -199,7 +205,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
   assert.equal(btc.news.items[1].contentFetchedAt, null)
 })
 
-test("limits news and keeps candidate and story failures in the output", async () => {
+test("deduplicates all recent news before keeping the latest three", async () => {
   const referenceTimestamp = 1_800_000_000
   const storyCalls = []
   const result = await enrichTopCandidatesWithNews(
@@ -213,17 +219,56 @@ test("limits news and keeps candidate and story failures in the output", async (
         }
 
         return {
-          items: Array.from({ length: 7 }, (_, index) => createNewsItem({
-            id: `provider:btc:${index}`,
-            published: referenceTimestamp - (index + 1) * 60,
-            requestedSymbol: symbol,
-          })).reverse(),
+          items: [
+            createNewsItem({
+              id: "provider:btc:0",
+              title: "Bitcoin jumps after Federal Reserve decision",
+              published: referenceTimestamp - 60,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "copy:btc:0",
+              title: "Bitcoin jumps after the Federal Reserve decision",
+              published: referenceTimestamp - 90,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "provider:btc:2",
+              title: "Bitcoin climbs 5% after Fed decision",
+              published: referenceTimestamp - 120,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "provider:btc:3",
+              title: "Bitcoin climbs 6% after Fed decision",
+              published: referenceTimestamp - 180,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "provider:btc:4",
+              title: "ETF inflows accelerate during US session",
+              published: referenceTimestamp - 240,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "provider:btc:5",
+              title: "Bitcoin whales increase exchange deposits",
+              published: referenceTimestamp - 300,
+              requestedSymbol: symbol,
+            }),
+            createNewsItem({
+              id: "provider:btc:6",
+              title: "Options traders prepare for monthly expiry",
+              published: referenceTimestamp - 360,
+              requestedSymbol: symbol,
+            }),
+          ].reverse(),
         }
       },
       fetchStory: async ({ id }) => {
         storyCalls.push(id)
 
-        if (id === "provider:btc:2") {
+        if (id === "provider:btc:3") {
           throw new Error("Story request failed")
         }
 
@@ -237,19 +282,66 @@ test("limits news and keeps candidate and story failures in the output", async (
     requestedSymbol: "CRYPTO:SUSHIUSD",
     status: "failed",
     error: "News request failed",
+    recentItemCount: null,
+    uniqueItemCount: null,
     items: [],
   })
   assert.equal(btc.news.status, "available")
+  assert.equal(btc.news.recentItemCount, 7)
+  assert.equal(btc.news.uniqueItemCount, 6)
   assert.deepEqual(
     btc.news.items.map(item => item.id),
-    Array.from({ length: 5 }, (_, index) => `provider:btc:${index}`),
+    ["provider:btc:0", "provider:btc:2", "provider:btc:3"],
   )
-  assert.equal(storyCalls.length, 5)
+  assert.deepEqual(
+    storyCalls,
+    ["provider:btc:0", "provider:btc:2", "provider:btc:3"],
+  )
 
-  const failedStory = btc.news.items.find(item => item.id === "provider:btc:2")
+  const failedStory = btc.news.items.find(item => item.id === "provider:btc:3")
 
   assert.equal(failedStory.contentStatus, "unavailable")
   assert.equal(failedStory.contentError, "Story request failed")
+})
+
+test("keeps an explicit empty result without falling back to old news", async () => {
+  const referenceTimestamp = 1_800_000_000
+  let storyCallCount = 0
+  const result = await enrichTopCandidatesWithNews(
+    createAnalysis(),
+    createShortlist(),
+    {
+      referenceTimestamp,
+      fetchNews: async ({ symbol }) => ({
+        items: [
+          createNewsItem({
+            id: `provider:${symbol}:old`,
+            published: referenceTimestamp - 24 * 60 * 60 - 1,
+            requestedSymbol: symbol,
+          }),
+          createNewsItem({
+            id: `provider:${symbol}:future`,
+            published: referenceTimestamp + 1,
+            requestedSymbol: symbol,
+          }),
+        ],
+      }),
+      fetchStory: async () => {
+        storyCallCount += 1
+        return createStory("unexpected")
+      },
+    },
+  )
+
+  for (const candidate of result.topCandidates) {
+    assert.equal(candidate.news.status, "empty")
+    assert.equal(candidate.news.error, null)
+    assert.equal(candidate.news.recentItemCount, 0)
+    assert.equal(candidate.news.uniqueItemCount, 0)
+    assert.deepEqual(candidate.news.items, [])
+  }
+
+  assert.equal(storyCallCount, 0)
 })
 
 test("requires matching step snapshots and TradingView coin symbols", async () => {

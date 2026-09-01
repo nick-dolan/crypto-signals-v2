@@ -1,3 +1,5 @@
+import { token_sort_ratio as getTitleSimilarity } from "fuzzball"
+
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
@@ -88,12 +90,76 @@ function validateInputs (analysis, shortlist) {
   })
 }
 
+function normalizeTitle (value) {
+  return typeof value === "string"
+    ? value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    : ""
+}
+
+function getTitleNumbers (title) {
+  return [...new Set(title.match(/\d+(?:[.,]\d+)*/g) ?? [])].sort()
+}
+
+function haveDifferentTitleNumbers (firstTitle, secondTitle) {
+  const firstNumbers = getTitleNumbers(firstTitle)
+  const secondNumbers = getTitleNumbers(secondTitle)
+
+  return firstNumbers.length > 0
+    && secondNumbers.length > 0
+    && (
+      firstNumbers.length !== secondNumbers.length
+      || firstNumbers.some((number, index) => number !== secondNumbers[index])
+    )
+}
+
+function haveSameArticleUrl (first, second) {
+  return ["tradingViewUrl", "externalUrl"].some(field => (
+    typeof first[field] === "string"
+    && first[field]
+    && first[field] === second[field]
+  ))
+}
+
+function haveSameArticleIdentity (first, second) {
+  return first.id === second.id || haveSameArticleUrl(first, second)
+}
+
+function isSameNewsItem (first, second) {
+  if (haveSameArticleIdentity(first, second)) {
+    return true
+  }
+
+  const firstTitle = normalizeTitle(first.title)
+  const secondTitle = normalizeTitle(second.title)
+
+  if (!firstTitle || !secondTitle) {
+    return false
+  }
+
+  return firstTitle === secondTitle || (
+    !haveDifferentTitleNumbers(firstTitle, secondTitle)
+    && getTitleSimilarity(firstTitle, secondTitle) >= 92
+  )
+}
+
+function deduplicateNewsItems (items) {
+  const uniqueItems = []
+
+  for (const item of items) {
+    if (!uniqueItems.some(uniqueItem => isSameNewsItem(uniqueItem, item))) {
+      uniqueItems.push(item)
+    }
+  }
+
+  return uniqueItems
+}
+
 function selectNewsItems (items, referenceTimestamp) {
   if (!Array.isArray(items)) {
     throw new Error("TradingView news response does not contain an items array")
   }
 
-  return [...new Map(items
+  const recentItems = items
     .filter(item => (
       Number.isInteger(item?.published)
       && item.published >= referenceTimestamp - 24 * 60 * 60
@@ -103,9 +169,13 @@ function selectNewsItems (items, referenceTimestamp) {
       second.published - first.published
       || first.id.localeCompare(second.id)
     ))
-    .map(item => [item.id, item]))
-    .values()]
-    .slice(0, 5)
+  const uniqueItems = deduplicateNewsItems(recentItems)
+
+  return {
+    recentItemCount: recentItems.length,
+    uniqueItemCount: uniqueItems.length,
+    items: uniqueItems.slice(0, 3),
+  }
 }
 
 async function fetchCandidateNews (
@@ -115,12 +185,13 @@ async function fetchCandidateNews (
 ) {
   try {
     const { items } = await fetchNews({ symbol: coin.tradingViewSymbol })
+    const selected = selectNewsItems(items, referenceTimestamp)
 
     return {
       baseCurrencyId: coin.baseCurrencyId,
       symbol: candidate.symbol,
       requestedSymbol: coin.tradingViewSymbol,
-      items: selectNewsItems(items, referenceTimestamp),
+      ...selected,
       error: null,
     }
   } catch (error) {
@@ -128,6 +199,8 @@ async function fetchCandidateNews (
       baseCurrencyId: coin.baseCurrencyId,
       symbol: candidate.symbol,
       requestedSymbol: coin.tradingViewSymbol,
+      recentItemCount: null,
+      uniqueItemCount: null,
       items: [],
       error: getErrorMessage(error),
     }
@@ -135,11 +208,13 @@ async function fetchCandidateNews (
 }
 
 function collectArticles (candidateNews) {
-  const articleById = new Map()
+  const articles = []
 
   for (const result of candidateNews) {
     for (const item of result.items) {
-      const existing = articleById.get(item.id)
+      const existing = articles.find(article => (
+        haveSameArticleIdentity(article.item, item)
+      ))
 
       if (existing) {
         existing.item = {
@@ -154,11 +229,12 @@ function collectArticles (candidateNews) {
             item.relatedSymbols,
           ),
         }
+        existing.ids.add(item.id)
         existing.matchedCandidates.add(result.symbol)
         continue
       }
 
-      articleById.set(item.id, {
+      articles.push({
         item: {
           ...item,
           matchedSymbols: mergeStrings(
@@ -167,12 +243,13 @@ function collectArticles (candidateNews) {
           ),
           relatedSymbols: mergeStrings(item.relatedSymbols),
         },
+        ids: new Set([item.id]),
         matchedCandidates: new Set([result.symbol]),
       })
     }
   }
 
-  return articleById
+  return articles
 }
 
 function createUnavailableContent (contentError = null) {
@@ -239,13 +316,14 @@ export async function enrichTopCandidatesWithNews (
   const candidateNews = await Promise.all(topCandidates.map(candidate => (
     fetchCandidateNews(candidate, referenceTimestamp, fetchNews)
   )))
-  const articleById = collectArticles(candidateNews)
-  const enrichedArticles = await Promise.all(
-    [...articleById.values()].map(article => enrichArticle(article, fetchStory)),
-  )
-  const enrichedArticleById = new Map(
-    enrichedArticles.map(article => [article.id, article]),
-  )
+  const articles = collectArticles(candidateNews)
+  const enrichedArticles = await Promise.all(articles.map(async article => ({
+    ids: article.ids,
+    item: await enrichArticle(article, fetchStory),
+  })))
+  const enrichedArticleById = new Map(enrichedArticles.flatMap(({ ids, item }) => (
+    [...ids].map(id => [id, item])
+  )))
   const candidateNewsById = new Map(
     candidateNews.map(result => [result.baseCurrencyId, result]),
   )
@@ -259,7 +337,7 @@ export async function enrichTopCandidatesWithNews (
       asOf: new Date(referenceTimestamp * 1_000).toISOString(),
       from: new Date((referenceTimestamp - 24 * 60 * 60) * 1_000).toISOString(),
       lookbackHours: 24,
-      maxItemsPerCandidate: 5,
+      maxItemsPerCandidate: 3,
     },
     topCandidates: topCandidates.map(({ candidate, coin }) => {
       const result = candidateNewsById.get(coin.baseCurrencyId)
@@ -275,6 +353,8 @@ export async function enrichTopCandidatesWithNews (
               ? "available"
               : "empty",
           error: result.error,
+          recentItemCount: result.recentItemCount,
+          uniqueItemCount: result.uniqueItemCount,
           items,
         },
       }
