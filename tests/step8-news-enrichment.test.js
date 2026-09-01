@@ -164,7 +164,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
     storyCalls.map(call => call.id),
     [sharedId, "provider:sushi:0"],
   )
-  assert.equal(result.schemaVersion, 2)
+  assert.equal(result.schemaVersion, 3)
   assert.equal(result.asOf, "2027-01-15T08:00:00.000Z")
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.newsEnrichment, {
@@ -174,7 +174,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
     lookbackHours: 24,
     maxItemsPerCandidate: 3,
   })
-  assert.deepEqual(result.assessments, createAnalysis().assessments)
+  assert.ok(!Object.hasOwn(result, "assessments"))
 
   const [sushi, btc] = result.topCandidates
 

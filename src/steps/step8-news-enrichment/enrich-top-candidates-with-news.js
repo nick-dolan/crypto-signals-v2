@@ -334,7 +334,7 @@ export async function enrichTopCandidatesWithNews (
   )
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     asOf: analysis.asOf,
     newsEnrichment: {
@@ -364,6 +364,5 @@ export async function enrichTopCandidatesWithNews (
         },
       }
     }),
-    assessments: analysis.assessments,
   }
 }
