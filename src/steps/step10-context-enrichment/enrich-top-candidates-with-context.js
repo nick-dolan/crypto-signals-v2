@@ -1,3 +1,4 @@
+import { omit } from "radash"
 import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
@@ -81,7 +82,7 @@ async function enrichCandidate (
   }
 
   return {
-    ...candidate.candidate,
+    ...omit(candidate.candidate, ["news", "twitter"]),
     enrichedExplanation: `${candidate.explanation} ${enrichment.informationBackground}`,
   }
 }

@@ -104,8 +104,8 @@ test("uses one sequential Gemini call per candidate and adds enriched explanatio
     result.topCandidates[1].enrichedExplanation,
     `${input.topCandidates[1].explanation} Свежий информационный фон пока не подтверждает исходную картину.`,
   )
-  assert.deepEqual(result.topCandidates[0].news, input.topCandidates[0].news)
-  assert.deepEqual(result.topCandidates[0].twitter, input.topCandidates[0].twitter)
+  assert.equal(Object.hasOwn(result.topCandidates[0], "news"), false)
+  assert.equal(Object.hasOwn(result.topCandidates[0], "twitter"), false)
 })
 
 test("accepts JSON wrapped in one Markdown fence", () => {
