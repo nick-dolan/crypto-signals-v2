@@ -1,6 +1,6 @@
 ---
 name: copilot-sdk
-description: Используй при реализации, ревью, отладке или обновлении официальной интеграции @github/copilot-sdk в crypto-signals-v2, особенно обёртки src/api/copilot/chat.js, сессий, моделей, промптов, разрешений и авторизации.
+description: Используй при реализации, ревью, отладке или обновлении официальной интеграции @github/copilot-sdk в crypto-signals-v2
 ---
 
 # GitHub Copilot SDK
