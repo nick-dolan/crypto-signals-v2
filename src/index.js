@@ -39,6 +39,7 @@ async function runAll () {
       "step7-agent-analysis.js",
       "step8-news-enrichment.js",
       "step9-twitter-enrichment.js",
+      "step10-context-enrichment.js",
     ]) {
       const succeeded = await runStep(`src/${step}`)
 
