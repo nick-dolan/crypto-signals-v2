@@ -1,4 +1,4 @@
-import { callCopilot } from "../../api/copilot/chat.js"
+import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
 import {
@@ -89,7 +89,7 @@ async function enrichCandidate (
 export async function enrichTopCandidatesWithContext (
   input,
   systemPrompt,
-  { callAgent = callCopilot } = {},
+  { callAgent = callUnofficialCopilot } = {},
 ) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Context enrichment system prompt is required")
@@ -116,7 +116,7 @@ export async function enrichTopCandidatesWithContext (
     schemaVersion: 5,
     generatedAt: new Date().toISOString(),
     contextEnrichment: {
-      source: "github-copilot-sdk",
+      source: "github-copilot-unofficial",
       model: "gemini-3.7-flash",
       reasoningEffort: "medium",
       candidateCallCount: topCandidates.length,

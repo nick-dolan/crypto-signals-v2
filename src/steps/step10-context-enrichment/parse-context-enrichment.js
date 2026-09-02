@@ -32,10 +32,14 @@ export function parseContextEnrichment (content, expectedSymbol) {
     invalidEnrichment("response must be a non-empty string")
   }
 
+  const json = content.trim().replace(
+    /^```(?:json)?\s*([\s\S]*?)\s*```$/i,
+    "$1",
+  )
   let enrichment
 
   try {
-    enrichment = JSON.parse(content)
+    enrichment = JSON.parse(json)
   } catch (error) {
     const details = isError(error) ? error.message : "unknown JSON error"
 

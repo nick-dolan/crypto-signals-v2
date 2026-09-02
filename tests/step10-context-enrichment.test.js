@@ -91,7 +91,7 @@ test("uses one sequential Gemini call per candidate and adds enriched explanatio
   assert.equal(result.schemaVersion, 5)
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.contextEnrichment, {
-    source: "github-copilot-sdk",
+    source: "github-copilot-unofficial",
     model: "gemini-3.7-flash",
     reasoningEffort: "medium",
     candidateCallCount: 2,
@@ -106,6 +106,23 @@ test("uses one sequential Gemini call per candidate and adds enriched explanatio
   )
   assert.deepEqual(result.topCandidates[0].news, input.topCandidates[0].news)
   assert.deepEqual(result.topCandidates[0].twitter, input.topCandidates[0].twitter)
+})
+
+test("accepts JSON wrapped in one Markdown fence", () => {
+  assert.deepEqual(
+    parseContextEnrichment(`\`\`\`json
+{
+  "schemaVersion": 1,
+  "symbol": "SOL",
+  "informationBackground": "Информационный фон частично подтверждает картину."
+}
+\`\`\``, "SOL"),
+    {
+      schemaVersion: 1,
+      symbol: "SOL",
+      informationBackground: "Информационный фон частично подтверждает картину.",
+    },
+  )
 })
 
 test("rejects an invalid agent response and preserves it for diagnostics", async () => {
