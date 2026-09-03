@@ -84,6 +84,10 @@ function createBinanceUrl (endpoint, searchParams) {
     "https://fapi.binance.com/",
   )
 
+  if (url.origin !== "https://fapi.binance.com") {
+    throw new Error("Binance endpoint must use the Binance Futures API origin")
+  }
+
   appendSearchParams(url, searchParams)
 
   return url

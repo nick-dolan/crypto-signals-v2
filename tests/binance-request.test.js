@@ -153,6 +153,10 @@ test("Binance requester validates request options", async () => {
     /Binance endpoint must be relative/,
   )
   await assert.rejects(
+    requestBinanceFuturesJson("\\\\example.com/fapi/v1/klines"),
+    /Binance endpoint must use the Binance Futures API origin/,
+  )
+  await assert.rejects(
     requestBinanceFuturesJson("/fapi/v1/klines", { searchParams: [] }),
     /searchParams must be an object or URLSearchParams/,
   )
