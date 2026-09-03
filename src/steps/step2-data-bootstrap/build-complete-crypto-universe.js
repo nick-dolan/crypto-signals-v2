@@ -36,12 +36,16 @@ export async function buildCompleteCryptoUniverse (
   const coins = []
   const rejected = []
 
-  for (const coin of orderedCandidates) {
+  for (const [index, coin] of orderedCandidates.entries()) {
+    const progress = {
+      index: index + 1,
+      total: orderedCandidates.length,
+    }
     const { attempts, result } = await checkWithRetry(
       checkCoverage,
       coin,
       maxAttempts,
-      onProgress,
+      event => onProgress({ ...event, ...progress }),
     )
 
     if (result?.complete) {
@@ -55,6 +59,7 @@ export async function buildCompleteCryptoUniverse (
       coins.push(accepted)
       onProgress({
         status: "accepted",
+        ...progress,
         coin,
         market: coin.market,
         accepted,
@@ -66,6 +71,7 @@ export async function buildCompleteCryptoUniverse (
     rejected.push(rejection)
     onProgress({
       status: "rejected",
+      ...progress,
       coin,
       market: coin.market,
       rejection,

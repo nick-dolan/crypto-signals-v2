@@ -3,22 +3,22 @@ import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js
 import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
 
 function logProgress (event) {
+  const coin = `${event.index}/${event.total} ${event.coin.symbol} (rank #${event.coin.rank})`
+
   if (event.status === "retrying") {
     console.log(
-      `↻ #${event.coin.rank} ${event.coin.symbol}: retrying after ${event.result.reasonCodes.join(", ")}`,
+      `↻ ${coin}: retrying after ${event.result.reasonCodes.join(", ")}`,
     )
     return
   }
 
   if (event.status === "accepted") {
-    console.log(
-      `✓ #${event.coin.rank} ${event.coin.symbol} — ${event.market.tradingViewSymbol}`,
-    )
+    console.log(`✓ ${coin}`)
     return
   }
 
   console.log(
-    `✗ #${event.coin.rank} ${event.coin.symbol} — ${event.rejection.reasonCodes.join(", ")}`,
+    `✗ ${coin} — ${event.rejection.reasonCodes.join(", ")}`,
   )
 }
 

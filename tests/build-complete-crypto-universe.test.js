@@ -99,6 +99,7 @@ test("complete universe checks every attached market by rank", async () => {
     createCoin(3, { baseCurrencyId: "XTVCEDGED", symbol: "EDGE" }),
   ]
   const checkedIds = []
+  const progressEvents = []
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse(candidates),
     async (coin) => {
@@ -106,7 +107,10 @@ test("complete universe checks every attached market by rank", async () => {
 
       return createCoverageResult(coin.baseCurrencyId !== "XTVCEDGED")
     },
-    { generatedAt: "2026-08-29T12:00:00Z" },
+    {
+      generatedAt: "2026-08-29T12:00:00Z",
+      onProgress: event => progressEvents.push(event),
+    },
   )
 
   assert.deepEqual(checkedIds, [
@@ -115,6 +119,20 @@ test("complete universe checks every attached market by rank", async () => {
     "XTVCBTC",
     "XTVC5",
   ])
+  assert.deepEqual(
+    progressEvents.map(event => [
+      event.status,
+      event.index,
+      event.total,
+      event.coin.rank,
+    ]),
+    [
+      ["accepted", 1, 4, 2],
+      ["rejected", 2, 4, 3],
+      ["accepted", 3, 4, 4],
+      ["accepted", 4, 4, 5],
+    ],
+  )
   assert.deepEqual(
     report.coins.map(coin => coin.baseCurrencyId),
     ["XTVCEDGEX", "XTVCBTC", "XTVC5"],
@@ -135,6 +153,7 @@ test("complete universe checks every attached market by rank", async () => {
 
 test("complete universe accepts every complete coin and retries transient failures", async () => {
   let attempts = 0
+  const progressEvents = []
   const report = await buildCompleteCryptoUniverse(
     createSourceUniverse([createCoin(1)]),
     async (_coin, attempt) => {
@@ -147,10 +166,20 @@ test("complete universe accepts every complete coin and retries transient failur
 
       return createCoverageResult(true)
     },
-    { generatedAt: "2026-08-29T12:00:00Z" },
+    {
+      generatedAt: "2026-08-29T12:00:00Z",
+      onProgress: event => progressEvents.push(event),
+    },
   )
 
   assert.equal(attempts, 2)
+  assert.deepEqual(
+    progressEvents.map(event => [event.status, event.index, event.total]),
+    [
+      ["retrying", 1, 1],
+      ["accepted", 1, 1],
+    ],
+  )
   assert.equal(report.candidateCount, 1)
   assert.equal(report.coinCount, 1)
   assert.equal(report.coins[0].attempts, 2)
