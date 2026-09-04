@@ -15,6 +15,11 @@ function latestValues (seriesByName) {
 
 function findUnavailableMetrics (features, categoryApplicable, socialAvailable) {
   const allowedNulls = new Set([
+    "movementLifecycle.pre_breakout_squeeze_age",
+    "movementLifecycle.squeeze_ended_hours_ago",
+    "movementLifecycle.breakout_age_hours",
+    "movementLifecycle.post_breakout_extension_atr",
+    "movementLifecycle.extension_from_base_atr",
     ...(categoryApplicable
       ? []
       : [

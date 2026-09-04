@@ -1,6 +1,7 @@
 import { calculateBreadthNarrativeMetrics } from "./metrics/breadth-narrative.js"
 import { calculateDerivativesMetrics } from "./metrics/derivatives.js"
 import { calculateDivergenceFlags } from "./metrics/divergence-flags.js"
+import { calculateMovementLifecycleMetrics } from "./metrics/movement-lifecycle.js"
 import { calculateRelativeStrengthMetrics } from "./metrics/relative-strength.js"
 import { calculateSocialMetrics } from "./metrics/social.js"
 import {
@@ -18,6 +19,11 @@ export function calculateCoinMetrics (
   const volatilityCompression = calculateVolatilityCompressionMetrics({
     ...coinSeries,
     atr24hPct,
+  })
+  const movementLifecycle = calculateMovementLifecycleMetrics({
+    ...coinSeries,
+    atr24hPct,
+    squeezeAge: volatilityCompression.squeeze_age_hours,
   })
   const volumeOrderFlow = calculateVolumeOrderFlowMetrics(coinSeries)
   const derivatives = calculateDerivativesMetrics({
@@ -56,6 +62,7 @@ export function calculateCoinMetrics (
     categoryContext,
     featureSeries: {
       volatilityCompression,
+      movementLifecycle,
       volumeOrderFlow,
       derivatives,
       social,

@@ -12,6 +12,18 @@ function createCandidate (symbol, overrides = {}) {
       range_compression_streak: 3,
       squeeze_age_hours: 8,
     },
+    movementLifecycle: {
+      prior_runup_atr_72h: 1.23456,
+      max_24h_runup_last_7d_atr: 2.34567,
+      range_position_7d: 0.87654,
+      pre_breakout_squeeze_age: 18,
+      squeeze_ended_hours_ago: 3,
+      breakout_age_hours: 2,
+      post_breakout_extension_atr: 0.45678,
+      extension_from_base_atr: 1.23456,
+      fresh_quiet_breakout: true,
+      late_pump: false,
+    },
     volumeOrderFlow: {
       volume_z_30d: 1.8345,
       volume_acceleration_3h: 0.25123,
@@ -128,11 +140,11 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 3)
+  assert.equal(payload.schemaVersion, 4)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 47)
+  assert.equal(payload.schema.length, 55)
   assert.deepEqual(Object.keys(payload.definitions), payload.schema)
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
@@ -157,6 +169,14 @@ test("agent payload creates documented compact rows", () => {
     atrPctile: 0.235,
     rangeStreak: 3,
     squeezeAge: 8,
+    priorRunupAtr72h: 1.235,
+    max24hRunupLast7dAtr: 2.346,
+    rangePosition7d: 0.877,
+    preBreakoutSqueezeAge: 18,
+    squeezeEndedHoursAgo: 3,
+    breakoutAgeHours: 2,
+    postBreakoutExtensionAtr: 0.457,
+    extensionFromBaseAtr: 1.235,
     volumeZ: 1.835,
     volumeAccel3hPct: 25.123,
     relVolume: 1.877,
@@ -190,7 +210,7 @@ test("agent payload creates documented compact rows", () => {
     categoryMoveAtr: 1.458,
     categoryBreadth: 0.667,
     coinLeadAtr: -0.486,
-    flags: ["coiling", "resilient"],
+    flags: ["coiling", "resilient", "fresh_quiet_breakout"],
   })
 
   const serialized = JSON.stringify(payload)
@@ -212,7 +232,7 @@ test("agent payload creates documented compact rows", () => {
   }
 })
 
-test("agent payload preserves order and nullable narrative metrics", () => {
+test("agent payload preserves order and nullable metrics", () => {
   const payload = buildAgentPayload(createShortlist([
     createCandidate("FIRST"),
     createCandidate("SECOND", {
@@ -222,6 +242,15 @@ test("agent payload preserves order and nullable narrative metrics", () => {
         categoryStatus: "not_applicable",
       },
       features: {
+        movementLifecycle: {
+          pre_breakout_squeeze_age: null,
+          squeeze_ended_hours_ago: null,
+          breakout_age_hours: null,
+          post_breakout_extension_atr: null,
+          extension_from_base_atr: null,
+          fresh_quiet_breakout: false,
+          late_pump: false,
+        },
         breadthNarrative: {
           category_momentum_4h: null,
           category_breadth: null,
@@ -245,6 +274,11 @@ test("agent payload preserves order and nullable narrative metrics", () => {
   assert.equal(rows[1].categoryMoveAtr, null)
   assert.equal(rows[1].categoryBreadth, null)
   assert.equal(rows[1].coinLeadAtr, null)
+  assert.equal(rows[1].preBreakoutSqueezeAge, null)
+  assert.equal(rows[1].squeezeEndedHoursAgo, null)
+  assert.equal(rows[1].breakoutAgeHours, null)
+  assert.equal(rows[1].postBreakoutExtensionAtr, null)
+  assert.equal(rows[1].extensionFromBaseAtr, null)
   assert.deepEqual(rows[1].flags, [])
   assert.deepEqual(
     Object.keys(payload.marketDefinitions),
@@ -258,6 +292,8 @@ test("agent payload preserves order and nullable narrative metrics", () => {
     "laggard",
     "resilient",
     "squeeze_fuel",
+    "fresh_quiet_breakout",
+    "late_pump",
   ])
 })
 

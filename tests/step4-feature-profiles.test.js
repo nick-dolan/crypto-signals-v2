@@ -142,6 +142,18 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
     },
     featureSeries: {
       volatilityCompression: { sample_metric: Array(24).fill(2) },
+      movementLifecycle: {
+        prior_runup_atr_72h: Array(24).fill(1),
+        max_24h_runup_last_7d_atr: Array(24).fill(2),
+        range_position_7d: Array(24).fill(0.5),
+        pre_breakout_squeeze_age: Array(24).fill(null),
+        squeeze_ended_hours_ago: Array(24).fill(null),
+        breakout_age_hours: Array(24).fill(null),
+        post_breakout_extension_atr: Array(24).fill(null),
+        extension_from_base_atr: Array(24).fill(null),
+        fresh_quiet_breakout: Array(24).fill(false),
+        late_pump: Array(24).fill(false),
+      },
       social: null,
       breadthNarrative: {
         category_momentum_4h: Array(24).fill(null),
@@ -164,6 +176,8 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
   assert.equal(result.profile.context.socialStatus, "unavailable")
   assert.equal(result.profile.features.social, null)
   assert.equal(result.profile.features.volatilityCompression.sample_metric, 2)
+  assert.equal(result.profile.features.movementLifecycle.breakout_age_hours, null)
+  assert.equal(result.profile.features.movementLifecycle.late_pump, false)
   assert.equal("dataQuality" in result.profile, false)
 })
 

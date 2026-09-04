@@ -37,6 +37,10 @@ function createProfile (baseCurrencyId, overrides = {}) {
       category_breadth: null,
       coin_leads_category: null,
     },
+    movementLifecycle: {
+      fresh_quiet_breakout: false,
+      late_pump: false,
+    },
     divergences: {
       coiling: false,
       attention_ahead: false,
@@ -212,6 +216,7 @@ test("preliminary shortlist deduplicates overlapping reasons", () => {
       features: {
         volatilityCompression: { squeeze_age_hours: 6 },
         social: { social_minus_price_z_3h: 1.2 },
+        movementLifecycle: { fresh_quiet_breakout: true },
         divergences: { coiling: true },
       },
     }),
@@ -221,12 +226,59 @@ test("preliminary shortlist deduplicates overlapping reasons", () => {
   assert.equal(result.candidateCount, 1)
   assert.deepEqual(candidate.selection.selectedBy, [
     "divergences",
+    "movementLifecycle",
     "compression",
     "social",
   ])
   assert.deepEqual(candidate.selection.divergenceFlags, ["coiling"])
-  assert.deepEqual(candidate.selection.setupSignals, ["volatilityCompression"])
-  assert.deepEqual(candidate.selection.triggerSignals, ["socialAttention"])
+  assert.deepEqual(candidate.selection.setupSignals, [
+    "volatilityCompression",
+    "preBreakoutCompression",
+  ])
+  assert.deepEqual(candidate.selection.triggerSignals, [
+    "freshBreakout",
+    "socialAttention",
+  ])
+})
+
+test("preliminary shortlist nominates a fresh quiet breakout as setup and trigger", () => {
+  const result = buildPreliminaryShortlist([
+    createProfile("fresh", {
+      features: {
+        movementLifecycle: { fresh_quiet_breakout: true },
+      },
+    }),
+  ])
+  const candidate = result.candidates[0]
+
+  assert.equal(result.candidateCount, 1)
+  assert.equal(result.filter.freshQuietBreakoutNominatedCoinCount, 1)
+  assert.deepEqual(candidate.selection.selectedBy, ["movementLifecycle"])
+  assert.deepEqual(candidate.selection.activeAxes, [])
+  assert.deepEqual(candidate.selection.setupSignals, ["preBreakoutCompression"])
+  assert.deepEqual(candidate.selection.triggerSignals, ["freshBreakout"])
+})
+
+test("preliminary shortlist applies a soft late-pump penalty", () => {
+  const result = buildPreliminaryShortlist([
+    createProfile("z-neutral-strong", {
+      features: { volatilityCompression: { squeeze_age_hours: 24 } },
+    }),
+    createProfile("a-late-strong", {
+      features: {
+        volatilityCompression: { squeeze_age_hours: 24 },
+        movementLifecycle: { late_pump: true },
+      },
+    }),
+    createProfile("b-neutral-weak", {
+      features: { volatilityCompression: { squeeze_age_hours: 4 } },
+    }),
+  ])
+
+  assert.deepEqual(
+    result.candidates.map(candidate => candidate.coin.baseCurrencyId),
+    ["z-neutral-strong", "a-late-strong", "b-neutral-weak"],
+  )
 })
 
 test("preliminary shortlist orders role combinations before context", () => {
@@ -282,12 +334,14 @@ test("preliminary shortlist applies the limit after signal priority", () => {
         volume_acceleration_3h: 0.5,
         rel_volume_at_time: 2,
       },
+      movementLifecycle: { fresh_quiet_breakout: true },
       divergences: { coiling: true },
     },
   })
   const result = buildPreliminaryShortlist([...weakProfiles, strongProfile])
 
   assert.equal(result.filter.nominatedBeforeLimit, 61)
+  assert.equal(result.filter.freshQuietBreakoutNominatedCoinCount, 1)
   assert.equal(result.filter.limitApplied, true)
   assert.equal(result.candidateCount, 60)
   assert.equal(result.candidates[0].coin.baseCurrencyId, "zz-strong")

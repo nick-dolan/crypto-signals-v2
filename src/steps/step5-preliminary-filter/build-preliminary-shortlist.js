@@ -187,17 +187,23 @@ function evaluateProfile (profile) {
     relativeStrength: calculateRelativeStrengthAxis(profile),
     narrative: calculateNarrativeAxis(profile),
   }
+  const {
+    fresh_quiet_breakout: freshQuietBreakout,
+    late_pump: latePump,
+  } = profile.features.movementLifecycle
   const divergences = profile.features.divergences
   const divergenceFlags = Object.entries(divergences)
     .filter(([, active]) => active === true)
     .map(([name]) => name)
   const setupSignals = [
     axes.compression.active && "volatilityCompression",
+    freshQuietBreakout && "preBreakoutCompression",
     axes.derivatives.oiSetup && "quietOiBuild",
     axes.derivatives.crowdSetup && "crowdedPositioning",
     divergences.squeeze_fuel && "squeezeFuel",
   ].filter(Boolean)
   const triggerSignals = [
+    freshQuietBreakout && "freshBreakout",
     axes.volumeOrderFlow.active && "volumeOrderFlow",
     (axes.derivatives.oiTrigger || axes.derivatives.liquidationTrigger) && "derivatives",
     axes.social.active && "socialAttention",
@@ -216,10 +222,14 @@ function evaluateProfile (profile) {
     "derivatives",
     "social",
   ].filter(name => axes[name].active).length
+  const averageAxisScore = average(
+    activeAxes.map(name => axes[name].score),
+  )
 
   return {
     profile,
     axes,
+    freshQuietBreakout,
     divergenceFlags,
     setupSignals,
     triggerSignals,
@@ -232,7 +242,10 @@ function evaluateProfile (profile) {
       multipleTriggers: Number(triggerSignals.length >= 2),
       signalAxisCount,
       contextCount: contextSignals.length,
-      averageAxisScore: average(activeAxes.map(name => axes[name].score)),
+      lifecycleAdjustedScore: averageAxisScore
+        + 0.15 * Number(freshQuietBreakout)
+        - 0.15 * Number(latePump),
+      averageAxisScore,
     },
   }
 }
@@ -253,6 +266,7 @@ function comparePriority (first, second) {
     || second.priority.multipleTriggers - first.priority.multipleTriggers
     || second.priority.signalAxisCount - first.priority.signalAxisCount
     || second.priority.contextCount - first.priority.contextCount
+    || second.priority.lifecycleAdjustedScore - first.priority.lifecycleAdjustedScore
     || second.priority.averageAxisScore - first.priority.averageAxisScore
     || first.profile.coin.baseCurrencyId.localeCompare(
       second.profile.coin.baseCurrencyId,
@@ -300,9 +314,16 @@ export function buildPreliminaryShortlist (profiles) {
   const divergenceCandidates = evaluations.filter(
     evaluation => evaluation.divergenceFlags.length > 0,
   )
+  const freshQuietBreakoutCandidates = evaluations.filter(
+    evaluation => evaluation.freshQuietBreakout,
+  )
 
   for (const evaluation of divergenceCandidates) {
     addSelectionReason(selectionReasonsById, evaluation, "divergences")
+  }
+
+  for (const evaluation of freshQuietBreakoutCandidates) {
+    addSelectionReason(selectionReasonsById, evaluation, "movementLifecycle")
   }
 
   const eligibleCoinCountByAxis = {}
@@ -358,6 +379,8 @@ export function buildPreliminaryShortlist (profiles) {
       topPerAxis: 5,
       candidateLimit: 60,
       divergenceNominatedCoinCount: divergenceCandidates.length,
+      freshQuietBreakoutNominatedCoinCount:
+        freshQuietBreakoutCandidates.length,
       eligibleCoinCountByAxis,
       nominatedCoinCountByAxis,
       nominatedBeforeLimit: nominated.length,

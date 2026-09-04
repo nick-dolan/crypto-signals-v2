@@ -31,15 +31,16 @@ function normalizeToAtr (value, atr24hPct) {
   return roundNumber(value / atr24hPct)
 }
 
-function getActiveFlags (divergences) {
-  return Object.entries(divergences)
+function getActiveFlags (...groups) {
+  return groups.flatMap(group => Object.entries(group)
     .filter(([, active]) => active === true)
-    .map(([name]) => name)
+    .map(([name]) => name))
 }
 
 function createCandidateRow (profile) {
   const { coin, context, features } = profile
   const volatility = features.volatilityCompression
+  const lifecycle = features.movementLifecycle
   const volume = features.volumeOrderFlow
   const derivatives = features.derivatives
   const social = features.social
@@ -79,6 +80,14 @@ function createCandidateRow (profile) {
     roundNumber(volatility.atr_pct_90d),
     volatility.range_compression_streak,
     volatility.squeeze_age_hours,
+    roundNumber(lifecycle.prior_runup_atr_72h),
+    roundNumber(lifecycle.max_24h_runup_last_7d_atr),
+    roundNumber(lifecycle.range_position_7d),
+    roundNullable(lifecycle.pre_breakout_squeeze_age),
+    roundNullable(lifecycle.squeeze_ended_hours_ago),
+    roundNullable(lifecycle.breakout_age_hours),
+    roundNullable(lifecycle.post_breakout_extension_atr),
+    roundNullable(lifecycle.extension_from_base_atr),
     roundNumber(volume.volume_z_30d),
     roundNumber(volume.volume_acceleration_3h * 100),
     roundNumber(volume.rel_volume_at_time),
@@ -112,7 +121,10 @@ function createCandidateRow (profile) {
     normalizeToAtr(narrative.category_momentum_4h, context.atr24hPct),
     roundNullable(narrative.category_breadth),
     normalizeToAtr(narrative.coin_leads_category, context.atr24hPct),
-    getActiveFlags(features.divergences),
+    getActiveFlags(features.divergences, {
+      fresh_quiet_breakout: lifecycle.fresh_quiet_breakout,
+      late_pump: lifecycle.late_pump,
+    }),
   ]
 }
 
@@ -136,7 +148,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -170,7 +182,7 @@ export function buildAgentPayload (shortlist) {
       rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
-      null: "Метрика недоступна; это не ноль и не отрицательный сигнал. Причину блока показывают categoryStatus или socialStatus",
+      null: "Для category/social метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Это не ноль",
     },
     schema: [
       "symbol",
@@ -186,6 +198,14 @@ export function buildAgentPayload (shortlist) {
       "atrPctile",
       "rangeStreak",
       "squeezeAge",
+      "priorRunupAtr72h",
+      "max24hRunupLast7dAtr",
+      "rangePosition7d",
+      "preBreakoutSqueezeAge",
+      "squeezeEndedHoursAgo",
+      "breakoutAgeHours",
+      "postBreakoutExtensionAtr",
+      "extensionFromBaseAtr",
       "volumeZ",
       "volumeAccel3hPct",
       "relVolume",
@@ -235,6 +255,14 @@ export function buildAgentPayload (shortlist) {
       atrPctile: "Setup: перцентиль ATR24h / close в полном скользящем окне 90 дней",
       rangeStreak: "Setup: часов подряд диапазон (high - low) / close не превышает свою 30-дневную медиану",
       squeezeAge: "Setup: часов подряд RV ratio < 0.75, Bollinger percentile <= 0.2 и ATR percentile <= 0.2",
+      priorRunupAtr72h: "Lifecycle: положительный рост close за 72 часа до последних 4 часов / ATR в начале окна",
+      max24hRunupLast7dAtr: "Lifecycle: максимальный положительный рост close за 24 часа среди окон последних 7 дней, завершившихся до последних 4 часов, / ATR в начале каждого окна",
+      rangePosition7d: "Lifecycle: положение текущего close внутри диапазона high/low за 7 дней; 0 соответствует минимуму, 1 — максимуму",
+      preBreakoutSqueezeAge: "Lifecycle: продолжительность сжатия непосредственно перед последним пробоем тихой базы, часы; null — подходящий пробой за 7 дней не найден",
+      squeezeEndedHoursAgo: "Lifecycle: сколько часов назад закончилась последняя зрелая тихая база; null — такая база за 7 дней не найдена",
+      breakoutAgeHours: "Lifecycle: сколько часов прошло с первого close за границей последних максимум 48 часов тихой базы; null — подходящий пробой за 7 дней не найден",
+      postBreakoutExtensionAtr: "Lifecycle: текущая дистанция по направлению пробоя за границей последних максимум 48 часов базы / ATR перед пробоем; null — подходящий пробой за 7 дней не найден",
+      extensionFromBaseAtr: "Lifecycle: абсолютная дистанция текущего close от середины последней тихой базы / её замороженный ATR; null — зрелая тихая база за 7 дней не найдена",
       volumeZ: "Trigger: z-score логарифма USD-объёма за 30 дней",
       volumeAccel3hPct: "Trigger: изменение суммы объёма последних 3 часов к предыдущим 3 часам, %",
       relVolume: "Trigger: текущий USD-объём / медиана этого же часа суток за предыдущие 30 дней",
@@ -268,7 +296,7 @@ export function buildAgentPayload (shortlist) {
       categoryMoveAtr: "Narrative: медианная simple return peer-монет категории за 4h / ATR монеты; сама монета исключена, знак показывает направление",
       categoryBreadth: "Narrative: доля peer-монет в направлении медианы категории, чьё 4-часовое движение сильнее предыдущего непересекающегося окна",
       coinLeadAtr: "Narrative: [simple return монеты за 4h - медиана peer-монет] / ATR; отрицательное значение означает отставание",
-      flags: "Только активные true-паттерны; недоступность category-зависимого laggard показывает categoryStatus",
+      flags: "Только активные true-паттерны Divergence и Lifecycle; недоступность category-зависимого laggard показывает categoryStatus",
     },
     flagDefinitions: {
       coiling: "Сжатие, одновременно начинают расти Open Interest и объём",
@@ -278,6 +306,8 @@ export function buildAgentPayload (shortlist) {
       laggard: "Категория движется, а монета отстаёт",
       resilient: "BTC падает, а монета сохраняет относительную силу",
       squeeze_fuel: "Экстремальный Funding, высокий Open Interest и однобокая толпа создают топливо",
+      fresh_quiet_breakout: "Свежий выход из зрелой тихой базы, который ещё не успел далеко уйти от её границы",
+      late_pump: "Цена уже сильно выросла за несколько дней и удерживается около недельного максимума",
     },
     candidates: shortlist.candidates.map(createCandidateRow),
   }
