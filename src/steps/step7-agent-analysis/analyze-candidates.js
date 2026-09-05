@@ -37,18 +37,31 @@ export async function analyzeCandidates (
 
   try {
     const analysis = parseAgentAnalysis(content, payload)
+    const assessments = analysis.assessments.map(assessment => ({
+      ...assessment,
+      tradingViewUrl: `https://www.tradingview.com/chart/?symbol=${marketSymbolBySymbol.get(assessment.symbol)}`,
+    }))
     const assessmentBySymbol = new Map(
-      analysis.assessments.map(assessment => [assessment.symbol, assessment]),
+      assessments.map(assessment => [assessment.symbol, assessment]),
     )
 
     return {
-      ...analysis,
-      topCandidates: analysis.topCandidates.map(candidate => ({
-        ...candidate,
-        directionBias: assessmentBySymbol.get(candidate.symbol).directionBias,
-        estimateConfidence: assessmentBySymbol.get(candidate.symbol).estimateConfidence,
-        tradingViewUrl: `https://www.tradingview.com/chart/?symbol=${marketSymbolBySymbol.get(candidate.symbol)}`,
-      })),
+      schemaVersion: analysis.schemaVersion,
+      asOf: analysis.asOf,
+      candidateCount: assessments.length,
+      topCandidates: analysis.topCandidates.map((candidate) => {
+        const assessment = assessmentBySymbol.get(candidate.symbol)
+
+        return {
+          ...candidate,
+          directionBias: assessment.directionBias,
+          estimateConfidence: assessment.estimateConfidence,
+          drivers: assessment.drivers,
+          counterSignals: assessment.counterSignals,
+          tradingViewUrl: assessment.tradingViewUrl,
+        }
+      }),
+      assessments,
     }
   } catch (error) {
     if (error instanceof InvalidCopilotAnalysisError) {
