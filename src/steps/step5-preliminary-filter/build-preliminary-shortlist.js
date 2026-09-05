@@ -230,6 +230,7 @@ function evaluateProfile (profile) {
     profile,
     axes,
     freshQuietBreakout,
+    latePump,
     divergenceFlags,
     setupSignals,
     triggerSignals,
@@ -242,9 +243,8 @@ function evaluateProfile (profile) {
       multipleTriggers: Number(triggerSignals.length >= 2),
       signalAxisCount,
       contextCount: contextSignals.length,
-      lifecycleAdjustedScore: averageAxisScore
-        + 0.15 * Number(freshQuietBreakout)
-        - 0.15 * Number(latePump),
+      freshnessAdjustedScore: averageAxisScore
+        + 0.15 * Number(freshQuietBreakout),
       averageAxisScore,
     },
   }
@@ -266,7 +266,7 @@ function comparePriority (first, second) {
     || second.priority.multipleTriggers - first.priority.multipleTriggers
     || second.priority.signalAxisCount - first.priority.signalAxisCount
     || second.priority.contextCount - first.priority.contextCount
-    || second.priority.lifecycleAdjustedScore - first.priority.lifecycleAdjustedScore
+    || second.priority.freshnessAdjustedScore - first.priority.freshnessAdjustedScore
     || second.priority.averageAxisScore - first.priority.averageAxisScore
     || first.profile.coin.baseCurrencyId.localeCompare(
       second.profile.coin.baseCurrencyId,
@@ -310,11 +310,12 @@ export function buildPreliminaryShortlist (profiles) {
   validateProfiles(profiles)
 
   const evaluations = profiles.map(evaluateProfile)
+  const eligibleEvaluations = evaluations.filter(evaluation => !evaluation.latePump)
   const selectionReasonsById = new Map()
-  const divergenceCandidates = evaluations.filter(
+  const divergenceCandidates = eligibleEvaluations.filter(
     evaluation => evaluation.divergenceFlags.length > 0,
   )
-  const freshQuietBreakoutCandidates = evaluations.filter(
+  const freshQuietBreakoutCandidates = eligibleEvaluations.filter(
     evaluation => evaluation.freshQuietBreakout,
   )
 
@@ -337,7 +338,7 @@ export function buildPreliminaryShortlist (profiles) {
     "relativeStrength",
     "narrative",
   ]) {
-    const eligible = evaluations.filter(evaluation => (
+    const eligible = eligibleEvaluations.filter(evaluation => (
       evaluation.axes[axisName].active
     ))
     const selected = [...eligible].sort(compareByAxis(axisName)).slice(0, 5)
@@ -350,7 +351,7 @@ export function buildPreliminaryShortlist (profiles) {
     }
   }
 
-  const nominated = evaluations
+  const nominated = eligibleEvaluations
     .filter(evaluation => selectionReasonsById.has(
       evaluation.profile.coin.baseCurrencyId,
     ))
@@ -378,6 +379,7 @@ export function buildPreliminaryShortlist (profiles) {
     filter: {
       topPerAxis: 5,
       candidateLimit: 60,
+      latePumpExcludedCoinCount: evaluations.length - eligibleEvaluations.length,
       divergenceNominatedCoinCount: divergenceCandidates.length,
       freshQuietBreakoutNominatedCoinCount:
         freshQuietBreakoutCandidates.length,

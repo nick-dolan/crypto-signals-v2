@@ -259,26 +259,33 @@ test("preliminary shortlist nominates a fresh quiet breakout as setup and trigge
   assert.deepEqual(candidate.selection.triggerSignals, ["freshBreakout"])
 })
 
-test("preliminary shortlist applies a soft late-pump penalty", () => {
+test("preliminary shortlist excludes late pumps before nomination", () => {
   const result = buildPreliminaryShortlist([
-    createProfile("z-neutral-strong", {
-      features: { volatilityCompression: { squeeze_age_hours: 24 } },
+    createProfile("eligible", {
+      features: { volatilityCompression: { squeeze_age_hours: 4 } },
     }),
-    createProfile("a-late-strong", {
+    createProfile("late", {
       features: {
         volatilityCompression: { squeeze_age_hours: 24 },
+        volumeOrderFlow: {
+          volume_acceleration_3h: 1,
+          rel_volume_at_time: 4,
+        },
         movementLifecycle: { late_pump: true },
+        divergences: { coiling: true },
       },
-    }),
-    createProfile("b-neutral-weak", {
-      features: { volatilityCompression: { squeeze_age_hours: 4 } },
     }),
   ])
 
   assert.deepEqual(
     result.candidates.map(candidate => candidate.coin.baseCurrencyId),
-    ["z-neutral-strong", "a-late-strong", "b-neutral-weak"],
+    ["eligible"],
   )
+  assert.equal(result.excludedCoinCount, 1)
+  assert.equal(result.filter.latePumpExcludedCoinCount, 1)
+  assert.equal(result.filter.divergenceNominatedCoinCount, 0)
+  assert.equal(result.filter.eligibleCoinCountByAxis.compression, 1)
+  assert.equal(result.filter.eligibleCoinCountByAxis.volumeOrderFlow, 0)
 })
 
 test("preliminary shortlist orders role combinations before context", () => {
