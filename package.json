@@ -17,6 +17,7 @@
     "dayjs": "^1.11.23",
     "dotenv": "^17.4.2",
     "fuzzball": "^2.2.6",
+    "lightweight-charts": "^5.2.1",
     "radash": "^12.1.1"
   },
   "devDependencies": {

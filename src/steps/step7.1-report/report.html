@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Crypto Signals · Срез рынка</title>
+  <style>/* REPORT_STYLES */</style>
+</head>
+<body>
+  <main class="shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/ ШАГ 7.1</span></p>
+        <h1>Рынок перед движением</h1>
+        <p class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12 часов</strong></p>
+      </div>
+      <div class="snapshot">
+        <span class="snapshot-label"><span class="status-dot" aria-hidden="true"></span> Сохранённый срез · UTC</span>
+        <time id="as-of"></time>
+        <span id="coverage" class="muted"></span>
+      </div>
+    </header>
+    <section aria-label="Состояние рынка" class="market-grid" id="market-summary"></section>
+    <p class="context-note">Ротация — изменение доли сегмента в капитализации, а не прямой приток денег.</p>
+    <section class="top-section" aria-labelledby="top-heading">
+      <div class="section-heading">
+        <h2 id="top-heading">В фокусе агента</h2>
+        <span class="muted">Нажмите на монету, чтобы изучить сигнал</span>
+      </div>
+      <div id="top-candidates" class="top-grid"></div>
+    </section>
+    <div class="workspace">
+      <aside class="panel candidate-panel" aria-labelledby="candidates-heading">
+        <div class="candidate-controls">
+          <div class="section-heading">
+            <h2 id="candidates-heading">Все кандидаты</h2>
+            <span class="count-badge" id="candidate-count"></span>
+          </div>
+          <label for="search" class="sr-only">Поиск по тикеру или названию</label>
+          <input id="search" type="search" placeholder="Тикер или название…" autocomplete="off" spellcheck="false">
+          <label for="sort" class="sr-only">Сортировка кандидатов</label>
+          <select id="sort">
+            <option value="probability">По вероятности движения</option>
+            <option value="top">Сначала топ агента</option>
+            <option value="confidence">По уверенности агента</option>
+            <option value="symbol">По алфавиту</option>
+          </select>
+        </div>
+        <div class="candidate-scroll">
+          <table class="candidate-table">
+            <caption class="sr-only">Кандидаты с вероятностью движения и предполагаемым направлением</caption>
+            <thead><tr><th scope="col">Монета</th><th scope="col">P движения</th><th scope="col">Уклон</th></tr></thead>
+            <tbody id="candidate-rows"></tbody>
+          </table>
+        </div>
+        <p id="search-results" class="list-note" role="status"></p>
+      </aside>
+      <section class="detail" id="coin-detail" aria-label="Подробности выбранной монеты" hidden>
+        <div class="panel chart-panel">
+          <header class="coin-header">
+            <div>
+              <div class="coin-title"><h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span></div>
+              <p id="coin-name" class="muted"></p>
+            </div>
+            <div class="coin-price"><strong id="last-price"></strong><span class="muted">USDT · последняя закрытая свеча</span></div>
+          </header>
+          <div class="coin-meta">
+            <div id="coin-badges" class="badge-list"></div>
+            <a id="tradingview-link" target="_blank" rel="noopener noreferrer">Открыть в TradingView ↗</a>
+          </div>
+          <div class="chart-toolbar">
+            <span><strong>Цена</strong> <span class="muted">/ свечи 1h · UTC</span></span>
+            <div class="range-buttons" role="group" aria-label="Видимый период графика">
+              <button type="button" data-days="1" aria-pressed="false">1 день</button>
+              <button type="button" data-days="3" aria-pressed="true">3 дня</button>
+              <button type="button" data-days="7" aria-pressed="false">7 дней</button>
+            </div>
+          </div>
+          <div id="chart-legend" class="chart-legend" aria-label="Значения под курсором"></div>
+          <p id="history-warning" class="warning" role="status" hidden></p>
+          <div id="chart" class="chart" role="img" aria-label="Часовые свечи, объём и Open Interest с общей временной шкалой"></div>
+          <p id="chart-empty" class="empty-state" hidden>График недоступен. Оценка агента сохранена ниже.</p>
+          <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · единицы TradingView</span><span>Колесо — масштаб, перетаскивание — история</span></div>
+        </div>
+        <section class="panel analysis-panel" aria-labelledby="analysis-heading">
+          <div class="section-heading"><h2 id="analysis-heading">Почему монета в списке</h2><span class="muted">Анализ шага 7</span></div>
+          <p id="explanation" class="explanation" hidden></p>
+          <div class="signal-columns">
+            <div><h3 class="positive">Поддерживает движение</h3><ul id="drivers" class="signal-list"></ul></div>
+            <div><h3 class="negative">Сдерживает / противоречит</h3><ul id="counter-signals" class="signal-list"></ul></div>
+          </div>
+        </section>
+        <section class="panel features-panel" aria-labelledby="features-heading">
+          <div class="section-heading"><h2 id="features-heading">Признаки сигнала</h2><span class="muted">Те же значения, что получил агент</span></div>
+          <div id="feature-highlights" class="feature-grid"></div>
+          <div id="flags" class="badge-list flags"></div>
+          <details class="feature-details">
+            <summary>Все признаки и их значения</summary>
+            <p class="muted">Пропуск — не ноль. Перцентили приведены в диапазоне 0–1. Подсказки описывают единицы и окна расчёта.</p>
+            <div class="feature-scroll"><table class="feature-table">
+              <thead><tr><th scope="col">Признак</th><th scope="col">Значение</th><th scope="col">Описание</th></tr></thead>
+              <tbody id="feature-rows"></tbody>
+            </table></div>
+          </details>
+        </section>
+      </section>
+      <div class="panel empty-state" id="no-candidates" hidden>В этом срезе нет оценённых кандидатов.</div>
+    </div>
+    <footer class="page-footer">
+      <p id="objective"></p>
+      <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Уклон не означает вероятность роста или падения. Это не торговая рекомендация.</p>
+      <p id="candle-time-note"></p>
+      <p>Отчёт работает локально, без сетевых запросов и живого обновления. Новости и публикации последующих шагов сюда не входят.</p>
+      <p>Графики: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a>. Copyright (c) 2026 TradingView, Inc.</p>
+      <details class="license"><summary>Лицензия библиотеки графиков</summary><pre><!-- REPORT_LICENSE --></pre></details>
+    </footer>
+    <noscript><p class="warning">Для интерактивного отчёта включите JavaScript в браузере.</p></noscript>
+  </main>
+  <script id="report-data" type="application/json">"REPORT_DATA"</script>
+  <script>/* REPORT_CHARTS */</script>
+  <script>/* REPORT_SCRIPT */</script>
+</body>
+</html>
