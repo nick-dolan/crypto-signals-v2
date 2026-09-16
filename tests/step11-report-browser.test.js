@@ -6,15 +6,16 @@ import vm from "node:vm"
 import { isFinite, isFunction } from "../src/helpers/utils.typed.js"
 
 const script = new vm.Script(
-  await fs.readFile(new URL("../src/steps/step7.1-report/report.js", import.meta.url), "utf8"),
+  await fs.readFile(new URL("../src/steps/step11-report/report.js", import.meta.url), "utf8"),
   { filename: "report.js" },
 )
-const template = await fs.readFile(new URL("../src/steps/step7.1-report/report.html", import.meta.url), "utf8")
+const template = await fs.readFile(new URL("../src/steps/step11-report/report.html", import.meta.url), "utf8")
 
 // Only the DOM operations used by report.js; no layout, HTML parsing or event bubbling.
-function createNode () {
+function createNode (tagName = "div") {
   let text = ""
   return {
+    tagName: tagName.toUpperCase(),
     children: [],
     dataset: {},
     style: {},
@@ -214,6 +215,38 @@ function addOiGaps (report) {
   return segments
 }
 
+function addInformation (report) {
+  report.informationSources = {
+    news: { from: "2026-09-14T10:45:00.000Z", asOf: "2026-09-15T10:45:00.000Z" },
+    twitter: { from: "2026-09-14T11:00:00.000Z", asOf: "2026-09-15T11:00:00.000Z" },
+    contextGeneratedAt: "2026-09-15T11:05:00.000Z",
+  }
+  report.coins[0].explanation = "Исходная оценка. Дополненное объяснение из шага 10."
+  report.coins[0].information = {
+    news: {
+      status: "available", error: null,
+      items: [{
+        title: "Новость про монету", publishedAt: "2026-09-15T10:30:00.000Z",
+        provider: { name: "Crypto News" }, externalUrl: "https://example.com/news",
+        tradingViewUrl: "https://www.tradingview.com/news/story/",
+        shortDescription: "Краткое описание", content: "Полный сохранённый текст\nВторой абзац",
+      }],
+    },
+    twitter: {
+      status: "available", error: null,
+      tweets: [{
+        id: "1234567890123456789", authorUsername: "researcher", text: "Публикация о монете\nПодробности",
+        createdAt: "2026-09-15T10:50:00.000Z", likeCount: 12, retweetCount: 3, viewCount: 456, authorFollowers: 1000,
+      }],
+    },
+  }
+  return report.coins[0].information
+}
+
+function descendants (node) {
+  return node.children.flatMap(child => [child, ...descendants(child)])
+}
+
 function oiLegend (byId) {
   return byId("chart-legend").children.at(-1).textContent
 }
@@ -402,4 +435,92 @@ test("an empty candidate list renders its empty states without creating a chart"
   days.forEach(node => click(node))
   assert.equal(charts.length, 0)
   assert.equal(byId("coin-detail").hidden, true)
+})
+
+test("top candidates show enriched explanations, news, tweets and their independent collection times", () => {
+  const report = createReport()
+  addInformation(report)
+  const { byId } = runReport(report)
+  assert.equal(byId("information-panel").hidden, false)
+  assert.equal(byId("news-details").open, false)
+  assert.equal(byId("twitter-details").open, false)
+  assert.equal(byId("explanation").textContent, report.coins[0].explanation)
+  assert.match(byId("analysis-source").textContent, /шаге 10/)
+  assert.match(byId("context-generated").textContent, /11:05/)
+  assert.match(byId("news-window").textContent, /10:45/)
+  assert.match(byId("twitter-window").textContent, /11:00/)
+  assert.equal(byId("as-of").dateTime, report.asOf)
+  assert.equal(byId("news-count").textContent, "1")
+  assert.equal(byId("twitter-count").textContent, "1")
+  assert.equal(byId("news-status").hidden, true)
+  assert.equal(byId("twitter-status").hidden, true)
+  assert.match(byId("news-items").textContent, /Crypto News.*10:30/)
+  assert.match(byId("news-items").textContent, /Полный сохранённый текст\nВторой абзац/)
+  assert.match(byId("twitter-items").textContent, /@researcher.*10:50/)
+  assert.match(byId("twitter-items").textContent, /Лайки: 12.*Репосты: 3.*Просмотры: 456/)
+  const links = [...descendants(byId("news-items")), ...descendants(byId("twitter-items"))].filter(node => node.tagName === "A")
+  assert.deepEqual(links.map(link => link.href), ["https://example.com/news", "https://www.tradingview.com/news/story/", "https://x.com/i/status/1234567890123456789"])
+  assert.ok(links.every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
+})
+
+test("empty searches and failed sources have distinct messages, while missing article text stays visible", () => {
+  const report = createReport(["EMPTY", "ARTICLE"])
+  const information = addInformation(report)
+  report.coins[1].information = structuredClone(information)
+  const item = report.coins[1].information.news.items[0]
+  item.content = null
+  item.shortDescription = null
+  item.paywall = true
+  information.news = { status: "empty", error: null, items: [] }
+  information.twitter = { status: "failed", error: "Rate limit", tweets: [] }
+  const { byId } = runReport(report)
+  assert.equal(byId("news-status").hidden, false)
+  assert.match(byId("news-status").textContent, /ничего не найдено/)
+  assert.match(byId("twitter-status").textContent, /Ошибка загрузки: Rate limit/)
+  assert.equal(byId("twitter-count").textContent, "ошибка")
+  assert.equal(byId("news-items").children.length, 0)
+  assert.equal(byId("twitter-items").children.length, 0)
+  click(byId("top-candidates"), byId("top-candidates").children[1])
+  assert.equal(byId("news-status").hidden, true)
+  assert.match(byId("news-items").textContent, /Новость про монету/)
+  assert.match(byId("news-items").textContent, /ограниченный доступ/)
+})
+
+test("switching to a non-top candidate clears and hides all source data and collapses the source panels", () => {
+  const report = createReport(["TOP", "PLAIN"])
+  report.coins[1].topRank = null
+  addInformation(report)
+  const { byId } = runReport(report)
+  byId("news-details").open = true
+  byId("twitter-details").open = true
+  const row = byId("candidate-rows").children.find(node => node.dataset.symbol === "PLAIN")
+  click(byId("candidate-rows"), row)
+  assert.equal(byId("information-panel").hidden, true)
+  assert.equal(byId("news-items").children.length, 0)
+  assert.equal(byId("twitter-items").children.length, 0)
+  assert.equal(byId("context-generated").textContent, "")
+  assert.equal(byId("analysis-source").textContent, "Анализ шага 7")
+  assert.equal(byId("explanation").textContent, report.coins[1].explanation)
+  click(byId("top-candidates"), byId("top-candidates").children[0])
+  assert.equal(byId("information-panel").hidden, false)
+  assert.equal(byId("news-details").open, false)
+  assert.equal(byId("twitter-details").open, false)
+})
+
+test("source markup is literal text, unsafe URLs and tweet IDs never create active links", () => {
+  const report = createReport()
+  const information = addInformation(report)
+  const unsafe = "</script><img src=x onerror=alert(1)>"
+  Object.assign(information.news.items[0], {
+    title: unsafe, shortDescription: unsafe, content: unsafe,
+    provider: { name: unsafe }, externalUrl: "javascript:alert(1)", tradingViewUrl: "data:text/html,unsafe", publishedAt: "invalid date",
+  })
+  Object.assign(information.twitter.tweets[0], { id: "12/../x", authorUsername: unsafe, text: unsafe, createdAt: "invalid date" })
+  const { byId } = runReport(report)
+  assert.ok(byId("news-items").textContent.includes(unsafe))
+  assert.ok(byId("twitter-items").textContent.includes(unsafe))
+  assert.match(byId("news-items").textContent, /Время не указано/)
+  assert.match(byId("twitter-items").textContent, /Время не указано/)
+  const nodes = [...descendants(byId("news-items")), ...descendants(byId("twitter-items"))]
+  assert.ok(nodes.every(node => !["A", "IMG", "SCRIPT", "IFRAME"].includes(node.tagName)))
 })

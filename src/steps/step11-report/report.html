@@ -11,7 +11,7 @@
   <main class="shell">
     <header class="page-header">
       <div>
-        <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/ ШАГ 7.1</span></p>
+        <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/ ШАГ 11</span></p>
         <h1>Рынок перед движением</h1>
         <p class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12 часов</strong></p>
       </div>
@@ -84,12 +84,29 @@
           <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · единицы TradingView</span><span>Колесо — масштаб, перетаскивание — история</span></div>
         </div>
         <section class="panel analysis-panel" aria-labelledby="analysis-heading">
-          <div class="section-heading"><h2 id="analysis-heading">Почему монета в списке</h2><span class="muted">Анализ шага 7</span></div>
+          <div class="section-heading"><h2 id="analysis-heading">Почему монета в списке</h2><span id="analysis-source" class="muted">Анализ шага 7</span></div>
           <p id="explanation" class="explanation" hidden></p>
           <div class="signal-columns">
             <div><h3 class="positive">Поддерживает движение</h3><ul id="drivers" class="signal-list"></ul></div>
             <div><h3 class="negative">Сдерживает / противоречит</h3><ul id="counter-signals" class="signal-list"></ul></div>
           </div>
+        </section>
+        <section class="panel information-panel" id="information-panel" aria-labelledby="information-heading" hidden>
+          <div class="section-heading"><h2 id="information-heading">Новости и Twitter</h2><span class="muted">Только для топ-5</span></div>
+          <p id="context-generated" class="source-meta"></p>
+          <details id="news-details" class="source-details">
+            <summary>Новости <span id="news-count" class="count-badge"></span></summary>
+            <p id="news-window" class="source-window"></p>
+            <p id="news-status" class="source-status" role="status" hidden></p>
+            <div id="news-items" class="source-list"></div>
+          </details>
+          <details id="twitter-details" class="source-details">
+            <summary>Twitter / X <span id="twitter-count" class="count-badge"></span></summary>
+            <p id="twitter-window" class="source-window"></p>
+            <p class="source-window">Сохранённые результаты поиска: упоминание тикера не гарантирует связь с этой монетой.</p>
+            <p id="twitter-status" class="source-status" role="status" hidden></p>
+            <div id="twitter-items" class="source-list"></div>
+          </details>
         </section>
         <section class="panel features-panel" aria-labelledby="features-heading">
           <div class="section-heading"><h2 id="features-heading">Признаки сигнала</h2><span class="muted">Те же значения, что получил агент</span></div>
@@ -111,7 +128,7 @@
       <p id="objective"></p>
       <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Уклон не означает вероятность роста или падения. Это не торговая рекомендация.</p>
       <p id="candle-time-note"></p>
-      <p>Отчёт работает локально, без сетевых запросов и живого обновления. Новости и публикации последующих шагов сюда не входят.</p>
+      <p>Отчёт работает локально, без сетевых запросов и живого обновления. Для топ-5 добавлены сохранённые новости и Twitter, а также дополненное объяснение шага 10.</p>
       <p>Графики: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a>. Copyright (c) 2026 TradingView, Inc.</p>
       <details class="license"><summary>Лицензия библиотеки графиков</summary><pre><!-- REPORT_LICENSE --></pre></details>
     </footer>

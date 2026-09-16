@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import test from "node:test"
 
-import { buildReportData } from "../src/steps/step7.1-report/build-report-data.js"
+import { buildReportData } from "../src/steps/step11-report/build-report-data.js"
 
 function createHistory (coin, asOf) {
   const asOfTimestamp = Date.parse(asOf) / 1_000

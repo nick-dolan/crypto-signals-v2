@@ -207,6 +207,107 @@
     }
   }
 
+  function sourceLink (label, href) {
+    try {
+      const url = new URL(href)
+      if (["https:", "http:"].includes(url.protocol)) {
+        const link = element("a", "", label)
+        link.href = url.href
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+        return link
+      }
+    } catch {
+      // A missing or unsafe URL is shown as text, never as an executable link.
+    }
+    return element("span", "", label)
+  }
+
+  function publicationTime (timestamp) {
+    if (timestamp != null) {
+      try {
+        return `${time(timestamp)} UTC`
+      } catch {
+        // A malformed publication date should not hide the saved text.
+      }
+    }
+    return "Время не указано"
+  }
+
+  function newsItem (item) {
+    const article = element("article", "source-item")
+    const heading = element("h3", "source-title")
+    heading.append(sourceLink(item.title || "Новость без заголовка", item.externalUrl || item.tradingViewUrl))
+    article.append(heading, element("p", "source-meta", `${item.provider?.name ?? "Источник не указан"} · ${publicationTime(item.publishedAt ?? (item.published == null ? null : item.published * 1_000))}`))
+    if (item.shortDescription) {
+      article.append(element("p", "source-text", item.shortDescription))
+    }
+    if (item.content) {
+      const content = element("details", "article-content")
+      content.append(element("summary", "", "Сохранённый текст новости"), element("p", "source-text", item.content))
+      article.append(content)
+    } else {
+      article.append(element("p", "source-meta", item.paywall ? "Полный текст недоступен: ограниченный доступ." : "Полный текст не получен."))
+    }
+    if (item.tradingViewUrl) {
+      const footer = element("div", "source-footer")
+      footer.append(sourceLink("Новость в TradingView ↗", item.tradingViewUrl))
+      article.append(footer)
+    }
+    return article
+  }
+
+  function tweetItem (tweet) {
+    const article = element("article", "source-item")
+    const heading = element("h3", "source-title", tweet.authorUsername ? `@${tweet.authorUsername}` : "Автор не указан")
+    article.append(heading, element("p", "source-meta", publicationTime(tweet.createdAt)), element("p", "source-text", tweet.text))
+    const footer = element("div", "source-footer")
+    footer.append(...[
+      ["Лайки", tweet.likeCount],
+      ["Репосты", tweet.retweetCount],
+      ["Просмотры", tweet.viewCount],
+      ["Подписчики", tweet.authorFollowers],
+    ].map(([label, value]) => element("span", "", `${label}: ${number(value, 0)}`)))
+    if (/^\d+$/.test(tweet.id ?? "")) {
+      footer.append(sourceLink("Открыть в X ↗", `https://x.com/i/status/${tweet.id}`))
+    }
+    article.append(footer)
+    return article
+  }
+
+  function renderSource (key, source, items, renderItem) {
+    const window = report.informationSources[key]
+    byId(`${key}-window`).textContent = `Окно публикаций: ${time(window.from)} — ${time(window.asOf)} UTC.`
+    byId(`${key}-count`).textContent = source.status === "failed" ? "ошибка" : String(items.length)
+    const status = byId(`${key}-status`)
+    status.hidden = source.status !== "failed" && items.length > 0
+    status.className = source.status === "failed" ? "source-status failed" : "source-status"
+    status.textContent = source.status === "failed"
+      ? `Ошибка загрузки: ${source.error || "источник недоступен"}`
+      : "За сохранённое окно публикаций ничего не найдено."
+    byId(`${key}-items`).replaceChildren(...items.map(renderItem))
+  }
+
+  function renderInformation (coin) {
+    for (const key of ["news", "twitter"]) {
+      byId(`${key}-details`).open = false
+      byId(`${key}-items`).replaceChildren()
+      byId(`${key}-count`).textContent = ""
+      byId(`${key}-window`).textContent = ""
+      byId(`${key}-status`).textContent = ""
+      byId(`${key}-status`).hidden = true
+    }
+    byId("context-generated").textContent = ""
+    byId("information-panel").hidden = coin.topRank == null || !coin.information
+    byId("analysis-source").textContent = byId("information-panel").hidden ? "Анализ шага 7" : "Объяснение дополнено на шаге 10"
+    if (byId("information-panel").hidden) {
+      return
+    }
+    byId("context-generated").textContent = `Объяснение дополнено ${time(report.informationSources.contextGeneratedAt)} UTC. Вероятности и аргументы шага 7 не пересчитывались.`
+    renderSource("news", coin.information.news, coin.information.news.items, newsItem)
+    renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
+  }
+
   function renderFeatures (coin) {
     byId("feature-highlights").replaceChildren(...[
       ["rvRatio", "Сжатие волатильности", "×"],
@@ -411,6 +512,7 @@
     byId("explanation").hidden = !coin.explanation
     renderSignals("drivers", coin.drivers)
     renderSignals("counter-signals", coin.counterSignals)
+    renderInformation(coin)
     renderFeatures(coin)
     renderChart(coin)
     renderCandidates()

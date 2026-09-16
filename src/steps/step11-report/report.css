@@ -657,7 +657,8 @@ table {
 }
 
 .analysis-panel,
-.features-panel {
+.features-panel,
+.information-panel {
     padding: 20px 22px;
 }
 
@@ -773,6 +774,99 @@ summary {
 .feature-table td:last-child {
     color: var(--muted);
     min-width: 220px;
+}
+
+.source-details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 14px;
+    overflow: hidden;
+}
+
+.source-details>summary {
+    padding: 12px 14px;
+    color: #d6e0ee;
+    font-weight: 600;
+}
+
+.source-details[open]>summary {
+    border-bottom: 1px solid var(--border);
+}
+
+.source-details .count-badge {
+    margin-left: 6px;
+}
+
+.source-window,
+.source-meta {
+    color: var(--muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.source-window {
+    margin: 12px 14px;
+}
+
+.source-status {
+    margin: 12px 14px;
+    padding: 11px 12px;
+    background: #151f2c;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.source-status.failed {
+    background: #302919;
+    color: #e2c18a;
+}
+
+.source-list {
+    max-height: 560px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #35465e transparent;
+}
+
+.source-item {
+    padding: 16px 14px;
+    border-top: 1px solid var(--border);
+}
+
+.source-title {
+    margin-bottom: 5px;
+    overflow-wrap: anywhere;
+}
+
+.source-text {
+    margin-top: 10px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.75;
+    color: #c5d1e1;
+}
+
+.article-content {
+    margin-top: 12px;
+}
+
+.source-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+.information-panel .section-heading,
+.analysis-panel .section-heading {
+    flex-wrap: wrap;
 }
 
 .page-footer {
@@ -1009,7 +1103,8 @@ summary {
     }
 
     .analysis-panel,
-    .features-panel {
+    .features-panel,
+    .information-panel {
         padding: 16px;
     }
 
