@@ -24,6 +24,13 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="update-chart"/)
   assert.match(html, /id="chart-update-status"/)
   assert.match(html, /id="report-time-note"/)
+  assert.match(html, /id="alt-market-background"/)
+  assert.match(html, /aria-labelledby="alt-market-heading"/)
+  assert.match(html, /Фон альтрынка · 4ч/)
+  assert.match(html, /более 55%.*менее 45%/)
+  assert.ok(html.indexOf("id=\"alt-market-background\"") < html.indexOf("id=\"market-summary\""))
+  assert.match(html, /\.alt-market-background\[data-status="up"\]/)
+  assert.match(html, /\.alt-market-background\[data-status="down"\]/)
   assert.doesNotMatch(html, /ШАГ 7\.1|публикации последующих шагов сюда не входят/)
   assert.match(html, /<style>\s*:root/)
   assert.doesNotMatch(html, /<(?:script|link|img)\b[^>]*(?:src|href)\s*=/i)
@@ -59,6 +66,7 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
       },
     }],
     definitions: { unsafe },
+    altMarketBackground: { status: "unavailable", change4hPct: null, breadth4h: null, warning: unsafe },
   }
   const html = await renderReportHtml(report)
   const embedded = scripts(html)

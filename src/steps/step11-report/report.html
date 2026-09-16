@@ -21,6 +21,28 @@
         <span id="coverage" class="muted"></span>
       </div>
     </header>
+    <section id="alt-market-background" class="alt-market-background" data-status="unavailable" aria-labelledby="alt-market-heading">
+      <div class="alt-market-overview">
+        <span id="alt-market-icon" class="alt-market-icon" aria-hidden="true">—</span>
+        <div>
+          <h2 id="alt-market-heading">Фон альтрынка · 4ч</h2>
+          <p id="alt-market-status" class="alt-market-status">Недостаточно данных</p>
+        </div>
+      </div>
+      <div class="alt-market-facts">
+        <div><span class="metric-label">Капитализация альткоинов · 4ч</span><strong id="alt-market-change" class="metric-value"></strong></div>
+        <div><span class="metric-label">Растущие монеты вселенной · 4ч</span><strong id="alt-market-breadth" class="metric-value"></strong></div>
+      </div>
+      <div class="alt-market-context">
+        <p id="alt-market-as-of"></p>
+        <details>
+          <summary>Как определён фон</summary>
+          <p>Капитализация — TOTAL3ES, без BTC, ETH и стейблкоинов. Ширина рынка — доля растущих монет всей нашей вселенной, не только отобранных кандидатов.</p>
+          <p>Рост: капитализация увеличивается и растут более 55% монет. Снижение: капитализация падает и растут менее 45%. Остальные сочетания — смешанный фон. Это простое правило для текущего среза, не прогноз и не оценка вероятности.</p>
+        </details>
+        <p id="alt-market-warning" class="alt-market-warning" hidden></p>
+      </div>
+    </section>
     <section aria-label="Состояние рынка" class="market-grid" id="market-summary"></section>
     <p class="context-note">Ротация — изменение доли сегмента в капитализации, а не прямой приток денег.</p>
     <section class="top-section" aria-labelledby="top-heading">

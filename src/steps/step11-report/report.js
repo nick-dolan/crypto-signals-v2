@@ -92,6 +92,33 @@
     }
   }
 
+  function renderAltMarketBackground () {
+    const background = report.altMarketBackground ?? {
+      status: "unavailable", change4hPct: null, breadth4h: null,
+      warning: "В этом отчёте фон альтрынка не рассчитан. Пересоздайте HTML из сохранённых данных.",
+    }
+    const status = ["up", "down", "mixed"].includes(background.status) ? background.status : "unavailable"
+    const [label, icon] = {
+      up: ["Преобладает рост", "↑"],
+      down: ["Преобладает снижение", "↓"],
+      mixed: ["Смешанный фон", "↔"],
+      unavailable: ["Недостаточно данных", "—"],
+    }[status]
+
+    byId("alt-market-background").dataset.status = status
+    byId("alt-market-status").textContent = label
+    byId("alt-market-icon").textContent = icon
+    byId("alt-market-change").textContent = background.change4hPct == null
+      ? "Нет данных"
+      : `${number(background.change4hPct, 3, "exceptZero")}%`
+    byId("alt-market-breadth").textContent = background.breadth4h == null
+      ? "Нет данных"
+      : `${number(background.breadth4h * 100, 2)}%`
+    byId("alt-market-as-of").textContent = `Срез ${time(report.asOf)} UTC · фон не меняется при Update chart`
+    byId("alt-market-warning").textContent = background.warning ?? ""
+    byId("alt-market-warning").hidden = !background.warning
+  }
+
   function renderSummary () {
     byId("as-of").dateTime = report.asOf
     byId("as-of").textContent = time(report.asOf)
@@ -100,6 +127,7 @@
     byId("objective").textContent = `Цель анализа: ${report.objective}`
     byId("candle-time-note").textContent = `Время на графике — UTC, по открытию свечи. Последняя свеча среза закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC.`
 
+    renderAltMarketBackground()
     byId("market-summary").replaceChildren(...[
       ["breadth4h", "Растущие монеты · 4h", 100, "%"],
       ["btcRotation4hPct", "Доля BTC · 4h", 1, " п.п."],

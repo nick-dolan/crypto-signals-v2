@@ -646,6 +646,97 @@ test("source markup is literal text, unsafe URLs and tweet IDs never create acti
   assert.ok(nodes.every(node => !["A", "IMG", "SCRIPT", "IFRAME"].includes(node.tagName)))
 })
 
+for (const [status, change4hPct, breadth4h, label, icon, change, breadth] of [
+  ["up", 1.25, 0.6, "Преобладает рост", "↑", "+1,25%", "60%"],
+  ["down", -2.5, 0.2, "Преобладает снижение", "↓", "-2,5%", "20%"],
+  ["mixed", 0, 0.55, "Смешанный фон", "↔", "0%", "55%"],
+  ["unavailable", null, 0.6, "Недостаточно данных", "—", "Нет данных", "60%"],
+]) {
+  test(`alt-market banner renders ${status} with a textual status, icon and saved metrics`, () => {
+    const report = createReport()
+    report.altMarketBackground = {
+      status, change4hPct, breadth4h, warning: status === "unavailable" ? "TOTAL3ES недоступен" : null,
+    }
+    const browser = runReport(report)
+    assert.equal(browser.byId("alt-market-background").dataset.status, status)
+    assert.equal(browser.byId("alt-market-status").textContent, label)
+    assert.equal(browser.byId("alt-market-icon").textContent, icon)
+    assert.equal(browser.byId("alt-market-change").textContent, change)
+    assert.equal(browser.byId("alt-market-breadth").textContent, breadth)
+    assert.equal(browser.byId("alt-market-warning").hidden, status !== "unavailable")
+    assert.match(browser.byId("alt-market-as-of").textContent, /09:00 UTC.*не меняется при Update chart/)
+    assert.doesNotMatch(browser.byId("alt-market-as-of").textContent, /11:37/)
+    assert.equal(browser.updateCalls.length, 0)
+    assert.equal(browser.directRequests.length, 0)
+  })
+}
+
+test("missing breadth retains the known capitalization change and never appears as zero or mixed", () => {
+  const report = createReport()
+  report.altMarketBackground = {
+    status: "unavailable", change4hPct: 1.25, breadth4h: null, warning: "Ширина рынка недоступна",
+  }
+  const { byId } = runReport(report)
+  assert.equal(byId("alt-market-background").dataset.status, "unavailable")
+  assert.equal(byId("alt-market-change").textContent, "+1,25%")
+  assert.equal(byId("alt-market-breadth").textContent, "Нет данных")
+  assert.equal(byId("alt-market-warning").textContent, "Ширина рынка недоступна")
+  assert.equal(byId("alt-market-warning").hidden, false)
+})
+
+test("legacy reports and empty candidate lists show an unavailable background without breaking the report", () => {
+  for (const symbols of [["COTI"], []]) {
+    const report = createReport(symbols)
+    const { byId } = runReport(report)
+    assert.equal(byId("alt-market-background").dataset.status, "unavailable")
+    assert.equal(byId("alt-market-status").textContent, "Недостаточно данных")
+    assert.equal(byId("alt-market-change").textContent, "Нет данных")
+    assert.equal(byId("alt-market-breadth").textContent, "Нет данных")
+    assert.match(byId("alt-market-warning").textContent, /не рассчитан/)
+    assert.equal(byId("no-candidates").hidden, symbols.length > 0)
+  }
+})
+
+test("background warnings remain text and unknown statuses cannot inject a color or markup", () => {
+  const report = createReport()
+  const unsafe = "</script><img src=x onerror=alert(1)>"
+  report.altMarketBackground = { status: unsafe, change4hPct: null, breadth4h: null, warning: unsafe }
+  const { byId } = runReport(report)
+  assert.equal(byId("alt-market-background").dataset.status, "unavailable")
+  assert.equal(byId("alt-market-status").textContent, "Недостаточно данных")
+  assert.equal(byId("alt-market-warning").textContent, unsafe)
+  assert.deepEqual(byId("alt-market-warning").children, [])
+})
+
+test("the market background stays at the original universe snapshot during chart updates, errors and coin switches", async () => {
+  const report = createReport(["COTI", "SOL"])
+  report.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const view = () => ({
+    status: browser.byId("alt-market-background").dataset.status,
+    text: ["alt-market-status", "alt-market-icon", "alt-market-change", "alt-market-breadth", "alt-market-as-of", "alt-market-warning"]
+      .map(id => browser.byId(id).textContent),
+    warningHidden: browser.byId("alt-market-warning").hidden,
+  })
+  const initial = view()
+  const embedded = browser.byId("report-data").textContent
+  const pending = click(browser.byId("update-chart"))
+  assert.deepEqual(view(), initial)
+  controlled.requests[0].resolve(createUpdate(report))
+  await pending
+  assert.deepEqual(view(), initial)
+  selectCoin(browser, "SOL")
+  click(browser.days.find(day => day.dataset.days === "7"))
+  assert.deepEqual(view(), initial)
+  const failed = click(browser.byId("update-chart"))
+  controlled.requests[1].reject(new Error("Offline"))
+  await failed
+  selectCoin(browser, "COTI")
+  assert.deepEqual(view(), initial)
+  assert.equal(browser.byId("report-data").textContent, embedded)
+})
+
 test("startup, coin selection, periods, search and sorting never call the updater or fetch", async () => {
   const report = createReport(["COTI", "SOL"])
   const api = createBinanceApi(report)
