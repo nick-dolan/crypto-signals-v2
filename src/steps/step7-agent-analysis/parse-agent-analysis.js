@@ -202,16 +202,21 @@ export function parseAgentAnalysis (content, payload) {
     }
   })
 
+  if (!isArray(analysis.topCandidates) || analysis.topCandidates.length > Math.min(5, symbols.length)) {
+    invalidAnalysis("topCandidates has an unexpected length")
+  }
+
+  const selectedSymbols = new Set(analysis.topCandidates.map(candidate => candidate?.symbol))
   const expectedTop = analysis.assessments
     .map((assessment, index) => ({ assessment, index }))
+    .filter(({ assessment }) => selectedSymbols.has(assessment.symbol))
     .sort((first, second) => (
       second.assessment.movementProbability - first.assessment.movementProbability
       || first.index - second.index
     ))
-    .slice(0, Math.min(5, symbols.length))
 
-  if (!isArray(analysis.topCandidates) || analysis.topCandidates.length !== expectedTop.length) {
-    invalidAnalysis("topCandidates has an unexpected length")
+  if (analysis.topCandidates.length !== expectedTop.length) {
+    invalidAnalysis("topCandidates must contain unique assessed symbols")
   }
 
   analysis.topCandidates.forEach((candidate, index) => {

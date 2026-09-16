@@ -50,7 +50,7 @@ export function calculateDivergenceFlags ({
       volumeOrderFlow.volume_z_30d,
       derivatives.oi_change_4h_z_30d,
     ], (returnZ, volumeZ, oiChangeZ) => (
-      returnZ > 1.5
+      Math.abs(returnZ) > 1.5
       && volumeZ < 0.5
       && Math.abs(oiChangeZ) < 0.5
     )),
@@ -79,14 +79,15 @@ export function calculateDivergenceFlags ({
       relativeStrength.residual_z_30d,
     ], (btcReturnZ, residualZ) => btcReturnZ < -1 && residualZ > 0.5),
     squeeze_fuel: calculateFlag(length, [
+      derivatives.funding_rate,
       derivatives.funding_percentile_90d,
       derivatives.oi_level_percentile_90d,
       derivatives.crowd_vs_top_traders,
-    ], (fundingPercentile, oiLevelPercentile, crowdPositioning) => (
+    ], (fundingRate, fundingPercentile, oiLevelPercentile, crowdPositioning) => (
       oiLevelPercentile >= 0.8
       && (
-        (fundingPercentile <= 0.05 && crowdPositioning < -0.15)
-        || (fundingPercentile >= 0.95 && crowdPositioning > 0.15)
+        (fundingRate < 0 && fundingPercentile <= 0.05 && crowdPositioning < -0.15)
+        || (fundingRate > 0 && fundingPercentile >= 0.95 && crowdPositioning > 0.15)
       )
     )),
     range_pressure_up: calculateFlag(length, [

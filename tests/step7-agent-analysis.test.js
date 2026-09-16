@@ -161,6 +161,33 @@ test("agent analysis parser rejects invalid JSON and inconsistent top candidates
   )
 })
 
+test("agent analysis allows no alerts or a shorter top without losing assessments", () => {
+  for (const selected of [[], [0], [1]]) {
+    const response = createAgentResponse()
+    response.topCandidates = selected.map(index => response.topCandidates[index])
+    const parsed = parseAgentAnalysis(JSON.stringify(response), createPayload())
+
+    assert.equal(parsed.topCandidates.length, selected.length)
+    assert.deepEqual(parsed.assessments, createAnalysis().assessments)
+  }
+})
+
+test("top candidates reject unknown symbols, duplicates and more than five entries", () => {
+  const response = createAgentResponse()
+  response.topCandidates[0].symbol = "UNKNOWN"
+  assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /unique assessed symbols/)
+
+  response.topCandidates = Array(2).fill(createAgentResponse().topCandidates[0])
+  assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /unique assessed symbols/)
+
+  const payload = createPayload()
+  payload.candidateCount = 6
+  payload.candidates = Array.from({ length: 6 }, (_, index) => [`COIN${index}`, 0.6, 1.4])
+  response.assessments = payload.candidates.map(([symbol]) => ({ ...createAgentResponse().assessments[0], symbol }))
+  response.topCandidates = payload.candidates.map(([symbol]) => ({ ...createAgentResponse().topCandidates[0], symbol }))
+  assert.throws(() => parseAgentAnalysis(JSON.stringify(response), payload), /unexpected length/)
+})
+
 test("agent analysis parser keeps explanations grounded and human-readable", () => {
   const analysis = createAgentResponse()
   analysis.topCandidates[0].explanation = "rvRatio=0.6 указывает на движение"
@@ -199,7 +226,7 @@ test("agent analysis parser keeps explanations grounded and human-readable", () 
   )
 })
 
-test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe tool", async () => {
+test("candidate analysis uses GPT-5.6 Sol with high reasoning and one safe tool", async () => {
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
@@ -228,7 +255,7 @@ test("candidate analysis uses GPT-5.6 Sol with medium reasoning and one safe too
   assert.equal(captured.systemPrompt, "system prompt")
   assert.deepEqual(JSON.parse(captured.userMessage), payload)
   assert.equal(captured.options.model, "GPT-5.6 Sol")
-  assert.equal(captured.options.reasoningEffort, "medium")
+  assert.equal(captured.options.reasoningEffort, "high")
   assert.equal(captured.options.tools.length, 1)
   assert.equal(captured.options.tools[0].name, "get_coin_history")
 })

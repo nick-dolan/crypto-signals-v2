@@ -193,6 +193,26 @@ test("historical runups exclude the latest four hours", () => {
   assert.equal(pumped.late_pump.at(-1), true)
 })
 
+test("a mature decline mirrors a mature rise", () => {
+  const risingClose = Array.from({ length: 220 }, (_, index) => 100 + index)
+  const fallingClose = risingClose.map(value => 500 - value)
+  const rising = calculateMovementLifecycleMetrics(createInput(risingClose))
+  const falling = calculateMovementLifecycleMetrics(createInput(fallingClose))
+
+  assertClose(
+    falling.prior_drawdown_atr_72h.at(-1),
+    rising.prior_runup_atr_72h.at(-1),
+  )
+  assertClose(
+    falling.max_24h_drawdown_last_7d_atr.at(-1),
+    rising.max_24h_runup_last_7d_atr.at(-1),
+  )
+  assert.equal(rising.late_pump.at(-1), true)
+  assert.equal(rising.late_dump.at(-1), false)
+  assert.equal(falling.late_pump.at(-1), false)
+  assert.equal(falling.late_dump.at(-1), true)
+})
+
 test("a mature quiet base produces one fresh breakout lifecycle", () => {
   const close = Array.from({ length: 240 }, (_, index) => (
     index < 210 ? 100 + index : 309
@@ -221,6 +241,39 @@ test("a mature quiet base produces one fresh breakout lifecycle", () => {
   assert.equal(metrics.fresh_quiet_breakout[233], true)
   assert.equal(metrics.fresh_quiet_breakout[234], false)
   assert.equal(metrics.late_pump[233], false)
+  assert.equal(metrics.late_dump[233], false)
+})
+
+test("a short squeeze preserves the previous mature base until a new one matures", () => {
+  const close = Array(70).fill(100)
+  const squeezeAge = close.map(() => 0)
+
+  for (let index = 10; index <= 21; index += 1) {
+    squeezeAge[index] = index - 9
+  }
+
+  for (let index = 30; index <= 37; index += 1) {
+    squeezeAge[index] = index - 29
+  }
+
+  close.fill(110, 45, 58)
+
+  for (let index = 45; index <= 56; index += 1) {
+    squeezeAge[index] = index - 44
+  }
+
+  const metrics = calculateMovementLifecycleMetrics(
+    createInput(close, squeezeAge),
+  )
+
+  assert.equal(metrics.squeeze_ended_hours_ago[38], 16)
+  assert.equal(metrics.extension_from_base_atr[38], 0)
+  assert.equal(metrics.squeeze_ended_hours_ago[55], 33)
+  assert.equal(metrics.extension_from_base_atr[55], 10)
+  assert.equal(metrics.squeeze_ended_hours_ago[56], null)
+  assert.equal(metrics.extension_from_base_atr[56], null)
+  assert.equal(metrics.squeeze_ended_hours_ago[57], 0)
+  assert.equal(metrics.extension_from_base_atr[57], 0)
 })
 
 test("a move after the four-hour breakout window keeps only base distance", () => {
@@ -245,16 +298,38 @@ test("a move after the four-hour breakout window keeps only base distance", () =
   assert.equal(metrics.fresh_quiet_breakout[197], false)
 })
 
-test("every metric at an hour is unchanged by later candles", () => {
-  const close = Array.from({ length: 230 }, (_, index) => (
-    100 + index / 10
+test("downside and base metrics at an hour are unchanged by later candles", () => {
+  const close = Array.from({ length: 240 }, (_, index) => (
+    300 - index / 10
   ))
   const fullInput = createInput(close)
+
+  for (let index = 180; index <= 191; index += 1) {
+    fullInput.squeezeAge[index] = index - 179
+  }
+
+  for (let index = 200; index <= 207; index += 1) {
+    fullInput.squeezeAge[index] = index - 199
+  }
+
+  for (let index = 220; index <= 231; index += 1) {
+    fullInput.squeezeAge[index] = index - 219
+  }
+
+  fullInput.close.fill(250, 232)
+  fullInput.high.fill(250.5, 232)
+  fullInput.low.fill(249.5, 232)
+  fullInput.atr24hPct.fill(1 / 250, 232)
+
   const prefixInput = Object.fromEntries(
     Object.entries(fullInput).map(([name, series]) => [name, series.slice(0, 211)]),
   )
   const full = calculateMovementLifecycleMetrics(fullInput)
   const prefix = calculateMovementLifecycleMetrics(prefixInput)
+
+  assert.equal(prefix.squeeze_ended_hours_ago.at(-1), 18)
+  assert.ok(prefix.prior_drawdown_atr_72h.at(-1) > 0)
+  assert.ok(prefix.max_24h_drawdown_last_7d_atr.at(-1) > 0)
 
   for (const name of Object.keys(full)) {
     assert.equal(full[name][210], prefix[name].at(-1), name)

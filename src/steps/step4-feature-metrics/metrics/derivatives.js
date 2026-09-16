@@ -3,7 +3,6 @@ import { rollingPercentileRank, rollingSum, rollingZScore } from "../../../scrip
 import { simpleReturns } from "../../../scripts/returns.js"
 
 export function calculateDerivativesMetrics ({
-  close,
   openInterest,
   fundingRate,
   premium,
@@ -50,7 +49,7 @@ export function calculateDerivativesMetrics ({
         fundingChangeZScore - oiChangeZScore
       ),
     ),
-    premium_z_30d: rollingZScore(ratioSeries(premium, close), 720),
+    premium_z_30d: rollingZScore(premium, 720),
     liquidations_4h_over_oi: ratioSeries(liquidationTotal4h, openInterest),
     liq_imbalance_4h: combineSeries(
       [longLiquidations4h, shortLiquidations4h],

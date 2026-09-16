@@ -6,6 +6,10 @@ function positiveAtrDistance (current, previous, atr) {
   return atr > 0 ? Math.max(current - previous, 0) / atr : null
 }
 
+function negativeAtrDistance (current, previous, atr) {
+  return atr > 0 ? Math.max(previous - current, 0) / atr : null
+}
+
 function createEndedBase (index, squeezeDuration, high, low, atr24h) {
   const start = index - Math.min(squeezeDuration, 48)
   const baseHighValues = high.slice(start, index)
@@ -47,7 +51,7 @@ function calculateEventMetrics ({ high, low, close, atr24h, squeezeAge }) {
     const currentSqueezeAge = squeezeAge[index]
     const previousSqueezeAge = squeezeAge[index - 1]
 
-    if (currentSqueezeAge === 4) {
+    if (currentSqueezeAge === 12) {
       base = null
       breakout = null
     }
@@ -55,7 +59,7 @@ function calculateEventMetrics ({ high, low, close, atr24h, squeezeAge }) {
     if (
       currentSqueezeAge === 0
       && isFinite(previousSqueezeAge)
-      && previousSqueezeAge >= 4
+      && previousSqueezeAge >= 12
     ) {
       base = createEndedBase(
         index,
@@ -143,11 +147,20 @@ export function calculateMovementLifecycleMetrics ({
     [lag(close, 4), lag(close, 76), lag(atr24h, 76)],
     ([end, start, atr]) => positiveAtrDistance(end, start, atr),
   )
+  const priorDrawdownAtr72h = combineSeries(
+    [lag(close, 4), lag(close, 76), lag(atr24h, 76)],
+    ([end, start, atr]) => negativeAtrDistance(end, start, atr),
+  )
   const runup24h = combineSeries(
     [close, lag(close, 24), lag(atr24h, 24)],
     ([end, start, atr]) => positiveAtrDistance(end, start, atr),
   )
+  const drawdown24h = combineSeries(
+    [close, lag(close, 24), lag(atr24h, 24)],
+    ([end, start, atr]) => negativeAtrDistance(end, start, atr),
+  )
   const max24hRunupLast7dAtr = rollingMaximum(lag(runup24h, 4), 168)
+  const max24hDrawdownLast7dAtr = rollingMaximum(lag(drawdown24h, 4), 168)
   const sevenDayLow = rollingMinimum(low, 168)
   const sevenDayHigh = rollingMaximum(high, 168)
   const rangePosition7d = combineSeries(
@@ -189,12 +202,32 @@ export function calculateMovementLifecycleMetrics ({
       && rangePosition7d[index] >= 0.85
       && evidenceCount >= 3
   })
+  const lateDump = close.map((_, index) => {
+    const evidenceCount = [
+      priorDrawdownAtr72h[index] >= 3,
+      max24hDrawdownLast7dAtr[index] >= 3,
+      rangePosition7d[index] <= 0.15,
+      eventMetrics.extensionFromBaseAtr[index] >= 2.5,
+      isFinite(eventMetrics.breakoutAgeHours[index])
+      && eventMetrics.breakoutAgeHours[index] >= 12,
+    ].filter(Boolean).length
+
+    return !freshQuietBreakout[index]
+      && (
+        priorDrawdownAtr72h[index] >= 3
+        || max24hDrawdownLast7dAtr[index] >= 3
+      )
+      && rangePosition7d[index] <= 0.15
+      && evidenceCount >= 3
+  })
 
   return {
     distance_to_previous_high_atr: distanceToPreviousHighAtr,
     distance_to_previous_low_atr: distanceToPreviousLowAtr,
     prior_runup_atr_72h: priorRunupAtr72h,
+    prior_drawdown_atr_72h: priorDrawdownAtr72h,
     max_24h_runup_last_7d_atr: max24hRunupLast7dAtr,
+    max_24h_drawdown_last_7d_atr: max24hDrawdownLast7dAtr,
     range_position_7d: rangePosition7d,
     pre_breakout_squeeze_age: eventMetrics.preBreakoutSqueezeAge,
     squeeze_ended_hours_ago: eventMetrics.squeezeEndedHoursAgo,
@@ -203,5 +236,6 @@ export function calculateMovementLifecycleMetrics ({
     extension_from_base_atr: eventMetrics.extensionFromBaseAtr,
     fresh_quiet_breakout: freshQuietBreakout,
     late_pump: latePump,
+    late_dump: lateDump,
   }
 }

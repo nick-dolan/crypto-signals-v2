@@ -51,10 +51,12 @@ function createCandidateRow (profile) {
   if (![
     lifecycle.distance_to_previous_high_atr,
     lifecycle.distance_to_previous_low_atr,
+    lifecycle.prior_drawdown_atr_72h,
+    lifecycle.max_24h_drawdown_last_7d_atr,
     derivatives.funding_rate,
     derivatives.oi_level_percentile_90d,
   ].every(isFinite)) {
-    throw new Error(`${coin.symbol} is missing finite range/funding/OI-level metrics; rerun steps 4 and 5`)
+    throw new Error(`${coin.symbol} is missing finite lifecycle/funding/OI-level metrics; rerun steps 4 and 5`)
   }
 
   if (
@@ -91,6 +93,8 @@ function createCandidateRow (profile) {
     volatility.squeeze_age_hours,
     roundNumber(lifecycle.prior_runup_atr_72h),
     roundNumber(lifecycle.max_24h_runup_last_7d_atr),
+    roundNumber(lifecycle.prior_drawdown_atr_72h),
+    roundNumber(lifecycle.max_24h_drawdown_last_7d_atr),
     roundNumber(lifecycle.range_position_7d),
     roundNumber(lifecycle.distance_to_previous_high_atr),
     roundNumber(lifecycle.distance_to_previous_low_atr),
@@ -115,7 +119,6 @@ function createCandidateRow (profile) {
     roundNumber(derivatives.funding_percentile_90d),
     roundNumber(derivatives.funding_minus_oi_z_4h),
     roundNumber(derivatives.premium_z_30d),
-    roundNumber(derivatives.liquidations_4h_over_oi, 6),
     roundNumber(derivatives.liq_imbalance_4h),
     roundNumber(derivatives.crowd_vs_top_traders),
     context.socialStatus,
@@ -137,6 +140,7 @@ function createCandidateRow (profile) {
     getActiveFlags(features.divergences, {
       fresh_quiet_breakout: lifecycle.fresh_quiet_breakout,
       late_pump: lifecycle.late_pump,
+      late_dump: lifecycle.late_dump,
     }),
   ]
 }
@@ -161,7 +165,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -194,7 +198,7 @@ export function buildAgentPayload (shortlist) {
       stablecap24hPct: "Изменение капитализации стейблкоинов за 24 часа, %",
     },
     conventions: {
-      rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести; fundingRate и altMarketBackground передаются без округления",
+      rounding: "Числа округлены до трёх знаков после запятой; fundingRate и altMarketBackground передаются без округления",
       flags: "Флаги рассчитаны до округления. Не пересчитывай их по округлённым полям и не считай независимыми подтверждениями поверх исходных метрик",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
@@ -216,6 +220,8 @@ export function buildAgentPayload (shortlist) {
       "squeezeAge",
       "priorRunupAtr72h",
       "max24hRunupLast7dAtr",
+      "priorDrawdownAtr72h",
+      "max24hDrawdownLast7dAtr",
       "rangePosition7d",
       "distanceToHigh24hAtr",
       "distanceToLow24hAtr",
@@ -240,7 +246,6 @@ export function buildAgentPayload (shortlist) {
       "fundingPctile",
       "fundingMinusOiZ4h",
       "premiumZ",
-      "liquidations4hOverOi",
       "liqImbalance",
       "crowdVsTop",
       "socialStatus",
@@ -265,7 +270,7 @@ export function buildAgentPayload (shortlist) {
       symbol: "Тикер монеты",
       name: "Название монеты",
       rank: "Место по глобальной капитализации; меньше означает крупнее",
-      atrPct: "ATR за 24 часа в процентах от текущей цены",
+      atrPct: "Средний true range последних 24 часовых свечей в процентах от текущей цены; это средний часовой диапазон, а не диапазон суток",
       marketCapB: "Рыночная капитализация, млрд USD",
       volume24hM: "Объём Binance perpetual за 24 часа, млн USD",
       category: "Категория минимум с тремя peer-монетами, чья текущая медианная 4-часовая доходность максимальна по модулю",
@@ -277,11 +282,13 @@ export function buildAgentPayload (shortlist) {
       squeezeAge: "Setup: часов подряд RV ratio < 0.75, Bollinger percentile <= 0.2 и ATR percentile <= 0.2",
       priorRunupAtr72h: "Lifecycle: положительный рост close за 72 часа до последних 4 часов / ATR в начале окна",
       max24hRunupLast7dAtr: "Lifecycle: максимальный положительный рост close за 24 часа среди окон последних 7 дней, завершившихся до последних 4 часов, / ATR в начале каждого окна",
+      priorDrawdownAtr72h: "Lifecycle: положительная величина снижения close за 72 часа до последних 4 часов / ATR в начале окна",
+      max24hDrawdownLast7dAtr: "Lifecycle: максимальная положительная величина снижения close за 24 часа среди окон последних 7 дней, завершившихся до последних 4 часов, / ATR в начале каждого окна",
       rangePosition7d: "Lifecycle: положение текущего close внутри диапазона high/low за 7 дней; 0 соответствует минимуму, 1 — максимуму",
       distanceToHigh24hAtr: "Range: (максимум high предыдущих 24 часов без текущей свечи - текущий close) / ATR24h предыдущей свечи; 0 — граница, минус — цена уже выше неё",
       distanceToLow24hAtr: "Range: (текущий close - минимум low предыдущих 24 часов без текущей свечи) / ATR24h предыдущей свечи; 0 — граница, минус — цена уже ниже неё",
       preBreakoutSqueezeAge: "Lifecycle: продолжительность сжатия непосредственно перед последним пробоем тихой базы, часы; null — подходящий пробой за 7 дней не найден",
-      squeezeEndedHoursAgo: "Lifecycle: сколько часов назад закончилась последняя зрелая тихая база; null — такая база за 7 дней не найдена",
+      squeezeEndedHoursAgo: "Lifecycle: сколько часов назад закончилась последняя тихая база длительностью минимум 12 часов; null — такая база за 7 дней не найдена",
       breakoutAgeHours: "Lifecycle: сколько часов прошло с первого close за границей последних максимум 48 часов тихой базы; null — подходящий пробой за 7 дней не найден",
       postBreakoutExtensionAtr: "Lifecycle: текущая дистанция по направлению пробоя за границей последних максимум 48 часов базы / ATR перед пробоем; null — подходящий пробой за 7 дней не найден",
       extensionFromBaseAtr: "Lifecycle: абсолютная дистанция текущего close от середины последней тихой базы / её замороженный ATR; null — зрелая тихая база за 7 дней не найдена",
@@ -300,9 +307,8 @@ export function buildAgentPayload (shortlist) {
       fundingRate: "Derivatives: текущая знаковая ставка из TradingView Funding_Rate в исходной шкале источника, без округления, масштабирования или годового пересчёта; плюс — лонги платят шортам, минус — шорты платят лонгам",
       fundingPctile: "Derivatives: перцентиль Funding Rate в полном скользящем окне 90 дней",
       fundingMinusOiZ4h: "Derivatives: z30d(изменение Funding Rate за 4h) минус z30d(изменение OI за 4h); плюс означает более сильный сдвиг funding",
-      premiumZ: "Derivatives: z30d(futures premium / close)",
-      liquidations4hOverOi: "Trigger: сумма модулей long и short ликвидаций за 4h / OI; относительное отношение, точная экономическая доля требует совпадения единиц studies",
-      liqImbalance: "Trigger: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long",
+      premiumZ: "Derivatives: z30d исходного Premium TradingView, уже относительного отклонения futures от index; без повторного деления на цену",
+      liqImbalance: "Context: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long. Не показывает величину или аномальность ликвидаций и сам по себе не является триггером",
       crowdVsTop: "Context: позиционирование обычных аккаунтов относительно top traders; плюс означает более long-настроенную толпу",
       socialStatus: "available при наличии всех четырёх полных social-рядов и шести рассчитанных признаков; иначе unavailable для всего Social-блока",
       socialDominanceZ: "Trigger: z-score доли внимания к монете за 30 дней",
@@ -325,17 +331,18 @@ export function buildAgentPayload (shortlist) {
     flagDefinitions: {
       coiling: "Сжатие, одновременно начинают расти Open Interest и объём",
       attention_ahead: "Эвристика: social-ускорение необычно сильнее одновременного движения цены; временное опережение напрямую не измеряется",
-      unconfirmed_move: "Аномально сильный рост цены за 4h не подтверждается Open Interest и объёмом",
+      unconfirmed_move: "Контрсигнал: аномально сильное движение цены за 4h не подтверждается Open Interest и объёмом",
       exhausted_hype: "Внимание высокое, но активность затухает и цена перестала реагировать",
       laggard: "Категория движется, а монета отстаёт",
       resilient: "BTC падает, а монета сохраняет относительную силу",
-      squeeze_fuel: "Экстремальный Funding, высокий Open Interest и однобокая толпа создают топливо",
+      squeeze_fuel: "Экстремальный Funding с подтверждённым знаком ставки, высокий Open Interest и согласованный перекос позиционирования создают возможное топливо",
       range_pressure_up: "Давление на верхнюю границу: distanceToHigh24hAtr от 0 до 0.5 включительно, relVolume >= 1.5 и vdShare4h >= 0.1; цена ещё не закрылась выше границы, пробой не подтверждён",
       range_pressure_down: "Давление на нижнюю границу: distanceToLow24hAtr от 0 до 0.5 включительно, relVolume >= 1.5 и vdShare4h <= -0.1; цена ещё не закрылась ниже границы, пробой не подтверждён",
       short_squeeze_setup: "Условия для short squeeze вверх: fundingRate < 0, fundingPctile <= 0.05, oiLevelPctile >= 0.8, oiChange4hPct > 0, vdShare4h >= 0.1; это подготовка, не факт сквиза и не измерение плеча",
       long_squeeze_setup: "Условия для long squeeze вниз: fundingRate > 0, fundingPctile >= 0.95, oiLevelPctile >= 0.8, oiChange4hPct > 0, vdShare4h <= -0.1; это подготовка, не факт сквиза и не измерение плеча",
       fresh_quiet_breakout: "Свежий выход из зрелой тихой базы, который ещё не успел далеко уйти от её границы",
       late_pump: "Цена уже сильно выросла за несколько дней и удерживается около недельного максимума",
+      late_dump: "Цена уже сильно снизилась за несколько дней и удерживается около недельного минимума",
     },
     candidates: shortlist.candidates.map(createCandidateRow),
   }

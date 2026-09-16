@@ -65,38 +65,35 @@ function calculateDerivativesAxis (profile) {
     oi_acceleration_4h: oiAcceleration,
     oi_change_4h_z_30d: oiChangeZ,
     oi_up_while_rv_down: oiBuildsQuietly,
+    funding_rate: fundingRate,
     funding_percentile_90d: fundingPercentile,
-    liquidations_4h_over_oi: liquidationsOverOi,
-    liq_imbalance_4h: liquidationImbalance,
     crowd_vs_top_traders: crowdPositioning,
   } = profile.features.derivatives
-  const alignedCrowd = Math.sign(fundingPercentile - 0.5) * crowdPositioning
+  const fundingDirection = Math.sign(fundingRate)
+  const percentileDirection = Math.sign(fundingPercentile - 0.5)
+  const fundingExtreme = Math.abs(fundingPercentile - 0.5) >= 0.4
+    && fundingDirection === percentileDirection
+  const alignedCrowd = fundingDirection * crowdPositioning
   const oiSetup = oiChangeZ >= 0.75 && oiBuildsQuietly
   const oiTrigger = oiChangeZ >= 0.75 && oiAcceleration >= 0.005
-  const liquidationTrigger = liquidationsOverOi >= 0.0005
-    && Math.abs(liquidationImbalance) >= 0.5
-  const crowdSetup = Math.abs(fundingPercentile - 0.5) >= 0.4
-    && alignedCrowd >= 0.15
+  const crowdSetup = fundingExtreme && alignedCrowd >= 0.15
   const oiScore = geometricMean(
     softPositive(oiChangeZ, 1),
     Math.max(Number(oiBuildsQuietly), softPositive(oiAcceleration, 0.015)),
   )
-  const liquidationScore = geometricMean(
-    softPositive(liquidationsOverOi, 0.0015),
-    softPositive(Math.abs(liquidationImbalance), 0.5),
-  )
-  const crowdScore = geometricMean(
-    softPositive(Math.abs(fundingPercentile - 0.5) - 0.3, 0.1),
-    softPositive(alignedCrowd, 0.2),
-  )
+  const crowdScore = fundingExtreme
+    ? geometricMean(
+        softPositive(Math.abs(fundingPercentile - 0.5) - 0.3, 0.1),
+        softPositive(alignedCrowd, 0.2),
+      )
+    : 0
 
   return {
-    active: oiSetup || oiTrigger || liquidationTrigger || crowdSetup,
-    score: Math.max(oiScore, liquidationScore, crowdScore),
+    active: oiSetup || oiTrigger || crowdSetup,
+    score: Math.max(oiScore, crowdScore),
     secondaryScore: 0,
     oiSetup,
     oiTrigger,
-    liquidationTrigger,
     crowdSetup,
   }
 }
@@ -189,6 +186,7 @@ function evaluateProfile (profile) {
   }
   const {
     fresh_quiet_breakout: freshQuietBreakout,
+    late_dump: lateDump = false,
     late_pump: latePump,
   } = profile.features.movementLifecycle
   const divergences = profile.features.divergences
@@ -207,9 +205,8 @@ function evaluateProfile (profile) {
   const triggerSignals = [
     freshQuietBreakout && "freshBreakout",
     (axes.volumeOrderFlow.active || rangePressure || directionalSqueeze) && "volumeOrderFlow",
-    (axes.derivatives.oiTrigger || axes.derivatives.liquidationTrigger) && "derivatives",
+    axes.derivatives.oiTrigger && "derivatives",
     axes.social.active && "socialAttention",
-    divergences.unconfirmed_move && "unconfirmedPriceMove",
   ].filter(Boolean)
   const contextSignals = [
     (axes.relativeStrength.active || divergences.resilient) && "relativeStrength",
@@ -232,6 +229,7 @@ function evaluateProfile (profile) {
     profile,
     axes,
     freshQuietBreakout,
+    lateDump,
     latePump,
     divergenceFlags,
     setupSignals,
@@ -312,10 +310,22 @@ export function buildPreliminaryShortlist (profiles) {
   validateProfiles(profiles)
 
   const evaluations = profiles.map(evaluateProfile)
-  const eligibleEvaluations = evaluations.filter(evaluation => !evaluation.latePump)
+  const eligibleEvaluations = evaluations.filter(
+    evaluation => !evaluation.latePump && !evaluation.lateDump,
+  )
   const selectionReasonsById = new Map()
   const divergenceCandidates = eligibleEvaluations.filter(
-    evaluation => evaluation.divergenceFlags.length > 0,
+    evaluation => evaluation.divergenceFlags.some(flag => [
+      "coiling",
+      "attention_ahead",
+      "laggard",
+      "resilient",
+      "squeeze_fuel",
+      "range_pressure_up",
+      "range_pressure_down",
+      "short_squeeze_setup",
+      "long_squeeze_setup",
+    ].includes(flag)),
   )
   const freshQuietBreakoutCandidates = eligibleEvaluations.filter(
     evaluation => evaluation.freshQuietBreakout,
@@ -381,7 +391,8 @@ export function buildPreliminaryShortlist (profiles) {
     filter: {
       topPerAxis: 5,
       candidateLimit: 60,
-      latePumpExcludedCoinCount: evaluations.length - eligibleEvaluations.length,
+      latePumpExcludedCoinCount: evaluations.filter(evaluation => evaluation.latePump).length,
+      lateDumpExcludedCoinCount: evaluations.filter(evaluation => evaluation.lateDump).length,
       divergenceNominatedCoinCount: divergenceCandidates.length,
       freshQuietBreakoutNominatedCoinCount:
         freshQuietBreakoutCandidates.length,

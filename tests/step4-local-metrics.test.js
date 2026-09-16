@@ -192,6 +192,32 @@ test("derivatives preserve raw signed funding and the 2160-hour OI percentile wi
   assert.deepEqual({ openInterest, fundingRate }, before)
 })
 
+test("premium z-score is independent of the coin price path", () => {
+  const premium = createSeries(index => 0.01 + Math.sin(index / 17) * 0.003)
+  const sharedInput = {
+    openInterest: createSeries(index => 1_000 + index),
+    fundingRate: createSeries(index => Math.sin(index / 19) * 0.001),
+    premium,
+    longLiquidations: createSeries(() => 0),
+    shortLiquidations: createSeries(() => 0),
+    longShortRatioAccounts: createSeries(() => 1),
+    topTradersLong: createSeries(() => 50),
+    topTradersShort: createSeries(() => 50),
+    rv24OverRv7: createSeries(() => 1),
+  }
+  const flatPrice = calculateDerivativesMetrics({
+    ...sharedInput,
+    close: createSeries(() => 100),
+  })
+  const trendingPrice = calculateDerivativesMetrics({
+    ...sharedInput,
+    close: createSeries(index => 10 + index ** 2),
+  })
+
+  assert.deepEqual(flatPrice.premium_z_30d, trendingPrice.premium_z_30d)
+  assert.notEqual(latest(flatPrice.premium_z_30d), 0)
+})
+
 test("social metrics use adjacent windows and zero-contributor fallbacks", () => {
   const close = createSeries(index => 100 + Math.sin(index / 11) * 2)
   const socialDominance = createSeries(index => 2 + Math.sin(index / 29) * 0.5)

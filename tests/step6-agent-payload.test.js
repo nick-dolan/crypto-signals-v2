@@ -16,6 +16,8 @@ function createCandidate (symbol, overrides = {}) {
     movementLifecycle: {
       prior_runup_atr_72h: 1.23456,
       max_24h_runup_last_7d_atr: 2.34567,
+      prior_drawdown_atr_72h: 0,
+      max_24h_drawdown_last_7d_atr: 1.45678,
       range_position_7d: 0.87654,
       distance_to_previous_high_atr: -0.123456,
       distance_to_previous_low_atr: 2.987654,
@@ -26,6 +28,7 @@ function createCandidate (symbol, overrides = {}) {
       extension_from_base_atr: 1.23456,
       fresh_quiet_breakout: true,
       late_pump: false,
+      late_dump: false,
     },
     volumeOrderFlow: {
       volume_z_30d: 1.8345,
@@ -150,11 +153,11 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 6)
+  assert.equal(payload.schemaVersion, 7)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 59)
+  assert.equal(payload.schema.length, 60)
   assert.deepEqual(Object.keys(payload.definitions), payload.schema)
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
@@ -182,6 +185,8 @@ test("agent payload creates documented compact rows", () => {
     squeezeAge: 8,
     priorRunupAtr72h: 1.235,
     max24hRunupLast7dAtr: 2.346,
+    priorDrawdownAtr72h: 0,
+    max24hDrawdownLast7dAtr: 1.457,
     rangePosition7d: 0.877,
     distanceToHigh24hAtr: -0.123,
     distanceToLow24hAtr: 2.988,
@@ -206,7 +211,6 @@ test("agent payload creates documented compact rows", () => {
     fundingPctile: 0.912,
     fundingMinusOiZ4h: -1.235,
     premiumZ: 0.457,
-    liquidations4hOverOi: 0.000457,
     liqImbalance: -0.812,
     crowdVsTop: 0.123,
     socialStatus: "available",
@@ -313,7 +317,19 @@ test("agent payload preserves order and nullable metrics", () => {
     "long_squeeze_setup",
     "fresh_quiet_breakout",
     "late_pump",
+    "late_dump",
   ])
+})
+
+test("unverified liquidation ratios never reach the agent payload", () => {
+  const original = createCandidate("SOL")
+  const changed = structuredClone(original)
+  changed.features.derivatives.liquidations_4h_over_oi = 1_000_000
+
+  const payload = buildAgentPayload(createShortlist([original]))
+  assert.deepEqual(buildAgentPayload(createShortlist([changed])), payload)
+  assert.equal(payload.schema.includes("liquidations4hOverOi"), false)
+  assert.equal(payload.schema.includes("liqImbalance"), true)
 })
 
 test("agent payload marks the entire unavailable social block with nulls", () => {

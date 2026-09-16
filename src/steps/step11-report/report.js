@@ -79,6 +79,7 @@
       long_squeeze_setup: "Условия для long squeeze ↓",
       fresh_quiet_breakout: "Свежий пробой тихой базы",
       late_pump: "Поздний памп",
+      late_dump: "Позднее падение",
     }[value] ?? value
   }
 

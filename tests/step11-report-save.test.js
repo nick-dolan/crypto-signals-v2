@@ -80,7 +80,7 @@ for (const timezone of ["UTC", "America/Los_Angeles", "Asia/Tokyo"]) {
     `], { cwd: directory, env: { ...process.env, TZ: timezone }, timeout: 10_000 })
     const expected = path.join(directory, "reports", "report-2027-01-01_00-05-06_GMT+3.html")
 
-    assert.equal(stdout.trim(), expected)
+    assert.equal(await fs.realpath(stdout.trim()), await fs.realpath(expected))
     assert.equal(await fs.readFile(expected, "utf8"), "report")
     assert.deepEqual(await fs.readdir(path.join(directory, "tmp")), [])
   })

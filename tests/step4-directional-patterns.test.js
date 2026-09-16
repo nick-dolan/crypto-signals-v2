@@ -176,19 +176,19 @@ for (const direction of ["up", "down"]) {
     ])
   })
 
-  test(`squeeze_fuel keeps its ${direction} signal without any new flag prerequisites`, () => {
+  test(`squeeze_fuel requires the ${direction} funding sign but not price levels, flow or OI growth`, () => {
     const input = createInput(direction)
     delete input.movementLifecycle
     delete input.volumeOrderFlow
     delete input.derivatives.funding_rate
     delete input.derivatives.oi_change_4h
 
-    assert.equal(calculateDivergenceFlags(input).squeeze_fuel[0], true)
+    assert.equal(calculateDivergenceFlags(input).squeeze_fuel[0], null)
 
     for (const fundingRate of [-0.001, 0, 0.001]) {
       input.derivatives.funding_rate = [fundingRate]
       input.derivatives.oi_change_4h = [-0.01]
-      assert.equal(calculateDivergenceFlags(input).squeeze_fuel[0], true)
+      assert.equal(calculateDivergenceFlags(input).squeeze_fuel[0], Math.sign(fundingRate) === -sign)
     }
   })
 
@@ -207,6 +207,7 @@ for (const direction of ["up", "down"]) {
         ["volumeOrderFlow", "vd_net_4h_over_volume"],
       ]],
       ["squeeze_fuel", [
+        ["derivatives", "funding_rate"],
         ["derivatives", "funding_percentile_90d"],
         ["derivatives", "oi_level_percentile_90d"],
         ["derivatives", "crowd_vs_top_traders"],

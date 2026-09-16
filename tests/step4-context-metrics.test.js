@@ -335,6 +335,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   const categoryBreadth = filled(0.7)
   const coinLeadsCategory = filled(0)
   const fundingPercentile = filled(0.5)
+  const fundingRate = filled(0.0001)
   const crowdVsTopTraders = filled(0)
   const residualZ = filled(0)
 
@@ -342,6 +343,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   socialDominanceZ[calm] = 2
   interactionsAcceleration[calm] = -1
   fundingPercentile[drop] = 0.05
+  fundingRate[drop] = -0.0001
   crowdVsTopTraders[drop] = -0.16
   oiChangeZ[last] = 2
   fundingPercentile[last] = 0.95
@@ -366,6 +368,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
         2_160,
       ),
       funding_percentile_90d: fundingPercentile,
+      funding_rate: fundingRate,
       crowd_vs_top_traders: crowdVsTopTraders,
     },
     social: {
@@ -400,7 +403,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   assert.equal(flags.attention_ahead[0], false)
   assert.equal(flags.attention_ahead[1], true)
   assert.equal(flags.unconfirmed_move[0], null)
-  assert.equal(flags.unconfirmed_move[drop], false)
+  assert.equal(flags.unconfirmed_move[drop], true)
   assert.equal(flags.unconfirmed_move[move], true)
   assert.equal(flags.exhausted_hype[calm], true)
   assert.equal(flags.laggard[0], null)
