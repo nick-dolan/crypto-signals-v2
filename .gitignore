@@ -6,6 +6,7 @@ npm-debug.log*
 pnpm-debug.log*
 
 /tmp/
+/reports/
 *.tmp
 
 .env
