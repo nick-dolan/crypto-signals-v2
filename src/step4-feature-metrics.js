@@ -27,11 +27,12 @@ async function runFeatureMetricsStep () {
   )
   const output = {
     generatedAt: new Date().toISOString(),
-    asOf: new Date(universeContext.times.at(-1) * 1_000).toISOString(),
+    asOf: universeContext.asOf,
     source: "tradingview",
     timeframe: "1h",
     marketContext: {
       breadth: universeContext.universeBreadth4h.at(-1),
+      altMarketBackground: universeContext.altMarketBackground,
       segmentRotation: universeContext.segmentRotation4h.at(-1),
       stablecapChange: universeContext.stablecapChange24h.at(-1),
     },

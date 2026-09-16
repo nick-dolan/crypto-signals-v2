@@ -1,4 +1,3 @@
-import { readTmpJson } from "../../helpers/fs-helper.js"
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 
@@ -6,7 +5,7 @@ function calculateChange4hPct (marketData, asOf) {
   const asOfTimestamp = isString(asOf) ? Date.parse(asOf) / 1_000 : NaN
 
   if (!isSafeInteger(asOfTimestamp) || asOfTimestamp % 3_600 !== 0) {
-    throw new Error("asOf отчёта должен указывать точное начало часовой свечи")
+    throw new Error("asOf должен указывать точное начало часовой свечи")
   }
 
   if (
@@ -21,7 +20,7 @@ function calculateChange4hPct (marketData, asOf) {
   const boundary = getClosedHourlyBoundary(collectedAt)
 
   if (!boundary) {
-    throw new Error("в сохранённом контексте некорректное время сбора collectedAt")
+    throw new Error("в рыночном контексте некорректное время сбора collectedAt")
   }
 
   if (asOfTimestamp > boundary.latestClosedTime) {
@@ -31,7 +30,7 @@ function calculateChange4hPct (marketData, asOf) {
   const periods = marketData.series.total3es.periods
 
   if (!isArray(periods)) {
-    throw new Error("в сохранённом контексте отсутствуют часовые свечи TOTAL3ES")
+    throw new Error("в рыночном контексте отсутствуют часовые свечи TOTAL3ES")
   }
 
   const earliestTime = asOfTimestamp - 4 * 3_600
@@ -61,10 +60,7 @@ function calculateChange4hPct (marketData, asOf) {
   return change4hPct
 }
 
-export async function buildAltMarketBackground (
-  { asOf, breadth4h },
-  { readMarketData = readTmpJson } = {},
-) {
+export function buildAltMarketBackground ({ asOf, breadth4h, marketData }) {
   const breadth = isFinite(breadth4h) && breadth4h >= 0 && breadth4h <= 1 ? breadth4h : null
   const warnings = breadth === null
     ? ["Ширина рынка за 4ч недоступна: требуется число от 0 до 1 по всей вселенной монет"]
@@ -72,10 +68,9 @@ export async function buildAltMarketBackground (
   let change4hPct = null
 
   try {
-    const marketData = await readMarketData("step3-market-context.json")
     change4hPct = calculateChange4hPct(marketData, asOf)
   } catch (error) {
-    warnings.push(`TOTAL3ES недоступен: ${isError(error) ? error.message : "не удалось прочитать step3-market-context.json"}`)
+    warnings.push(`TOTAL3ES недоступен: ${isError(error) ? error.message : "не удалось рассчитать изменение за 4ч"}`)
   }
 
   let status = "unavailable"

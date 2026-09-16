@@ -693,6 +693,7 @@ test("legacy reports and empty candidate lists show an unavailable background wi
     assert.equal(byId("alt-market-change").textContent, "Нет данных")
     assert.equal(byId("alt-market-breadth").textContent, "Нет данных")
     assert.match(byId("alt-market-warning").textContent, /не рассчитан/)
+    assert.match(byId("alt-market-warning").textContent, /шаги 4–6/)
     assert.equal(byId("no-candidates").hidden, symbols.length > 0)
   }
 })

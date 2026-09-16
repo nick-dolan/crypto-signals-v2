@@ -39,7 +39,7 @@ function assertProbability (value, label) {
 }
 
 function formatEvidenceValue (value) {
-  return isArray(value) ? JSON.stringify(value) : String(value)
+  return isArray(value) || isObject(value) ? JSON.stringify(value) : String(value)
 }
 
 function normalizeObservations (value, maxLength, payload, row, label) {

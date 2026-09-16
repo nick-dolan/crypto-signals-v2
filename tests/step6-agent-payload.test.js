@@ -120,6 +120,7 @@ function createShortlist (candidates) {
     timeframe: "1h",
     marketContext: {
       breadth: 0.48858,
+      altMarketBackground: { status: "mixed", change4hPct: -1.23456789, breadth4h: 0.48858, warning: null },
       segmentRotation: {
         btc: 0.0005958,
         eth: 0.0001131,
@@ -140,7 +141,7 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 4)
+  assert.equal(payload.schemaVersion, 5)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
@@ -149,6 +150,7 @@ test("agent payload creates documented compact rows", () => {
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
     breadth4h: 0.489,
+    altMarketBackground: { status: "mixed", change4hPct: -1.23456789, breadth4h: 0.48858, warning: null },
     btcRotation4hPct: 0.06,
     ethRotation4hPct: 0.011,
     altsRotation4hPct: 0.01,
@@ -340,6 +342,38 @@ test("agent payload rejects incomplete social features marked available", () => 
     ])),
     /social features do not match their status/,
   )
+})
+
+for (const background of [
+  { status: "up", change4hPct: 0.000000001, breadth4h: 0.550000001, warning: null },
+  { status: "down", change4hPct: -0.000000001, breadth4h: 0.449999999, warning: null },
+  { status: "mixed", change4hPct: 1.23456789, breadth4h: 0.55, warning: null },
+  { status: "unavailable", change4hPct: null, breadth4h: 0.6, warning: "TOTAL3ES недоступен" },
+]) {
+  test(`agent payload preserves the saved ${background.status} background without rounding or recalculation`, () => {
+    const shortlist = createShortlist([createCandidate("SOL")])
+    shortlist.marketContext.breadth = background.breadth4h
+    shortlist.marketContext.altMarketBackground = background
+    const before = structuredClone(shortlist)
+    const payload = buildAgentPayload(shortlist)
+
+    assert.deepEqual(payload.marketContext.altMarketBackground, background)
+    assert.deepEqual(JSON.parse(JSON.stringify(payload)).marketContext.altMarketBackground, background)
+    assert.deepEqual(shortlist, before)
+    assert.equal(payload.schema.includes("altMarketBackground"), false)
+    assert.match(payload.marketDefinitions.altMarketBackground, /шаге 4/)
+    assert.match(payload.marketDefinitions.altMarketBackground, /не прогноз и не вероятность/)
+    assert.match(payload.conventions.rounding, /altMarketBackground.*без округления/)
+  })
+}
+
+test("agent payload leaves a legacy missing background unavailable instead of inferring it from breadth", () => {
+  const shortlist = createShortlist([])
+  delete shortlist.marketContext.altMarketBackground
+  const payload = buildAgentPayload(shortlist)
+
+  assert.equal(payload.marketContext.altMarketBackground, null)
+  assert.deepEqual(Object.keys(payload.marketContext), Object.keys(payload.marketDefinitions))
 })
 
 test("agent payload rejects an inconsistent shortlist count", () => {

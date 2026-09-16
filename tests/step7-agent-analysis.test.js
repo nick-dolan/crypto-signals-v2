@@ -126,6 +126,26 @@ test("agent analysis parser inserts exact market context values into evidence", 
   )
 })
 
+test("agent analysis parser preserves the structured alt-market background in evidence", () => {
+  for (const background of [
+    { status: "down", change4hPct: -0.000000001, breadth4h: 0.449999999, warning: null },
+    { status: "unavailable", change4hPct: null, breadth4h: 0.2, warning: "TOTAL3ES недоступен" },
+    null,
+  ]) {
+    const payload = createPayload()
+    payload.marketContext.altMarketBackground = background
+    const response = createAgentResponse()
+    response.assessments[1].counterSignals = [
+      { fields: ["altMarketBackground"], text: "общий фон учитывается отдельно от признаков монеты" },
+    ]
+    const analysis = parseAgentAnalysis(JSON.stringify(response), payload)
+
+    assert.deepEqual(analysis.assessments[1].counterSignals, [
+      `altMarketBackground=${JSON.stringify(background)}: общий фон учитывается отдельно от признаков монеты`,
+    ])
+  }
+})
+
 test("agent analysis parser rejects invalid JSON and inconsistent top candidates", () => {
   assert.throws(
     () => parseAgentAnalysis("```json\n{}\n```", createPayload()),

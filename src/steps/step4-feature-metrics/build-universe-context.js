@@ -1,5 +1,6 @@
 import { isArray, isFinite } from "../../helpers/utils.typed.js"
 import { simpleReturns } from "../../scripts/returns.js"
+import { buildAltMarketBackground } from "./build-alt-market-background.js"
 
 function median (values) {
   const finite = values.filter(isFinite).sort((left, right) => left - right)
@@ -211,12 +212,19 @@ export function buildUniverseContext (baseCoins, marketContext) {
     baseCoin.coin.baseCurrencyId,
     buildCategoryContext(baseCoins, returns4h, index, times.length),
   ]))
+  const asOf = new Date(times.at(-1) * 1_000).toISOString()
 
   return {
+    asOf,
     times,
     btcClose: btc.close,
     total3esClose,
     universeBreadth4h,
+    altMarketBackground: buildAltMarketBackground({
+      asOf,
+      breadth4h: universeBreadth4h.at(-1),
+      marketData: marketContext,
+    }),
     segmentRotation4h,
     stablecapChange24h: simpleReturns(stableCap, 24),
     categoryContextsByCoin,

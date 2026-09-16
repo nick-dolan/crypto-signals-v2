@@ -95,7 +95,7 @@
   function renderAltMarketBackground () {
     const background = report.altMarketBackground ?? {
       status: "unavailable", change4hPct: null, breadth4h: null,
-      warning: "В этом отчёте фон альтрынка не рассчитан. Пересоздайте HTML из сохранённых данных.",
+      warning: "В этом отчёте фон альтрынка не рассчитан. Выполните шаги 4–6 и пересоздайте HTML для того же среза.",
     }
     const status = ["up", "down", "mixed"].includes(background.status) ? background.status : "unavailable"
     const [label, icon] = {

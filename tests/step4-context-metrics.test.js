@@ -21,11 +21,14 @@ function createMarketContext (times) {
   }))
 
   return {
+    source: "tradingview",
+    timeframe: "1h",
+    collectedAt: new Date((times.at(-1) + 3_600) * 1_000).toISOString(),
     series: {
-      total: { periods: periods(() => 1_000) },
-      totales: { periods: periods(index => 900 - index) },
-      total2es: { periods: periods(() => 500) },
-      total3es: { periods: periods(() => 300) },
+      total: { symbol: "CRYPTOCAP:TOTAL", periods: periods(() => 1_000) },
+      totales: { symbol: "CRYPTOCAP:TOTALES", periods: periods(index => 900 - index) },
+      total2es: { symbol: "CRYPTOCAP:TOTAL2ES", periods: periods(() => 500) },
+      total3es: { symbol: "CRYPTOCAP:TOTAL3ES", periods: periods(() => 300) },
     },
   }
 }
@@ -79,7 +82,11 @@ test("buildUniverseContext calculates shared market and category context", () =>
     createMarketContext(times),
   )
 
+  assert.equal(context.asOf, "1970-01-02T00:00:00.000Z")
   assert.deepEqual(context.times, times)
+  assert.deepEqual(context.altMarketBackground, {
+    status: "mixed", change4hPct: 0, breadth4h: 0, warning: null,
+  })
   assert.deepEqual(context.btcClose, Array(25).fill(100))
   assert.deepEqual(context.total3esClose, Array(25).fill(300))
   assert.deepEqual(
@@ -116,6 +123,71 @@ test("buildUniverseContext calculates shared market and category context", () =>
     breadth: Array(25).fill(null),
     coinLeadsCategory: Array(25).fill(null),
   })
+})
+
+test("buildUniverseContext uses its snapshot and unrounded whole-universe breadth for alt background", () => {
+  const times = Array.from({ length: 13 }, (_, index) => index * 3_600)
+  const baseCoins = [
+    ...createBaseCoins(times),
+    ...["FLAT1", "FLAT2"].map(symbol => ({
+      coin: { baseCurrencyId: symbol, symbol },
+      categories: [],
+      times,
+      close: Array(times.length).fill(100),
+    })),
+  ]
+  const marketContext = createMarketContext(times)
+  marketContext.collectedAt = "2099-01-01T00:00:00.000Z"
+  marketContext.series.total3es.periods[9].close = 1_000
+  marketContext.series.total3es.periods[12].close = 270
+  const before = structuredClone({ baseCoins, marketContext })
+  const context = buildUniverseContext(baseCoins, marketContext)
+
+  assert.equal(context.asOf, "1970-01-01T12:00:00.000Z")
+  assert.equal(context.universeBreadth4h.at(-1), 3 / 7)
+  assert.deepEqual(context.altMarketBackground, {
+    status: "down", change4hPct: -10, breadth4h: 3 / 7, warning: null,
+  })
+  assert.deepEqual({ baseCoins, marketContext }, before)
+})
+
+test("buildUniverseContext preserves breadth when alt background data is invalid or not closed", async (t) => {
+  for (const failure of ["close", "symbol", "collectedAt"]) {
+    await t.test(failure, () => {
+      const times = Array.from({ length: 13 }, (_, index) => index * 3_600)
+      const marketContext = createMarketContext(times)
+
+      if (failure === "close") {
+        marketContext.series.total3es.periods[11].close = 0
+      } else if (failure === "symbol") {
+        marketContext.series.total3es.symbol = "CRYPTOCAP:TOTAL3"
+      } else {
+        marketContext.collectedAt = new Date(times.at(-1) * 1_000).toISOString()
+      }
+
+      const context = buildUniverseContext(createBaseCoins(times), marketContext)
+      assert.deepEqual({ ...context.altMarketBackground, warning: null }, {
+        status: "unavailable", change4hPct: null, breadth4h: 3 / 5, warning: null,
+      })
+      assert.match(context.altMarketBackground.warning, /TOTAL3ES недоступен/)
+      assert.equal(context.universeBreadth4h.at(-1), 3 / 5)
+    })
+  }
+})
+
+test("buildUniverseContext keeps the market change when universe breadth is unavailable", () => {
+  const times = Array.from({ length: 13 }, (_, index) => index * 3_600)
+  const baseCoins = createBaseCoins(times)
+  baseCoins.forEach(baseCoin => baseCoin.close.fill(null))
+  const marketContext = createMarketContext(times)
+  marketContext.series.total3es.periods[12].close = 330
+  const context = buildUniverseContext(baseCoins, marketContext)
+
+  assert.equal(context.universeBreadth4h.at(-1), null)
+  assert.deepEqual({ ...context.altMarketBackground, warning: null }, {
+    status: "unavailable", change4hPct: 10, breadth4h: null, warning: null,
+  })
+  assert.match(context.altMarketBackground.warning, /Ширина рынка/)
 })
 
 test("buildUniverseContext distinguishes categories without enough peers", () => {

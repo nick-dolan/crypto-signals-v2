@@ -148,7 +148,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -156,6 +156,7 @@ export function buildAgentPayload (shortlist) {
     candidateCount: shortlist.candidateCount,
     marketContext: {
       breadth4h: roundNumber(shortlist.marketContext.breadth),
+      altMarketBackground: shortlist.marketContext.altMarketBackground ?? null,
       btcRotation4hPct: roundNumber(
         shortlist.marketContext.segmentRotation.btc * 100,
       ),
@@ -172,6 +173,7 @@ export function buildAgentPayload (shortlist) {
     },
     marketDefinitions: {
       breadth4h: "Доля монет вселенной с положительной доходностью за 4 часа",
+      altMarketBackground: "Фон альтрынка за 4ч на asOf, рассчитанный на шаге 4: change4hPct — изменение капитализации TOTAL3ES (без BTC, ETH и стейблкоинов), %; breadth4h — доля растущих монет всей вселенной, 0–1. status: up при change4hPct > 0 и breadth4h > 0.55; down при change4hPct < 0 и breadth4h < 0.45; mixed — остальные сочетания; unavailable — недостаточно данных, причина в warning. Значения не округлены. Это эвристика среза, не прогноз и не вероятность; не считай её и исходную ширину рынка независимыми сигналами",
       btcRotation4hPct: "Изменение доли BTC в общей капитализации за 4 часа, п.п.",
       ethRotation4hPct: "Изменение доли ETH в общей капитализации за 4 часа, п.п.",
       altsRotation4hPct: "Изменение доли остальных альткоинов за 4 часа, п.п.",
@@ -179,10 +181,10 @@ export function buildAgentPayload (shortlist) {
       stablecap24hPct: "Изменение капитализации стейблкоинов за 24 часа, %",
     },
     conventions: {
-      rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести",
+      rounding: "Числа округлены до трёх знаков после запятой; liquidations4hOverOi — до шести; altMarketBackground передаётся без округления",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
-      null: "Для category/social метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Это не ноль",
+      null: "Для category/social/altMarketBackground метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Это не ноль",
     },
     schema: [
       "symbol",

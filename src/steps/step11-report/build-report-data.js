@@ -254,6 +254,7 @@ export async function buildReportData (
     candidateCount: analysis.candidateCount,
     universeCoinCount: shortlist.universeCoinCount,
     marketContext: payload.marketContext,
+    altMarketBackground: payload.marketContext?.altMarketBackground ?? null,
     marketDefinitions: payload.marketDefinitions,
     definitions: payload.definitions,
     flagDefinitions: payload.flagDefinitions,

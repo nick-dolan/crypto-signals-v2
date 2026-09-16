@@ -122,6 +122,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
     candidateCount: 3,
     universeCoinCount: 23,
     marketContext: input.payload.marketContext,
+    altMarketBackground: null,
     marketDefinitions: input.payload.marketDefinitions,
     definitions: input.payload.definitions,
     flagDefinitions: input.payload.flagDefinitions,
@@ -153,6 +154,24 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
 
   assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], before)
 })
+
+for (const background of [
+  { status: "up", change4hPct: 0.000000001, breadth4h: 0.550000001, warning: null },
+  { status: "down", change4hPct: -0.000000001, breadth4h: 0.449999999, warning: null },
+  { status: "mixed", change4hPct: 1.23456789, breadth4h: 0.55, warning: null },
+  { status: "unavailable", change4hPct: null, breadth4h: 0.6, warning: "TOTAL3ES недоступен" },
+  null,
+]) {
+  test(`report copies the saved ${background?.status ?? "legacy"} background without raw market reads`, async () => {
+    const input = createInput([])
+    input.payload.marketContext.altMarketBackground = background
+    const before = structuredClone(input.payload)
+    const report = await build(input, () => assert.fail("No raw data should be read"))
+
+    assert.deepEqual(report.altMarketBackground, background)
+    assert.deepEqual(input.payload, before)
+  })
+}
 
 test("keeps exactly the last 168 clock hours, maps OHLC, sorts and deduplicates without future data", async () => {
   const input = createInput()
