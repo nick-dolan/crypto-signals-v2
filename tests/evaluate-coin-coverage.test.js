@@ -42,6 +42,7 @@ function createChartData ({
   chartBaseCurrencyId = "XTVCBTC",
   emptyStudyKey,
   fetchHours = 4,
+  nowTimestamp = 1_800_000_000,
   rejectedStudyKey,
   volumeDeltaHours = 3,
 } = {}) {
@@ -61,6 +62,7 @@ function createChartData ({
         field,
         request.key === emptyStudyKey ? null : 0,
       ])),
+      nowTimestamp,
     )
 
     return [request.key, {
@@ -87,7 +89,7 @@ function createChartData ({
         min: 0.5,
         close: 1.5,
         volume: 0,
-      })),
+      }), nowTimestamp),
     },
     studies,
   }
@@ -106,6 +108,36 @@ function evaluate (chartData, coin = createCoin(), options = {}) {
   )
 }
 
+function assertRecheckBoundary (chartData, key, recheckAfter, options = {}) {
+  const result = evaluate(chartData, createCoin(), options)
+  const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+  const source = key === "ohlcv" ? chartData.chart : chartData.studies[key].value
+
+  assert.equal(coverage.complete, false)
+  assert.equal(coverage.recheckAfter, recheckAfter)
+
+  for (const [offset, complete] of [[-1, false], [0, true]]) {
+    const nowTimestamp = Date.parse(recheckAfter) / 1_000 + offset
+    const shiftedData = createChartData({ ...options, nowTimestamp })
+    const shiftedSource = key === "ohlcv" ? shiftedData.chart : shiftedData.studies[key].value
+
+    shiftedSource.periods = [
+      ...source.periods,
+      ...shiftedSource.periods.filter(period => period.time > coverage.latestExpectedTime),
+    ]
+
+    const shiftedResult = evaluate(shiftedData, createCoin(), { ...options, nowTimestamp })
+    const shiftedCoverage = key === "ohlcv"
+      ? shiftedResult.coverage.ohlcv
+      : shiftedResult.coverage.studies[key]
+
+    assert.equal(shiftedCoverage.complete, complete)
+    assert.equal(shiftedCoverage.recheckAfter, complete ? null : recheckAfter)
+  }
+
+  return result
+}
+
 test("coverage requires 2400 complete hours and 1666 Volume Delta hours", () => {
   const result = evaluateCoinCoverage(
     createCoin(),
@@ -119,6 +151,11 @@ test("coverage requires 2400 complete hours and 1666 Volume Delta hours", () => 
   assert.equal(result.complete, true)
   assert.equal(result.coverage.social.status, "available")
   assert.equal(result.coverage.ohlcv.completePeriodCount, 2_400)
+
+  for (const coverage of [result.coverage.ohlcv, ...Object.values(result.coverage.studies)]) {
+    assert.equal(coverage.recheckAfter, null)
+  }
+
   assert.equal(
     result.coverage.studies.volumeDelta.completePeriodCount,
     1_666,
@@ -244,6 +281,7 @@ test("coverage marks a completely empty Liquidations study as unavailable", () =
   assert.deepEqual(result.unavailableMetrics, ["liquidations"])
   assert.ok(result.reasonCodes.includes("liquidations:missing_values"))
   assert.ok(result.reasonCodes.includes("liquidations:unavailable"))
+  assert.equal(result.coverage.studies.liquidations.recheckAfter, null)
 })
 
 test("coverage accepts the shorter Volume Delta window but requires every hour in it", () => {
@@ -271,6 +309,7 @@ test("coverage marks a completely absent dense metric as unavailable", () => {
   assert.deepEqual(result.unavailableMetrics, ["premium"])
   assert.ok(result.reasonCodes.includes("premium:missing_values"))
   assert.ok(result.reasonCodes.includes("premium:unavailable"))
+  assert.equal(result.coverage.studies.premium.recheckAfter, null)
 })
 
 test("coverage does not permanently exclude a partially populated metric", () => {
@@ -281,7 +320,11 @@ test("coverage does not permanently exclude a partially populated metric", () =>
     premium.periods[1][field] = 0
   }
 
-  const result = evaluate(chartData)
+  const result = assertRecheckBoundary(
+    chartData,
+    "premium",
+    new Date((1_800_000_000 + 4 * 3_600) * 1_000).toISOString(),
+  )
 
   assert.equal(result.complete, false)
   assert.equal(result.retryable, false)
@@ -312,9 +355,16 @@ test("coverage treats a partially populated social study as unavailable", () => 
   const chartData = createChartData()
   chartData.studies.interactions.value.periods[1].value = null
 
-  const result = evaluate(chartData)
+  const result = assertRecheckBoundary(
+    chartData,
+    "interactions",
+    new Date((1_800_000_000 + 2 * 3_600) * 1_000).toISOString(),
+  )
 
   assert.equal(result.complete, true)
+  assert.equal(result.retryable, false)
+  assert.deepEqual(result.reasonCodes, [])
+  assert.deepEqual(result.unavailableMetrics, [])
   assert.equal(result.coverage.social.status, "unavailable")
   assert.deepEqual(result.coverage.social.unavailableMetrics, ["interactions"])
   assert.deepEqual(
@@ -390,3 +440,269 @@ test("coverage allows empty categories but rejects missing required metadata", (
     result.reasonCodes.includes("metadata:fullyDilutedValuation_missing"),
   )
 })
+
+for (const key of ["ohlcv", "premium"]) {
+  for (const [label, missingIndexes, waitHours] of [
+    ["one leading gap", [0], 1],
+    ["a missing prefix", [0, 1], 2],
+    ["an internal gap", [2], 3],
+    ["the latest hour missing", [3], 4],
+    ["the latest of multiple gaps", [0, 2], 3],
+  ]) {
+    test(`${key} recheck waits for ${label} to leave the closed-hour window`, () => {
+      const chartData = createChartData()
+      const source = key === "ohlcv" ? chartData.chart : chartData.studies[key].value
+      source.periods = source.periods.filter((_, index) => !missingIndexes.includes(index)).reverse()
+
+      const result = assertRecheckBoundary(
+        chartData,
+        key,
+        new Date((1_800_000_000 + waitHours * 3_600) * 1_000).toISOString(),
+      )
+      const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+
+      assert.equal(result.complete, false)
+      assert.equal(result.retryable, false)
+      assert.deepEqual(result.unavailableMetrics, [])
+      assert.deepEqual(result.reasonCodes, [`${key}:missing_hours`, `${key}:missing_values`])
+      assert.equal(coverage.missingPeriodCount, missingIndexes.length)
+      assert.equal(coverage.completePeriodCount, 4 - missingIndexes.length)
+    })
+  }
+
+  test(`${key} recheck ignores old, current and future observations outside its window`, () => {
+    const chartData = createChartData()
+    const source = key === "ohlcv" ? chartData.chart : chartData.studies[key].value
+    source.periods.shift()
+    source.periods.push(...[
+      1_800_000_000 - 5 * 3_600,
+      1_800_000_000 - 5 * 3_600,
+      1_800_000_000 - 5 * 3_600 + 1_800,
+      1_800_000_000,
+      1_800_000_000 + 3_600,
+      1_800_000_000 + 3_600,
+      1_800_000_000 + 5_400,
+    ].map(time => ({ time })))
+
+    const result = evaluate(chartData)
+    const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+
+    assert.equal(
+      coverage.recheckAfter,
+      new Date((1_800_000_000 + 3_600) * 1_000).toISOString(),
+    )
+    assert.equal(coverage.periodCount, 3)
+    assert.equal(coverage.duplicatePeriodCount, 0)
+    assert.equal(coverage.offGridPeriodCount, 0)
+  })
+
+  for (const [label, corrupt] of [
+    ["duplicate hours", periods => periods.push({ ...periods[0] })],
+    ["off-grid hours", (periods) => {
+      periods[0].time += 1_800
+    }],
+    ["invalid timestamps", (periods) => {
+      periods[0].time = Number.NaN
+    }],
+  ]) {
+    test(`${key} has no precise recheck deadline with gaps and ${label}`, () => {
+      const chartData = createChartData()
+      const source = key === "ohlcv" ? chartData.chart : chartData.studies[key].value
+      source.periods.shift()
+      corrupt(source.periods)
+
+      const result = evaluate(chartData)
+      const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+
+      assert.equal(result.complete, false)
+      assert.ok(coverage.missingPeriodCount > 0)
+      assert.ok(Object.values(coverage.fieldValueCounts).some(count => count > 0))
+      assert.equal(coverage.recheckAfter, null)
+    })
+  }
+
+  for (const [label, createMissingPeriods] of [
+    ["empty history", () => []],
+    ["no numeric values", periods => periods.map(({ time }) => ({ time }))],
+    ["numeric observations only outside the window", periods => [
+      { ...periods[0], time: 1_800_000_000 - 5 * 3_600 },
+      { ...periods.at(-1), time: 1_800_000_000 + 3_600 },
+    ]],
+  ]) {
+    test(`${key} has no recheck deadline for ${label}`, () => {
+      const chartData = createChartData()
+      const source = key === "ohlcv" ? chartData.chart : chartData.studies[key].value
+      source.periods = createMissingPeriods(source.periods)
+
+      const result = evaluate(chartData)
+      const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+
+      assert.equal(result.complete, false)
+      assert.equal(coverage.recheckAfter, null)
+      assert.ok(Object.values(coverage.fieldValueCounts).every(count => count === 0))
+    })
+  }
+}
+
+test("OHLCV recheck uses the latest gap without adding overlapping hour and value shortages", () => {
+  const chartData = createChartData()
+  chartData.chart.periods[1].open = null
+  chartData.chart.periods[1].close = Number.NaN
+  chartData.chart.periods[2].min = "0"
+  chartData.chart.periods[2].volume = Infinity
+  chartData.chart.periods.shift()
+
+  const result = assertRecheckBoundary(
+    chartData,
+    "ohlcv",
+    new Date((1_800_000_000 + 3 * 3_600) * 1_000).toISOString(),
+  )
+
+  assert.equal(result.coverage.ohlcv.missingPeriodCount, 1)
+  assert.equal(result.coverage.ohlcv.completePeriodCount, 1)
+  assert.equal(result.coverage.ohlcv.fieldValueCounts.volume, 2)
+  assert.deepEqual(result.coverage.ohlcv.fieldMissingValueCounts, {
+    open: 2,
+    max: 1,
+    min: 2,
+    close: 2,
+    volume: 2,
+  })
+  assert.deepEqual(result.reasonCodes, ["ohlcv:missing_hours", "ohlcv:missing_values"])
+})
+
+test("study recheck counts overlapping missing fields and hours once, accepting zeros", () => {
+  const chartData = createChartData()
+  const liquidations = chartData.studies.liquidations.value
+  liquidations.periods[1].long = Number.NaN
+  liquidations.periods[1].short = null
+  liquidations.periods.shift()
+
+  const result = assertRecheckBoundary(
+    chartData,
+    "liquidations",
+    new Date((1_800_000_000 + 2 * 3_600) * 1_000).toISOString(),
+  )
+
+  assert.equal(result.coverage.studies.liquidations.completePeriodCount, 2)
+  assert.deepEqual(result.coverage.studies.liquidations.fieldMissingValueCounts, { long: 2, short: 2 })
+  assert.deepEqual(result.unavailableMetrics, [])
+  assert.equal(result.retryable, false)
+})
+
+test("study recheck requires some numeric data, not numeric data in every field", () => {
+  const chartData = createChartData()
+
+  for (const period of chartData.studies.liquidations.value.periods) {
+    period.short = null
+  }
+
+  const result = assertRecheckBoundary(
+    chartData,
+    "liquidations",
+    new Date((1_800_000_000 + 4 * 3_600) * 1_000).toISOString(),
+  )
+
+  assert.deepEqual(result.coverage.studies.liquidations.fieldValueCounts, { long: 4, short: 0 })
+  assert.deepEqual(result.unavailableMetrics, [])
+})
+
+test("study recheck is null when invalid timestamps were removed upstream", () => {
+  const chartData = createChartData()
+  chartData.studies.premium.value.periods.shift()
+  chartData.studies.premium.value.coverage.invalidTimestampCount = 1
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.coverage.studies.premium.missingPeriodCount, 1)
+  assert.equal(result.coverage.studies.premium.invalidTimestampCount, 1)
+  assert.equal(result.coverage.studies.premium.recheckAfter, null)
+  assert.ok(result.reasonCodes.includes("premium:invalid_timestamps"))
+})
+
+test("study recheck is null without a field list", () => {
+  const chartData = createChartData()
+  chartData.studies.premium.value.fields = {}
+  chartData.studies.premium.value.periods.shift()
+
+  const result = evaluate(chartData)
+
+  assert.equal(result.coverage.studies.premium.recheckAfter, null)
+  assert.ok(result.reasonCodes.includes("premium:missing_fields"))
+})
+
+test("missing, rejected and invalid study results expose no recheck deadline", () => {
+  for (const study of [undefined, { status: "rejected", reason: "Unavailable" }, { status: "invalid" }]) {
+    const chartData = createChartData()
+    chartData.studies.premium = study
+
+    const result = evaluate(chartData)
+
+    assert.equal(result.complete, false)
+    assert.equal(result.retryable, true)
+    assert.equal(result.coverage.studies.premium.recheckAfter, null)
+  }
+})
+
+test("2388 of 2400 hours rechecks after 12 closed hours, not twice the shortage", () => {
+  const chartData = createChartData({ fetchHours: 2_388, volumeDeltaHours: 1_666 })
+
+  for (const key of ["ohlcv", "premium"]) {
+    const result = assertRecheckBoundary(
+      chartData,
+      key,
+      new Date((1_800_000_000 + 12 * 3_600) * 1_000).toISOString(),
+      { fetchHours: 2_400, volumeDeltaHours: 1_666, nowTimestamp: 1_800_000_789 },
+    )
+    const coverage = key === "ohlcv" ? result.coverage.ohlcv : result.coverage.studies[key]
+
+    assert.equal(coverage.missingPeriodCount, 12)
+    assert.equal(result.coverage.studies.volumeDelta.recheckAfter, null)
+  }
+})
+
+test("Volume Delta uses 1666 hours rather than the general 2400-hour recheck window", () => {
+  const chartData = createChartData({ fetchHours: 2_400, volumeDeltaHours: 1_666 })
+  const missingTime = chartData.studies.volumeDelta.value.periods[0].time
+
+  for (const key of ["volumeDelta", "premium"]) {
+    const study = chartData.studies[key].value
+    study.periods = study.periods.filter(period => period.time !== missingTime)
+  }
+
+  for (const [key, waitHours] of [["volumeDelta", 1], ["premium", 735]]) {
+    assertRecheckBoundary(
+      chartData,
+      key,
+      new Date((1_800_000_000 + waitHours * 3_600) * 1_000).toISOString(),
+      { fetchHours: 2_400, volumeDeltaHours: 1_666 },
+    )
+  }
+})
+
+test("recheck deadlines do not drift with seconds or minutes within the reference hour", () => {
+  for (const nowTimestamp of [1_800_000_000, 1_800_000_123, 1_800_003_599.75]) {
+    const chartData = createChartData({ nowTimestamp })
+    chartData.studies.premium.value.periods.splice(0, 2)
+
+    assertRecheckBoundary(
+      chartData,
+      "premium",
+      new Date((1_800_000_000 + 2 * 3_600) * 1_000).toISOString(),
+      { nowTimestamp },
+    )
+  }
+})
+
+for (const [referenceTime, recheckAfter] of [
+  ["2026-01-31T23:37:42Z", "2026-02-01T01:00:00.000Z"],
+  ["2026-12-31T23:59:59Z", "2027-01-01T01:00:00.000Z"],
+]) {
+  test(`recheck crosses the date boundary from ${referenceTime} without drifting`, () => {
+    const nowTimestamp = Date.parse(referenceTime) / 1_000
+    const chartData = createChartData({ nowTimestamp })
+    chartData.chart.periods.splice(0, 2)
+
+    assertRecheckBoundary(chartData, "ohlcv", recheckAfter, { nowTimestamp })
+  })
+}

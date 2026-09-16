@@ -176,10 +176,41 @@ export function getPermanentCoverageExclusionIds (exclusions) {
     .map(exclusion => exclusion.baseCurrencyId))
 }
 
+export function selectCoverageExclusions (rejected) {
+  return rejected.map((coin) => {
+    const incomplete = Object.entries({
+      ohlcv: coin.coverage?.ohlcv,
+      ...coin.coverage?.studies,
+    }).filter(([key, coverage]) => coverage?.recheckAfter != null && (
+      coin.reasonCodes.includes(`${key}:missing_hours`)
+      || coin.reasonCodes.includes(`${key}:missing_values`)
+    ))
+
+    return {
+      ...coin,
+      unavailableMetrics: [...new Set([
+        ...(coin.confirmedUnavailableMetrics ?? []),
+        ...incomplete.map(([key]) => key),
+      ])],
+      recheckAfter: incomplete.map(([, coverage]) => coverage.recheckAfter).sort().at(-1) ?? null,
+    }
+  }).filter(coin => coin.unavailableMetrics.length > 0)
+}
+
 function createCoverageExclusion (coin, now, recheckDays) {
   if (!isSafeInteger(recheckDays) || recheckDays <= 0) {
     throw new Error("Coverage exclusion recheckDays must be a positive integer")
   }
+
+  const defaultRecheckTime = now.getTime() + recheckDays * (24 * 60 * 60 * 1_000)
+  const historyRecheckTime = coin?.recheckAfter == null
+    ? defaultRecheckTime
+    : Date.parse(toIsoTimestamp(coin.recheckAfter, "Coverage exclusion recheckAfter"))
+
+  // Confirmed absence keeps its cooldown even when another source has history gaps.
+  const recheckTime = coin?.confirmedUnavailableMetrics?.length
+    ? Math.max(defaultRecheckTime, historyRecheckTime)
+    : historyRecheckTime
 
   return normalizeCoverageExclusion({
     symbol: coin?.symbol,
@@ -187,9 +218,7 @@ function createCoverageExclusion (coin, now, recheckDays) {
     baseCurrencyId: coin?.baseCurrencyId,
     unavailableMetrics: coin?.unavailableMetrics,
     reasonCodes: coin?.reasonCodes,
-    recheckAfter: new Date(
-      now.getTime() + recheckDays * (24 * 60 * 60 * 1_000),
-    ).toISOString(),
+    recheckAfter: new Date(recheckTime).toISOString(),
   }, 0)
 }
 

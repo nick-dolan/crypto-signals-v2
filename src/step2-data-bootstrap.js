@@ -1,4 +1,4 @@
-import { updateCoverageExclusions } from "./helpers/coverage-exclusions-helper.js"
+import { selectCoverageExclusions, updateCoverageExclusions } from "./helpers/coverage-exclusions-helper.js"
 import {
   readTmpJson,
   resetTmpSubdirectory,
@@ -16,12 +16,7 @@ async function runDataBootstrapStep () {
   const dataDirectoryPath = await resetTmpSubdirectory("step2-data-bootstrap")
   const report = await buildDataBootstrapReport(sourceUniverse)
   const checkedCoins = [...report.coins, ...report.rejected]
-  const excludedCoins = report.rejected
-    .filter(coin => coin.confirmedUnavailableMetrics.length > 0)
-    .map(coin => ({
-      ...coin,
-      unavailableMetrics: coin.confirmedUnavailableMetrics,
-    }))
+  const excludedCoins = selectCoverageExclusions(report.rejected)
   await updateCoverageExclusions({
     checkedBaseCurrencyIds: checkedCoins.map(coin => coin.baseCurrencyId),
     excludedCoins,
@@ -32,7 +27,7 @@ async function runDataBootstrapStep () {
   console.log(`✓ Saved ${output.coinCount} complete coins to ${outputPath}`)
   console.log(`✓ Saved fetched hourly data under ${dataDirectoryPath}`)
   console.log(`✓ Rejected ${report.rejected.length} candidates`)
-  console.log(`✓ Recorded ${excludedCoins.length} unavailable coins in coverage exclusions`)
+  console.log(`✓ Recorded ${excludedCoins.length} coins with unavailable or incomplete data in coverage exclusions`)
 }
 
 await runStep("step2-data-bootstrap.js", runDataBootstrapStep)

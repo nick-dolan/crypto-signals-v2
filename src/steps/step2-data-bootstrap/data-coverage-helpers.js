@@ -272,12 +272,13 @@ function summarizeHourlyCoverage (
     field,
     requiredHours - fieldValueCounts[field],
   ]))
-  const completePeriodCount = expectedTimes.filter((time) => {
+  const incompleteTimes = expectedTimes.filter((time) => {
     const matchingPeriods = periodsByTime.get(time)
 
-    return matchingPeriods?.length === 1
-      && fields.every(field => isFinite(matchingPeriods[0][field]))
-  }).length
+    return matchingPeriods?.length !== 1
+      || fields.some(field => !isFinite(matchingPeriods[0][field]))
+  })
+  const completePeriodCount = requiredHours - incompleteTimes.length
   const invalidTimestampCount = sourcePeriods.filter(
     period => !isFinite(period?.time),
   ).length
@@ -287,6 +288,15 @@ function summarizeHourlyCoverage (
     && offGridPeriodCount === 0
     && invalidTimestampCount === 0
     && Object.values(fieldMissingValueCounts).every(count => count === 0)
+
+  // Candle timestamps are open times; the replacement hour must also close.
+  const recheckAfter = incompleteTimes.length > 0
+    && duplicatePeriodCount === 0
+    && offGridPeriodCount === 0
+    && invalidTimestampCount === 0
+    && Object.values(fieldValueCounts).some(count => count > 0)
+    ? new Date((incompleteTimes.at(-1) + (requiredHours + 1) * 3_600) * 1_000).toISOString()
+    : null
 
   return {
     requiredHours,
@@ -302,6 +312,7 @@ function summarizeHourlyCoverage (
     fields,
     fieldValueCounts,
     fieldMissingValueCounts,
+    recheckAfter,
     complete,
   }
 }
@@ -339,6 +350,7 @@ function summarizeStudyCoverage (
     ...coverage,
     duplicatePeriodCount,
     invalidTimestampCount,
+    recheckAfter: invalidTimestampCount === 0 ? coverage.recheckAfter : null,
     complete: coverage.complete
       && duplicatePeriodCount === 0
       && invalidTimestampCount === 0,
@@ -486,6 +498,7 @@ export function evaluateStudy (
 
     return {
       status: "missing",
+      recheckAfter: null,
     }
   }
 
@@ -503,6 +516,7 @@ export function evaluateStudy (
       status: "rejected",
       error,
       unavailable,
+      recheckAfter: null,
     }
   }
 
@@ -515,6 +529,7 @@ export function evaluateStudy (
 
     return {
       status: "invalid",
+      recheckAfter: null,
     }
   }
 
