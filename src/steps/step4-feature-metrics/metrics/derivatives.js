@@ -37,10 +37,12 @@ export function calculateDerivativesMetrics ({
     oi_change_12h: oiChange12h,
     oi_acceleration_4h: difference(oiChange4h, 4),
     oi_change_4h_z_30d: oiChange4hZ30d,
+    oi_level_percentile_90d: rollingPercentileRank(openInterest, 2_160),
     oi_up_while_rv_down: combineSeries(
       [oiChange12h, rv24OverRv7],
       ([oiChange, rvRatio]) => oiChange > 0 && rvRatio < 1,
     ),
+    funding_rate: fundingRate,
     funding_percentile_90d: rollingPercentileRank(fundingRate, 2_160),
     funding_minus_oi_z_4h: combineSeries(
       [rollingZScore(difference(fundingRate, 4), 720), oiChange4hZ30d],

@@ -1,5 +1,5 @@
 import { isArray, isFinite } from "../../../helpers/utils.typed.js"
-import { rollingPercentileRank, rollingZScore } from "../../../scripts/rolling-statistics.js"
+import { rollingZScore } from "../../../scripts/rolling-statistics.js"
 import { simpleReturns } from "../../../scripts/returns.js"
 
 function calculateFlag (length, required, condition) {
@@ -12,8 +12,8 @@ function calculateFlag (length, required, condition) {
 export function calculateDivergenceFlags ({
   close,
   btcClose,
-  openInterest,
   volatilityCompression = {},
+  movementLifecycle = {},
   volumeOrderFlow = {},
   derivatives = {},
   social = {},
@@ -26,9 +26,7 @@ export function calculateDivergenceFlags ({
   const btcReturn4hZ = isArray(btcClose)
     ? rollingZScore(simpleReturns(btcClose, 4), 720)
     : nulls()
-  const oiLevelPercentile90d = isArray(openInterest)
-    ? rollingPercentileRank(openInterest, 2_160)
-    : nulls()
+
   const categoryMomentum = breadthNarrative.category_momentum_4h
   const categoryMomentumZ = isArray(categoryMomentum)
     ? rollingZScore(categoryMomentum, 720)
@@ -82,7 +80,7 @@ export function calculateDivergenceFlags ({
     ], (btcReturnZ, residualZ) => btcReturnZ < -1 && residualZ > 0.5),
     squeeze_fuel: calculateFlag(length, [
       derivatives.funding_percentile_90d,
-      oiLevelPercentile90d,
+      derivatives.oi_level_percentile_90d,
       derivatives.crowd_vs_top_traders,
     ], (fundingPercentile, oiLevelPercentile, crowdPositioning) => (
       oiLevelPercentile >= 0.8
@@ -90,6 +88,46 @@ export function calculateDivergenceFlags ({
         (fundingPercentile <= 0.05 && crowdPositioning < -0.15)
         || (fundingPercentile >= 0.95 && crowdPositioning > 0.15)
       )
+    )),
+    range_pressure_up: calculateFlag(length, [
+      movementLifecycle.distance_to_previous_high_atr,
+      volumeOrderFlow.rel_volume_at_time,
+      volumeOrderFlow.vd_net_4h_over_volume,
+    ], (distance, relativeVolume, delta) => (
+      distance >= 0 && distance <= 0.5 && relativeVolume >= 1.5 && delta >= 0.1
+    )),
+    range_pressure_down: calculateFlag(length, [
+      movementLifecycle.distance_to_previous_low_atr,
+      volumeOrderFlow.rel_volume_at_time,
+      volumeOrderFlow.vd_net_4h_over_volume,
+    ], (distance, relativeVolume, delta) => (
+      distance >= 0 && distance <= 0.5 && relativeVolume >= 1.5 && delta <= -0.1
+    )),
+    short_squeeze_setup: calculateFlag(length, [
+      derivatives.funding_rate,
+      derivatives.funding_percentile_90d,
+      derivatives.oi_level_percentile_90d,
+      derivatives.oi_change_4h,
+      volumeOrderFlow.vd_net_4h_over_volume,
+    ], (fundingRate, fundingPercentile, oiLevelPercentile, oiChange, delta) => (
+      fundingRate < 0
+      && fundingPercentile <= 0.05
+      && oiLevelPercentile >= 0.8
+      && oiChange > 0
+      && delta >= 0.1
+    )),
+    long_squeeze_setup: calculateFlag(length, [
+      derivatives.funding_rate,
+      derivatives.funding_percentile_90d,
+      derivatives.oi_level_percentile_90d,
+      derivatives.oi_change_4h,
+      volumeOrderFlow.vd_net_4h_over_volume,
+    ], (fundingRate, fundingPercentile, oiLevelPercentile, oiChange, delta) => (
+      fundingRate > 0
+      && fundingPercentile >= 0.95
+      && oiLevelPercentile >= 0.8
+      && oiChange > 0
+      && delta <= -0.1
     )),
   }
 }

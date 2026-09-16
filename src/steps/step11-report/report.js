@@ -73,6 +73,10 @@
       laggard: "Отстаёт от категории",
       resilient: "Устойчивость к BTC",
       squeeze_fuel: "Топливо для сквиза",
+      range_pressure_up: "Давление на верхнюю границу",
+      range_pressure_down: "Давление на нижнюю границу",
+      short_squeeze_setup: "Условия для short squeeze ↑",
+      long_squeeze_setup: "Условия для long squeeze ↓",
       fresh_quiet_breakout: "Свежий пробой тихой базы",
       late_pump: "Поздний памп",
     }[value] ?? value

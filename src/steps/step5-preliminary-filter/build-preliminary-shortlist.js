@@ -192,6 +192,8 @@ function evaluateProfile (profile) {
     late_pump: latePump,
   } = profile.features.movementLifecycle
   const divergences = profile.features.divergences
+  const rangePressure = divergences.range_pressure_up === true || divergences.range_pressure_down === true
+  const directionalSqueeze = divergences.short_squeeze_setup === true || divergences.long_squeeze_setup === true
   const divergenceFlags = Object.entries(divergences)
     .filter(([, active]) => active === true)
     .map(([name]) => name)
@@ -200,11 +202,11 @@ function evaluateProfile (profile) {
     freshQuietBreakout && "preBreakoutCompression",
     axes.derivatives.oiSetup && "quietOiBuild",
     axes.derivatives.crowdSetup && "crowdedPositioning",
-    divergences.squeeze_fuel && "squeezeFuel",
+    (divergences.squeeze_fuel || directionalSqueeze) && "squeezeFuel",
   ].filter(Boolean)
   const triggerSignals = [
     freshQuietBreakout && "freshBreakout",
-    axes.volumeOrderFlow.active && "volumeOrderFlow",
+    (axes.volumeOrderFlow.active || rangePressure || directionalSqueeze) && "volumeOrderFlow",
     (axes.derivatives.oiTrigger || axes.derivatives.liquidationTrigger) && "derivatives",
     axes.social.active && "socialAttention",
     divergences.unconfirmed_move && "unconfirmedPriceMove",

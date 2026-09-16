@@ -48,8 +48,8 @@ export function calculateCoinMetrics (
   const divergences = calculateDivergenceFlags({
     close: coinSeries.close,
     btcClose: universeContext.btcClose,
-    openInterest: coinSeries.openInterest,
     volatilityCompression,
+    movementLifecycle,
     volumeOrderFlow,
     derivatives,
     social,

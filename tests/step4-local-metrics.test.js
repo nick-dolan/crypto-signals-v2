@@ -141,7 +141,9 @@ test("derivatives metrics expose OI flags, liquidation fallbacks, and trader dis
     "oi_change_12h",
     "oi_acceleration_4h",
     "oi_change_4h_z_30d",
+    "oi_level_percentile_90d",
     "oi_up_while_rv_down",
+    "funding_rate",
     "funding_percentile_90d",
     "funding_minus_oi_z_4h",
     "premium_z_30d",
@@ -149,11 +151,45 @@ test("derivatives metrics expose OI flags, liquidation fallbacks, and trader dis
     "liq_imbalance_4h",
     "crowd_vs_top_traders",
   ])
+  assert.deepEqual(metrics.funding_rate, fundingRate)
+  assert.deepEqual(metrics.oi_level_percentile_90d.slice(0, 2_159), Array(2_159).fill(null))
+  assertClose(metrics.oi_level_percentile_90d[2_159], 2_159.5 / 2_160)
+  assertClose(latest(metrics.oi_level_percentile_90d), 2_159.5 / 2_160)
   assert.equal(metrics.oi_up_while_rv_down[0], null)
   assert.equal(latest(metrics.oi_up_while_rv_down), true)
   assert.equal(latest(metrics.liquidations_4h_over_oi), 0)
   assert.equal(latest(metrics.liq_imbalance_4h), 0)
   assertClose(latest(metrics.crowd_vs_top_traders), -0.1)
+})
+
+test("derivatives preserve raw signed funding and the 2160-hour OI percentile with ties and gaps", () => {
+  const openInterest = [null, ...Array(2_160).fill(1_000), 2_000, 1_000, null]
+  const fundingRate = [null, -0.0123, 0, 0.0456, ...Array(2_160).fill(-0.000123)]
+  const before = structuredClone({ openInterest, fundingRate })
+  const filled = value => Array(openInterest.length).fill(value)
+  const metrics = calculateDerivativesMetrics({
+    close: filled(100),
+    openInterest,
+    fundingRate,
+    premium: filled(0.1),
+    longLiquidations: filled(0),
+    shortLiquidations: filled(0),
+    longShortRatioAccounts: filled(1),
+    topTradersLong: filled(50),
+    topTradersShort: filled(50),
+    rv24OverRv7: filled(1),
+  })
+
+  assert.deepEqual(metrics.funding_rate, before.fundingRate)
+  assert.deepEqual(metrics.funding_rate.slice(0, 4), [null, -0.0123, 0, 0.0456])
+  assert.equal(latest(metrics.funding_rate), -0.000123)
+  assert.equal(metrics.oi_level_percentile_90d.length, openInterest.length)
+  assert.deepEqual(metrics.oi_level_percentile_90d.slice(0, 2_160), Array(2_160).fill(null))
+  assert.equal(metrics.oi_level_percentile_90d[2_160], 0.5)
+  assertClose(metrics.oi_level_percentile_90d[2_161], 2_159.5 / 2_160)
+  assertClose(metrics.oi_level_percentile_90d[2_162], 2_159 / 2 / 2_160)
+  assert.equal(metrics.oi_level_percentile_90d[2_163], null)
+  assert.deepEqual({ openInterest, fundingRate }, before)
 })
 
 test("social metrics use adjacent windows and zero-contributor fallbacks", () => {

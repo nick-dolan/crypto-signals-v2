@@ -216,6 +216,27 @@ function createReport (symbols = ["COTI"]) {
   return report
 }
 
+test("report displays directional pattern labels and new numeric features", () => {
+  for (const [flag, label] of [
+    ["range_pressure_up", "Давление на верхнюю границу"],
+    ["range_pressure_down", "Давление на нижнюю границу"],
+    ["short_squeeze_setup", "Условия для short squeeze ↑"],
+    ["long_squeeze_setup", "Условия для long squeeze ↓"],
+  ]) {
+    const report = createReport()
+    Object.assign(report.coins[0].features, {
+      distanceToHigh24hAtr: -0.25, distanceToLow24hAtr: 2.75, fundingRate: -1e-12, oiLevelPctile: 0.9, flags: [flag],
+    })
+    const { byId } = runReport(report)
+
+    assert.ok(byId("flags").textContent.includes(label))
+    assert.ok(byId("feature-rows").textContent.includes(label))
+    for (const value of ["distanceToHigh24hAtr", "distanceToLow24hAtr", "fundingRate", "oiLevelPctile", "-0.25", "-1e-12"]) {
+      assert.ok(byId("feature-rows").textContent.includes(value))
+    }
+  }
+})
+
 function addOiGaps (report) {
   const { history } = report.coins[0]
   const timeAt = index => history.candles[index].time

@@ -130,6 +130,15 @@ export function calculateMovementLifecycleMetrics ({
     [atr24hPct, close],
     ([atrPercent, price]) => atrPercent * price,
   )
+  const previousAtr24h = lag(atr24h, 1)
+  const distanceToPreviousHighAtr = combineSeries(
+    [lag(rollingMaximum(high, 24), 1), close, previousAtr24h],
+    ([maximum, price, atr]) => atr > 0 ? (maximum - price) / atr : null,
+  )
+  const distanceToPreviousLowAtr = combineSeries(
+    [close, lag(rollingMinimum(low, 24), 1), previousAtr24h],
+    ([price, minimum, atr]) => atr > 0 ? (price - minimum) / atr : null,
+  )
   const priorRunupAtr72h = combineSeries(
     [lag(close, 4), lag(close, 76), lag(atr24h, 76)],
     ([end, start, atr]) => positiveAtrDistance(end, start, atr),
@@ -182,6 +191,8 @@ export function calculateMovementLifecycleMetrics ({
   })
 
   return {
+    distance_to_previous_high_atr: distanceToPreviousHighAtr,
+    distance_to_previous_low_atr: distanceToPreviousLowAtr,
     prior_runup_atr_72h: priorRunupAtr72h,
     max_24h_runup_last_7d_atr: max24hRunupLast7dAtr,
     range_position_7d: rangePosition7d,

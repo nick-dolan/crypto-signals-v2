@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { isFinite } from "../src/helpers/utils.typed.js"
+import { rollingPercentileRank } from "../src/scripts/rolling-statistics.js"
 import { buildUniverseContext } from "../src/steps/step4-feature-metrics/build-universe-context.js"
 import { calculateBreadthNarrativeMetrics } from "../src/steps/step4-feature-metrics/metrics/breadth-narrative.js"
 import { calculateDivergenceFlags } from "../src/steps/step4-feature-metrics/metrics/divergence-flags.js"
@@ -351,7 +352,7 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   const flags = calculateDivergenceFlags({
     close: closeFromFourHourReturns(coinReturns4h),
     btcClose: closeFromFourHourReturns(btcReturns4h),
-    openInterest: Array.from({ length }, (_, index) => 1_000 + index),
+
     volatilityCompression: { squeeze_age_hours: squeezeAge },
     volumeOrderFlow: {
       volume_acceleration_3h: volumeAcceleration,
@@ -360,6 +361,10 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
     derivatives: {
       oi_change_4h: oiChange,
       oi_change_4h_z_30d: oiChangeZ,
+      oi_level_percentile_90d: rollingPercentileRank(
+        Array.from({ length }, (_, index) => 1_000 + index),
+        2_160,
+      ),
       funding_percentile_90d: fundingPercentile,
       crowd_vs_top_traders: crowdVsTopTraders,
     },
@@ -385,6 +390,10 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
     "laggard",
     "resilient",
     "squeeze_fuel",
+    "range_pressure_up",
+    "range_pressure_down",
+    "short_squeeze_setup",
+    "long_squeeze_setup",
   ])
   Object.values(flags).forEach(series => assert.equal(series.length, length))
   assert.equal(flags.coiling[0], true)
@@ -397,6 +406,8 @@ test("calculateDivergenceFlags evaluates all conditions and preserves null warmu
   assert.equal(flags.laggard[0], null)
   assert.equal(flags.laggard[last], true)
   assert.equal(flags.resilient[last], true)
+  assert.deepEqual(flags.squeeze_fuel.slice(0, 2_159), Array(2_159).fill(null))
+  assert.equal(flags.squeeze_fuel[2_159], false)
   assert.equal(flags.squeeze_fuel[drop], true)
   assert.equal(flags.squeeze_fuel[last], true)
 })
@@ -412,4 +423,8 @@ test("calculateDivergenceFlags returns null when a required series is absent", (
   assert.deepEqual(flags.coiling, Array(length).fill(null))
   assert.deepEqual(flags.attention_ahead, Array(length).fill(null))
   assert.deepEqual(flags.squeeze_fuel, Array(length).fill(null))
+  assert.deepEqual(flags.range_pressure_up, Array(length).fill(null))
+  assert.deepEqual(flags.range_pressure_down, Array(length).fill(null))
+  assert.deepEqual(flags.short_squeeze_setup, Array(length).fill(null))
+  assert.deepEqual(flags.long_squeeze_setup, Array(length).fill(null))
 })

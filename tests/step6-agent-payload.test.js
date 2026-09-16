@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { buildPreliminaryShortlist } from "../src/steps/step5-preliminary-filter/build-preliminary-shortlist.js"
 import { buildAgentPayload } from "../src/steps/step6-agent-payload/build-agent-payload.js"
 
 function createCandidate (symbol, overrides = {}) {
@@ -16,6 +17,8 @@ function createCandidate (symbol, overrides = {}) {
       prior_runup_atr_72h: 1.23456,
       max_24h_runup_last_7d_atr: 2.34567,
       range_position_7d: 0.87654,
+      distance_to_previous_high_atr: -0.123456,
+      distance_to_previous_low_atr: 2.987654,
       pre_breakout_squeeze_age: 18,
       squeeze_ended_hours_ago: 3,
       breakout_age_hours: 2,
@@ -37,7 +40,9 @@ function createCandidate (symbol, overrides = {}) {
       oi_change_12h: 0.02345,
       oi_acceleration_4h: 0.00678,
       oi_change_4h_z_30d: 1.2678,
+      oi_level_percentile_90d: 0.876543,
       oi_up_while_rv_down: true,
+      funding_rate: -0.0000123456789,
       funding_percentile_90d: 0.91234,
       funding_minus_oi_z_4h: -1.23456,
       premium_z_30d: 0.45678,
@@ -74,6 +79,10 @@ function createCandidate (symbol, overrides = {}) {
       laggard: false,
       resilient: true,
       squeeze_fuel: false,
+      range_pressure_up: false,
+      range_pressure_down: false,
+      short_squeeze_setup: false,
+      long_squeeze_setup: false,
     },
   }
 
@@ -141,11 +150,11 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 5)
+  assert.equal(payload.schemaVersion, 6)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 55)
+  assert.equal(payload.schema.length, 59)
   assert.deepEqual(Object.keys(payload.definitions), payload.schema)
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
@@ -174,6 +183,8 @@ test("agent payload creates documented compact rows", () => {
     priorRunupAtr72h: 1.235,
     max24hRunupLast7dAtr: 2.346,
     rangePosition7d: 0.877,
+    distanceToHigh24hAtr: -0.123,
+    distanceToLow24hAtr: 2.988,
     preBreakoutSqueezeAge: 18,
     squeezeEndedHoursAgo: 3,
     breakoutAgeHours: 2,
@@ -189,7 +200,9 @@ test("agent payload creates documented compact rows", () => {
     oiChange12hPct: 2.345,
     oiAccel4hPct: 0.678,
     oiZ: 1.268,
+    oiLevelPctile: 0.877,
     quietOi: true,
+    fundingRate: -0.0000123456789,
     fundingPctile: 0.912,
     fundingMinusOiZ4h: -1.235,
     premiumZ: 0.457,
@@ -294,6 +307,10 @@ test("agent payload preserves order and nullable metrics", () => {
     "laggard",
     "resilient",
     "squeeze_fuel",
+    "range_pressure_up",
+    "range_pressure_down",
+    "short_squeeze_setup",
+    "long_squeeze_setup",
     "fresh_quiet_breakout",
     "late_pump",
   ])
@@ -374,6 +391,63 @@ test("agent payload leaves a legacy missing background unavailable instead of in
 
   assert.equal(payload.marketContext.altMarketBackground, null)
   assert.deepEqual(Object.keys(payload.marketContext), Object.keys(payload.marketDefinitions))
+})
+
+for (const flag of ["range_pressure_up", "range_pressure_down", "short_squeeze_setup", "long_squeeze_setup"]) {
+  test(`preliminary filter passes ${flag} and its supporting metrics to the agent without mutation`, () => {
+    const candidate = createCandidate("SOL", {
+      features: {
+        movementLifecycle: { fresh_quiet_breakout: false },
+        divergences: { coiling: false, resilient: false, [flag]: true },
+      },
+    })
+    const before = structuredClone(candidate)
+    const shortlist = { ...createShortlist([]), ...buildPreliminaryShortlist([candidate]) }
+    const payload = buildAgentPayload(shortlist)
+    const values = Object.fromEntries(payload.schema.map((name, index) => [name, payload.candidates[0][index]]))
+
+    assert.equal(payload.candidateCount, 1)
+    assert.deepEqual(values.flags, [flag])
+    assert.equal(values.distanceToHigh24hAtr, -0.123)
+    assert.equal(values.distanceToLow24hAtr, 2.988)
+    assert.equal(values.fundingRate, candidate.features.derivatives.funding_rate)
+    assert.equal(values.oiLevelPctile, 0.877)
+    assert.ok(payload.flagDefinitions[flag])
+    assert.deepEqual(candidate, before)
+  })
+}
+
+test("funding keeps tiny signed values and flags are not recalculated from rounded metrics", () => {
+  for (const funding of [-1e-12, 0, 1e-12]) {
+    const candidate = createCandidate("SOL", {
+      features: {
+        movementLifecycle: { distance_to_previous_high_atr: 0.500001 },
+        derivatives: { funding_rate: funding },
+      },
+    })
+    const payload = buildAgentPayload(createShortlist([candidate]))
+    const values = Object.fromEntries(payload.schema.map((name, index) => [name, payload.candidates[0][index]]))
+
+    assert.equal(values.fundingRate, funding)
+    assert.equal(values.distanceToHigh24hAtr, 0.5)
+    assert.equal(values.flags.includes("range_pressure_up"), false)
+    assert.match(payload.conventions.rounding, /fundingRate.*без округления/)
+    assert.match(payload.conventions.flags, /до округления/)
+  }
+})
+
+test("agent payload rejects missing or non-finite new core metrics with a rerun instruction", () => {
+  for (const [group, field] of [
+    ["movementLifecycle", "distance_to_previous_high_atr"],
+    ["movementLifecycle", "distance_to_previous_low_atr"],
+    ["derivatives", "funding_rate"],
+    ["derivatives", "oi_level_percentile_90d"],
+  ]) {
+    for (const value of [undefined, null, NaN, Infinity]) {
+      const candidate = createCandidate("SOL", { features: { [group]: { [field]: value } } })
+      assert.throws(() => buildAgentPayload(createShortlist([candidate])), /rerun steps 4 and 5/)
+    }
+  }
 })
 
 test("agent payload rejects an inconsistent shortlist count", () => {

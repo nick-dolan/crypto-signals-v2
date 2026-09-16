@@ -49,6 +49,10 @@ function createProfile (baseCurrencyId, overrides = {}) {
       laggard: false,
       resilient: false,
       squeeze_fuel: false,
+      range_pressure_up: false,
+      range_pressure_down: false,
+      short_squeeze_setup: false,
+      long_squeeze_setup: false,
     },
   }
 
@@ -354,6 +358,58 @@ test("preliminary shortlist applies the limit after signal priority", () => {
   assert.equal(result.candidates[0].coin.baseCurrencyId, "zz-strong")
   assert.ok(candidateById(result, "weak-58"))
   assert.equal(candidateById(result, "weak-59"), undefined)
+})
+
+for (const flag of ["range_pressure_up", "range_pressure_down", "short_squeeze_setup", "long_squeeze_setup"]) {
+  test(`preliminary shortlist nominates ${flag} without an active axis and still excludes late pumps`, () => {
+    const profile = createProfile("candidate", { features: { divergences: { [flag]: true } } })
+    const before = structuredClone(profile)
+    const result = buildPreliminaryShortlist([
+      profile,
+      createProfile("late", { features: { movementLifecycle: { late_pump: true }, divergences: { [flag]: true } } }),
+    ])
+    const candidate = result.candidates[0]
+
+    assert.equal(result.candidateCount, 1)
+    assert.equal(result.filter.latePumpExcludedCoinCount, 1)
+    assert.deepEqual(candidate.selection.selectedBy, ["divergences"])
+    assert.deepEqual(candidate.selection.divergenceFlags, [flag])
+    assert.deepEqual(candidate.selection.activeAxes, [])
+    assert.deepEqual(candidate.selection.triggerSignals, ["volumeOrderFlow"])
+    assert.deepEqual(candidate.selection.setupSignals, flag.endsWith("squeeze_setup") ? ["squeezeFuel"] : [])
+    assert.deepEqual(profile, before)
+  })
+}
+
+test("directional patterns share existing flow and squeeze roles instead of counting duplicate confirmations", () => {
+  const result = buildPreliminaryShortlist([
+    createProfile("overlap", {
+      features: {
+        volumeOrderFlow: { volume_acceleration_3h: 0.5, rel_volume_at_time: 2 },
+        divergences: { squeeze_fuel: true, range_pressure_up: true, short_squeeze_setup: true },
+      },
+    }),
+  ])
+
+  assert.deepEqual(result.candidates[0].selection.setupSignals, ["squeezeFuel"])
+  assert.deepEqual(result.candidates[0].selection.triggerSignals, ["volumeOrderFlow"])
+  assert.deepEqual(result.candidates[0].selection.divergenceFlags, [
+    "squeeze_fuel", "range_pressure_up", "short_squeeze_setup",
+  ])
+})
+
+test("unavailable directional patterns neither nominate candidates nor create roles", () => {
+  const result = buildPreliminaryShortlist([
+    createProfile("unavailable", {
+      features: {
+        divergences: {
+          range_pressure_up: null, range_pressure_down: null, short_squeeze_setup: null, long_squeeze_setup: null,
+        },
+      },
+    }),
+  ])
+
+  assert.equal(result.candidateCount, 0)
 })
 
 test("preliminary shortlist rejects duplicate identities", () => {
