@@ -15,7 +15,10 @@ async function runReportStep () {
     readTmpJson("step9-twitter-enrichment.json"),
     readTmpJson("step10-context-enrichment.json"),
   ])
-  const report = addReportContext(await buildReportData(analysis, payload, shortlist), sources, context)
+  const report = {
+    ...addReportContext(await buildReportData(analysis, payload, shortlist), sources, context),
+    reportCreatedAt: new Date().toISOString(),
+  }
   const html = await renderReportHtml(report)
   const outputPath = path.resolve("tmp", "step11-report.html")
   await fs.writeFile(outputPath, html, "utf8")

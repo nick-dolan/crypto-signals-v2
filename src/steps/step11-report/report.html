@@ -63,7 +63,7 @@
               <div class="coin-title"><h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span></div>
               <p id="coin-name" class="muted"></p>
             </div>
-            <div class="coin-price"><strong id="last-price"></strong><span class="muted">USDT · последняя закрытая свеча</span></div>
+            <div class="coin-price"><strong id="last-price"></strong><span id="last-price-label" class="muted">USDT · последняя закрытая свеча</span></div>
           </header>
           <div class="coin-meta">
             <div id="coin-badges" class="badge-list"></div>
@@ -71,17 +71,26 @@
           </div>
           <div class="chart-toolbar">
             <span><strong>Цена</strong> <span class="muted">/ свечи 1h · UTC</span></span>
-            <div class="range-buttons" role="group" aria-label="Видимый период графика">
-              <button type="button" data-days="1" aria-pressed="false">1 день</button>
-              <button type="button" data-days="3" aria-pressed="true">3 дня</button>
-              <button type="button" data-days="7" aria-pressed="false">7 дней</button>
+            <div class="chart-actions">
+              <div class="range-buttons" role="group" aria-label="Видимый период графика">
+                <button type="button" data-days="1" aria-pressed="false">1 день</button>
+                <button type="button" data-days="3" aria-pressed="true">3 дня</button>
+                <button type="button" data-days="7" aria-pressed="false">7 дней</button>
+              </div>
+              <button id="update-chart" class="update-chart" type="button" aria-describedby="chart-update-status" title="Загрузить свечи, объём и OI с Binance только для выбранной монеты. Изменения не сохраняются в файл.">Update chart</button>
             </div>
           </div>
+          <div class="chart-update-notes">
+            <p id="chart-update-status" role="status" aria-live="polite"></p>
+            <p id="report-time-note" class="report-time-note"></p>
+            <p id="chart-source"></p>
+          </div>
+          <p id="chart-update-error" class="warning" role="alert" hidden></p>
           <div id="chart-legend" class="chart-legend" aria-label="Значения под курсором"></div>
           <p id="history-warning" class="warning" role="status" hidden></p>
           <div id="chart" class="chart" role="img" aria-label="Часовые свечи, объём и Open Interest с общей временной шкалой"></div>
           <p id="chart-empty" class="empty-state" hidden>График недоступен. Оценка агента сохранена ниже.</p>
-          <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · единицы TradingView</span><span>Колесо — масштаб, перетаскивание — история</span></div>
+          <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · базовый актив</span><span>Колесо — масштаб, перетаскивание — история</span></div>
         </div>
         <section class="panel analysis-panel" aria-labelledby="analysis-heading">
           <div class="section-heading"><h2 id="analysis-heading">Почему монета в списке</h2><span id="analysis-source" class="muted">Анализ шага 7</span></div>
@@ -128,7 +137,7 @@
       <p id="objective"></p>
       <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Уклон не означает вероятность роста или падения. Это не торговая рекомендация.</p>
       <p id="candle-time-note"></p>
-      <p>Отчёт работает локально, без сетевых запросов и живого обновления. Для топ-5 добавлены сохранённые новости и Twitter, а также дополненное объяснение шага 10.</p>
+      <p>Отчёт открывается локально и без интернета. Только кнопка Update chart делает публичные запросы к Binance для выбранной монеты; нужен доступ к fapi.binance.com. Обновления живут в памяти вкладки: после перезагрузки вернётся исходный срез, HTML на диске не меняется. Вероятности, признаки, объяснения, новости и Twitter не обновляются.</p>
       <p>Графики: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a>. Copyright (c) 2026 TradingView, Inc.</p>
       <details class="license"><summary>Лицензия библиотеки графиков</summary><pre><!-- REPORT_LICENSE --></pre></details>
     </footer>

@@ -1,5 +1,8 @@
 import fs from "node:fs/promises"
 
+import { isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
+import { createChartUpdater } from "./chart-update.js"
+
 export async function renderReportHtml (report) {
   const chartsDirectory = new URL(".", import.meta.resolve("lightweight-charts"))
   const [template, styles, script, charts, license] = await Promise.all([
@@ -11,7 +14,16 @@ export async function renderReportHtml (report) {
   ])
   const replacements = {
     styles,
-    script,
+    // Inline a self-contained factory: file:// needs neither module imports nor a build.
+    script: `(() => {
+      const updateChartHistory = (${createChartUpdater.toString()})({
+        isArray: Array.isArray,
+        isFinite: ${isFinite.toString()},
+        isSafeInteger: ${isSafeInteger.toString()},
+        isString: ${isString.toString()},
+      });
+      ${script}
+    })()`,
     charts,
     // JSON is data, not markup: agent text must never close the script element.
     data: JSON.stringify(report).replaceAll("<", "\\u003c"),

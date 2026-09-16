@@ -573,12 +573,54 @@ table {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
     font-size: 12px;
 }
 
 .chart-toolbar strong {
     font-weight: 500;
+}
+
+.chart-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.update-chart {
+    padding: 7px 11px;
+    border-radius: 6px;
+    background: #233a57;
+    color: #dbe9ff;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.update-chart:hover:not(:disabled) {
+    background: #304e72;
+}
+
+.update-chart:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.chart-update-notes {
+    margin: 0 18px 10px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.chart-update-notes p+p {
+    margin-top: 4px;
+}
+
+.report-time-note {
+    color: #f2c56d;
 }
 
 .range-buttons {

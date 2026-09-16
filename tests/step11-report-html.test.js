@@ -10,7 +10,7 @@ function scripts (html) {
 }
 
 test("report embeds its data, styles, executable browser scripts and chart license without external assets", async () => {
-  const report = { asOf: "2026-09-15T09:00:00.000Z", coins: [] }
+  const report = { asOf: "2026-09-15T09:00:00.000Z", reportCreatedAt: "2026-09-15T11:05:12.345Z", coins: [] }
   const html = await renderReportHtml(report)
   const embedded = scripts(html)
 
@@ -21,6 +21,9 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="information-panel"/)
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)
+  assert.match(html, /id="update-chart"/)
+  assert.match(html, /id="chart-update-status"/)
+  assert.match(html, /id="report-time-note"/)
   assert.doesNotMatch(html, /ШАГ 7\.1|публикации последующих шагов сюда не входят/)
   assert.match(html, /<style>\s*:root/)
   assert.doesNotMatch(html, /<(?:script|link|img)\b[^>]*(?:src|href)\s*=/i)
@@ -35,7 +38,11 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(embedded[2].content, /LightweightCharts\.CandlestickSeries/)
   assert.match(embedded[2].content, /LightweightCharts\.HistogramSeries/)
   assert.match(embedded[2].content, /LightweightCharts\.LineSeries/)
-  assert.doesNotMatch(embedded[2].content, /\b(?:fetch|XMLHttpRequest|WebSocket)\s*\(/)
+  assert.match(embedded[2].content, /credentials: "omit"/)
+  assert.match(embedded[2].content, /https:\/\/fapi\.binance\.com/)
+  assert.match(embedded[2].content, /LightweightCharts\.createSeriesMarkers/)
+  assert.doesNotMatch(embedded[2].content, /\b(?:XMLHttpRequest|WebSocket|setInterval|localStorage|sessionStorage|showSaveFilePicker)\b/)
+  assert.doesNotMatch(embedded[2].content, /\[native code\]/)
   for (const { content } of embedded.slice(1)) {
     assert.doesNotThrow(() => new vm.Script(content))
   }
