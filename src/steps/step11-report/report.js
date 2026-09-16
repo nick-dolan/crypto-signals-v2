@@ -1,8 +1,9 @@
-/* global document, LightweightCharts */
+/* global document, LightweightCharts, updateChartHistory */
 
 (() => {
   const report = JSON.parse(document.getElementById("report-data").textContent)
   const coinsBySymbol = new Map(report.coins.map(coin => [coin.symbol, coin]))
+  const chartStates = new Map(report.coins.map(coin => [coin.symbol, { data: null, pending: false, error: null, requested: false }]))
   const topCandidates = report.coins.filter(coin => coin.topRank != null)
     .sort((first, second) => first.topRank - second.topRank)
   let selectedSymbol = topCandidates[0]?.symbol ?? report.coins[0]?.symbol ?? null
@@ -39,7 +40,7 @@
     return value == null ? "—" : `${number(value * 100, 0)}%`
   }
 
-  function time (timestamp) {
+  function time (timestamp, seconds = false) {
     return new Intl.DateTimeFormat("ru-RU", {
       timeZone: "UTC",
       year: "numeric",
@@ -47,6 +48,7 @@
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      second: seconds ? "2-digit" : undefined,
     }).format(new Date(timestamp))
   }
 
@@ -207,6 +209,107 @@
     }
   }
 
+  function sourceLink (label, href) {
+    try {
+      const url = new URL(href)
+      if (["https:", "http:"].includes(url.protocol)) {
+        const link = element("a", "", label)
+        link.href = url.href
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+        return link
+      }
+    } catch {
+      // A missing or unsafe URL is shown as text, never as an executable link.
+    }
+    return element("span", "", label)
+  }
+
+  function publicationTime (timestamp) {
+    if (timestamp != null) {
+      try {
+        return `${time(timestamp)} UTC`
+      } catch {
+        // A malformed publication date should not hide the saved text.
+      }
+    }
+    return "Время не указано"
+  }
+
+  function newsItem (item) {
+    const article = element("article", "source-item")
+    const heading = element("h3", "source-title")
+    heading.append(sourceLink(item.title || "Новость без заголовка", item.externalUrl || item.tradingViewUrl))
+    article.append(heading, element("p", "source-meta", `${item.provider?.name ?? "Источник не указан"} · ${publicationTime(item.publishedAt ?? (item.published == null ? null : item.published * 1_000))}`))
+    if (item.shortDescription) {
+      article.append(element("p", "source-text", item.shortDescription))
+    }
+    if (item.content) {
+      const content = element("details", "article-content")
+      content.append(element("summary", "", "Сохранённый текст новости"), element("p", "source-text", item.content))
+      article.append(content)
+    } else {
+      article.append(element("p", "source-meta", item.paywall ? "Полный текст недоступен: ограниченный доступ." : "Полный текст не получен."))
+    }
+    if (item.tradingViewUrl) {
+      const footer = element("div", "source-footer")
+      footer.append(sourceLink("Новость в TradingView ↗", item.tradingViewUrl))
+      article.append(footer)
+    }
+    return article
+  }
+
+  function tweetItem (tweet) {
+    const article = element("article", "source-item")
+    const heading = element("h3", "source-title", tweet.authorUsername ? `@${tweet.authorUsername}` : "Автор не указан")
+    article.append(heading, element("p", "source-meta", publicationTime(tweet.createdAt)), element("p", "source-text", tweet.text))
+    const footer = element("div", "source-footer")
+    footer.append(...[
+      ["Лайки", tweet.likeCount],
+      ["Репосты", tweet.retweetCount],
+      ["Просмотры", tweet.viewCount],
+      ["Подписчики", tweet.authorFollowers],
+    ].map(([label, value]) => element("span", "", `${label}: ${number(value, 0)}`)))
+    if (/^\d+$/.test(tweet.id ?? "")) {
+      footer.append(sourceLink("Открыть в X ↗", `https://x.com/i/status/${tweet.id}`))
+    }
+    article.append(footer)
+    return article
+  }
+
+  function renderSource (key, source, items, renderItem) {
+    const window = report.informationSources[key]
+    byId(`${key}-window`).textContent = `Окно публикаций: ${time(window.from)} — ${time(window.asOf)} UTC.`
+    byId(`${key}-count`).textContent = source.status === "failed" ? "ошибка" : String(items.length)
+    const status = byId(`${key}-status`)
+    status.hidden = source.status !== "failed" && items.length > 0
+    status.className = source.status === "failed" ? "source-status failed" : "source-status"
+    status.textContent = source.status === "failed"
+      ? `Ошибка загрузки: ${source.error || "источник недоступен"}`
+      : "За сохранённое окно публикаций ничего не найдено."
+    byId(`${key}-items`).replaceChildren(...items.map(renderItem))
+  }
+
+  function renderInformation (coin) {
+    for (const key of ["news", "twitter"]) {
+      byId(`${key}-details`).open = false
+      byId(`${key}-items`).replaceChildren()
+      byId(`${key}-count`).textContent = ""
+      byId(`${key}-window`).textContent = ""
+      byId(`${key}-status`).textContent = ""
+      byId(`${key}-status`).hidden = true
+    }
+    byId("context-generated").textContent = ""
+    byId("information-panel").hidden = coin.topRank == null || !coin.information
+    byId("analysis-source").textContent = byId("information-panel").hidden ? "Анализ шага 7" : "Объяснение дополнено на шаге 10"
+    if (byId("information-panel").hidden) {
+      return
+    }
+    byId("context-generated").textContent = `Объяснение дополнено ${time(report.informationSources.contextGeneratedAt)} UTC. Вероятности и аргументы шага 7 не пересчитывались.`
+    renderSource("news", coin.information.news, coin.information.news.items, newsItem)
+    renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
+  }
+
   function renderFeatures (coin) {
     byId("feature-highlights").replaceChildren(...[
       ["rvRatio", "Сжатие волатильности", "×"],
@@ -238,17 +341,86 @@
     }))
   }
 
-  function hourlyGrid (series) {
+  function chartHistory (coin) {
+    return chartStates.get(coin.symbol).data?.history ?? coin.history
+  }
+
+  function historyEnd (history) {
+    return Math.max(Date.parse(report.asOf) / 1_000, ...[
+      history.candles, history.volume, history.openInterest,
+    ].map(series => series.at(-1)?.time ?? 0))
+  }
+
+  function hourlyGrid (series, to) {
+    const from = Date.parse(report.asOf) / 1_000 - 167 * 3_600
     const byTime = new Map(series.map(point => [point.time, point]))
-    return Array.from({ length: 168 }, (_, index) => {
-      const timestamp = Date.parse(report.asOf) / 1_000 - (167 - index) * 3_600
+    return Array.from({ length: (to - from) / 3_600 + 1 }, (_, index) => {
+      const timestamp = from + index * 3_600
       return byTime.get(timestamp) ?? { time: timestamp }
     })
   }
 
+  function reportMarkerTime (history) {
+    const hour = Date.parse(report.asOf) / 1_000
+    // Never let the library snap a marker across a missing candle to the wrong hour.
+    return history.candles.some(candle => candle.time === hour) ? hour : null
+  }
+
+  function renderUpdateState (coin) {
+    const state = chartStates.get(coin.symbol)
+    const button = byId("update-chart")
+    button.disabled = state.pending
+    button.textContent = state.pending ? "Обновление…" : "Update chart"
+    button.setAttribute("aria-busy", String(state.pending))
+    byId("chart-update-error").textContent = state.error ?? ""
+    byId("chart-update-error").hidden = !state.error
+    byId("chart-update-status").textContent = state.pending
+      ? "Загружаем свечи, объём и OI выбранной монеты с Binance…"
+      : state.data
+        ? `Обновлено ${time(state.data.updatedAt, true)} UTC. ${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC, не закрытие часа.` : "Текущий OI недоступен."}`
+        : "Сохранённый срез. Обновление — только по кнопке, без пересчёта анализа."
+    byId("chart-source").textContent = state.data
+      ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC.`} OI в базовом активе; небольшие различия источников возможны.`
+      : "Источник графика: сохранённые данные TradingView."
+    byId("report-time-note").textContent = [
+      `Срез отчёта: ${time(report.asOf)} UTC — время открытия последней закрытой свечи.`,
+      reportMarkerTime(chartHistory(coin)) == null
+        ? "Свеча среза недоступна — отметка не подменяется другим временем."
+        : "Отметка «Отчёт» при обновлении привязана к этой свече, а не ко времени создания HTML.",
+    ].join(" ")
+  }
+
+  async function refreshSelectedChart () {
+    const coin = coinsBySymbol.get(selectedSymbol)
+    if (!coin) {
+      return
+    }
+    const state = chartStates.get(coin.symbol)
+    if (state.pending) {
+      return
+    }
+    state.pending = true
+    state.requested = true
+    state.error = null
+    renderUpdateState(coin)
+    try {
+      state.data = await updateChartHistory(coin, report.asOf, state.data)
+      if (selectedSymbol === coin.symbol) {
+        renderChart(coin)
+      }
+    } catch (error) {
+      state.error = `${error.message}. График не изменён; можно повторить обновление.`
+    } finally {
+      state.pending = false
+      if (selectedSymbol === coin.symbol) {
+        renderUpdateState(coin)
+      }
+    }
+  }
+
   function applyRange () {
     if (chart) {
-      const to = Date.parse(report.asOf) / 1_000
+      const to = historyEnd(chartHistory(coinsBySymbol.get(selectedSymbol)))
       chart.timeScale().setVisibleRange({ from: to - (selectedDays * 24 - 1) * 3_600, to })
     }
     document.querySelectorAll("[data-days]").forEach((button) => {
@@ -291,7 +463,8 @@
   function renderChart (coin) {
     chart?.remove()
     chart = null
-    const { history } = coin
+    const history = chartHistory(coin)
+    const state = chartStates.get(coin.symbol)
     const lastCandle = history.candles.at(-1)
     byId("history-warning").textContent = history.warning ?? ""
     byId("history-warning").hidden = !history.warning
@@ -299,13 +472,19 @@
     byId("chart-empty").hidden = Boolean(lastCandle)
     byId("chart-legend").replaceChildren()
     byId("last-price").textContent = "—"
+    byId("last-price-label").textContent = state.data?.formingTime != null
+      ? "USDT · незакрытая свеча"
+      : "USDT · последняя закрытая свеча"
+    renderUpdateState(coin)
     if (!lastCandle) {
       return
     }
 
     const precision = Math.max(2, 4 - Math.floor(Math.log10(Math.min(...history.candles.map(candle => candle.low)))))
     byId("last-price").textContent = number(lastCandle.close, precision)
-    const showLatest = () => renderLegend(lastCandle.time, lastCandle, history.volume.at(-1), history.openInterest.at(-1), precision)
+    const volumeByTime = new Map(history.volume.map(point => [point.time, point]))
+    const oiByTime = new Map(history.openInterest.map(point => [point.time, point]))
+    const showLatest = () => renderLegend(lastCandle.time, lastCandle, volumeByTime.get(lastCandle.time), oiByTime.get(lastCandle.time), precision)
     showLatest()
 
     try {
@@ -357,13 +536,19 @@
         }, 2)
         series.setData(section)
       }
-      candles.setData(hourlyGrid(history.candles))
+      const to = historyEnd(history)
+      candles.setData(hourlyGrid(history.candles, to))
+      const markerTime = reportMarkerTime(history)
+      if (state.requested && markerTime != null) {
+        LightweightCharts.createSeriesMarkers(candles, [{
+          time: markerTime, position: "aboveBar", shape: "arrowDown", color: "#f2c56d", text: "Отчёт",
+        }])
+      }
       const candlesByTime = new Map(history.candles.map(candle => [candle.time, candle]))
-      volume.setData(hourlyGrid(history.volume).map((point) => {
+      volume.setData(hourlyGrid(history.volume, to).map((point) => {
         const candle = candlesByTime.get(point.time)
-        return point.value == null ? point : { ...point, color: candle.close >= candle.open ? "#368b70" : "#9a5362" }
+        return point.value == null || !candle ? { time: point.time } : { ...point, color: candle.close >= candle.open ? "#368b70" : "#9a5362" }
       }))
-      const oiByTime = new Map(history.openInterest.map(point => [point.time, point]))
       volume.priceScale().applyOptions({ scaleMargins: { top: 0.2, bottom: 0 } })
       chart.panes().forEach((pane, index) => pane.setStretchFactor([0.64, 0.16, 0.2][index]))
       chart.subscribeCrosshairMove((event) => {
@@ -411,6 +596,7 @@
     byId("explanation").hidden = !coin.explanation
     renderSignals("drivers", coin.drivers)
     renderSignals("counter-signals", coin.counterSignals)
+    renderInformation(coin)
     renderFeatures(coin)
     renderChart(coin)
     renderCandidates()
@@ -430,6 +616,7 @@
   byId("candidate-rows").addEventListener("click", handleCoinClick)
   byId("search").addEventListener("input", renderCandidates)
   byId("sort").addEventListener("change", renderCandidates)
+  byId("update-chart").addEventListener("click", refreshSelectedChart)
   document.querySelectorAll("[data-days]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedDays = Number(button.dataset.days)

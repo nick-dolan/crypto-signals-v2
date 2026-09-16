@@ -31,7 +31,7 @@ export async function analyzeCandidates (
     : []
   const content = await callAgent(systemPrompt, JSON.stringify(payload), {
     model: "GPT-5.6 Sol",
-    reasoningEffort: "medium",
+    reasoningEffort: "high",
     tools,
   })
 
