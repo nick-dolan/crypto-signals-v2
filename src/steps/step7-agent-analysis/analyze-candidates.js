@@ -30,7 +30,7 @@ export async function analyzeCandidates (
     ? [createCoinHistoryTool(payload, shortlist, { readCoinData })]
     : []
   const content = await callAgent(systemPrompt, JSON.stringify(payload), {
-    model: "GPT-5.6 Sol",
+    model: "GPT-6-Astra",
     reasoningEffort: "high",
     tools,
   })

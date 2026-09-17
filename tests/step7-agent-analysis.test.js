@@ -226,7 +226,7 @@ test("agent analysis parser keeps explanations grounded and human-readable", () 
   )
 })
 
-test("candidate analysis uses GPT-5.6 Sol with high reasoning and one safe tool", async () => {
+test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool", async () => {
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
@@ -254,7 +254,7 @@ test("candidate analysis uses GPT-5.6 Sol with high reasoning and one safe tool"
   assert.deepEqual(result, expected)
   assert.equal(captured.systemPrompt, "system prompt")
   assert.deepEqual(JSON.parse(captured.userMessage), payload)
-  assert.equal(captured.options.model, "GPT-5.6 Sol")
+  assert.equal(captured.options.model, "GPT-6-Astra")
   assert.equal(captured.options.reasoningEffort, "high")
   assert.equal(captured.options.tools.length, 1)
   assert.equal(captured.options.tools[0].name, "get_coin_history")
