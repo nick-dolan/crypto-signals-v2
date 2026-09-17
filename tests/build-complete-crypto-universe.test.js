@@ -151,6 +151,38 @@ test("complete universe checks every attached market by rank", async () => {
   assert.equal(report.coinCount, 3)
 })
 
+test("complete universe checks distinct coins with the same rank independently", async () => {
+  const checkedIds = []
+  const report = await buildCompleteCryptoUniverse(
+    createSourceUniverse([createCoin(3), createCoin(1), { ...createCoin(2), rank: 1 }]),
+    async (coin) => {
+      checkedIds.push(coin.baseCurrencyId)
+
+      return createCoverageResult(true)
+    },
+  )
+
+  assert.deepEqual(checkedIds, ["XTVC1", "XTVC2", "XTVC3"])
+  assert.equal(report.candidateCount, 3)
+  assert.equal(report.coinCount, 3)
+  assert.deepEqual(
+    report.coins.map(coin => [coin.baseCurrencyId, coin.rank]),
+    [["XTVC1", 1], ["XTVC2", 1], ["XTVC3", 3]],
+  )
+})
+
+test("complete universe rejects duplicate baseCurrencyId values with equal or different ranks", async () => {
+  for (const rank of [1, 2]) {
+    await assert.rejects(
+      buildCompleteCryptoUniverse(
+        createSourceUniverse([createCoin(1), createCoin(rank, { baseCurrencyId: "XTVC1" })]),
+        async () => createCoverageResult(true),
+      ),
+      /duplicate baseCurrencyId: XTVC1/,
+    )
+  }
+})
+
 test("complete universe accepts every complete coin and retries transient failures", async () => {
   let attempts = 0
   const progressEvents = []

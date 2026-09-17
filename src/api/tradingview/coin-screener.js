@@ -154,21 +154,15 @@ function validateResponse (payload) {
 }
 
 function validateUniqueCoins (coins) {
-  const ranks = new Set()
   const baseCurrencyIds = new Set()
 
   for (const coin of coins) {
-    if (ranks.has(coin.rank)) {
-      throw new Error(`TradingView coin screener response contains duplicate rank: ${coin.rank}`)
-    }
-
     if (baseCurrencyIds.has(coin.baseCurrencyId)) {
       throw new Error(
         `TradingView coin screener response contains duplicate baseCurrencyId: ${coin.baseCurrencyId}`,
       )
     }
 
-    ranks.add(coin.rank)
     baseCurrencyIds.add(coin.baseCurrencyId)
   }
 }

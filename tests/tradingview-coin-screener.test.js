@@ -104,6 +104,26 @@ test("TradingView coin screener requests and normalizes ranked coins", async (co
   ])
 })
 
+test("TradingView coin screener preserves distinct coins with the same rank", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => new Response(
+    JSON.stringify({
+      ...SCREENER_PAYLOAD,
+      data: SCREENER_PAYLOAD.data.map(row => ({
+        ...row,
+        d: [68, ...row.d.slice(1)],
+      })),
+    }),
+    { status: 200 },
+  ))
+
+  const candidates = await fetchTradingViewCoins({ rankMax: 500, timeoutMs: 100 })
+
+  assert.deepEqual(
+    candidates.map(coin => [coin.baseCurrencyId, coin.rank]),
+    [["crypto-ethereum", 68], ["crypto-bitcoin", 68]],
+  )
+})
+
 test("TradingView coin screener preserves missing categories", async (context) => {
   context.mock.method(globalThis, "fetch", async () => new Response(
     JSON.stringify({

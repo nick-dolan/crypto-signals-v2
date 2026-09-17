@@ -29,7 +29,6 @@ function validateCandidates (candidates) {
     throw new Error("Crypto universe candidates must be an array")
   }
 
-  const ranks = new Set()
   const baseCurrencyIds = new Set()
 
   for (const [index, candidate] of candidates.entries()) {
@@ -47,17 +46,12 @@ function validateCandidates (candidates) {
     )
     validateCandidateMarket(candidate, index)
 
-    if (ranks.has(candidate.rank)) {
-      throw new Error(`Crypto universe contains duplicate rank: ${candidate.rank}`)
-    }
-
     if (baseCurrencyIds.has(candidate.baseCurrencyId)) {
       throw new Error(
         `Crypto universe contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
       )
     }
 
-    ranks.add(candidate.rank)
     baseCurrencyIds.add(candidate.baseCurrencyId)
   }
 }

@@ -85,21 +85,15 @@ export function normalizeUniverseCandidate (candidate, index, candidateRankMax) 
 }
 
 export function validateUniqueUniverseCandidates (candidates) {
-  const ranks = new Set()
   const baseCurrencyIds = new Set()
 
   for (const candidate of candidates) {
-    if (ranks.has(candidate.rank)) {
-      throw new Error(`Crypto universe contains duplicate rank: ${candidate.rank}`)
-    }
-
     if (baseCurrencyIds.has(candidate.baseCurrencyId)) {
       throw new Error(
         `Crypto universe contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
       )
     }
 
-    ranks.add(candidate.rank)
     baseCurrencyIds.add(candidate.baseCurrencyId)
   }
 }

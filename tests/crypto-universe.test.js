@@ -170,6 +170,24 @@ test("crypto universe joins coins and markets only by baseCurrencyId", () => {
   assert.equal(universe.excludedMissingMarketCount, 1)
 })
 
+test("crypto universe keeps distinct coins with the same rank in rank order", () => {
+  const universe = buildCryptoUniverse(
+    [createCandidate(3), createCandidate(1), { ...createCandidate(2), rank: 1 }],
+    [createMarket(1), createMarket(2), createMarket(3)],
+    {
+      candidateRankMax: 3,
+      targetCount: 3,
+    },
+  )
+
+  assert.equal(universe.candidateCount, 3)
+  assert.equal(universe.coinCount, 3)
+  assert.deepEqual(
+    universe.coins.map(coin => [coin.baseCurrencyId, coin.rank, coin.market.baseCurrencyId]),
+    [["asset-1", 1, "asset-1"], ["asset-2", 1, "asset-2"], ["asset-3", 3, "asset-3"]],
+  )
+})
+
 test("crypto universe rejects duplicate baseCurrencyId values", () => {
   assert.throws(
     () => buildCryptoUniverse(
