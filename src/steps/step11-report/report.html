@@ -114,6 +114,17 @@
           <p id="chart-empty" class="empty-state" hidden>График недоступен. Оценка агента сохранена ниже.</p>
           <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · базовый актив</span><span>Колесо — масштаб, перетаскивание — история</span></div>
         </div>
+        <section id="sustained-strength" class="panel sustained-strength-panel" data-status="insufficient_data" aria-labelledby="sustained-strength-heading">
+          <div>
+            <h2 id="sustained-strength-heading">Устойчивая сила</h2>
+            <p id="sustained-strength-status" class="sustained-strength-status" role="status">Недостаточно данных</p>
+          </div>
+          <div class="sustained-strength-scores">
+            <div><span class="metric-label">За всю историю</span><strong id="sustained-strength-history" class="metric-value">Нет данных</strong></div>
+            <div><span class="metric-label">Сейчас · 4ч–7д</span><strong id="sustained-strength-current" class="metric-value">Нет данных</strong></div>
+          </div>
+          <p class="sustained-strength-note">Сила относительно других монет. Оценки 0–100 — не вероятность движения и не сигнал входа. Данные сохранённого среза, не меняются при Update chart.</p>
+        </section>
         <section class="panel analysis-panel" aria-labelledby="analysis-heading">
           <div class="section-heading"><h2 id="analysis-heading">Почему монета в списке</h2><span id="analysis-source" class="muted">Анализ шага 7</span></div>
           <p id="explanation" class="explanation" hidden></p>

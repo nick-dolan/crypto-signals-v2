@@ -237,6 +237,102 @@ test("report displays directional pattern labels and new numeric features", () =
   }
 })
 
+for (const [status, label, history, current, historyText, currentText] of [
+  ["persistent", "Устойчиво сильная", 81.412, 91.235, "81,4 / 100", "91,2 / 100"],
+  ["emerging", "Сила появляется", 37.555, 83.333, "37,6 / 100", "83,3 / 100"],
+  ["fading", "Сила ослабевает", 82.345, 64.999, "82,3 / 100", "65 / 100"],
+  ["neutral", "Не выделяется", 0, 0, "0 / 100", "0 / 100"],
+  ["insufficient_data", "Недостаточно данных", null, 73.35, "Нет данных", "73,4 / 100"],
+]) {
+  test(`sustained strength card shows saved ${status} status and scores without recalculating them`, () => {
+    const report = createReport()
+    Object.assign(report.coins[0].features, {
+      sustainedStatus: status, sustainedHistoryScore: history, sustainedCurrentScore: current,
+      sustainedDownWinRate: 0.65, sustainedDownPositiveRate: 0.2, sustainedDownExcessMedianPct: 0.45,
+      sustainedUpParticipationRate: 0.6, sustainedExcess24hPct: 0.23,
+    })
+    Object.assign(report.definitions, {
+      sustainedStatus: "Готовый статус",
+      sustainedHistoryScore: "Историческая оценка 0–100",
+      sustainedCurrentScore: "Текущая оценка 0–100",
+    })
+    const before = structuredClone(report)
+    const { byId, updateCalls, directRequests } = runReport(report)
+
+    assert.equal(byId("sustained-strength").dataset.status, status)
+    assert.equal(byId("sustained-strength-status").textContent, label)
+    assert.equal(byId("sustained-strength-status").title, report.definitions.sustainedStatus)
+    assert.equal(byId("sustained-strength-history").textContent, historyText)
+    assert.equal(byId("sustained-strength-current").textContent, currentText)
+    assert.equal(byId("sustained-strength-history").title, report.definitions.sustainedHistoryScore)
+    assert.equal(byId("sustained-strength-current").title, report.definitions.sustainedCurrentScore)
+    for (const [field, value] of Object.entries(report.coins[0].features).filter(([key]) => key.startsWith("sustained"))) {
+      const row = byId("feature-rows").children.find(node => node.children[0].textContent === field)
+      assert.equal(row.children[1].textContent, value === null ? "Нет данных / события" : String(value))
+    }
+    assert.equal(updateCalls.length, 0)
+    assert.equal(directRequests.length, 0)
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  })
+}
+
+for (const [label, features, history, current] of [
+  ["legacy missing fields", {}, "Нет данных", "Нет данных"],
+  ["unavailable history", { sustainedStatus: "insufficient_data", sustainedHistoryScore: null, sustainedCurrentScore: 0 }, "Нет данных", "0 / 100"],
+  ["unavailable current score", { sustainedStatus: "insufficient_data", sustainedHistoryScore: 100, sustainedCurrentScore: null }, "100 / 100", "Нет данных"],
+]) {
+  test(`sustained strength card handles ${label} without hiding available scores`, () => {
+    const report = createReport()
+    Object.assign(report.coins[0].features, features)
+    const { byId } = runReport(report)
+
+    assert.equal(byId("sustained-strength").dataset.status, "insufficient_data")
+    assert.equal(byId("sustained-strength-status").textContent, "Недостаточно данных")
+    assert.equal(byId("sustained-strength-history").textContent, history)
+    assert.equal(byId("sustained-strength-current").textContent, current)
+    assert.equal(byId("sustained-strength-history").title, "")
+    assert.equal(byId("sustained-strength-current").title, "")
+  })
+}
+
+test("sustained strength status cannot inject markup or an arbitrary color state", () => {
+  for (const status of ["unknown", "__proto__", "</script><img src=x onerror=alert(1)>"]) {
+    const report = createReport()
+    report.coins[0].features.sustainedStatus = status
+    const { byId } = runReport(report)
+    assert.equal(byId("sustained-strength").dataset.status, "insufficient_data")
+    assert.equal(byId("sustained-strength-status").textContent, "Недостаточно данных")
+    assert.deepEqual(byId("sustained-strength-status").children, [])
+  }
+})
+
+test("switching coins replaces sustained strength and clears values for a legacy coin", () => {
+  const report = createReport(["COTI", "SOL", "ADA"])
+  Object.assign(report.coins[0].features, {
+    sustainedStatus: "persistent", sustainedHistoryScore: 80, sustainedCurrentScore: 90,
+  })
+  Object.assign(report.coins[1].features, {
+    sustainedStatus: "fading", sustainedHistoryScore: 75, sustainedCurrentScore: 30,
+  })
+  const browser = runReport(report)
+  const view = () => [
+    browser.byId("sustained-strength").dataset.status,
+    ...["sustained-strength-status", "sustained-strength-history", "sustained-strength-current"]
+      .map(id => browser.byId(id).textContent),
+  ]
+  const initial = view()
+  assert.deepEqual(initial, ["persistent", "Устойчиво сильная", "80 / 100", "90 / 100"])
+  selectCoin(browser, "SOL")
+  assert.deepEqual(view(), ["fading", "Сила ослабевает", "75 / 100", "30 / 100"])
+  selectCoin(browser, "ADA")
+  assert.deepEqual(view(), ["insufficient_data", "Недостаточно данных", "Нет данных", "Нет данных"])
+  selectCoin(browser, "COTI")
+  assert.deepEqual(view(), initial)
+  assert.equal(browser.updateCalls.length, 0)
+  assert.equal(browser.directRequests.length, 0)
+})
+
 function addOiGaps (report) {
   const { history } = report.coins[0]
   const timeAt = index => history.candles[index].time
@@ -1206,6 +1302,9 @@ for (const cached of [false, true]) {
 
 test("pending, successful and failed updates preserve embedded JSON, analysis and expanded news without rebuilding their DOM", async () => {
   const report = createReport()
+  Object.assign(report.coins[0].features, {
+    sustainedStatus: "persistent", sustainedHistoryScore: 82.5, sustainedCurrentScore: 91.25,
+  })
   addInformation(report)
   const before = structuredClone(report)
   const controlled = controlledUpdater()
@@ -1222,12 +1321,14 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
     "explanation", "drivers", "counter-signals", "feature-highlights", "feature-rows", "flags", "analysis-source",
     "information-panel", "context-generated", "news-window", "news-count", "news-status", "news-items", "twitter-window",
     "twitter-count", "twitter-status", "twitter-items",
+    "sustained-strength-status", "sustained-strength-history", "sustained-strength-current",
   ].map(id => ({ id, text: browser.byId(id).textContent, hidden: browser.byId(id).hidden, children: [...browser.byId(id).children] }))
   const assertUnchanged = () => {
     assert.equal(browser.byId("report-data").textContent, embedded)
     assert.deepEqual(JSON.parse(embedded), before)
     assert.deepEqual(report, before)
     assert.equal(browser.byId("as-of").dateTime, report.asOf)
+    assert.equal(browser.byId("sustained-strength").dataset.status, "persistent")
     for (const { id, text, hidden, children } of unchanged) {
       assert.equal(browser.byId(id).textContent, text, id)
       assert.equal(browser.byId(id).hidden, hidden, id)

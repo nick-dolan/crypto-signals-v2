@@ -343,6 +343,31 @@
     renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
   }
 
+  function renderSustainedStrength (coin) {
+    const status = ["persistent", "emerging", "fading", "neutral"].includes(coin.features.sustainedStatus)
+      ? coin.features.sustainedStatus
+      : "insufficient_data"
+
+    byId("sustained-strength").dataset.status = status
+    byId("sustained-strength-status").textContent = {
+      persistent: "Устойчиво сильная",
+      emerging: "Сила появляется",
+      fading: "Сила ослабевает",
+      neutral: "Не выделяется",
+      insufficient_data: "Недостаточно данных",
+    }[status]
+    byId("sustained-strength-status").title = report.definitions?.sustainedStatus ?? ""
+
+    for (const [id, field] of [
+      ["sustained-strength-history", "sustainedHistoryScore"],
+      ["sustained-strength-current", "sustainedCurrentScore"],
+    ]) {
+      const value = coin.features[field]
+      byId(id).textContent = value == null ? "Нет данных" : `${number(value, 1)} / 100`
+      byId(id).title = report.definitions?.[field] ?? ""
+    }
+  }
+
   function renderFeatures (coin) {
     byId("feature-highlights").replaceChildren(...[
       ["rvRatio", "Сжатие волатильности", "×"],
@@ -630,6 +655,7 @@
     renderSignals("drivers", coin.drivers)
     renderSignals("counter-signals", coin.counterSignals)
     renderInformation(coin)
+    renderSustainedStrength(coin)
     renderFeatures(coin)
     renderChart(coin)
     renderCandidates()

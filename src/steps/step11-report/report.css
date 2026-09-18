@@ -792,8 +792,50 @@ table {
 
 .analysis-panel,
 .features-panel,
-.information-panel {
+.information-panel,
+.sustained-strength-panel {
     padding: 20px 22px;
+}
+
+.sustained-strength-panel {
+    --strength-tone: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+    border-left: 3px solid var(--strength-tone);
+}
+
+.sustained-strength-panel[data-status="persistent"] {
+    --strength-tone: var(--positive);
+}
+
+.sustained-strength-panel[data-status="emerging"] {
+    --strength-tone: var(--accent);
+}
+
+.sustained-strength-panel[data-status="fading"] {
+    --strength-tone: var(--negative);
+}
+
+.sustained-strength-status {
+    margin-top: 6px;
+    color: var(--strength-tone);
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.sustained-strength-scores {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+}
+
+.sustained-strength-note {
+    flex-basis: 100%;
+    color: var(--muted);
+    font-size: 12px;
 }
 
 .explanation {
@@ -1246,7 +1288,8 @@ summary {
 
     .analysis-panel,
     .features-panel,
-    .information-panel {
+    .information-panel,
+    .sustained-strength-panel {
         padding: 16px;
     }
 

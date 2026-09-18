@@ -24,6 +24,17 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="update-chart"/)
   assert.match(html, /id="chart-update-status"/)
   assert.match(html, /id="report-time-note"/)
+  assert.match(html, /id="sustained-strength"/)
+  assert.match(html, /aria-labelledby="sustained-strength-heading"/)
+  assert.match(html, /Устойчивая сила/)
+  assert.match(html, /id="sustained-strength-status"[^>]*role="status"/)
+  assert.match(html, /id="sustained-strength-history"/)
+  assert.match(html, /id="sustained-strength-current"/)
+  assert.match(html, /Оценки 0–100 — не вероятность\s+движения и не сигнал входа/)
+  assert.ok(html.indexOf("id=\"sustained-strength\"") < html.indexOf("aria-labelledby=\"analysis-heading\""))
+  for (const status of ["persistent", "emerging", "fading"]) {
+    assert.ok(html.includes(`.sustained-strength-panel[data-status="${status}"]`))
+  }
   assert.match(html, /id="alt-market-background"/)
   assert.match(html, /aria-labelledby="alt-market-heading"/)
   assert.match(html, /Фон альтрынка · 4ч/)
