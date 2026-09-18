@@ -185,9 +185,6 @@
     const coins = report.coins
       .filter(coin => `${coin.symbol} ${coin.name}`.toLocaleLowerCase().includes(query))
       .sort((first, second) => {
-        if (sort === "symbol") {
-          return first.symbol.localeCompare(second.symbol)
-        }
         if (sort === "top" && first.topRank !== second.topRank) {
           return (first.topRank ?? Infinity) - (second.topRank ?? Infinity)
         }

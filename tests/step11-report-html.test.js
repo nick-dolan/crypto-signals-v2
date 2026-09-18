@@ -18,6 +18,11 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /<html lang="ru">/)
   assert.match(html, /<meta name="viewport"/)
   assert.match(html, /ШАГ 11/)
+  const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
+  assert.deepEqual([...sortOptions.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value), [
+    "probability", "top", "confidence",
+  ])
+  assert.doesNotMatch(sortOptions, /По алфавиту/)
   assert.match(html, /id="information-panel"/)
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)

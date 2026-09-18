@@ -855,6 +855,25 @@ test("the market background stays at the original universe snapshot during chart
   assert.equal(browser.byId("report-data").textContent, embedded)
 })
 
+test("probability, top and confidence sorts preserve their candidate ordering", () => {
+  const report = createReport(["COTI", "SOL", "ADA", "BTC"])
+  Object.assign(report.coins[0], { topRank: 2, estimateConfidence: "low" })
+  Object.assign(report.coins[1], { topRank: null, estimateConfidence: "low" })
+  Object.assign(report.coins[2], { topRank: null, estimateConfidence: "high" })
+  Object.assign(report.coins[3], { topRank: 1, estimateConfidence: "medium" })
+  const { byId } = runReport(report)
+
+  for (const [sort, expected] of [
+    ["probability", ["COTI", "SOL", "ADA", "BTC"]],
+    ["top", ["BTC", "COTI", "SOL", "ADA"]],
+    ["confidence", ["ADA", "BTC", "COTI", "SOL"]],
+  ]) {
+    byId("sort").value = sort
+    byId("sort").listeners.get("change")()
+    assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), expected)
+  }
+})
+
 test("startup, coin selection, periods, search and sorting never call the updater or fetch", async () => {
   const report = createReport(["COTI", "SOL"])
   const api = createBinanceApi(report)
@@ -869,8 +888,10 @@ test("startup, coin selection, periods, search and sorting never call the update
   }
   browser.byId("search").value = "SOL"
   browser.byId("search").listeners.get("input")()
-  browser.byId("sort").value = "symbol"
-  browser.byId("sort").listeners.get("change")()
+  for (const sort of ["probability", "top", "confidence"]) {
+    browser.byId("sort").value = sort
+    browser.byId("sort").listeners.get("change")()
+  }
 
   assert.equal(browser.updateCalls.length, 0)
   assert.equal(api.requests.length, 0)
