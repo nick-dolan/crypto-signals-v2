@@ -81,7 +81,7 @@
         <div class="panel chart-panel">
           <header class="coin-header">
             <div>
-              <div class="coin-title"><h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span></div>
+              <div class="coin-title"><h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span><span id="coingecko-badge" hidden></span></div>
               <p id="coin-name" class="muted"></p>
             </div>
             <div class="coin-price"><strong id="last-price"></strong><span id="last-price-label" class="muted">USDT · последняя закрытая свеча</span></div>
@@ -90,6 +90,12 @@
             <div id="coin-badges" class="badge-list"></div>
             <a id="tradingview-link" target="_blank" rel="noopener noreferrer">Открыть в TradingView ↗</a>
           </div>
+          <section id="coingecko-context" class="coingecko-context" aria-labelledby="coingecko-heading" hidden>
+            <h3 id="coingecko-heading">Трендовые категории CoinGecko</h3>
+            <div id="coingecko-categories" class="badge-list"></div>
+            <p id="coingecko-category-status" class="muted" hidden></p>
+            <p class="muted">Поисковое внимание, не сигнал роста. Данные сохранённого среза не меняются при Update chart.</p>
+          </section>
           <div class="chart-toolbar">
             <span><strong>Цена</strong> <span class="muted">/ свечи 1h · UTC</span></span>
             <div class="chart-actions">

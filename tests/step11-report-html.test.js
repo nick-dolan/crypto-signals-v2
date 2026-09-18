@@ -29,6 +29,13 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="update-chart"/)
   assert.match(html, /id="chart-update-status"/)
   assert.match(html, /id="report-time-note"/)
+  assert.match(html, /id="coingecko-badge"[^>]*hidden/)
+  assert.match(html, /id="coingecko-context"[^>]*aria-labelledby="coingecko-heading"[^>]*hidden/)
+  assert.match(html, /Трендовые категории CoinGecko/)
+  assert.match(html, /id="coingecko-categories"/)
+  assert.match(html, /id="coingecko-category-status"/)
+  assert.match(html, /\.coingecko-badge\s*\{/)
+  assert.match(html, /Поисковое внимание, не сигнал роста/)
   assert.match(html, /id="sustained-strength"/)
   assert.match(html, /aria-labelledby="sustained-strength-heading"/)
   assert.match(html, /Устойчивая сила/)
@@ -76,6 +83,7 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
   const report = {
     coins: [{
       symbol: unsafe, explanation: unsafe, drivers: [unsafe], history: { warning: unsafe },
+      features: { coingeckoId: "coin", coingeckoTrending: true, coingeckoTrendingCategories: [unsafe] },
       information: {
         news: { status: "failed", error: unsafe, items: [{ title: unsafe, content: unsafe, shortDescription: unsafe }] },
         twitter: { status: "available", tweets: [{ text: unsafe, authorUsername: unsafe }] },

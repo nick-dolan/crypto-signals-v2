@@ -342,6 +342,7 @@ select {
 
 .top-card-heading {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 9px;
 }
@@ -576,6 +577,7 @@ table {
 
 .coin-title {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
 }
@@ -646,6 +648,41 @@ table {
     border-radius: 5px;
     font-size: 11px;
     background: #1d2a3b;
+}
+
+.coingecko-badge {
+    display: inline-block;
+    color: var(--accent);
+    background: #203550;
+    border: 1px solid #355579;
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.coin-button .coingecko-badge {
+    margin-left: 5px;
+    padding: 2px 4px;
+    font-size: 9px;
+}
+
+.coingecko-context {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.coingecko-context .badge-list {
+    margin-top: 8px;
+}
+
+.coingecko-context .badge {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.coingecko-context p {
+    margin-top: 7px;
+    font-size: 11px;
 }
 
 .badge.positive {

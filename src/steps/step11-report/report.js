@@ -93,6 +93,9 @@
       case false:
         return "Нет"
       default:
+        if (key === "coingeckoTrendingCategories") {
+          return value.length ? value.join(", ") : "Нет пересечений с трендовыми категориями"
+        }
         return key === "flags" ? value.map(flagLabel).join(", ") || "Нет активных" : String(value)
     }
   }
@@ -152,6 +155,12 @@
     }))
   }
 
+  function createCoinGeckoBadge () {
+    const badge = element("span", "badge coingecko-badge", "CoinGecko Trending")
+    badge.title = "Поисковое внимание CoinGecko, не сигнал роста"
+    return badge
+  }
+
   function renderTopCandidates () {
     byId("top-candidates").replaceChildren(...topCandidates.map((coin) => {
       const bias = direction(coin.directionBias)
@@ -161,6 +170,9 @@
       card.setAttribute("aria-pressed", String(coin.symbol === selectedSymbol))
       const heading = element("span", "top-card-heading")
       heading.append(element("span", "top-card-rank", `0${coin.topRank}`), element("span", "top-card-symbol", coin.symbol))
+      if (coin.features.coingeckoTrending === true) {
+        heading.append(createCoinGeckoBadge())
+      }
       const estimate = element("span", "top-card-probability")
       estimate.append(element("strong", "", probability(coin.movementProbability)), element("span", "muted", "P движения"))
       const track = element("span", "probability-track")
@@ -205,6 +217,9 @@
       button.append(element("strong", "", coin.symbol))
       if (coin.topRank != null) {
         button.append(element("span", "top-star", `★ ${coin.topRank}`))
+      }
+      if (coin.features.coingeckoTrending === true) {
+        button.append(createCoinGeckoBadge())
       }
       button.append(element("small", "", coin.name))
       cell.append(button)
@@ -338,6 +353,25 @@
     byId("context-generated").textContent = `Объяснение дополнено ${time(report.informationSources.contextGeneratedAt)} UTC. Вероятности и аргументы шага 7 не пересчитывались.`
     renderSource("news", coin.information.news, coin.information.news.items, newsItem)
     renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
+  }
+
+  function renderCoinGecko (coin) {
+    const trending = coin.features.coingeckoTrending === true
+    const categories = trending ? coin.features.coingeckoTrendingCategories : null
+    const status = !trending
+      ? ""
+      : categories == null
+        ? "Нет данных о категориях"
+        : categories.length ? "" : "Нет пересечений с трендовыми категориями"
+
+    byId("coingecko-badge").hidden = !trending
+    byId("coingecko-badge").replaceChildren(...(trending ? [createCoinGeckoBadge()] : []))
+    byId("coingecko-context").hidden = !trending
+    byId("coingecko-categories").replaceChildren(...(categories ?? []).map(category => (
+      element("span", "badge", category)
+    )))
+    byId("coingecko-category-status").textContent = status
+    byId("coingecko-category-status").hidden = !status
   }
 
   function renderSustainedStrength (coin) {
@@ -652,6 +686,7 @@
     renderSignals("drivers", coin.drivers)
     renderSignals("counter-signals", coin.counterSignals)
     renderInformation(coin)
+    renderCoinGecko(coin)
     renderSustainedStrength(coin)
     renderFeatures(coin)
     renderChart(coin)

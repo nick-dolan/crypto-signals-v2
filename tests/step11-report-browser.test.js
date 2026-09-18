@@ -216,6 +216,102 @@ function createReport (symbols = ["COTI"]) {
   return report
 }
 
+test("CoinGecko badges and categories follow the selected coin without leaking stale data", () => {
+  const report = createReport(["COTI", "SOL", "MINA"])
+  Object.assign(report.coins[0].features, {
+    coingeckoId: "coti", coingeckoTrending: true, coingeckoTrendingCategories: ["Privacy", "Layer 1"],
+    category: "tradingview-category",
+  })
+  Object.assign(report.coins[1].features, {
+    coingeckoId: "solana", coingeckoTrending: true, coingeckoTrendingCategories: [],
+  })
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+  const badges = node => descendants(node).filter(child => child.className === "badge coingecko-badge")
+
+  assert.equal(byId("coingecko-badge").hidden, false)
+  assert.equal(byId("coingecko-badge").textContent, "CoinGecko Trending")
+  assert.equal(byId("coingecko-context").hidden, false)
+  assert.deepEqual(byId("coingecko-categories").children.map(node => node.textContent), ["Privacy", "Layer 1"])
+  assert.equal(byId("coingecko-category-status").hidden, true)
+  assert.equal(badges(byId("top-candidates")).length, 2)
+  assert.equal(badges(byId("candidate-rows")).length, 2)
+  assert.equal(badges(byId("candidate-rows")).every(badge => badge.textContent === "CoinGecko Trending"), true)
+  assert.equal(byId("feature-rows").children.find(row => row.children[0].textContent === "coingeckoTrendingCategories")
+    .children[1].textContent, "Privacy, Layer 1")
+
+  selectCoin(browser, "SOL")
+  assert.equal(byId("coingecko-badge").hidden, false)
+  assert.equal(byId("coingecko-context").hidden, false)
+  assert.equal(byId("coingecko-categories").children.length, 0)
+  assert.equal(byId("coingecko-category-status").hidden, false)
+  assert.equal(byId("coingecko-category-status").textContent, "Нет пересечений с трендовыми категориями")
+  assert.equal(byId("feature-rows").children.find(row => row.children[0].textContent === "coingeckoTrendingCategories")
+    .children[1].textContent, "Нет пересечений с трендовыми категориями")
+
+  selectCoin(browser, "MINA")
+  assert.equal(byId("coingecko-badge").hidden, true)
+  assert.equal(byId("coingecko-badge").children.length, 0)
+  assert.equal(byId("coingecko-context").hidden, true)
+  assert.equal(byId("coingecko-categories").children.length, 0)
+  assert.equal(byId("coingecko-category-status").hidden, true)
+  assert.equal(byId("coingecko-category-status").textContent, "")
+
+  selectCoin(browser, "COTI")
+  assert.deepEqual(byId("coingecko-categories").children.map(node => node.textContent), ["Privacy", "Layer 1"])
+  assert.equal(byId("coingecko-badge").children.length, 1)
+  assert.deepEqual(report, before)
+  assert.deepEqual(browser.updateCalls, [])
+  assert.deepEqual(browser.directRequests, [])
+})
+
+for (const status of [undefined, null, false, "true"]) {
+  test(`CoinGecko badges require a confirmed true flag, not ${String(status)}`, () => {
+    const report = createReport()
+    Object.assign(report.coins[0].features, {
+      coingeckoId: "coti", coingeckoTrending: status, coingeckoTrendingCategories: ["Privacy"],
+    })
+    const { byId } = runReport(report)
+
+    assert.equal(byId("coingecko-badge").hidden, true)
+    assert.equal(byId("coingecko-context").hidden, true)
+    assert.equal(byId("coingecko-categories").children.length, 0)
+    for (const id of ["top-candidates", "candidate-rows"]) {
+      assert.equal(descendants(byId(id)).some(node => node.className === "badge coingecko-badge"), false)
+    }
+  })
+}
+
+for (const categories of [null, undefined]) {
+  test(`missing CoinGecko categories ${String(categories)} are not reported as an empty intersection`, () => {
+    const report = createReport()
+    Object.assign(report.coins[0].features, {
+      coingeckoId: "coti", coingeckoTrending: true, coingeckoTrendingCategories: categories,
+    })
+    const { byId } = runReport(report)
+
+    assert.equal(byId("coingecko-badge").hidden, false)
+    assert.equal(byId("coingecko-category-status").textContent, "Нет данных о категориях")
+    assert.equal(byId("coingecko-category-status").hidden, false)
+  })
+}
+
+test("CoinGecko category names are literal text and never become markup", () => {
+  const report = createReport()
+  const unsafe = "<img src=x onerror=alert(1)> & Privacy"
+  Object.assign(report.coins[0].features, {
+    coingeckoId: "coti", coingeckoTrending: true, coingeckoTrendingCategories: [unsafe],
+  })
+  const { byId } = runReport(report)
+  const [category] = byId("coingecko-categories").children
+
+  assert.equal(category.tagName, "SPAN")
+  assert.equal(category.textContent, unsafe)
+  assert.equal(category.children.length, 0)
+  assert.equal(descendants(byId("coingecko-context")).some(node => node.tagName === "IMG"), false)
+})
+
 test("report displays directional pattern labels and new numeric features", () => {
   for (const [flag, label] of [
     ["range_pressure_up", "Давление на верхнюю границу"],
@@ -1325,6 +1421,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
   const report = createReport()
   Object.assign(report.coins[0].features, {
     sustainedStatus: "persistent", sustainedHistoryScore: 82.5, sustainedCurrentScore: 91.25,
+    coingeckoId: "coti", coingeckoTrending: true, coingeckoTrendingCategories: ["Privacy"],
   })
   addInformation(report)
   const before = structuredClone(report)
@@ -1343,6 +1440,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
     "information-panel", "context-generated", "news-window", "news-count", "news-status", "news-items", "twitter-window",
     "twitter-count", "twitter-status", "twitter-items",
     "sustained-strength-status", "sustained-strength-history", "sustained-strength-current",
+    "coingecko-badge", "coingecko-context", "coingecko-categories", "coingecko-category-status",
   ].map(id => ({ id, text: browser.byId(id).textContent, hidden: browser.byId(id).hidden, children: [...browser.byId(id).children] }))
   const assertUnchanged = () => {
     assert.equal(browser.byId("report-data").textContent, embedded)

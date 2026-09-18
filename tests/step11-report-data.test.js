@@ -107,6 +107,27 @@ function build (input, readCoinData = input.readCoinData) {
   return buildReportData(input.analysis, input.payload, input.shortlist, { readCoinData })
 }
 
+test("report preserves confirmed, empty and unknown CoinGecko context from the agent payload", async () => {
+  const input = createInput(["COTI", "SOL", "MINA"])
+  const contexts = [
+    ["coti", true, ["Layer 1", "Privacy"]],
+    ["solana", true, []],
+    [null, null, null],
+  ]
+  input.payload.schemaVersion = 11
+  input.payload.schema.coingecko = ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"]
+  input.payload.candidates.forEach((candidate, index) => {
+    candidate.coingecko = contexts[index]
+  })
+  const before = structuredClone(input.payload)
+  const report = await build(input)
+
+  assert.deepEqual(report.coins.map(({ features }) => [
+    features.coingeckoId, features.coingeckoTrending, features.coingeckoTrendingCategories,
+  ]), contexts)
+  assert.deepEqual(input.payload, before)
+})
+
 test("joins by symbol, preserves assessments and top order, and reads histories sequentially", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
   input.analysis.assessments = [
