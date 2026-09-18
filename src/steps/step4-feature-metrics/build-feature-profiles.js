@@ -20,6 +20,13 @@ function findUnavailableMetrics (features, categoryApplicable, socialAvailable) 
     "movementLifecycle.breakout_age_hours",
     "movementLifecycle.post_breakout_extension_atr",
     "movementLifecycle.extension_from_base_atr",
+    "sustainedStrength",
+    ...[
+      "history_score", "current_score", "down_win_rate", "down_positive_rate",
+      "down_excess_median", "up_participation_rate", "up_excess_median",
+      "daily_win_rate", "weekly_win_rate", "excess_4h", "excess_12h",
+      "excess_24h", "excess_7d",
+    ].map(name => `sustainedStrength.${name}`),
     ...(categoryApplicable
       ? []
       : [

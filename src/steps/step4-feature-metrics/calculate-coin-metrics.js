@@ -67,6 +67,7 @@ export function calculateCoinMetrics (
       derivatives,
       social,
       relativeStrength,
+      sustainedStrength: universeContext.sustainedStrengthByCoin?.get(baseCurrencyId) ?? null,
       breadthNarrative,
       divergences,
     },
