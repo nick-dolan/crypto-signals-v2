@@ -6,17 +6,17 @@ import { parseAgentAnalysis } from "../src/steps/step7-agent-analysis/parse-agen
 
 function createPayload () {
   return {
-    schemaVersion: 2,
+    schemaVersion: 10,
     asOf: "2026-08-31T09:00:00.000Z",
     timeframe: "1h",
     candidateCount: 2,
     marketContext: {
       breadth4h: 0.199,
     },
-    schema: ["symbol", "rvRatio", "volumeZ"],
+    schema: { volatility: ["rvRatio"], volume: ["volumeZ"] },
     candidates: [
-      ["SOL", 0.6, 1.4],
-      ["BTC", 0.9, 0.2],
+      { symbol: "SOL", name: "Solana", selectionRank: 1, volatility: [0.6], volume: [1.4], flags: [] },
+      { symbol: "BTC", name: "Bitcoin", selectionRank: 2, volatility: [0.9], volume: [0.2], flags: [] },
     ],
   }
 }
@@ -182,9 +182,11 @@ test("top candidates reject unknown symbols, duplicates and more than five entri
 
   const payload = createPayload()
   payload.candidateCount = 6
-  payload.candidates = Array.from({ length: 6 }, (_, index) => [`COIN${index}`, 0.6, 1.4])
-  response.assessments = payload.candidates.map(([symbol]) => ({ ...createAgentResponse().assessments[0], symbol }))
-  response.topCandidates = payload.candidates.map(([symbol]) => ({ ...createAgentResponse().topCandidates[0], symbol }))
+  payload.candidates = Array.from({ length: 6 }, (_, index) => ({
+    ...createPayload().candidates[0], symbol: `COIN${index}`, selectionRank: index + 1,
+  }))
+  response.assessments = payload.candidates.map(({ symbol }) => ({ ...createAgentResponse().assessments[0], symbol }))
+  response.topCandidates = payload.candidates.map(({ symbol }) => ({ ...createAgentResponse().topCandidates[0], symbol }))
   assert.throws(() => parseAgentAnalysis(JSON.stringify(response), payload), /unexpected length/)
 })
 
@@ -224,6 +226,26 @@ test("agent analysis parser keeps explanations grounded and human-readable", () 
     () => parseAgentAnalysis(JSON.stringify(analysis), createPayload()),
     /short interpretation text/,
   )
+})
+
+test("group names, nested paths and selection rank are not evidence fields", () => {
+  for (const field of ["volume", "volume.volumeZ", "selectionRank"]) {
+    const response = createAgentResponse()
+    response.assessments[0].drivers = [{ fields: [field], text: "подтверждение сигнала" }]
+    assert.throws(
+      () => parseAgentAnalysis(JSON.stringify(response), createPayload()),
+      /references unknown field/,
+    )
+  }
+})
+
+test("malformed grouped payload is rejected before calling the agent", async () => {
+  const payload = createPayload()
+  payload.candidates[0].volume = []
+
+  await assert.rejects(analyzeCandidates(payload, createShortlist(), "system prompt", {
+    callAgent: async () => assert.fail("Malformed payload must not reach the agent"),
+  }), /schema length/)
 })
 
 test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool", async () => {

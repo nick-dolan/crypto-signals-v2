@@ -1,6 +1,7 @@
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
+import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
 
 function indexBySymbol (items, symbolOf, label) {
   if (!isArray(items)) {
@@ -36,24 +37,8 @@ function validateReportInputs (analysis, payload, shortlist) {
     throw new Error("Steps 5, 6 and 7 must use the same closed hourly snapshot (asOf, 1h)")
   }
 
-  if (
-    !isArray(payload.schema)
-    || !payload.schema.includes("symbol")
-    || payload.schema.some(field => !isString(field) || !field.trim())
-    || new Set(payload.schema).size !== payload.schema.length
-  ) {
-    throw new Error("Step 6 schema must contain unique column names including symbol")
-  }
-
-  if (
-    !isArray(payload.candidates)
-    || payload.candidates.some(row => !isArray(row) || row.length !== payload.schema.length)
-  ) {
-    throw new Error("Step 6 candidate rows must match the schema length")
-  }
-
-  const symbolIndex = payload.schema.indexOf("symbol")
-  const rowsBySymbol = indexBySymbol(payload.candidates, row => row[symbolIndex], "Step 6 candidates")
+  const { candidates } = decodeAgentPayload(payload)
+  const rowsBySymbol = indexBySymbol(candidates, candidate => candidate.symbol, "Step 6 candidates")
   const shortlistBySymbol = indexBySymbol(shortlist.candidates, item => item?.coin?.symbol, "Step 5 candidates")
   const assessmentsBySymbol = indexBySymbol(analysis.assessments, item => item?.symbol, "Step 7 assessments")
   const topBySymbol = indexBySymbol(analysis.topCandidates, item => item?.symbol, "Step 7 top candidates")
@@ -242,7 +227,7 @@ export async function buildReportData (
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,
       name: coin.name,
       marketSymbol: coin.marketSymbol,
-      features: Object.fromEntries(payload.schema.map((field, index) => [field, row[index]])),
+      features: row,
       history: await readHistory(coin, asOfTimestamp, readCoinData),
     })
   }

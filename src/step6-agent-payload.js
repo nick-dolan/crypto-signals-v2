@@ -8,7 +8,7 @@ async function runAgentPayloadStep () {
   const outputPath = await writeTmpJson("step6-agent-payload.json", payload)
 
   console.log(
-    `✓ Saved ${payload.candidateCount} compact agent rows with ${payload.schema.length} columns to ${outputPath}`,
+    `✓ Saved ${payload.candidateCount} compact agent candidates with ${Object.keys(payload.schema).length} groups to ${outputPath}`,
   )
 }
 

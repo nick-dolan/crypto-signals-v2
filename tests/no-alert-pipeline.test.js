@@ -51,16 +51,23 @@ function createInput () {
     })),
   }
   const payload = {
+    schemaVersion: 10,
     asOf,
     timeframe: "1h",
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
     candidateCount: symbols.length,
     marketContext: { breadth4h: 0.5 },
     marketDefinitions: { breadth4h: "Ширина рынка" },
-    schema: ["symbol", "volumeZ"],
+    schema: { volume: ["volumeZ"] },
     definitions: { symbol: "Тикер", volumeZ: "Аномалия объёма" },
     flagDefinitions: {},
-    candidates: symbols.map((symbol, index) => [symbol, index + 0.25]),
+    candidates: symbols.map((symbol, index) => ({
+      symbol,
+      name: `Coin ${symbol}`,
+      selectionRank: index + 1,
+      volume: [index + 0.25],
+      flags: [],
+    })),
   }
   const analysis = {
     schemaVersion: 1,

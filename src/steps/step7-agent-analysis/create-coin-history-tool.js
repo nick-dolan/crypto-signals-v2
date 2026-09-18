@@ -1,8 +1,9 @@
 import { defineTool } from "@github/copilot-sdk"
 
 import { readTmpJson } from "../../helpers/fs-helper.js"
-import { isArray, isError, isFinite, isInt, isObject, isString } from "../../helpers/utils.typed.js"
+import { isArray, isError, isFinite, isInt, isObject } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
+import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
 
 function normalizeNumber (value) {
   if (!isFinite(value)) {
@@ -13,24 +14,11 @@ function normalizeNumber (value) {
 }
 
 function getCandidateSymbols (payload) {
-  if (!isArray(payload?.schema) || !isArray(payload?.candidates)) {
-    throw new Error("Step 6 agent payload is incomplete")
-  }
-
-  const symbolIndex = payload.schema.indexOf("symbol")
-
-  if (symbolIndex < 0) {
-    throw new Error("Step 6 agent payload does not define symbol")
-  }
-
-  const symbols = payload.candidates.map(row => row?.[symbolIndex])
-
-  if (symbols.some(symbol => !isString(symbol) || !symbol)) {
-    throw new Error("Step 6 agent payload contains an invalid symbol")
-  }
+  const { candidates } = decodeAgentPayload(payload)
+  const symbols = candidates.map(candidate => candidate.symbol)
 
   if (payload.candidateCount !== symbols.length) {
-    throw new Error("Step 6 candidate count does not match its rows")
+    throw new Error("Step 6 candidate count does not match its candidates")
   }
 
   return symbols

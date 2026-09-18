@@ -2,7 +2,9 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
 
+import { isArray } from "../src/helpers/utils.typed.js"
 import { buildPreliminaryShortlist } from "../src/steps/step5-preliminary-filter/build-preliminary-shortlist.js"
+import { decodeAgentPayload } from "../src/steps/step6-agent-payload/agent-payload-format.js"
 import { buildAgentPayload } from "../src/steps/step6-agent-payload/build-agent-payload.js"
 import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
 
@@ -171,26 +173,113 @@ function createShortlist (candidates) {
 }
 
 function getSustainedValues (payload, index = 0) {
-  return Object.fromEntries(payload.schema
-    .map((field, column) => [field, payload.candidates[index][column]])
+  return Object.fromEntries(Object.entries(decodeAgentPayload(payload).candidates[index])
     .filter(([field]) => field.startsWith("sustained")))
 }
 
-test("agent payload creates documented compact rows", () => {
-  const payload = buildAgentPayload(createShortlist([createCandidate("SOL")]))
-  const values = Object.fromEntries(payload.schema.map((name, index) => [
-    name,
-    payload.candidates[0][index],
-  ]))
+test("agent payload groups the original fields in the approved order, including an empty shortlist", () => {
+  const payload = buildAgentPayload(createShortlist([]))
 
-  assert.equal(payload.schemaVersion, 9)
+  assert.equal(payload.candidateCount, 0)
+  assert.deepEqual(payload.candidates, [])
+  assert.deepEqual(decodeAgentPayload(payload).candidates, [])
+  assert.deepEqual(Object.keys(payload.schema), [
+    "profile", "volatility", "lifecycle", "volume", "derivatives", "social",
+    "relativeStrength", "sustainedStrength", "categoryContext",
+  ])
+  assert.deepEqual(payload.schema, {
+    profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
+    volatility: ["rvRatio", "bbPctile", "atrPctile", "rangeStreak", "squeezeAge"],
+    lifecycle: [
+      "priorRunupAtr72h",
+      "max24hRunupLast7dAtr",
+      "priorDrawdownAtr72h",
+      "max24hDrawdownLast7dAtr",
+      "rangePosition7d",
+      "distanceToHigh24hAtr",
+      "distanceToLow24hAtr",
+      "preBreakoutSqueezeAge",
+      "squeezeEndedHoursAgo",
+      "breakoutAgeHours",
+      "postBreakoutExtensionAtr",
+      "extensionFromBaseAtr",
+    ],
+    volume: ["volumeZ", "volumeAccel3hPct", "relVolume", "vdShare4h", "cvdMinusPriceZ12h"],
+    derivatives: [
+      "oiChange1hPct",
+      "oiChange4hPct",
+      "oiChange12hPct",
+      "oiAccel4hPct",
+      "oiZ",
+      "oiLevelPctile",
+      "quietOi",
+      "fundingRate",
+      "fundingPctile",
+      "fundingMinusOiZ4h",
+      "premiumZ",
+      "liqImbalance",
+      "crowdVsTop",
+    ],
+    social: [
+      "socialStatus",
+      "socialDominanceZ",
+      "interactionsZ",
+      "socialAccel3hPct",
+      "interactionsPerContributorZ",
+      "postsPerContributor",
+      "socialMinusPriceZ3h",
+    ],
+    relativeStrength: [
+      "btcBeta7d",
+      "btcCorr24h",
+      "btcCorrChange",
+      "residualLogReturn4hPct",
+      "residualZ",
+      "rsVsAlts12hPct",
+    ],
+    sustainedStrength: [
+      "sustainedStatus",
+      "sustainedHistoryScore",
+      "sustainedCurrentScore",
+      "sustainedDownWinRate",
+      "sustainedDownPositiveRate",
+      "sustainedDownExcessMedianPct",
+      "sustainedUpParticipationRate",
+      "sustainedExcess24hPct",
+    ],
+    categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+  })
+})
+
+test("agent payload creates documented grouped candidates without changing market values", () => {
+  const shortlist = createShortlist([createCandidate("SOL")])
+  const before = structuredClone(shortlist)
+  const payload = buildAgentPayload(shortlist)
+  const { fields, candidates: [values] } = decodeAgentPayload(payload)
+
+  assert.equal(payload.schemaVersion, 10)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
+  assert.equal(payload.objective, "P(|движение| > 2.5 ATR в следующие 4–12 часов)")
+  assert.equal(payload.candidateOrder, "От наиболее приоритетного кандидата к наименее приоритетному")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 68)
-  assert.equal(new Set(payload.schema).size, 68)
-  assert.deepEqual(Object.keys(payload.definitions), payload.schema)
-  assert.equal(payload.candidates[0].length, payload.schema.length)
+  assert.equal(fields.length, 68)
+  assert.equal(new Set(fields).size, 68)
+  assert.equal(fields.includes("selectionRank"), false)
+  assert.equal(Object.hasOwn(values, "selectionRank"), false)
+  assert.equal(Object.keys(payload.definitions).length, fields.length + 1)
+  assert.deepEqual(Object.keys(payload.definitions).sort(), [...fields, "selectionRank"].sort())
+  assert.equal(payload.definitions.selectionRank, "Приоритет предварительного отбора, не готовый ответ")
+  assert.deepEqual(Object.keys(payload.candidates[0]), [
+    "symbol", "name", "selectionRank", ...Object.keys(payload.schema), "flags",
+  ])
+  assert.equal(payload.candidates[0].selectionRank, 1)
+  for (const [group, names] of Object.entries(payload.schema)) {
+    assert.ok(isArray(payload.candidates[0][group]), group)
+    assert.equal(payload.candidates[0][group].length, names.length, group)
+  }
+  assert.deepEqual(shortlist, before)
+  assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))), { fields, candidates: [values] })
   assert.deepEqual(payload.marketContext, {
     breadth4h: 0.489,
     altMarketBackground: { status: "mixed", change4hPct: -1.23456789, breadth4h: 0.48858, warning: null },
@@ -287,13 +376,13 @@ test("agent payload creates documented compact rows", () => {
     "triggerSignals",
     "contextSignals",
   ]) {
-    assert.equal(serialized.includes(excluded), false)
+    assert.equal(serialized.includes(`"${excluded}"`), false)
   }
 })
 
 test("agent payload documents sustained strength units, coverage and precomputed status", () => {
   const payload = buildAgentPayload(createShortlist([]))
-  const fields = payload.schema.filter(field => field.startsWith("sustained"))
+  const fields = payload.schema.sustainedStrength
 
   assert.deepEqual(fields, [
     "sustainedStatus",
@@ -472,6 +561,24 @@ for (const [status, historyScore, currentScore, downWinRate] of [
   })
 }
 
+test("agent payload keeps shortlist order and separates selection rank from market rank", () => {
+  const shortlist = createShortlist([
+    createCandidate("ZETA", { coin: { rank: 50 } }),
+    createCandidate("ALPHA", { coin: { rank: 1 } }),
+    createCandidate("MID", { coin: { rank: 5 } }),
+  ])
+  const before = structuredClone(shortlist)
+  const payload = buildAgentPayload(shortlist)
+  const { candidates } = decodeAgentPayload(payload)
+
+  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
+    ["ZETA", 1], ["ALPHA", 2], ["MID", 3],
+  ])
+  assert.deepEqual(candidates.map(candidate => candidate.symbol), ["ZETA", "ALPHA", "MID"])
+  assert.deepEqual(candidates.map(candidate => candidate.rank), [50, 1, 5])
+  assert.deepEqual(shortlist, before)
+})
+
 test("agent payload preserves order and nullable metrics", () => {
   const payload = buildAgentPayload(createShortlist([
     createCandidate("FIRST"),
@@ -504,9 +611,7 @@ test("agent payload preserves order and nullable metrics", () => {
       },
     }),
   ]))
-  const rows = payload.candidates.map(row => Object.fromEntries(
-    payload.schema.map((name, index) => [name, row[index]]),
-  ))
+  const { candidates: rows } = decodeAgentPayload(payload)
 
   assert.deepEqual(rows.map(row => row.symbol), ["FIRST", "SECOND"])
   assert.equal(rows[1].category, null)
@@ -549,8 +654,8 @@ test("unverified liquidation ratios never reach the agent payload", () => {
 
   const payload = buildAgentPayload(createShortlist([original]))
   assert.deepEqual(buildAgentPayload(createShortlist([changed])), payload)
-  assert.equal(payload.schema.includes("liquidations4hOverOi"), false)
-  assert.equal(payload.schema.includes("liqImbalance"), true)
+  assert.equal(decodeAgentPayload(payload).fields.includes("liquidations4hOverOi"), false)
+  assert.equal(decodeAgentPayload(payload).fields.includes("liqImbalance"), true)
 })
 
 test("agent payload marks the entire unavailable social block with nulls", () => {
@@ -566,10 +671,7 @@ test("agent payload marks the entire unavailable social block with nulls", () =>
       },
     }),
   ]))
-  const values = Object.fromEntries(payload.schema.map((name, index) => [
-    name,
-    payload.candidates[0][index],
-  ]))
+  const [values] = decodeAgentPayload(payload).candidates
 
   assert.equal(values.socialStatus, "unavailable")
 
@@ -614,7 +716,7 @@ for (const background of [
     assert.deepEqual(payload.marketContext.altMarketBackground, background)
     assert.deepEqual(JSON.parse(JSON.stringify(payload)).marketContext.altMarketBackground, background)
     assert.deepEqual(shortlist, before)
-    assert.equal(payload.schema.includes("altMarketBackground"), false)
+    assert.equal(decodeAgentPayload(payload).fields.includes("altMarketBackground"), false)
     assert.match(payload.marketDefinitions.altMarketBackground, /шаге 4/)
     assert.match(payload.marketDefinitions.altMarketBackground, /не прогноз и не вероятность/)
     assert.match(payload.conventions.rounding, /altMarketBackground.*без округления/)
@@ -641,7 +743,7 @@ for (const flag of ["range_pressure_up", "range_pressure_down", "short_squeeze_s
     const before = structuredClone(candidate)
     const shortlist = { ...createShortlist([]), ...buildPreliminaryShortlist([candidate]) }
     const payload = buildAgentPayload(shortlist)
-    const values = Object.fromEntries(payload.schema.map((name, index) => [name, payload.candidates[0][index]]))
+    const [values] = decodeAgentPayload(payload).candidates
 
     assert.equal(payload.candidateCount, 1)
     assert.deepEqual(values.flags, [flag])
@@ -663,7 +765,7 @@ test("funding keeps tiny signed values and flags are not recalculated from round
       },
     })
     const payload = buildAgentPayload(createShortlist([candidate]))
-    const values = Object.fromEntries(payload.schema.map((name, index) => [name, payload.candidates[0][index]]))
+    const [values] = decodeAgentPayload(payload).candidates
 
     assert.equal(values.fundingRate, funding)
     assert.equal(values.distanceToHigh24hAtr, 0.5)
@@ -740,6 +842,9 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
   const shortlist = JSON.parse(JSON.stringify({ ...createShortlist([]), ...selection }))
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
   assert.equal(payload.candidateCount, 2)
+  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
+    ["FIRST", 1], ["SECOND", 2],
+  ])
   assert.equal(shortlist.candidates[0].features.sustainedStrength.peer_count, 4)
   assert.equal(getSustainedValues(payload).sustainedCurrentScore, 91.235)
 

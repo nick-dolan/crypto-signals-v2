@@ -43,13 +43,19 @@ function createInput (symbols = ["COTI"]) {
     })),
   }
   const payload = {
+    schemaVersion: 10,
     asOf: shortlist.asOf,
     timeframe: "1h",
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
     candidateCount: symbols.length,
     marketContext: { breadth4h: 0.2 },
     marketDefinitions: { breadth4h: "Ширина рынка" },
-    schema: ["volumeZ", "symbol", "name", "quietOi", "flags", "socialZ"],
+    schema: {
+      profile: [],
+      volume: ["volumeZ"],
+      derivatives: ["quietOi"],
+      social: ["socialZ"],
+    },
     definitions: {
       volumeZ: "Аномалия объёма",
       symbol: "Тикер",
@@ -59,7 +65,16 @@ function createInput (symbols = ["COTI"]) {
       socialZ: "Внимание",
     },
     flagDefinitions: { coiling: "Сжатие" },
-    candidates: symbols.map((symbol, index) => [index + 0.1, symbol, `Payload ${symbol}`, false, ["coiling"], null]),
+    candidates: symbols.map((symbol, index) => ({
+      symbol,
+      name: `Payload ${symbol}`,
+      selectionRank: index + 1,
+      profile: [],
+      volume: [index + 0.1],
+      derivatives: [false],
+      social: [null],
+      flags: ["coiling"],
+    })),
   }
   const analysis = {
     asOf: shortlist.asOf,
@@ -136,7 +151,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
   )))
 
   for (const [index, { history, ...coin }] of report.coins.entries()) {
-    const row = input.payload.candidates.find(row => row[1] === coin.symbol)
+    const candidate = input.payload.candidates.find(candidate => candidate.symbol === coin.symbol)
 
     assert.deepEqual(coin, {
       ...input.analysis.assessments[index],
@@ -144,8 +159,16 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
       topRank: [2, null, 1][index],
       name: `Coin ${coin.symbol}`,
       marketSymbol: `BINANCE:${coin.symbol}USDT.P`,
-      features: Object.fromEntries(input.payload.schema.map((field, column) => [field, row[column]])),
+      features: {
+        volumeZ: candidate.volume[0],
+        symbol: candidate.symbol,
+        name: candidate.name,
+        quietOi: candidate.derivatives[0],
+        flags: candidate.flags,
+        socialZ: candidate.social[0],
+      },
     })
+    assert.ok(!Object.hasOwn(coin.features, "selectionRank"))
     assert.equal(history.warning, null)
     assert.equal(history.candles.length, 168)
     assert.equal(history.volume.length, 168)
@@ -392,7 +415,7 @@ test("rejects different candidate sets, duplicates and unknown top members", asy
       input.analysis.assessments[0].symbol = "OTHER"
     }, /candidate sets/],
     ["payload set", (input) => {
-      input.payload.candidates[0][1] = "OTHER"
+      input.payload.candidates[0].symbol = "OTHER"
     }, /candidate sets/],
     ["shortlist set", (input) => {
       input.shortlist.candidates[0].coin.symbol = "OTHER"
@@ -404,7 +427,7 @@ test("rejects different candidate sets, duplicates and unknown top members", asy
     ["duplicate assessments", (input) => {
       input.analysis.assessments[1] = input.analysis.assessments[0]
     }, /duplicate symbols/],
-    ["duplicate rows", (input) => {
+    ["duplicate payload candidates", (input) => {
       input.payload.candidates[1] = input.payload.candidates[0]
     }, /duplicate symbols/],
     ["duplicate shortlist", (input) => {
@@ -442,38 +465,87 @@ test("rejects different candidate sets, duplicates and unknown top members", asy
   }
 })
 
-test("rejects ambiguous schemas, malformed rows and missing coin metadata", async (t) => {
+test("rejects ambiguous schemas, malformed groups and missing coin metadata", async (t) => {
   for (const [name, change, message] of [
     ["missing schema", (input) => {
       delete input.payload.schema
-    }, /schema/],
-    ["missing symbol column", (input) => {
-      input.payload.schema[1] = "ticker"
-    }, /schema/],
-    ["duplicate column", (input) => {
-      input.payload.schema[0] = "symbol"
-    }, /schema/],
-    ["invalid column", (input) => {
-      input.payload.schema[0] = null
-    }, /schema/],
-    ["short row", (input) => {
-      input.payload.candidates[0].pop()
-    }, /schema length/],
-    ["long row", (input) => {
-      input.payload.candidates[0].push(1)
-    }, /schema length/],
-    ["invalid row", (input) => {
-      input.payload.candidates[0] = {}
-    }, /schema length/],
-    ["metadata", (input) => {
+    }, /Step 6 schema/],
+    ["positional schema", (input) => {
+      input.payload.schema = ["symbol", "volumeZ"]
+    }, /Step 6 schema/],
+    ["invalid schema group", (input) => {
+      input.payload.schema.volume = null
+    }, /Step 6 schema/],
+    ["duplicate field within group", (input) => {
+      input.payload.schema.volume.push("volumeZ")
+    }, /Step 6 schema/],
+    ["duplicate field across groups", (input) => {
+      input.payload.schema.social[0] = "volumeZ"
+    }, /Step 6 schema/],
+    ...["symbol", "name", "selectionRank", "flags"].map(field => [
+      `reserved ${field} field`, (input) => {
+        input.payload.schema.volume[0] = field
+      }, /Step 6 schema/,
+    ]),
+    ...[null, "", "  ", 1].map(field => [
+      `invalid field ${String(field)}`, (input) => {
+        input.payload.schema.volume[0] = field
+      }, /Step 6 schema/,
+    ]),
+    ["short group", (input) => {
+      input.payload.candidates[0].volume.pop()
+    }, /Step 6 candidate.*schema length/],
+    ["long group", (input) => {
+      input.payload.candidates[0].volume.push(1)
+    }, /Step 6 candidate.*schema length/],
+    ["invalid group", (input) => {
+      input.payload.candidates[0].volume = null
+    }, /Step 6 candidate.*schema length/],
+    ["missing group", (input) => {
+      delete input.payload.candidates[0].volume
+    }, /Step 6 candidate.*schema length/],
+    ["extra group", (input) => {
+      input.payload.candidates[0].unknown = []
+    }, /Step 6 candidate.*schema length/],
+    ["positional candidate", (input) => {
+      input.payload.candidates[0] = [0.1, "COTI", "Payload COTI", false, ["coiling"], null]
+    }, /Step 6 candidate.*schema length/],
+    ["shortlist metadata", (input) => {
       delete input.shortlist.candidates[0].coin.marketSymbol
     }, /coin metadata/],
   ]) {
     await t.test(name, async () => {
       const input = createInput()
       change(input)
-      await assert.rejects(build(input), message)
+      await assert.rejects(build(input, async () => assert.fail("Unexpected history read")), message)
     })
+  }
+})
+
+test("rejects missing candidate metadata", async (t) => {
+  for (const field of ["symbol", "name", "selectionRank", "flags"]) {
+    await t.test(field, async () => {
+      const input = createInput()
+      delete input.payload.candidates[0][field]
+      await assert.rejects(build(input), /Step 6 candidate/)
+    })
+  }
+})
+
+test("rejects invalid candidate metadata", async (t) => {
+  for (const [field, values] of [
+    ["symbol", [null, "", "  ", 1]],
+    ["name", [null, "", "  ", 1]],
+    ["selectionRank", [null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, "1"]],
+    ["flags", [null, "coiling", {}]],
+  ]) {
+    for (const value of values) {
+      await t.test(`${field}: ${String(value)}`, async () => {
+        const input = createInput()
+        input.payload.candidates[0][field] = value
+        await assert.rejects(build(input), /Step 6 candidate/)
+      })
+    }
   }
 })
 

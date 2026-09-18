@@ -19,12 +19,12 @@ function createInput () {
     volume: 1_000 + index,
   }))
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 10,
     asOf: new Date((latestTime - 3_600) * 1_000).toISOString(),
     timeframe: "1h",
     candidateCount: 1,
-    schema: ["symbol"],
-    candidates: [["SOL"]],
+    schema: {},
+    candidates: [{ symbol: "SOL", name: "Solana", selectionRank: 1, flags: [] }],
   }
   const shortlist = {
     asOf: payload.asOf,

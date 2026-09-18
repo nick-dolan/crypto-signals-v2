@@ -1,4 +1,5 @@
 import { isArray, isError, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
+import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
 
 export class InvalidCopilotAnalysisError extends Error {
   constructor (message) {
@@ -42,7 +43,7 @@ function formatEvidenceValue (value) {
   return isArray(value) || isObject(value) ? JSON.stringify(value) : String(value)
 }
 
-function normalizeObservations (value, maxLength, payload, row, label) {
+function normalizeObservations (value, maxLength, payload, candidate, label) {
   if (!isArray(value) || value.length > maxLength) {
     invalidAnalysis(`${label} must contain at most ${maxLength} items`)
   }
@@ -50,7 +51,7 @@ function normalizeObservations (value, maxLength, payload, row, label) {
   const marketContext = isObject(payload.marketContext) ? payload.marketContext : {}
   const evidenceByField = new Map([
     ...Object.entries(marketContext),
-    ...payload.schema.map((field, index) => [field, row[index]]),
+    ...Object.entries(candidate),
   ])
 
   return value.map((observation, index) => {
@@ -93,27 +94,20 @@ function normalizeObservations (value, maxLength, payload, row, label) {
   })
 }
 
-function getCandidateSymbols (payload) {
-  if (!isArray(payload?.schema) || !isArray(payload?.candidates)) {
-    invalidAnalysis("step 6 payload is incomplete")
+function readAgentPayload (payload) {
+  let decoded
+
+  try {
+    decoded = decodeAgentPayload(payload)
+  } catch (error) {
+    invalidAnalysis(isError(error) ? error.message : "step 6 payload is incomplete")
   }
 
-  const symbolIndex = payload.schema.indexOf("symbol")
-
-  if (symbolIndex < 0) {
-    invalidAnalysis("step 6 payload does not define symbol")
-  }
-
-  const symbols = payload.candidates.map(row => row?.[symbolIndex])
-
-  if (
-    symbols.some(symbol => !isString(symbol) || !symbol)
-    || payload.candidateCount !== symbols.length
-  ) {
+  if (payload.candidateCount !== decoded.candidates.length) {
     invalidAnalysis("step 6 payload contains invalid candidates")
   }
 
-  return symbols
+  return decoded
 }
 
 export function parseAgentAnalysis (content, payload) {
@@ -145,7 +139,8 @@ export function parseAgentAnalysis (content, payload) {
     invalidAnalysis("asOf does not match the agent payload")
   }
 
-  const symbols = getCandidateSymbols(payload)
+  const { fields, candidates } = readAgentPayload(payload)
+  const symbols = candidates.map(candidate => candidate.symbol)
 
   if (!isArray(analysis.assessments) || analysis.assessments.length !== symbols.length) {
     invalidAnalysis("assessments must contain every candidate")
@@ -186,14 +181,14 @@ export function parseAgentAnalysis (content, payload) {
       assessment.drivers,
       3,
       payload,
-      payload.candidates[index],
+      candidates[index],
       `assessment ${assessment.symbol} drivers`,
     )
     assessment.counterSignals = normalizeObservations(
       assessment.counterSignals,
       2,
       payload,
-      payload.candidates[index],
+      candidates[index],
       `assessment ${assessment.symbol} counterSignals`,
     )
 
@@ -247,7 +242,7 @@ export function parseAgentAnalysis (content, payload) {
     const marketFields = isObject(payload.marketContext)
       ? Object.keys(payload.marketContext)
       : []
-    const technicalField = [...payload.schema, ...marketFields].find(field => (
+    const technicalField = [...fields, ...marketFields].find(field => (
       candidate.explanation.includes(field)
     ))
 
