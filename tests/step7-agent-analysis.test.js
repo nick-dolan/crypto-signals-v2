@@ -253,7 +253,7 @@ test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool"
 
   assert.deepEqual(result, expected)
   assert.equal(captured.systemPrompt, "system prompt")
-  assert.deepEqual(JSON.parse(captured.userMessage), payload)
+  assert.equal(captured.userMessage, JSON.stringify(payload))
   assert.equal(captured.options.model, "GPT-6-Astra")
   assert.equal(captured.options.reasoningEffort, "high")
   assert.equal(captured.options.tools.length, 1)

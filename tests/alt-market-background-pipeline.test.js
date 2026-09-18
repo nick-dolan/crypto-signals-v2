@@ -53,7 +53,9 @@ for (const [name, altMarketBackground] of [
     assert.deepEqual(shortlist.marketContext, featureMetrics.marketContext)
 
     await run("step6-agent-payload.js")
-    const payload = await readJson("step6-agent-payload.json")
+    const payloadText = await fs.readFile(path.join(directory, "tmp", "step6-agent-payload.json"), "utf8")
+    const payload = JSON.parse(payloadText)
+    assert.equal(payloadText, JSON.stringify(payload, null, 2))
     assert.equal(payload.asOf, featureMetrics.asOf)
     assert.equal(payload.candidateCount, 0)
     assert.deepEqual(payload.candidates, [])
