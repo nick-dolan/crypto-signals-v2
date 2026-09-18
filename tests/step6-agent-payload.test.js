@@ -183,12 +183,12 @@ test("agent payload creates documented compact rows", () => {
     payload.candidates[0][index],
   ]))
 
-  assert.equal(payload.schemaVersion, 8)
+  assert.equal(payload.schemaVersion, 9)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(payload.schema.length, 80)
-  assert.equal(new Set(payload.schema).size, 80)
+  assert.equal(payload.schema.length, 68)
+  assert.equal(new Set(payload.schema).size, 68)
   assert.deepEqual(Object.keys(payload.definitions), payload.schema)
   assert.equal(payload.candidates[0].length, payload.schema.length)
   assert.deepEqual(payload.marketContext, {
@@ -260,23 +260,12 @@ test("agent payload creates documented compact rows", () => {
     sustainedStatus: "persistent",
     sustainedHistoryScore: 81.412,
     sustainedCurrentScore: 91.235,
-    sustainedHistoryHours: 1440.123,
-    sustainedPeerCount: 99,
-    sustainedDownWindows: 64,
-    sustainedUpWindows: 85,
-    sustainedDailyWindows: 60,
-    sustainedWeeklyWindows: 8,
+
     sustainedDownWinRate: 0.812,
     sustainedDownPositiveRate: 0.235,
     sustainedDownExcessMedianPct: 0.457,
     sustainedUpParticipationRate: 0.723,
-    sustainedUpExcessMedianPct: -0.123,
-    sustainedDailyWinRate: 0.846,
-    sustainedWeeklyWinRate: 0.875,
-    sustainedExcess4hPct: 1.235,
-    sustainedExcess12hPct: 2.346,
     sustainedExcess24hPct: 3.457,
-    sustainedExcess7dPct: 4.568,
     categoryMoveAtr: 1.458,
     categoryBreadth: 0.667,
     coinLeadAtr: -0.486,
@@ -306,7 +295,16 @@ test("agent payload documents sustained strength units, coverage and precomputed
   const payload = buildAgentPayload(createShortlist([]))
   const fields = payload.schema.filter(field => field.startsWith("sustained"))
 
-  assert.equal(fields.length, 20)
+  assert.deepEqual(fields, [
+    "sustainedStatus",
+    "sustainedHistoryScore",
+    "sustainedCurrentScore",
+    "sustainedDownWinRate",
+    "sustainedDownPositiveRate",
+    "sustainedDownExcessMedianPct",
+    "sustainedUpParticipationRate",
+    "sustainedExcess24hPct",
+  ])
   for (const field of fields) {
     assert.match(payload.definitions[field], /^Context:/)
     if (field.includes("Excess")) {
@@ -321,6 +319,35 @@ test("agent payload documents sustained strength units, coverage and precomputed
   assert.match(payload.conventions.sustainedStrength, /до округления.*не пересчитывай/)
 })
 
+test("agent payload and prompt omit internal sustained details without changing full profiles", async () => {
+  const candidate = createCandidate("SOL")
+  const before = structuredClone(candidate)
+  const payload = buildAgentPayload(createShortlist([candidate]))
+  const serialized = JSON.stringify(payload)
+  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+
+  for (const field of [
+    "sustainedHistoryHours", "sustainedPeerCount", "sustainedDownWindows",
+    "sustainedUpWindows", "sustainedDailyWindows", "sustainedWeeklyWindows",
+    "sustainedUpExcessMedianPct", "sustainedDailyWinRate", "sustainedWeeklyWinRate",
+    "sustainedExcess4hPct", "sustainedExcess12hPct", "sustainedExcess7dPct",
+  ]) {
+    assert.equal(serialized.includes(field), false, field)
+    assert.equal(systemPrompt.includes(field), false, field)
+  }
+
+  const changed = structuredClone(candidate)
+  for (const field of [
+    "history_hours", "peer_count", "down_windows", "up_windows", "daily_windows",
+    "weekly_windows", "up_excess_median", "daily_win_rate", "weekly_win_rate",
+    "excess_4h", "excess_12h", "excess_7d",
+  ]) {
+    changed.features.sustainedStrength[field] = 0
+  }
+  assert.deepEqual(buildAgentPayload(createShortlist([changed])), payload)
+  assert.deepEqual(candidate, before)
+})
+
 for (const block of ["missing", "null"]) {
   test(`agent payload maps a legacy ${block} sustained-strength block to unavailable values`, () => {
     const candidate = createCandidate("SOL")
@@ -333,7 +360,7 @@ for (const block of ["missing", "null"]) {
     const payload = buildAgentPayload(createShortlist([candidate]))
     const values = getSustainedValues(payload)
 
-    assert.equal(Object.keys(values).length, 20)
+    assert.equal(Object.keys(values).length, 8)
     assert.deepEqual(values, Object.fromEntries(Object.keys(values).map(field => [
       field, field === "sustainedStatus" ? "insufficient_data" : null,
     ])))
@@ -342,7 +369,7 @@ for (const block of ["missing", "null"]) {
   })
 }
 
-test("insufficient sustained history preserves current strength, partial evidence and zero counts", () => {
+test("insufficient sustained history preserves current strength and partial evidence", () => {
   const candidate = createCandidate("SOL", {
     features: {
       sustainedStrength: {
@@ -372,23 +399,12 @@ test("insufficient sustained history preserves current strength, partial evidenc
     sustainedStatus: "insufficient_data",
     sustainedHistoryScore: null,
     sustainedCurrentScore: 91.235,
-    sustainedHistoryHours: 168,
-    sustainedPeerCount: 3,
-    sustainedDownWindows: 0,
-    sustainedUpWindows: 12,
-    sustainedDailyWindows: 7,
-    sustainedWeeklyWindows: 1,
+
     sustainedDownWinRate: null,
     sustainedDownPositiveRate: null,
     sustainedDownExcessMedianPct: null,
     sustainedUpParticipationRate: 1,
-    sustainedUpExcessMedianPct: 1.568,
-    sustainedDailyWinRate: 1,
-    sustainedWeeklyWinRate: 0,
-    sustainedExcess4hPct: 1.235,
-    sustainedExcess12hPct: 2.346,
     sustainedExcess24hPct: 3.457,
-    sustainedExcess7dPct: -0.123,
   })
   assert.deepEqual(candidate, before)
 })
@@ -400,8 +416,8 @@ test("unavailable current strength preserves history, zero rates and signed exce
         status: "insufficient_data",
         current_score: null,
         down_positive_rate: 0,
-        excess_4h: 0,
-        excess_12h: -0.0234567,
+        down_excess_median: 0,
+        excess_24h: -0.0234567,
         excess_7d: null,
       },
     },
@@ -411,13 +427,10 @@ test("unavailable current strength preserves history, zero rates and signed exce
   assert.equal(values.sustainedStatus, "insufficient_data")
   assert.equal(values.sustainedHistoryScore, 81.412)
   assert.equal(values.sustainedCurrentScore, null)
-  assert.equal(values.sustainedHistoryHours, 1440.123)
   assert.equal(values.sustainedDownWinRate, 0.812)
   assert.equal(values.sustainedDownPositiveRate, 0)
-  assert.equal(values.sustainedExcess4hPct, 0)
-  assert.equal(values.sustainedExcess12hPct, -2.346)
-  assert.equal(values.sustainedExcess24hPct, 3.457)
-  assert.equal(values.sustainedExcess7dPct, null)
+  assert.equal(values.sustainedDownExcessMedianPct, 0)
+  assert.equal(values.sustainedExcess24hPct, -2.346)
 })
 
 for (const [status, historyScore, currentScore, downWinRate] of [
@@ -437,7 +450,7 @@ for (const [status, historyScore, currentScore, downWinRate] of [
           up_participation_rate: 0.6,
           daily_win_rate: 0.6,
           weekly_win_rate: 0.8,
-          up_excess_median: -1e-8,
+          down_excess_median: -1e-8,
           excess_4h: 1e-8,
           excess_12h: 1e-8,
           excess_24h: 1e-8,
@@ -453,11 +466,8 @@ for (const [status, historyScore, currentScore, downWinRate] of [
     assert.equal(values.sustainedHistoryScore, 65)
     assert.equal(values.sustainedCurrentScore, 65)
     assert.equal(values.sustainedDownWinRate, 0.6)
-    assert.equal(values.sustainedUpExcessMedianPct, 0)
-    assert.equal(values.sustainedExcess4hPct, 0)
-    assert.equal(values.sustainedExcess12hPct, 0)
+    assert.equal(values.sustainedDownExcessMedianPct, 0)
     assert.equal(values.sustainedExcess24hPct, 0)
-    assert.equal(values.sustainedExcess7dPct, 0)
     assert.deepEqual(candidate, before)
   })
 }
@@ -730,7 +740,7 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
   const shortlist = JSON.parse(JSON.stringify({ ...createShortlist([]), ...selection }))
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
   assert.equal(payload.candidateCount, 2)
-  assert.equal(getSustainedValues(payload).sustainedPeerCount, 4)
+  assert.equal(shortlist.candidates[0].features.sustainedStrength.peer_count, 4)
   assert.equal(getSustainedValues(payload).sustainedCurrentScore, 91.235)
 
   const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
@@ -753,12 +763,12 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
           text: "Относительная сила учитывается как контекст",
         },
         {
-          fields: ["sustainedPeerCount", "sustainedHistoryHours", "sustainedWeeklyWindows"],
-          text: "Покрытие относится ко всей вселенной до отбора",
+          fields: ["sustainedDownWinRate", "sustainedDownPositiveRate", "sustainedDownExcessMedianPct"],
+          text: "Поведение при падении рынка дополняет общую оценку силы",
         },
       ],
       counterSignals: [{
-        fields: ["sustainedUpExcessMedianPct", "sustainedExcess7dPct"],
+        fields: ["sustainedUpParticipationRate", "sustainedExcess24hPct"],
         text: "Участие в росте требует отдельного подтверждения свежим триггером",
       }],
     })),
@@ -775,16 +785,16 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
   assert.deepEqual(analysis.assessments.map(assessment => assessment.drivers), [
     [
       "sustainedStatus=persistent и sustainedHistoryScore=81.412 и sustainedCurrentScore=91.235: Относительная сила учитывается как контекст",
-      "sustainedPeerCount=4 и sustainedHistoryHours=1440.123 и sustainedWeeklyWindows=8: Покрытие относится ко всей вселенной до отбора",
+      "sustainedDownWinRate=0.812 и sustainedDownPositiveRate=0.235 и sustainedDownExcessMedianPct=0.457: Поведение при падении рынка дополняет общую оценку силы",
     ],
     [
       "sustainedStatus=insufficient_data и sustainedHistoryScore=null и sustainedCurrentScore=91.235: Относительная сила учитывается как контекст",
-      "sustainedPeerCount=4 и sustainedHistoryHours=168 и sustainedWeeklyWindows=1: Покрытие относится ко всей вселенной до отбора",
+      "sustainedDownWinRate=0.812 и sustainedDownPositiveRate=0.235 и sustainedDownExcessMedianPct=0.457: Поведение при падении рынка дополняет общую оценку силы",
     ],
   ])
   for (const assessment of analysis.assessments) {
     assert.deepEqual(assessment.counterSignals, [
-      "sustainedUpExcessMedianPct=-0.123 и sustainedExcess7dPct=4.568: Участие в росте требует отдельного подтверждения свежим триггером",
+      "sustainedUpParticipationRate=0.723 и sustainedExcess24hPct=3.457: Участие в росте требует отдельного подтверждения свежим триггером",
     ])
     assert.equal(assessment.movementProbability, 0.25)
     assert.equal(assessment.directionBias, "unclear")
