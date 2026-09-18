@@ -139,7 +139,14 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
   }
 }
 
-export function buildBaseSeries ({ coinData, sourceUniverse }) {
+export function buildBaseSeries ({ coinData, sourceUniverse, coingeckoTrending }) {
+  if (coingeckoTrending && coingeckoTrending.universeGeneratedAt !== sourceUniverse.generatedAt) {
+    throw new Error("CoinGecko context does not match the current universe; rerun step 3.1")
+  }
+
+  const coingeckoById = new Map(
+    (coingeckoTrending ? coingeckoTrending.matches : []).map(match => [match.baseCurrencyId, match]),
+  )
   const metadataById = new Map(
     sourceUniverse.coins.map(coin => [coin.baseCurrencyId, coin]),
   )
@@ -158,6 +165,12 @@ export function buildBaseSeries ({ coinData, sourceUniverse }) {
       throw new Error(`${metadata.symbol} market does not match step 1`)
     }
 
+    const coingeckoMatch = coingeckoById.get(metadata.baseCurrencyId)
+
+    if (coingeckoMatch && coingeckoMatch.marketSymbol !== hourlyData.coin.marketSymbol) {
+      throw new Error(`${metadata.symbol} market does not match CoinGecko context; rerun step 3.1`)
+    }
+
     return {
       hourlyData,
       coin: {
@@ -167,6 +180,7 @@ export function buildBaseSeries ({ coinData, sourceUniverse }) {
         name: metadata.name,
         tradingViewSymbol: metadata.tradingViewSymbol,
         marketSymbol: metadata.market.tradingViewSymbol,
+        ...(coingeckoMatch ? { coingecko: coingeckoMatch.coingecko } : {}),
       },
       categories: [...metadata.categories],
       metadata,

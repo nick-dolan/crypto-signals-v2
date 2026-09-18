@@ -185,7 +185,7 @@ test("agent payload groups the original fields in the approved order, including 
   assert.deepEqual(decodeAgentPayload(payload).candidates, [])
   assert.deepEqual(Object.keys(payload.schema), [
     "profile", "volatility", "lifecycle", "volume", "derivatives", "social",
-    "relativeStrength", "sustainedStrength", "categoryContext",
+    "relativeStrength", "sustainedStrength", "categoryContext", "coingecko",
   ])
   assert.deepEqual(payload.schema, {
     profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -248,6 +248,7 @@ test("agent payload groups the original fields in the approved order, including 
       "sustainedExcess24hPct",
     ],
     categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+    coingecko: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
   })
 })
 
@@ -257,14 +258,14 @@ test("agent payload creates documented grouped candidates without changing marke
   const payload = buildAgentPayload(shortlist)
   const { fields, candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 10)
+  assert.equal(payload.schemaVersion, 11)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.objective, "P(|движение| > 2.5 ATR в следующие 4–12 часов)")
   assert.equal(payload.candidateOrder, "От наиболее приоритетного кандидата к наименее приоритетному")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(fields.length, 68)
-  assert.equal(new Set(fields).size, 68)
+  assert.equal(fields.length, 71)
+  assert.equal(new Set(fields).size, 71)
   assert.equal(fields.includes("selectionRank"), false)
   assert.equal(Object.hasOwn(values, "selectionRank"), false)
   assert.equal(Object.keys(payload.definitions).length, fields.length + 1)
@@ -358,6 +359,9 @@ test("agent payload creates documented grouped candidates without changing marke
     categoryMoveAtr: 1.458,
     categoryBreadth: 0.667,
     coinLeadAtr: -0.486,
+    coingeckoId: null,
+    coingeckoTrending: null,
+    coingeckoTrendingCategories: null,
     flags: ["coiling", "resilient", "fresh_quiet_breakout"],
   })
 
@@ -378,6 +382,152 @@ test("agent payload creates documented grouped candidates without changing marke
   ]) {
     assert.equal(serialized.includes(`"${excluded}"`), false)
   }
+})
+
+test("CoinGecko context passes JSON, validation and step 7 evidence without changing candidate order", async () => {
+  const shortlist = createShortlist([
+    createCandidate("SOL", {
+      coin: { coingecko: { id: "solana", isTrending: true, trendingCategories: ["Layer 1 (L1)", "Smart Contract Platform"] } },
+    }),
+    createCandidate("BTC"),
+    createCandidate("ETH", { coin: { coingecko: null } }),
+    createCandidate("BNB", {
+      coin: { coingecko: { id: "binancecoin", isTrending: true, trendingCategories: [] } },
+    }),
+  ])
+  const before = structuredClone(shortlist)
+  const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
+  const { candidates } = decodeAgentPayload(payload)
+
+  assert.deepEqual(payload.candidates.map(candidate => candidate.coingecko), [
+    ["solana", true, ["Layer 1 (L1)", "Smart Contract Platform"]],
+    [null, null, null],
+    [null, null, null],
+    ["binancecoin", true, []],
+  ])
+  assert.deepEqual(
+    candidates.map(candidate => payload.schema.coingecko.map(field => candidate[field])),
+    payload.candidates.map(candidate => candidate.coingecko),
+  )
+  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
+    ["SOL", 1], ["BTC", 2], ["ETH", 3], ["BNB", 4],
+  ])
+  assert.equal(candidates[0].category, "layer-1")
+
+  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+  const analysis = await analyzeCandidates(payload, shortlist, systemPrompt, {
+    callAgent: async (prompt, input) => {
+      assert.equal(prompt, systemPrompt)
+      assert.deepEqual(JSON.parse(input), payload)
+      return JSON.stringify({
+        schemaVersion: 1,
+        asOf: payload.asOf,
+        topCandidates: [],
+        assessments: candidates.map(({ symbol }) => ({
+          symbol,
+          movementProbability: 0.25,
+          estimateConfidence: "medium",
+          directionBias: "unclear",
+          drivers: [{
+            fields: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
+            text: "Поисковое внимание не подтверждает направление движения",
+          }],
+          counterSignals: [],
+        })),
+      })
+    },
+    readCoinData: async () => assert.fail("CoinGecko context must not require raw history"),
+  })
+
+  assert.deepEqual(analysis.assessments.map(assessment => assessment.symbol), ["SOL", "BTC", "ETH", "BNB"])
+  assert.deepEqual(analysis.assessments.map(assessment => assessment.drivers[0]), [
+    "coingeckoId=solana и coingeckoTrending=true и coingeckoTrendingCategories=[\"Layer 1 (L1)\",\"Smart Contract Platform\"]: Поисковое внимание не подтверждает направление движения",
+    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание не подтверждает направление движения",
+    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание не подтверждает направление движения",
+    "coingeckoId=binancecoin и coingeckoTrending=true и coingeckoTrendingCategories=[]: Поисковое внимание не подтверждает направление движения",
+  ])
+  assert.deepEqual(shortlist, before)
+})
+
+test("agent payload never infers CoinGecko matches or emits false trending status", () => {
+  for (const coingecko of [
+    undefined,
+    null,
+    { isTrending: true, trendingCategories: ["Layer 1 (L1)"] },
+    { id: " ", isTrending: true, trendingCategories: [] },
+    { id: "solana", isTrending: false, trendingCategories: [] },
+  ]) {
+    const payload = buildAgentPayload(createShortlist([createCandidate("SOL", { coin: { coingecko } })]))
+    assert.deepEqual(payload.candidates[0].coingecko, [null, null, null])
+  }
+})
+
+test("confirmed CoinGecko matches require a category array rather than inventing an empty intersection", () => {
+  for (const trendingCategories of [undefined, null, "Layer 1 (L1)", [null], [""]]) {
+    const candidate = createCandidate("SOL", {
+      coin: { coingecko: { id: "solana", isTrending: true, trendingCategories } },
+    })
+    assert.throws(() => buildAgentPayload(createShortlist([candidate])), /CoinGecko trendingCategories must be an array/)
+  }
+})
+
+test("CoinGecko context leaves selection, late-move exclusions and existing payload values unchanged", () => {
+  const profiles = [
+    createCandidate("SOL", {
+      coin: { coingecko: { id: "solana", isTrending: true, trendingCategories: ["Layer 1 (L1)"] } },
+    }),
+    createCandidate("BTC"),
+    createCandidate("ETH", {
+      coin: { coingecko: { id: "ethereum", isTrending: true, trendingCategories: ["Layer 1 (L1)"] } },
+      features: { movementLifecycle: { late_pump: true } },
+    }),
+    createCandidate("BNB", {
+      coin: { coingecko: { id: "binancecoin", isTrending: true, trendingCategories: [] } },
+      features: { movementLifecycle: { late_dump: true } },
+    }),
+  ]
+  const before = structuredClone(profiles)
+  const baselineProfiles = structuredClone(profiles)
+  for (const profile of baselineProfiles) {
+    delete profile.coin.coingecko
+  }
+  const selection = buildPreliminaryShortlist(profiles)
+  const baselineSelection = buildPreliminaryShortlist(baselineProfiles)
+  const withoutCoinGecko = structuredClone(selection)
+  for (const candidate of withoutCoinGecko.candidates) {
+    delete candidate.coin.coingecko
+  }
+
+  assert.deepEqual(withoutCoinGecko, baselineSelection)
+  assert.deepEqual(selection.candidates.map(candidate => candidate.coin.symbol), ["BTC", "SOL"])
+
+  const payload = buildAgentPayload(createShortlist(selection.candidates))
+  const baselinePayload = buildAgentPayload(createShortlist(baselineSelection.candidates))
+  assert.deepEqual({
+    ...payload,
+    candidates: payload.candidates.map(candidate => ({ ...candidate, coingecko: [null, null, null] })),
+  }, baselinePayload)
+  assert.deepEqual(profiles, before)
+})
+
+test("agent payload and prompt explain CoinGecko attention, unknown matches and separate category semantics", async () => {
+  const payload = buildAgentPayload(createShortlist([]))
+  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+
+  assert.match(payload.definitions.coingeckoId, /CoinGecko id.*Binance USDT perpetual.*TV/)
+  assert.match(payload.definitions.coingeckoTrending, /true.*поисковому вниманию.*null.*false не используется/)
+  assert.match(payload.definitions.coingeckoTrendingCategories, /пересечения.*не TV-категории.*\[\].*не отсутствие данных/)
+  assert.match(payload.conventions.null, /не доказывает отсутствие тренда/)
+  for (const text of [payload.conventions.coingecko, systemPrompt]) {
+    assert.match(text, /coin_id/)
+    assert.match(text, /fuzzy-сопоставлен/)
+    assert.match(text, /поисковое внимание, не цена, направление или ранний вход/)
+    assert.match(text, /late_pump.*late_dump/)
+  }
+  assert.match(systemPrompt, /\[null, null, null\].*не доказанное отсутствие тренда/)
+  assert.match(systemPrompt, /coingeckoTrendingCategories: \[\].*пересечений категорий нет.*не что данные отсутствуют/)
+  assert.match(systemPrompt, /не TV-категории из `categoryContext`/)
+  assert.match(systemPrompt, /coingeckoTrendingCategories` целиком, без индексов массива/)
 })
 
 test("agent payload documents sustained strength units, coverage and precomputed status", () => {

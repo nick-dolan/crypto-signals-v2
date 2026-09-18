@@ -125,7 +125,12 @@ test("buildAlignedCoinSeries rejects a mismatched grid", () => {
 
 test("createFeatureProfile compacts latest metrics and calculates 24h USD volume", () => {
   const baseCoin = {
-    coin: { rank: 1, baseCurrencyId: "XTVCBTC", symbol: "BTC" },
+    coin: {
+      rank: 1,
+      baseCurrencyId: "XTVCBTC",
+      symbol: "BTC",
+      coingecko: { id: "bitcoin", isTrending: true, trendingCategories: ["Layer 1"] },
+    },
     categories: ["layer-1"],
     metadata: { marketCap: 1_000 },
   }
@@ -181,6 +186,8 @@ test("createFeatureProfile compacts latest metrics and calculates 24h USD volume
   const result = createFeatureProfile(baseCoin, coinSeries, calculated)
 
   assert.equal(result.rejection, null)
+  assert.deepEqual(result.profile.coin.coingecko, baseCoin.coin.coingecko)
+  assert.deepEqual(result.profile.coin.categories, ["layer-1"])
   assert.equal(result.profile.context.volume24hUsd, 480)
   assert.equal(result.profile.context.atr24hPct, 0.02)
   assert.equal(result.profile.context.categoryStatus, "insufficient_peers")

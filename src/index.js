@@ -33,6 +33,7 @@ async function runAll () {
       "step1-crypto-universe.js",
       "step2-data-bootstrap.js",
       "step3-market-context.js",
+      "step3.1-coingecko-trending.js",
       "step4-feature-metrics.js",
       "step5-preliminary-filter.js",
       "step6-agent-payload.js",

@@ -1,4 +1,4 @@
-import { isArray, isFinite, isNaN, isNumber, isObject } from "../../helpers/utils.typed.js"
+import { isArray, isFinite, isNaN, isNumber, isObject, isString } from "../../helpers/utils.typed.js"
 import { decodeAgentPayload } from "./agent-payload-format.js"
 
 function roundNumber (value, precision = 3) {
@@ -36,6 +36,21 @@ function getActiveFlags (...groups) {
   return groups.flatMap(group => Object.entries(group)
     .filter(([, active]) => active === true)
     .map(([name]) => name))
+}
+
+function createCoinGeckoContext (coingecko) {
+  if (!isString(coingecko?.id) || !coingecko.id.trim() || coingecko.isTrending !== true) {
+    return [null, null, null]
+  }
+
+  if (
+    !isArray(coingecko.trendingCategories)
+    || coingecko.trendingCategories.some(category => !isString(category) || !category.trim())
+  ) {
+    throw new Error("Agent payload CoinGecko trendingCategories must be an array of non-empty category names")
+  }
+
+  return [coingecko.id, true, coingecko.trendingCategories]
 }
 
 function createCandidate (profile, index) {
@@ -166,6 +181,7 @@ function createCandidate (profile, index) {
       roundNullable(narrative.category_breadth),
       normalizeToAtr(narrative.coin_leads_category, context.atr24hPct),
     ],
+    coingecko: createCoinGeckoContext(coin.coingecko),
     flags: getActiveFlags(features.divergences, {
       fresh_quiet_breakout: lifecycle.fresh_quiet_breakout,
       late_pump: lifecycle.late_pump,
@@ -194,7 +210,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 10,
+    schemaVersion: 11,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -232,7 +248,8 @@ export function buildAgentPayload (shortlist) {
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
       sustainedStrength: "Контекст относительной силы, рассчитанный на шаге 4 до предварительного отбора. Peers — другие монеты всей вселенной, сама монета исключена; минимум 3 peers. Используется вся доступная OHLCV-история с непересекающимися историческими окнами. Медвежье окно 4h: строго > 55% peers падают и TOTAL3ES снижается; бычье: > 55% peers растут и TOTAL3ES растёт. sustainedStatus рассчитан до округления: не пересчитывай его по округлённым полям. Покрытие, повторяемость и остальные горизонты учтены в scores и статусе, но отдельно не передаются. Scores 0–100 — эвристики, не вероятности события",
-      null: "Для category/social/altMarketBackground/sustainedStrength метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Это не ноль; insufficient_data у sustainedStatus не означает слабость, доступные компоненты сохраняются",
+      coingecko: "Только trending-монеты CoinGecko, сопоставленные с существующей TV-вселенной по coin_id через Binance USDT perpetual; без coin_id совпадение пропускается, без угадывания тикеров и fuzzy-сопоставления. Trending — поисковое внимание, не цена, направление или ранний вход; не самостоятельные Setup/Trigger и не повод обходить late_pump/late_dump или позднюю фазу по Lifecycle. Категории CoinGecko не являются TV-категориями из categoryContext",
+      null: "Для category/social/altMarketBackground/sustainedStrength метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Для coingecko нет подтверждённого совпадения: это не доказывает отсутствие тренда, возможны несопоставленная монета или отсутствие coin_id; false не используется. Это не ноль; insufficient_data у sustainedStatus не означает слабость, доступные компоненты сохраняются",
     },
     schema: {
       profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -295,6 +312,7 @@ export function buildAgentPayload (shortlist) {
         "sustainedExcess24hPct",
       ],
       categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+      coingecko: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
     },
     definitions: {
       symbol: "Тикер монеты",
@@ -365,6 +383,9 @@ export function buildAgentPayload (shortlist) {
       categoryMoveAtr: "Narrative: медианная simple return peer-монет категории за 4h / ATR монеты; сама монета исключена, знак показывает направление",
       categoryBreadth: "Narrative: доля peer-монет в направлении медианы категории, чьё 4-часовое движение сильнее предыдущего непересекающегося окна",
       coinLeadAtr: "Narrative: [simple return монеты за 4h - медиана peer-монет] / ATR; отрицательное значение означает отставание",
+      coingeckoId: "Context: точный CoinGecko id подтверждённой trending-монеты, сопоставленной с Binance USDT perpetual существующей TV-вселенной; null — нет подтверждённого совпадения",
+      coingeckoTrending: "Context: true — монета есть в CoinGecko trending по поисковому вниманию; null — нет подтверждённого совпадения, не доказательство отсутствия тренда. false не используется",
+      coingeckoTrendingCategories: "Context: массив названий пересечения категорий монеты CoinGecko с trending-категориями CoinGecko, не TV-категории. [] — у подтверждённой trending-монеты нет пересечений, не отсутствие данных; null — нет подтверждённого совпадения",
       flags: "Только активные true-паттерны Divergence и Lifecycle; недоступность category-зависимого laggard показывает categoryStatus",
     },
     flagDefinitions: {

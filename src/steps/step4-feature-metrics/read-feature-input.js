@@ -4,10 +4,11 @@ import path from "node:path"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 
 export async function readFeatureInput () {
-  const [sourceUniverse, bootstrapSummary, marketContext, entries] = await Promise.all([
+  const [sourceUniverse, bootstrapSummary, marketContext, coingeckoTrending, entries] = await Promise.all([
     readTmpJson("step1-crypto-universe.json"),
     readTmpJson("step2-data-bootstrap.json"),
     readTmpJson("step3-market-context.json"),
+    readTmpJson("step3.1-coingecko-trending.json"),
     fs.readdir(
       path.resolve(process.cwd(), "tmp", "step2-data-bootstrap"),
       { withFileTypes: true },
@@ -27,6 +28,7 @@ export async function readFeatureInput () {
   return {
     sourceUniverse,
     marketContext,
+    coingeckoTrending,
     coinData: await Promise.all(coinDataFiles.map(readTmpJson)),
   }
 }
