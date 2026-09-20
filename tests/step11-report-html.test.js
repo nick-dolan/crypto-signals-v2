@@ -22,6 +22,7 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.deepEqual([...sortOptions.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value), [
     "probability", "top", "confidence",
   ])
+  assert.match(sortOptions, /<option value="top" selected>/)
   assert.doesNotMatch(sortOptions, /По алфавиту/)
   assert.match(html, /id="information-panel"/)
   assert.match(html, /id="news-details"/)

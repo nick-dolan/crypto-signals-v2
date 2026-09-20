@@ -120,7 +120,8 @@ function runReport (report, { updateChartHistory = () => assert.fail("Unexpected
     return node
   })
   byId("report-data").textContent = JSON.stringify(report)
-  byId("sort").value = "probability"
+  const sortOptions = template.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
+  byId("sort").value = sortOptions.match(/<option value="([^"]+)" selected>/)[1]
   const charts = []
   const markers = []
   const updateCalls = []
@@ -951,13 +952,16 @@ test("the market background stays at the original universe snapshot during chart
   assert.equal(browser.byId("report-data").textContent, embedded)
 })
 
-test("probability, top and confidence sorts preserve their candidate ordering", () => {
+test("agent top is the default sort and other sorts preserve their candidate ordering", () => {
   const report = createReport(["COTI", "SOL", "ADA", "BTC"])
   Object.assign(report.coins[0], { topRank: 2, estimateConfidence: "low" })
   Object.assign(report.coins[1], { topRank: null, estimateConfidence: "low" })
   Object.assign(report.coins[2], { topRank: null, estimateConfidence: "high" })
   Object.assign(report.coins[3], { topRank: 1, estimateConfidence: "medium" })
   const { byId } = runReport(report)
+
+  assert.equal(byId("sort").value, "top")
+  assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["BTC", "COTI", "SOL", "ADA"])
 
   for (const [sort, expected] of [
     ["probability", ["COTI", "SOL", "ADA", "BTC"]],
