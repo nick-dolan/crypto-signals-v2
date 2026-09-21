@@ -123,6 +123,8 @@ select {
 }
 
 .eyebrow {
+    display: flex;
+    align-items: center;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.7px;
@@ -136,7 +138,6 @@ select {
 .brand-mark {
     color: var(--accent);
     font-size: 20px;
-    vertical-align: middle;
     margin-right: 8px;
 }
 
