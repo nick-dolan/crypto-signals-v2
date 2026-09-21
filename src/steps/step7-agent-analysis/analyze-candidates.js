@@ -54,7 +54,6 @@ export async function analyzeCandidates (
 
         return {
           ...candidate,
-          directionBias: assessment.directionBias,
           estimateConfidence: assessment.estimateConfidence,
           drivers: assessment.drivers,
           counterSignals: assessment.counterSignals,

@@ -84,7 +84,6 @@ function createInput (symbols = ["COTI"]) {
       symbol,
       movementProbability: (index + 1) / 10,
       estimateConfidence: "medium",
-      directionBias: "unclear",
       drivers: [`Драйвер ${symbol}`],
       counterSignals: [],
       tradingViewUrl: `https://www.tradingview.com/chart/?symbol=BINANCE:${symbol}USDT.P`,
@@ -106,6 +105,43 @@ function createInput (symbols = ["COTI"]) {
 function build (input, readCoinData = input.readCoinData) {
   return buildReportData(input.analysis, input.payload, input.shortlist, { readCoinData })
 }
+
+test("report omits legacy direction predictions but preserves assessments, directional features and market background", async () => {
+  const input = createInput(["COTI", "SOL", "MINA"])
+  input.payload.marketContext.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
+  input.payload.schema.derivatives.push("fundingRate")
+  input.payload.definitions.fundingRate = "Ставка финансирования"
+  input.payload.candidates.forEach((candidate) => {
+    candidate.derivatives.push(-0.01)
+    candidate.flags.push("range_pressure_up", "range_pressure_down", "short_squeeze_setup", "long_squeeze_setup")
+  })
+  input.analysis.assessments.forEach((assessment, index) => {
+    assessment.estimateConfidence = ["high", "medium", "low"][index]
+    assessment.counterSignals = [`Риск ${assessment.symbol}`]
+  })
+  const expected = await build(input)
+  input.analysis.assessments.forEach((assessment, index) => {
+    assessment.directionBias = ["up", "down", "unclear"][index]
+  })
+  input.analysis.topCandidates.forEach((candidate) => {
+    candidate.directionBias = "down"
+  })
+  const before = structuredClone([input.analysis, input.payload, input.shortlist, input.histories])
+  const report = await build(input)
+
+  assert.deepEqual(report, expected)
+  assert.doesNotMatch(JSON.stringify(report), /"directionBias"\s*:/)
+  assert.equal(report.objective, "P(|движение| > 2.5 ATR в следующие 4–12 часов)")
+  assert.deepEqual(report.altMarketBackground, input.payload.marketContext.altMarketBackground)
+  for (const [index, coin] of report.coins.entries()) {
+    for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals"]) {
+      assert.deepEqual(coin[key], input.analysis.assessments[index][key])
+    }
+    assert.equal(coin.features.fundingRate, -0.01)
+    assert.deepEqual(coin.features.flags, input.payload.candidates[index].flags)
+  }
+  assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], before)
+})
 
 test("report preserves confirmed, empty and unknown CoinGecko context from the agent payload", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])

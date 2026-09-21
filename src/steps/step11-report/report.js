@@ -52,14 +52,6 @@
     }).format(new Date(timestamp))
   }
 
-  function direction (value) {
-    return {
-      up: { label: "↑ Уклон вверх", short: "↑ Вверх", className: "positive" },
-      down: { label: "↓ Уклон вниз", short: "↓ Вниз", className: "negative" },
-      unclear: { label: "↔ Направление неясно", short: "↔ Неясно", className: "neutral" },
-    }[value] ?? { label: "Нет оценки направления", short: "—", className: "neutral" }
-  }
-
   function confidence (value) {
     return { high: "высокая", medium: "средняя", low: "низкая" }[value] ?? "нет оценки"
   }
@@ -163,7 +155,6 @@
 
   function renderTopCandidates () {
     byId("top-candidates").replaceChildren(...topCandidates.map((coin) => {
-      const bias = direction(coin.directionBias)
       const card = element("button", "top-card")
       card.type = "button"
       card.dataset.symbol = coin.symbol
@@ -180,8 +171,7 @@
       fill.style.width = `${coin.movementProbability * 100}%`
       track.setAttribute("aria-hidden", "true")
       track.append(fill)
-      const footer = element("span", "top-card-footer")
-      footer.append(element("span", bias.className, bias.short), element("span", "muted", `Уверенность: ${confidence(coin.estimateConfidence)}`))
+      const footer = element("span", "top-card-footer muted", `Уверенность: ${confidence(coin.estimateConfidence)}`)
       card.append(heading, element("span", "top-card-name", coin.name), estimate, track, footer)
       return card
     }))
@@ -223,15 +213,14 @@
       }
       button.append(element("small", "", coin.name))
       cell.append(button)
-      const bias = direction(coin.directionBias)
-      row.append(cell, element("td", "", probability(coin.movementProbability)), element("td", bias.className, bias.short))
+      row.append(cell, element("td", "", probability(coin.movementProbability)))
       return row
     }))
 
     if (!coins.length) {
       const row = element("tr")
       const cell = element("td", "empty-state", "Ничего не найдено")
-      cell.colSpan = 3
+      cell.colSpan = 2
       row.append(cell)
       byId("candidate-rows").append(row)
     }
@@ -669,10 +658,8 @@
     byId("coin-name").textContent = `${coin.name} · ${coin.marketSymbol}`
     byId("top-rank").textContent = `ТОП ${coin.topRank}`
     byId("top-rank").hidden = coin.topRank == null
-    const bias = direction(coin.directionBias)
     byId("coin-badges").replaceChildren(
       element("span", "badge", `P движения ${probability(coin.movementProbability)}`),
-      element("span", `badge ${bias.className}`, bias.label),
       element("span", "badge neutral", `Уверенность: ${confidence(coin.estimateConfidence)}`),
     )
     if (coin.features.socialStatus === "unavailable") {

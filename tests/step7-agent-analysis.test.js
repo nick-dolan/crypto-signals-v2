@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
 import test from "node:test"
 
 import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
@@ -66,7 +67,6 @@ function createAgentResponse () {
         symbol: "SOL",
         movementProbability: 0.7,
         estimateConfidence: "medium",
-        directionBias: "unclear",
         drivers: [
           { fields: ["rvRatio"], text: "волатильность сжата" },
         ],
@@ -76,7 +76,6 @@ function createAgentResponse () {
         symbol: "BTC",
         movementProbability: 0.4,
         estimateConfidence: "low",
-        directionBias: "up",
         drivers: [
           { fields: ["rvRatio"], text: "присутствует умеренное сжатие" },
         ],
@@ -101,6 +100,36 @@ function createAnalysis () {
 
   return analysis
 }
+
+test("analysis and context prompts do not request a direction forecast", async () => {
+  const [analysisPrompt, contextPrompt] = await Promise.all([
+    readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8"),
+    readFile(new URL("../src/prompts/candidate-context-enrichment.md", import.meta.url), "utf8"),
+  ])
+
+  assert.ok(analysisPrompt.includes("P(|движение| > 2.5 ATR в следующие 4–12 часов)"))
+  for (const prompt of [analysisPrompt, contextPrompt]) {
+    assert.match(prompt, /[Нн]е прогнозируй рост или падение/)
+    assert.doesNotMatch(prompt, /directionBias|не меняй направление прогноза/)
+  }
+
+  const example = JSON.parse(analysisPrompt.match(/```json\n([\s\S]*?)\n```/)[1])
+  assert.deepEqual(Object.keys(example.assessments[0]), [
+    "symbol", "movementProbability", "estimateConfidence", "drivers", "counterSignals",
+  ])
+})
+
+test("agent analysis parser rejects a direction forecast as an extra field", () => {
+  for (const group of ["assessments", "topCandidates"]) {
+    const response = createAgentResponse()
+    response[group][0].directionBias = "up"
+
+    assert.throws(
+      () => parseAgentAnalysis(JSON.stringify(response), createPayload()),
+      /unexpected structure/,
+    )
+  }
+})
 
 test("agent analysis parser inserts exact payload values into evidence", () => {
   assert.deepEqual(
@@ -255,12 +284,12 @@ test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool"
   expected.candidateCount = 2
   expected.assessments[0].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:SOLUSDT.P"
   expected.assessments[1].tradingViewUrl = "https://www.tradingview.com/chart/?symbol=BINANCE:BTCUSDT.P"
-  expected.topCandidates[0].directionBias = "unclear"
+
   expected.topCandidates[0].estimateConfidence = "medium"
   expected.topCandidates[0].drivers = expected.assessments[0].drivers
   expected.topCandidates[0].counterSignals = expected.assessments[0].counterSignals
   expected.topCandidates[0].tradingViewUrl = expected.assessments[0].tradingViewUrl
-  expected.topCandidates[1].directionBias = "up"
+
   expected.topCandidates[1].estimateConfidence = "low"
   expected.topCandidates[1].drivers = expected.assessments[1].drivers
   expected.topCandidates[1].counterSignals = expected.assessments[1].counterSignals
@@ -274,6 +303,9 @@ test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool"
   })
 
   assert.deepEqual(result, expected)
+  for (const candidate of [...result.assessments, ...result.topCandidates]) {
+    assert.equal(Object.hasOwn(candidate, "directionBias"), false)
+  }
   assert.equal(captured.systemPrompt, "system prompt")
   assert.equal(captured.userMessage, JSON.stringify(payload))
   assert.equal(captured.options.model, "GPT-6-Astra")

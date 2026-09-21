@@ -507,11 +507,6 @@ table {
     text-align: right;
 }
 
-.candidate-table th:last-child,
-.candidate-table td:last-child {
-    text-align: center;
-}
-
 .candidate-table tr[data-symbol] {
     cursor: pointer;
 }

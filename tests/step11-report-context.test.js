@@ -7,7 +7,7 @@ function createInput () {
   const report = {
     asOf: "2026-09-16T07:00:00.000Z",
     timeframe: "1h",
-    objective: "P(сильное движение в следующие 4–12 часов)",
+    objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
     candidateCount: 6,
     universeCoinCount: 241,
     marketContext: { breadth4h: 0.279 },
@@ -21,7 +21,6 @@ function createInput () {
       topRank: index < 5 ? index + 1 : null,
       explanation: index < 5 ? `Исходное объяснение ${symbol}.` : "",
       movementProbability: 0.8 - index / 10,
-      directionBias: "up",
       estimateConfidence: "medium",
       drivers: [`Драйвер ${symbol}`],
       counterSignals: [`Риск ${symbol}`],
@@ -55,7 +54,6 @@ function createInput () {
       symbol: coin.symbol,
       explanation: coin.explanation,
       movementProbability: 0.99,
-      directionBias: "down",
       estimateConfidence: "low",
       drivers: ["Не брать из шага 9"],
       news: {
@@ -107,7 +105,6 @@ function createInput () {
       explanation: candidate.explanation,
       enrichedExplanation: `${candidate.explanation} Информационный фон ${candidate.symbol}.`,
       movementProbability: 0.01,
-      directionBias: "down",
       estimateConfidence: "high",
       drivers: ["Не брать из шага 10"],
       counterSignals: [],
@@ -173,6 +170,29 @@ test("joins reordered tops by symbol without changing assessments, counts, order
     }
   }
 
+  assert.deepEqual(input, before)
+})
+
+test("legacy enrichment direction predictions do not enter the report or change assessments and historical background", () => {
+  const input = createInput()
+  input.report.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
+  const expected = addContext(input)
+  for (const source of [input.sources, input.context]) {
+    source.topCandidates.forEach((candidate) => {
+      candidate.directionBias = "up"
+    })
+  }
+  const before = structuredClone(input)
+  const result = addContext(input)
+
+  assert.deepEqual(result, expected)
+  assert.doesNotMatch(JSON.stringify(result), /"directionBias"\s*:/)
+  assert.deepEqual(result.altMarketBackground, input.report.altMarketBackground)
+  for (const [index, coin] of result.coins.entries()) {
+    for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals", "features"]) {
+      assert.deepEqual(coin[key], input.report.coins[index][key])
+    }
+  }
   assert.deepEqual(input, before)
 })
 

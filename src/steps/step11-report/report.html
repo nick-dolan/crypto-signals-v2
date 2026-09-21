@@ -70,8 +70,8 @@
         </div>
         <div class="candidate-scroll">
           <table class="candidate-table">
-            <caption class="sr-only">Кандидаты с вероятностью движения и предполагаемым направлением</caption>
-            <thead><tr><th scope="col">Монета</th><th scope="col">P движения</th><th scope="col">Уклон</th></tr></thead>
+            <caption class="sr-only">Кандидаты с вероятностью сильного движения</caption>
+            <thead><tr><th scope="col">Монета</th><th scope="col">P движения</th></tr></thead>
             <tbody id="candidate-rows"></tbody>
           </table>
         </div>
@@ -173,7 +173,7 @@
     </div>
     <footer class="page-footer">
       <p id="objective"></p>
-      <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Уклон не означает вероятность роста или падения. Это не торговая рекомендация.</p>
+      <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Это не торговая рекомендация.</p>
       <p id="candle-time-note"></p>
       <p>Отчёт открывается локально и без интернета. Только кнопка Update chart делает публичные запросы к Binance для выбранной монеты; нужен доступ к fapi.binance.com. Обновления живут в памяти вкладки: после перезагрузки вернётся исходный срез, HTML на диске не меняется. Вероятности, признаки, объяснения, новости и Twitter не обновляются.</p>
       <p>Графики: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a>. Copyright (c) 2026 TradingView, Inc.</p>

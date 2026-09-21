@@ -178,7 +178,7 @@ function createReport (symbols = ["COTI"]) {
     asOf: "2026-09-15T09:00:00.000Z",
     reportCreatedAt: "2026-09-15T11:37:42.123Z",
     timeframe: "1h",
-    objective: "P сильного движения в следующие 4–12 часов",
+    objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
     candidateCount: symbols.length,
     universeCoinCount: 30,
     marketContext: { breadth4h: 0.6 },
@@ -200,7 +200,6 @@ function createReport (symbols = ["COTI"]) {
       marketSymbol: `BINANCE:${symbol}USDT.P`,
       topRank: index + 1,
       movementProbability: 0.8 - index * 0.1,
-      directionBias: "up",
       estimateConfidence: "medium",
       explanation: `Оценка ${symbol}`,
       drivers: ["rvRatio=0.6: Сжатие волатильности"],
@@ -215,6 +214,57 @@ function createReport (symbols = ["COTI"]) {
     }
   })
   return report
+}
+
+for (const bias of [undefined, "up", "down", "unclear"]) {
+  test(`report shows movement estimates without a direction forecast for ${bias ?? "missing"} directionBias`, () => {
+    const report = createReport(["COTI", "SOL", "ADA"])
+    report.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
+    report.coins.forEach((coin, index) => {
+      coin.estimateConfidence = ["high", "medium", "low"][index]
+      if (bias != null) {
+        coin.directionBias = bias
+      }
+    })
+    const before = structuredClone(report)
+    const browser = runReport(report)
+    const { byId } = browser
+
+    assert.equal(byId("objective").textContent, "Цель анализа: P(|движение| > 2.5 ATR в следующие 4–12 часов)")
+    for (const [index, [probability, confidence]] of [
+      ["80%", "высокая"], ["70%", "средняя"], ["60%", "низкая"],
+    ].entries()) {
+      const coin = report.coins[index]
+      const card = byId("top-candidates").children[index]
+      const row = byId("candidate-rows").children[index]
+      assert.equal(descendants(card).find(node => node.className === "top-card-probability").textContent, `${probability}P движения`)
+      assert.equal(card.children.at(-1).textContent, `Уверенность: ${confidence}`)
+      assert.equal(row.children.length, 2)
+      assert.equal(row.children[1].textContent, probability)
+
+      selectCoin(browser, coin.symbol)
+      assert.deepEqual(byId("coin-badges").children.map(node => node.textContent), [
+        `P движения ${probability}`, `Уверенность: ${confidence}`, "Social: нет данных",
+      ])
+      assert.equal(byId("explanation").textContent, coin.explanation)
+      assert.match(byId("drivers").textContent, /Сжатие волатильности/)
+      assert.deepEqual(byId("counter-signals").children.map(node => node.textContent), coin.counterSignals)
+      assert.match(byId("flags").textContent, /Накопление в сжатии/)
+      for (const node of [card, row, byId("coin-badges")]) {
+        assert.doesNotMatch(node.textContent, /уклон|направлен|↑ Вверх|↓ Вниз|↔ Неясно/i)
+      }
+    }
+    assert.equal(byId("alt-market-background").dataset.status, "down")
+    assert.equal(byId("alt-market-status").textContent, "Преобладает снижение")
+    assert.equal(byId("alt-market-change").textContent, "-1,5%")
+    assert.equal(byId("alt-market-breadth").textContent, "20%")
+
+    byId("search").value = "UNKNOWN"
+    byId("search").listeners.get("input")()
+    assert.equal(byId("candidate-rows").children[0].children[0].colSpan, 2)
+    assert.equal(byId("candidate-rows").textContent, "Ничего не найдено")
+    assert.deepEqual(report, before)
+  })
 }
 
 test("CoinGecko badges and categories follow the selected coin without leaking stale data", () => {

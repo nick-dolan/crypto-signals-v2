@@ -427,10 +427,9 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
           symbol,
           movementProbability: 0.25,
           estimateConfidence: "medium",
-          directionBias: "unclear",
           drivers: [{
             fields: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
-            text: "Поисковое внимание не подтверждает направление движения",
+            text: "Поисковое внимание само по себе не подтверждает начало сильного движения",
           }],
           counterSignals: [],
         })),
@@ -441,10 +440,10 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
 
   assert.deepEqual(analysis.assessments.map(assessment => assessment.symbol), ["SOL", "BTC", "ETH", "BNB"])
   assert.deepEqual(analysis.assessments.map(assessment => assessment.drivers[0]), [
-    "coingeckoId=solana и coingeckoTrending=true и coingeckoTrendingCategories=[\"Layer 1 (L1)\",\"Smart Contract Platform\"]: Поисковое внимание не подтверждает направление движения",
-    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание не подтверждает направление движения",
-    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание не подтверждает направление движения",
-    "coingeckoId=binancecoin и coingeckoTrending=true и coingeckoTrendingCategories=[]: Поисковое внимание не подтверждает направление движения",
+    "coingeckoId=solana и coingeckoTrending=true и coingeckoTrendingCategories=[\"Layer 1 (L1)\",\"Smart Contract Platform\"]: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoId=binancecoin и coingeckoTrending=true и coingeckoTrendingCategories=[]: Поисковое внимание само по себе не подтверждает начало сильного движения",
   ])
   assert.deepEqual(shortlist, before)
 })
@@ -1011,7 +1010,6 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
       symbol: coin.symbol,
       movementProbability: 0.25,
       estimateConfidence: "medium",
-      directionBias: "unclear",
       drivers: [
         {
           fields: ["sustainedStatus", "sustainedHistoryScore", "sustainedCurrentScore"],
@@ -1052,7 +1050,7 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
       "sustainedUpParticipationRate=0.723 и sustainedExcess24hPct=3.457: Участие в росте требует отдельного подтверждения свежим триггером",
     ])
     assert.equal(assessment.movementProbability, 0.25)
-    assert.equal(assessment.directionBias, "unclear")
+    assert.equal(Object.hasOwn(assessment, "directionBias"), false)
   }
   assert.deepEqual(analysis.topCandidates[0].drivers, analysis.assessments[0].drivers)
   assert.deepEqual(profiles, before)

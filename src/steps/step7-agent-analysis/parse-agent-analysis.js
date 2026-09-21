@@ -153,7 +153,6 @@ export function parseAgentAnalysis (content, payload) {
         "symbol",
         "movementProbability",
         "estimateConfidence",
-        "directionBias",
         "drivers",
         "counterSignals",
       ],
@@ -171,10 +170,6 @@ export function parseAgentAnalysis (content, payload) {
 
     if (!["low", "medium", "high"].includes(assessment.estimateConfidence)) {
       invalidAnalysis(`assessment ${assessment.symbol} has invalid estimateConfidence`)
-    }
-
-    if (!["up", "down", "unclear"].includes(assessment.directionBias)) {
-      invalidAnalysis(`assessment ${assessment.symbol} has invalid directionBias`)
     }
 
     assessment.drivers = normalizeObservations(

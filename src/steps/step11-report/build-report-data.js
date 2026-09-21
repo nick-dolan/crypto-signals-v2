@@ -1,3 +1,4 @@
+import { omit } from "radash"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
@@ -222,7 +223,7 @@ export async function buildReportData (
     const top = topBySymbol.get(assessment.symbol)
 
     coins.push({
-      ...assessment,
+      ...omit(assessment, ["directionBias"]),
       explanation: isString(top?.explanation) ? top.explanation : "",
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,
       name: coin.name,

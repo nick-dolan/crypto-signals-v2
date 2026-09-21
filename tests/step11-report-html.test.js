@@ -24,6 +24,13 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   ])
   assert.match(sortOptions, /<option value="top" selected>/)
   assert.doesNotMatch(sortOptions, /По алфавиту/)
+  const candidateTable = html.match(/<table class="candidate-table">([\s\S]*?)<\/table>/)[1]
+  assert.match(candidateTable, /<caption class="sr-only">Кандидаты с вероятностью сильного движения<\/caption>/)
+  assert.deepEqual([...candidateTable.matchAll(/<th scope="col">([^<]+)<\/th>/g)].map(([, label]) => label), [
+    "Монета", "P движения",
+  ])
+  assert.doesNotMatch(html, /directionBias|Уклон|предполагаемым направлением|Направление неясно|Нет оценки направления/)
+  assert.match(html, /Вероятность — оценка агента, не статистически откалиброванный прогноз\. Это не торговая рекомендация\./)
   assert.match(html, /id="information-panel"/)
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)
@@ -52,6 +59,7 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /aria-labelledby="alt-market-heading"/)
   assert.match(html, /Фон альтрынка · 4ч/)
   assert.match(html, /более 55%.*менее 45%/)
+  assert.match(html, /Это простое правило для текущего среза, не прогноз и не оценка вероятности\./)
   assert.ok(html.indexOf("id=\"alt-market-background\"") < html.indexOf("id=\"market-summary\""))
   assert.match(html, /\.alt-market-background\[data-status="up"\]/)
   assert.match(html, /\.alt-market-background\[data-status="down"\]/)

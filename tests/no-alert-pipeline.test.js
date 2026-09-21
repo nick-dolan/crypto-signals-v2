@@ -78,7 +78,6 @@ function createInput () {
       symbol,
       movementProbability: 0.2 - index * 0.05,
       estimateConfidence: "medium",
-      directionBias: "unclear",
       drivers: [`Драйвер ${symbol}`],
       counterSignals: [`Ограничение ${symbol}`],
       tradingViewUrl: `https://www.tradingview.com/chart/?symbol=BINANCE:${symbol}USDT.P`,
