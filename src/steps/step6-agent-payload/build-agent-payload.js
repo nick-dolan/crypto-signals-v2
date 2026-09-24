@@ -53,6 +53,42 @@ function createCoinGeckoContext (coingecko) {
   return [coingecko.id, true, coingecko.trendingCategories]
 }
 
+function createPeerLeader (leader) {
+  return {
+    symbol: leader.symbol,
+    type: leader.type,
+    basis: leader.basis,
+    caveat: leader.caveat,
+    detectedAt: leader.detectedAt,
+    windowStartedAt: leader.windowStartedAt,
+    ageHours: leader.ageHours,
+    status: leader.status,
+    return4hPct: roundScaledNullable(leader.return4h, 100),
+    move4hAtr: roundNullable(leader.move4hAtr),
+    marketExcess4hAtr: roundNullable(leader.marketExcess4hAtr),
+    relativeVolume4h: roundNullable(leader.relativeVolume4h),
+    retainedPct: roundScaledNullable(leader.retainedFraction, 100),
+    returnSinceStartPct: roundScaledNullable(leader.returnSinceStart, 100),
+    coinReturnSinceStartPct: roundScaledNullable(leader.coinReturnSinceStart, 100),
+    coinMoveSinceStartAtr: roundNullable(leader.coinMoveSinceStartAtr),
+  }
+}
+
+function createPeerContext (peerContext) {
+  return [
+    peerContext?.status ?? "unavailable",
+    peerContext?.registryGeneratedAt ?? null,
+    peerContext?.peerCount ?? null,
+    peerContext?.availablePeerCount ?? null,
+    peerContext?.benchmarkCoinCount ?? null,
+    peerContext?.freshLeaderCount ?? null,
+    peerContext?.fadingLeaderCount ?? null,
+    roundScaledNullable(peerContext?.coinReturn4h ?? null, 100),
+    roundNullable(peerContext?.coinMove4hAtr ?? null),
+    peerContext?.leaders?.map(createPeerLeader) ?? null,
+  ]
+}
+
 function createCandidate (profile, index) {
   const { coin, context, features } = profile
   const volatility = features.volatilityCompression
@@ -181,6 +217,7 @@ function createCandidate (profile, index) {
       roundNullable(narrative.category_breadth),
       normalizeToAtr(narrative.coin_leads_category, context.atr24hPct),
     ],
+    peerContext: createPeerContext(profile.peerContext),
     coingecko: createCoinGeckoContext(coin.coingecko),
     flags: getActiveFlags(features.divergences, {
       fresh_quiet_breakout: lifecycle.fresh_quiet_breakout,
@@ -210,7 +247,7 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 11,
+    schemaVersion: 12,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -243,13 +280,15 @@ export function buildAgentPayload (shortlist) {
       stablecap24hPct: "Изменение капитализации стейблкоинов за 24 часа, %",
     },
     conventions: {
-      rounding: "Числа округлены до трёх знаков после запятой; fundingRate и altMarketBackground передаются без округления",
+      rounding: "Числа округлены до трёх знаков после запятой; fundingRate, altMarketBackground и ageHours peer-событий передаются без округления",
       flags: "Флаги рассчитаны до округления. Не пересчитывай их по округлённым полям и не считай независимыми подтверждениями поверх исходных метрик",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
       sustainedStrength: "Контекст относительной силы, рассчитанный на шаге 4 до предварительного отбора. Peers — другие монеты всей вселенной, сама монета исключена; минимум 3 peers. Используется вся доступная OHLCV-история с непересекающимися историческими окнами. Медвежье окно 4h: строго > 55% peers падают и TOTAL3ES снижается; бычье: > 55% peers растут и TOTAL3ES растёт. sustainedStatus рассчитан до округления: не пересчитывай его по округлённым полям. Покрытие, повторяемость и остальные горизонты учтены в scores и статусе, но отдельно не передаются. Scores 0–100 — эвристики, не вероятности события",
+      peerContext: "Контекст прямых связей из справочника, только 1-hop без транзитивности. Лидеры рассчитаны на шаге 4 по всей загруженной вселенной до предварительного отбора, включая поздние монеты и не попавшие в shortlist. Benchmark исключает кандидата и всех его прямых соседей; минимум 3 монеты с полными наблюдениями. Покрытие требует полной сезонной истории объёма и 17 подряд оцениваемых часов; пропуски означают недоступность, не отсутствие события. Событие требует одновременно положительного роста за 4ч >= 2.5 собственного ATR, замороженного до начала окна, excess над медианой доходностей benchmark >= 1 того же ATR и сезонного USD-объёма за 4ч >= 1.5 медианы аналогичных 4ч окон предыдущих 30 дней. Это не вероятность, не прогноз направления и не самостоятельные Setup/Trigger; не меняет shortlist и не отменяет late_pump/late_dump. laggard/categoryContext и peerContext могут описывать одно событие; несколько соседей не гарантируют независимых подтверждений, например VET/VTHO. При partial ноль наблюдаемых лидеров не означает, что вся группа тиха; null не отрицательный сигнал",
+      peerEpisodes: "detectedAt — закрытие свечи первого срабатывания, windowStartedAt — закрытие свечи в начале исходного 4ч окна. Это фактические времена закрытия, а asOf — метка открытия последней завершённой свечи: закрытие среза = asOf + 1ч. ageHours измерен по завершённым часам от первого срабатывания до закрытия среза. Старт не обновляется на каждом максимуме; новый эпизод разрешён только после 4 полных подряд часов без qualifying-trigger. return4hPct, move4hAtr, marketExcess4hAtr и relativeVolume4h заморожены на первом срабатывании. Передаются только живые события возраста <= 12ч с удержанием >= 50% пикового подъёма; спад ниже 50% инвалидирует эпизод, который не оживает на отскоке без нового эпизода. fresh — ageHours <= 4, fading — 4 < ageHours <= 12. Возраст, статусы и counts уже рассчитаны; не пересчитывай их по округлённым значениям",
       coingecko: "Только trending-монеты CoinGecko, сопоставленные с существующей TV-вселенной по coin_id через Binance USDT perpetual; без coin_id совпадение пропускается, без угадывания тикеров и fuzzy-сопоставления. Trending — поисковое внимание, не цена, направление или ранний вход; не самостоятельные Setup/Trigger и не повод обходить late_pump/late_dump или позднюю фазу по Lifecycle. Категории CoinGecko не являются TV-категориями из categoryContext",
-      null: "Для category/social/altMarketBackground/sustainedStrength метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Для coingecko нет подтверждённого совпадения: это не доказывает отсутствие тренда, возможны несопоставленная монета или отсутствие coin_id; false не используется. Это не ноль; insufficient_data у sustainedStatus не означает слабость, доступные компоненты сохраняются",
+      null: "Для category/social/altMarketBackground/sustainedStrength метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Для peerContext неизвестное покрытие или недоступная оценка не являются отрицательным сигналом; null и [] у peerLeaders не взаимозаменяемы. Для coingecko нет подтверждённого совпадения: это не доказывает отсутствие тренда, возможны несопоставленная монета или отсутствие coin_id; false не используется. Это не ноль; insufficient_data у sustainedStatus не означает слабость, доступные компоненты сохраняются",
     },
     schema: {
       profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -312,6 +351,18 @@ export function buildAgentPayload (shortlist) {
         "sustainedExcess24hPct",
       ],
       categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+      peerContext: [
+        "peerStatus",
+        "peerRegistryGeneratedAt",
+        "peerCount",
+        "peerAvailableCount",
+        "peerBenchmarkCoinCount",
+        "peerFreshLeaderCount",
+        "peerFadingLeaderCount",
+        "peerCoinReturn4hPct",
+        "peerCoinMove4hAtr",
+        "peerLeaders",
+      ],
       coingecko: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
     },
     definitions: {
@@ -383,6 +434,16 @@ export function buildAgentPayload (shortlist) {
       categoryMoveAtr: "Narrative: медианная simple return peer-монет категории за 4h / ATR монеты; сама монета исключена, знак показывает направление",
       categoryBreadth: "Narrative: доля peer-монет в направлении медианы категории, чьё 4-часовое движение сильнее предыдущего непересекающегося окна",
       coinLeadAtr: "Narrative: [simple return монеты за 4h - медиана peer-монет] / ATR; отрицательное значение означает отставание",
+      peerStatus: "Context: unavailable — нет справочника или блока в старом профиле; not_covered — монеты нет в справочнике; unreviewed — исследование связей не подтверждено; no_peers — монета проверена без связей; insufficient_data — нет оцениваемых соседей или достаточного benchmark; partial — оценена лишь часть известных соседей; available — оценены все известные соседи. Статус готовый, не пересчитывай",
+      peerRegistryGeneratedAt: "Context: время создания справочника связей, не время рыночного события; null — справочник недоступен",
+      peerCount: "Context: число всех прямых связей, включая недоступных сейчас соседей; null при неизвестном покрытии, 0 при no_peers",
+      peerAvailableCount: "Context: число прямых соседей, по которым можно проверить событие сейчас, не число лидеров; null при неизвестном покрытии",
+      peerBenchmarkCoinCount: "Context: число загруженных монет вне кандидата и всех его прямых соседей, не только вне доступных; для оценки нужно минимум 3 монеты benchmark; null при неизвестном покрытии",
+      peerFreshLeaderCount: "Context: число наблюдаемых живых событий fresh возраста <= 4ч; 0 при no_peers, null при неизвестном покрытии или insufficient_data. При partial учитывает только проверенные данные, 0 не означает тишину всей группы",
+      peerFadingLeaderCount: "Context: число наблюдаемых живых событий fading возраста > 4ч и <= 12ч; 0 при no_peers, null при неизвестном покрытии или insufficient_data. Это возраст события, не прогноз; при partial учитывает только проверенные данные",
+      peerCoinReturn4hPct: "Context: собственная simple return КАНДИДАТА за последние 4ч, % (исходная fraction × 100); null — нет данных",
+      peerCoinMove4hAtr: "Context: знаковое движение КАНДИДАТА за последние 4ч в его собственном ATR, замороженном до начала этого окна; безразмерное, не процент и не прогноз",
+      peerLeaders: "Context: массив живых событий прямых соседей — значение одной колонки, без дополнительных колонок или вложенных evidence-путей. null — неизвестное покрытие или insufficient_data; [] — no_peers либо нет наблюдаемых живых событий среди проверенных соседей. symbol — тикер лидера; type/basis/caveat — тип, основание и оговорка связи. detectedAt/windowStartedAt — фактические закрытия свечей первого срабатывания и начала исходного 4ч окна (закрытие среза = asOf + 1ч); ageHours/status — готовые возраст и fresh/fading. return4hPct — рост ЛИДЕРА за исходные 4ч, %; move4hAtr — этот рост в его ATR до окна; marketExcess4hAtr — [return лидера - медиана return benchmark] в том же ATR; relativeVolume4h — сезонный USD-объём исходных 4ч к медиане аналогичных окон за предыдущие 30 дней. Эти четыре метрики заморожены на первом срабатывании, не описывают последние 4ч. retainedPct = 100 × (текущий close - начальный close) / (максимальный close с начала события - начальный close), удержание пикового подъёма в %. returnSinceStartPct — текущая simple return ЛИДЕРА от начала его исходного окна, %. coinReturnSinceStartPct — реакция КАНДИДАТА на том же интервале, %; coinMoveSinceStartAtr — та же реакция в собственном ATR КАНДИДАТА до начала окна. Все *Pct переведены из fraction × 100, ATR безразмерны; null у реакции кандидата — нет данных, не отсутствие реакции",
       coingeckoId: "Context: точный CoinGecko id подтверждённой trending-монеты, сопоставленной с Binance USDT perpetual существующей TV-вселенной; null — нет подтверждённого совпадения",
       coingeckoTrending: "Context: true — монета есть в CoinGecko trending по поисковому вниманию; null — нет подтверждённого совпадения, не доказательство отсутствия тренда. false не используется",
       coingeckoTrendingCategories: "Context: массив названий пересечения категорий монеты CoinGecko с trending-категориями CoinGecko, не TV-категории. [] — у подтверждённой trending-монеты нет пересечений, не отсутствие данных; null — нет подтверждённого совпадения",

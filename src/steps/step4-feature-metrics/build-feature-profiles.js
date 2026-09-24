@@ -142,6 +142,7 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
         socialStatus: socialAvailable ? "available" : "unavailable",
       },
       features,
+      peerContext: calculated.peerContext ?? null,
     },
     rejection: null,
   }

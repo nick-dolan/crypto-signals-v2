@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Crypto Signals · Срез рынка</title>
+    <style>
+        /* REPORT_STYLES */
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span
+                        class="muted">/ ШАГ 13</span></p>
+                <h1>Рынок перед движением</h1>
+                <p class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12 часов</strong></p>
+            </div>
+            <div class="snapshot">
+                <span class="snapshot-label"><span class="status-dot" aria-hidden="true"></span> Сохранённый срез ·
+                    UTC</span>
+                <time id="as-of"></time>
+                <span id="coverage" class="muted"></span>
+            </div>
+        </header>
+        <div id="report-tabs" class="report-tabs" role="tablist" aria-label="Разделы отчёта">
+            <button id="main-tab" type="button" role="tab" data-report-tab="main-panel" aria-controls="main-panel"
+                aria-selected="true" tabindex="0">Основной анализ</button>
+            <button id="peer-radar-tab" type="button" role="tab" data-report-tab="peer-radar" aria-controls="peer-radar"
+                aria-selected="false" tabindex="-1">Радар соседей</button>
+        </div>
+        <div id="main-panel" role="tabpanel" aria-labelledby="main-tab" tabindex="0">
+            <section id="alt-market-background" class="alt-market-background" data-status="unavailable"
+                aria-labelledby="alt-market-heading">
+                <div class="alt-market-overview">
+                    <span id="alt-market-icon" class="alt-market-icon" aria-hidden="true">—</span>
+                    <div>
+                        <h2 id="alt-market-heading">Фон альтрынка · 4ч</h2>
+                        <p id="alt-market-status" class="alt-market-status">Недостаточно данных</p>
+                    </div>
+                </div>
+                <div class="alt-market-facts">
+                    <div><span class="metric-label">Капитализация альткоинов · 4ч</span><strong id="alt-market-change"
+                            class="metric-value"></strong></div>
+                    <div><span class="metric-label">Растущие монеты вселенной · 4ч</span><strong id="alt-market-breadth"
+                            class="metric-value"></strong></div>
+                </div>
+                <div class="alt-market-context">
+                    <p id="alt-market-as-of"></p>
+                    <details>
+                        <summary>Как определён фон</summary>
+                        <p>Капитализация — TOTAL3ES, без BTC, ETH и стейблкоинов. Ширина рынка — доля растущих монет
+                            всей
+                            нашей вселенной, не только отобранных кандидатов.</p>
+                        <p>Рост: капитализация увеличивается и растут более 55% монет. Снижение: капитализация падает и
+                            растут менее 45%. Остальные сочетания — смешанный фон. Это простое правило для текущего
+                            среза,
+                            не прогноз и не оценка вероятности.</p>
+                    </details>
+                    <p id="alt-market-warning" class="alt-market-warning" hidden></p>
+                </div>
+            </section>
+            <section aria-label="Состояние рынка" class="market-grid" id="market-summary"></section>
+            <p class="context-note">Ротация — изменение доли сегмента в капитализации, а не прямой приток денег.</p>
+            <section class="top-section" aria-labelledby="top-heading">
+                <div class="section-heading">
+                    <h2 id="top-heading">В фокусе агента</h2>
+                    <span class="muted">Нажмите на монету, чтобы изучить сигнал</span>
+                </div>
+                <div id="top-candidates" class="top-grid"></div>
+            </section>
+            <div class="workspace">
+                <aside class="panel candidate-panel" aria-labelledby="candidates-heading">
+                    <div class="candidate-controls">
+                        <div class="section-heading">
+                            <h2 id="candidates-heading">Все кандидаты</h2>
+                            <span class="count-badge" id="candidate-count"></span>
+                        </div>
+                        <label for="search" class="sr-only">Поиск по тикеру или названию</label>
+                        <input id="search" type="search" placeholder="Тикер или название…" autocomplete="off"
+                            spellcheck="false">
+                        <label for="sort" class="sr-only">Сортировка кандидатов</label>
+                        <select id="sort">
+                            <option value="probability">По вероятности движения</option>
+                            <option value="top" selected>Сначала топ агента</option>
+                            <option value="confidence">По уверенности агента</option>
+                        </select>
+                    </div>
+                    <div class="candidate-scroll">
+                        <table class="candidate-table">
+                            <caption class="sr-only">Кандидаты с вероятностью сильного движения</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Монета</th>
+                                    <th scope="col">P движения</th>
+                                </tr>
+                            </thead>
+                            <tbody id="candidate-rows"></tbody>
+                        </table>
+                    </div>
+                    <p id="search-results" class="list-note" role="status"></p>
+                </aside>
+                <section class="detail" id="coin-detail" aria-label="Подробности выбранной монеты" hidden>
+                    <div class="panel chart-panel">
+                        <header class="coin-header">
+                            <div>
+                                <div class="coin-title">
+                                    <h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span><span
+                                        id="coingecko-badge" hidden></span>
+                                </div>
+                                <p id="coin-name" class="muted"></p>
+                            </div>
+                            <div class="coin-price"><strong id="last-price"></strong><span id="last-price-label"
+                                    class="muted">USDT · последняя закрытая свеча</span></div>
+                        </header>
+                        <div class="coin-meta">
+                            <div id="coin-badges" class="badge-list"></div>
+                            <a id="tradingview-link" target="_blank" rel="noopener noreferrer">Открыть в TradingView
+                                ↗</a>
+                        </div>
+                        <section id="coingecko-context" class="coingecko-context" aria-labelledby="coingecko-heading"
+                            hidden>
+                            <h3 id="coingecko-heading">Трендовые категории CoinGecko</h3>
+                            <div id="coingecko-categories" class="badge-list"></div>
+                            <p id="coingecko-category-status" class="muted" hidden></p>
+                            <p class="muted">Поисковое внимание, не сигнал роста. Данные сохранённого среза не меняются
+                                при
+                                Update chart.</p>
+                        </section>
+                        <div class="chart-toolbar">
+                            <span><strong>Цена</strong> <span class="muted">/ свечи 1h · UTC</span></span>
+                            <div class="chart-actions">
+                                <div class="range-buttons" role="group" aria-label="Видимый период графика">
+                                    <button type="button" data-days="1" aria-pressed="false">1 день</button>
+                                    <button type="button" data-days="3" aria-pressed="true">3 дня</button>
+                                    <button type="button" data-days="7" aria-pressed="false">7 дней</button>
+                                </div>
+                                <button id="update-chart" class="update-chart" type="button"
+                                    aria-describedby="chart-update-status"
+                                    title="Загрузить свечи, объём и OI с Binance только для выбранной монеты. Изменения не сохраняются в файл.">Update
+                                    chart</button>
+                            </div>
+                        </div>
+                        <div class="chart-update-notes">
+                            <p id="chart-update-status" role="status" aria-live="polite"></p>
+                            <p id="report-time-note" class="report-time-note"></p>
+                            <p id="chart-source"></p>
+                        </div>
+                        <p id="chart-update-error" class="warning" role="alert" hidden></p>
+                        <div id="chart-legend" class="chart-legend" aria-label="Значения под курсором"></div>
+                        <p id="history-warning" class="warning" role="status" hidden></p>
+                        <div id="chart" class="chart" role="img"
+                            aria-label="Часовые свечи, объём и Open Interest с общей временной шкалой"></div>
+                        <p id="chart-empty" class="empty-state" hidden>График недоступен. Оценка агента сохранена ниже.
+                        </p>
+                        <div class="chart-caption"><span><i class="legend-dot volume-dot"></i> Объём · базовый
+                                актив</span><span><i class="legend-dot oi-dot"></i> Open Interest · базовый
+                                актив</span><span>Колесо — масштаб, перетаскивание — история</span></div>
+                    </div>
+                    <section id="sustained-strength" class="panel sustained-strength-panel"
+                        data-status="insufficient_data" aria-labelledby="sustained-strength-heading">
+                        <div>
+                            <h2 id="sustained-strength-heading">Устойчивая сила</h2>
+                            <p id="sustained-strength-status" class="sustained-strength-status" role="status">
+                                Недостаточно
+                                данных</p>
+                        </div>
+                        <div class="sustained-strength-scores">
+                            <div><span class="metric-label">За всю историю</span><strong id="sustained-strength-history"
+                                    class="metric-value">Нет данных</strong></div>
+                            <div><span class="metric-label">Сейчас · 4ч–7д</span><strong id="sustained-strength-current"
+                                    class="metric-value">Нет данных</strong></div>
+                        </div>
+                        <p class="sustained-strength-note">Сила относительно других монет. Оценки 0–100 — не вероятность
+                            движения и не сигнал входа. Данные сохранённого среза, не меняются при Update chart.</p>
+                    </section>
+                    <section class="panel analysis-panel" aria-labelledby="analysis-heading">
+                        <div class="section-heading">
+                            <h2 id="analysis-heading">Почему монета в списке</h2><span id="analysis-source"
+                                class="muted">Анализ шага 7</span>
+                        </div>
+                        <p id="explanation" class="explanation" hidden></p>
+                        <div class="signal-columns">
+                            <div>
+                                <h3 class="positive">Поддерживает движение</h3>
+                                <ul id="drivers" class="signal-list"></ul>
+                            </div>
+                            <div>
+                                <h3 class="negative">Сдерживает / противоречит</h3>
+                                <ul id="counter-signals" class="signal-list"></ul>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="panel information-panel" id="information-panel"
+                        aria-labelledby="information-heading" hidden>
+                        <div class="section-heading">
+                            <h2 id="information-heading">Новости и Twitter</h2><span class="muted">Для выбранных лидеров
+                                ·
+                                до пяти монет</span>
+                        </div>
+                        <p id="context-generated" class="source-meta"></p>
+                        <details id="news-details" class="source-details">
+                            <summary>Новости <span id="news-count" class="count-badge"></span></summary>
+                            <p id="news-window" class="source-window"></p>
+                            <p id="news-status" class="source-status" role="status" hidden></p>
+                            <div id="news-items" class="source-list"></div>
+                        </details>
+                        <details id="twitter-details" class="source-details">
+                            <summary>Twitter / X <span id="twitter-count" class="count-badge"></span></summary>
+                            <p id="twitter-window" class="source-window"></p>
+                            <p class="source-window">Сохранённые результаты поиска: упоминание тикера не гарантирует
+                                связь с
+                                этой монетой.</p>
+                            <p id="twitter-status" class="source-status" role="status" hidden></p>
+                            <div id="twitter-items" class="source-list"></div>
+                        </details>
+                    </section>
+                    <section class="panel features-panel" aria-labelledby="features-heading">
+                        <div class="section-heading">
+                            <h2 id="features-heading">Признаки сигнала</h2><span class="muted">Те же значения, что
+                                получил
+                                агент</span>
+                        </div>
+                        <div id="feature-highlights" class="feature-grid"></div>
+                        <div id="flags" class="badge-list flags"></div>
+                        <details class="feature-details">
+                            <summary>Все признаки и их значения</summary>
+                            <p class="muted">Пропуск — не ноль. Перцентили приведены в диапазоне 0–1. Подсказки
+                                описывают
+                                единицы и окна расчёта.</p>
+                            <div class="feature-scroll">
+                                <table class="feature-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Признак</th>
+                                            <th scope="col">Значение</th>
+                                            <th scope="col">Описание</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="feature-rows"></tbody>
+                                </table>
+                            </div>
+                        </details>
+                    </section>
+                </section>
+                <div class="panel empty-state" id="no-candidates" hidden>В этом срезе нет оценённых кандидатов.</div>
+            </div>
+        </div>
+        <section id="peer-radar" class="panel peer-radar" data-status="unavailable" role="tabpanel"
+            aria-labelledby="peer-radar-tab" tabindex="0" hidden>
+            <div class="section-heading">
+                <h2 id="peer-radar-heading">Радар соседей</h2>
+                <span class="muted">Независимый анализ · шаг 12</span>
+            </div>
+            <p class="peer-radar-note">Для ручного наблюдения, не прогноз и не вероятность движения. Не входит в
+                основной топ и оценки; не меняется при выборе монеты или Update chart.</p>
+            <p id="peer-radar-status" class="peer-radar-status" role="status">Радар недоступен</p>
+            <p id="peer-radar-warning" class="warning" hidden></p>
+            <div id="peer-radar-content" hidden>
+                <div id="peer-radar-counts" class="badge-list"></div>
+                <p id="peer-radar-time" class="peer-radar-meta"></p>
+                <p id="peer-radar-coverage" class="peer-radar-meta"></p>
+                <p class="peer-radar-note">Сравниваются движения в собственном ATR каждой монеты, поэтому отставание не
+                    обязательно означает меньший рост в процентах. «Слабая реакция» (flat) — в пределах ±0,5 своего ATR,
+                    а не строго 0%. Несколько лидеров могут отражать одну общую историю: независимость подтверждений не
+                    гарантируется.</p>
+                <details id="peer-radar-method" class="peer-radar-method">
+                    <summary>Покрытие, справочник и критерии</summary>
+                    <div id="peer-radar-coverage-counts" class="badge-list"></div>
+                    <p class="peer-radar-note">Покрытие посчитано среди загруженных монет. Частичное — доступны не все
+                        соседи. Без соседей (no_peers) — проверено по справочнику, это не ошибка. Вне справочника, не
+                        проверено или справочник недоступен — связи неизвестны, а не отсутствуют. Недостаток данных — не
+                        отсутствие движения.</p>
+                    <p id="peer-radar-provenance" class="peer-radar-meta"></p>
+                    <p id="peer-radar-analysis" class="peer-radar-meta"></p>
+                    <dl id="peer-radar-criteria" class="peer-radar-criteria"></dl>
+                </details>
+                <div id="peer-radar-toolbar" class="peer-radar-toolbar">
+                    <p class="peer-radar-note">Сначала выбранные агентом для наблюдения (watch), затем все остальные —
+                        без квоты и без исключения ограниченных наблюдений.</p>
+                    <div class="range-buttons" role="group" aria-label="Период всех графиков радара">
+                        <button type="button" data-peer-days="1" aria-pressed="true">1д</button>
+                        <button type="button" data-peer-days="3" aria-pressed="false">3д</button>
+                        <button type="button" data-peer-days="7" aria-pressed="false">7д</button>
+                    </div>
+                    <p class="peer-radar-note">Графики: изменение цены закрытия в процентах, не сигнал в ATR.
+                        Время — фактическое закрытие часовой свечи, UTC. Все линии имеют 0% в одну и ту же точку
+                        начала периода. Без цены в этой точке линия отключена; пропуски часов не соединяются.
+                        Только сохранённые данные, без сетевых запросов и обновлений.</p>
+                    <p id="peer-radar-range-note" class="peer-radar-meta"></p>
+                </div>
+                <div id="peer-radar-observations" class="peer-radar-observations"></div>
+            </div>
+        </section>
+        <footer class="page-footer">
+            <p id="objective"></p>
+            <p>Вероятность — оценка агента, не статистически откалиброванный прогноз. Это не торговая рекомендация.</p>
+            <p id="candle-time-note"></p>
+            <p>Отчёт открывается локально и без интернета. Только кнопка Update chart делает публичные запросы к Binance
+                для выбранной монеты; нужен доступ к fapi.binance.com. Обновления живут в памяти вкладки: после
+                перезагрузки вернётся исходный срез, HTML на диске не меняется. Вероятности, признаки, объяснения,
+                новости, Twitter и радар соседей не обновляются.</p>
+            <p>Графики: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView
+                    Lightweight Charts™</a>. Copyright (c) 2026 TradingView, Inc.</p>
+            <details class="license">
+                <summary>Лицензия библиотеки графиков</summary>
+                <pre><!-- REPORT_LICENSE --></pre>
+            </details>
+        </footer>
+        <noscript>
+            <p class="warning">Для интерактивного отчёта включите JavaScript в браузере.</p>
+        </noscript>
+    </main>
+    <script id="report-data" type="application/json">"REPORT_DATA"</script>
+    <script>/* REPORT_CHARTS */</script>
+    <script>/* REPORT_SCRIPT */</script>
+</body>
+
+</html>

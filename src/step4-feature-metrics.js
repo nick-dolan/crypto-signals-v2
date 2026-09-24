@@ -19,7 +19,7 @@ function logProgress (event) {
 async function runFeatureMetricsStep () {
   const input = await readFeatureInput()
   const baseCoins = buildBaseSeries(input)
-  const universeContext = buildUniverseContext(baseCoins, input.marketContext)
+  const universeContext = buildUniverseContext(baseCoins, input.marketContext, input.coinPeers)
   const { profiles, rejected } = buildFeatureProfiles(
     baseCoins,
     universeContext,

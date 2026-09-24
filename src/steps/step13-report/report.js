@@ -9,6 +9,8 @@
   let selectedSymbol = topCandidates[0]?.symbol ?? report.coins[0]?.symbol ?? null
   let selectedDays = 3
   let chart = null
+  let peerDays = 1
+  const peerCards = []
 
   function element (tag, className = "", text = "") {
     const node = document.createElement(tag)
@@ -87,6 +89,9 @@
       default:
         if (key === "coingeckoTrendingCategories") {
           return value.length ? value.join(", ") : "Нет пересечений с трендовыми категориями"
+        }
+        if (key === "peerLeaders") {
+          return JSON.stringify(value)
         }
         return key === "flags" ? value.map(flagLabel).join(", ") || "Нет активных" : String(value)
     }
@@ -230,7 +235,8 @@
   function renderSignals (id, signals) {
     byId(id).replaceChildren(...(signals ?? []).map((signal) => {
       const item = element("li")
-      const separator = signal.indexOf(": ")
+      // Skip separators inside JSON evidence strings, including escaped quotes.
+      const separator = [...signal.matchAll(/"(?:\\.|[^"\\])*"|: /g)].find(([match]) => match === ": ")?.index ?? -1
       if (separator > 0 && signal.slice(0, separator).includes("=")) {
         item.append(element("span", "", signal.slice(separator + 2)), element("span", "signal-values", signal.slice(0, separator)))
       } else {
@@ -268,6 +274,305 @@
       }
     }
     return "Время не указано"
+  }
+
+  function peerMetrics (entries) {
+    const metrics = element("dl", "peer-metrics")
+    metrics.append(...entries.map(([label, value, unit, signed = false]) => {
+      const item = element("div")
+      item.append(
+        element("dt", "metric-label", label),
+        element("dd", "", value == null ? "Нет данных" : `${number(value, 2, signed ? "exceptZero" : "auto")}${unit}`),
+      )
+      return item
+    }))
+    return metrics
+  }
+
+  function peerMarketLink (label, marketSymbol) {
+    if (!marketSymbol) {
+      return element("span", "", label)
+    }
+    const url = new URL("https://www.tradingview.com/chart/")
+    url.searchParams.set("symbol", marketSymbol)
+    return sourceLink(label, url.href)
+  }
+
+  function peerLeader (leader, coin, snapshotClosedAt) {
+    const article = element("article", "peer-leader")
+    const relation = leader.type === "competitor" ? "Конкурент" : "Смежный сосед"
+    const freshness = leader.status === "fresh" ? "Свежий импульс (fresh)" : "Затухающий импульс (fading)"
+    const reaction = leader.coinReaction === "flat"
+      ? "Слабая (flat)"
+      : leader.coinReaction === "rising" ? "Рост (rising)" : "Снижение (falling)"
+    const heading = element("h3")
+    heading.append(
+      peerMarketLink(leader.symbol, report.peerRadar.histories?.[leader.baseCurrencyId]?.marketSymbol),
+      element("span", "", ` · ${relation}`),
+    )
+    article.append(
+      heading,
+      element("p", "peer-radar-meta", `${freshness} · Возраст с обнаружения: ${number(leader.ageHours)} ч · Обнаружен: ${publicationTime(leader.detectedAt)}`),
+      element("p", "peer-radar-text", `Связь по справочнику: ${leader.basis}`),
+      element("p", "peer-radar-note", `Оговорка связи: ${leader.caveat}`),
+      element("p", "peer-current-window", `Текущий интервал: ${publicationTime(leader.windowStartedAt)} → ${publicationTime(snapshotClosedAt)}`),
+      element("p", "peer-reaction", `Реакция ${coin.symbol} на этом интервале: ${reaction}`),
+      peerMetrics([
+        [`Лидер ${leader.symbol} · изменение цены`, leader.returnSinceStartPct, "%", true],
+        [`Кандидат ${coin.symbol} · изменение цены`, leader.coinReturnSinceStartPct, "%", true],
+        ["Лидер · движение в своём ATR", leader.moveSinceStartAtr, " ATR", true],
+        ["Кандидат · движение в своём ATR", leader.coinMoveSinceStartAtr, " ATR", true],
+        ["Разрыв · лидер минус кандидат в своих ATR", leader.gapAtr, " ATR"],
+        ["Удержание движения от пика", leader.retainedPct, "%"],
+        ["Кандидат / лидер · отношение в своих ATR", leader.responseRatio, "×"],
+      ]),
+    )
+    const original = element("details", "peer-original")
+    original.append(
+      element("summary", "", "Исходный импульс · 4ч (зафиксирован)"),
+      element("p", "peer-radar-meta", `Окно обнаружения: ${publicationTime(leader.windowStartedAt)} → ${publicationTime(leader.detectedAt)}. Это исходные значения, не текущая доходность.`),
+      peerMetrics([
+        ["Лидер · исходное изменение цены за 4ч", leader.return4hPct, "%", true],
+        ["Лидер · исходное движение за 4ч", leader.move4hAtr, " ATR", true],
+        ["Превышение над рынком за 4ч", leader.marketExcess4hAtr, " ATR", true],
+        ["Объём за 4ч / сезонная норма", leader.relativeVolume4h, "×"],
+      ]),
+    )
+    article.append(original)
+    return article
+  }
+
+  function peerObservation (observation, snapshotClosedAt) {
+    const { coin } = observation
+    const card = element("article", "peer-observation")
+    const verdict = observation.verdict === "watch" ? "watch" : "limited"
+    card.dataset.verdict = verdict
+    const heading = element("header", "peer-observation-heading")
+    const title = element("h3", "peer-symbol", coin.symbol)
+    title.id = `peer-observation-${peerCards.length}`
+    card.setAttribute("aria-labelledby", title.id)
+    heading.append(
+      title,
+      element("span", "peer-name", coin.name),
+      element("span", "peer-verdict", verdict === "watch" ? "Обратить внимание" : "Ограниченная интерпретация"),
+      element("span", "peer-radar-meta", `Лидеров: ${observation.leaders.length}`),
+    )
+    heading.append(peerMarketLink("Открыть в TradingView ↗", coin.marketSymbol))
+    const comparison = element("div", "peer-comparison")
+    const timestamp = element("p", "peer-chart-time")
+    const legend = element("div", "peer-chart-legend")
+    legend.setAttribute("role", "list")
+    legend.setAttribute("aria-label", "Легенда: изменение цены закрытия, %")
+    const container = element("div", "peer-chart")
+    container.setAttribute("role", "img")
+    container.setAttribute("aria-label", `${coin.symbol} и все прямые лидеры: изменение цены закрытия в процентах`)
+    const warning = element("p", "warning")
+    warning.setAttribute("role", "status")
+    warning.hidden = true
+    const empty = element("p", "empty-state")
+    empty.hidden = true
+    comparison.append(timestamp, legend, container, warning, empty)
+    peerCards.push({ observation, container, timestamp, legend, warning, empty, chart: null })
+    const facts = element("details", "peer-observation-facts")
+    const body = element("div", "peer-observation-body")
+    body.append(
+      element("p", "peer-radar-text", observation.explanation),
+      element("p", "peer-radar-meta", `${observation.peerStatus === "partial" ? "Частичное покрытие" : "Полное покрытие"} · Соседи с данными: ${number(observation.availablePeerCount, 0)} / ${number(observation.peerCount, 0)} · Монет для сравнения с рынком: ${number(observation.benchmarkCoinCount, 0)}`),
+    )
+    if (observation.caveats.length) {
+      const caveats = element("ul", "peer-caveats")
+      caveats.append(...observation.caveats.map(caveat => element("li", "", caveat)))
+      body.append(element("h3", "", "Оговорки"), caveats)
+    }
+    body.append(...observation.leaders.map(leader => peerLeader(leader, coin, snapshotClosedAt)))
+    facts.append(element("summary", "", "Факты и объяснение агента · ATR"), body)
+    card.append(heading, comparison, facts)
+    return card
+  }
+
+  function peerLine (member, index, from, to) {
+    const history = report.peerRadar.histories?.[member.baseCurrencyId]
+    const closes = new Map((history?.points ?? []).map(point => [point.time, point.value]))
+    const anchor = closes.get(from)
+    const disabled = !isFinite(anchor) || anchor <= 0
+    const warnings = history?.warning ? [history.warning] : []
+    const points = disabled
+      ? []
+      : Array.from({ length: (to - from) / 3_600 + 1 }, (_, hour) => {
+          const time = from + hour * 3_600
+          const close = closes.get(time)
+          const value = (close / anchor - 1) * 100
+          return isFinite(close) && close > 0 && isFinite(value) ? { time, value } : { time }
+        })
+    if (disabled) {
+      warnings.push(`Нет цены закрытия на общей базе ${time(from * 1_000)} UTC — линия отключена, другая точка не подставляется.`)
+    } else {
+      const missing = points.filter(point => point.value == null).length
+      if (missing) {
+        warnings.push(`Нет ${missing} из ${points.length} часовых закрытий; пропуски не соединяются.`)
+      }
+    }
+    return {
+      symbol: member.symbol,
+      marketSymbol: history?.marketSymbol,
+      role: index === 0 ? "Кандидат" : "Лидер",
+      color: index === 0 ? "#f2c56d" : ["#83b8ff", "#b09dff", "#52d3a1", "#ed7e8a", "#6cdbec"][(index - 1) % 5],
+      disabled,
+      points,
+      byTime: new Map(points.map(point => [point.time, point.value])),
+      warning: warnings.join(" "),
+    }
+  }
+
+  function renderPeerLegend (state, lines, timestamp) {
+    state.timestamp.textContent = `Закрытие: ${time(timestamp * 1_000)} UTC · изменение цены, % (не ATR)`
+    state.legend.replaceChildren(...lines.map((line) => {
+      const item = element("span")
+      item.setAttribute("role", "listitem")
+      item.dataset.disabled = String(line.disabled)
+      const swatch = element("i", "peer-line-swatch")
+      swatch.style.backgroundColor = line.color
+      swatch.setAttribute("aria-hidden", "true")
+      const value = line.byTime.get(timestamp)
+      item.append(
+        swatch,
+        element("span", "", `${line.role} `),
+        peerMarketLink(line.symbol, line.marketSymbol),
+        element("strong", "", ` · ${line.disabled ? "Линия отключена: нет общей базы" : value == null ? "Нет закрытия" : `${number(value, 2, "exceptZero")}%`}`),
+      )
+      return item
+    }))
+  }
+
+  function disposePeerCharts () {
+    for (const state of peerCards) {
+      state.chart?.remove()
+      state.chart = null
+    }
+  }
+
+  function renderPeerCharts () {
+    if (byId("peer-radar").hidden || !peerCards.length) {
+      return
+    }
+    disposePeerCharts()
+    const to = Date.parse(report.peerRadar.data.snapshotClosedAt) / 1_000
+    const from = to - peerDays * 86_400
+    byId("peer-radar-range-note").textContent = `Общая база (0%): ${time(from * 1_000)} UTC → срез: ${time(to * 1_000)} UTC`
+    for (const state of peerCards) {
+      const lines = [state.observation.coin, ...state.observation.leaders].map((member, index) => peerLine(member, index, from, to))
+      const warnings = lines.filter(line => line.warning).map(line => `${line.symbol}: ${line.warning}`)
+      state.warning.textContent = warnings.join("\n")
+      state.warning.hidden = !warnings.length
+      state.container.hidden = lines.every(line => line.disabled)
+      state.empty.hidden = !state.container.hidden
+      state.empty.textContent = "Нет линий с ценой закрытия на общей базе. Факты и объяснение агента доступны ниже."
+      renderPeerLegend(state, lines, to)
+      if (state.container.hidden) {
+        continue
+      }
+      try {
+        state.chart = LightweightCharts.createChart(state.container, {
+          autoSize: true,
+          layout: {
+            background: { type: LightweightCharts.ColorType.Solid, color: "#131d2a" },
+            textColor: "#8f9daf", fontSize: 11, attributionLogo: true,
+          },
+          grid: { vertLines: { color: "#192332" }, horzLines: { color: "#25303f" } },
+          rightPriceScale: { borderColor: "#25303f" },
+          timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#25303f", lockVisibleTimeRangeOnResize: true },
+          localization: { locale: "ru-RU", timeFormatter: timestamp => `${time(timestamp * 1_000)} UTC · закрытие` },
+        })
+        for (const line of lines.filter(line => !line.disabled)) {
+          // Whitespace alone does not stop LineSeries bridging a missing hour.
+          for (const section of openInterestSections(line.points)) {
+            const points = new Map(section.map(point => [point.time, point]))
+            const series = state.chart.addSeries(LightweightCharts.LineSeries, {
+              title: `${line.role} ${line.symbol}`,
+              color: line.color,
+              lineWidth: line.role === "Кандидат" ? 3 : 2,
+              priceFormat: { type: "percent", precision: 2, minMove: 0.01 },
+              priceLineVisible: false,
+              lastValueVisible: section.at(-1).time === to,
+              pointMarkersVisible: section.length === 1,
+            })
+            // Keep the complete hourly time axis, including missing end candles.
+            series.setData(line.points.map(point => points.get(point.time) ?? { time: point.time }))
+          }
+        }
+        state.chart.timeScale().setVisibleRange({ from, to })
+        state.chart.subscribeCrosshairMove(event => renderPeerLegend(state, lines, isFinite(event.time) ? event.time : to))
+      } catch (error) {
+        state.chart?.remove()
+        state.chart = null
+        state.container.hidden = true
+        state.empty.hidden = false
+        state.empty.textContent = "График недоступен. Факты и объяснение агента доступны ниже."
+        state.warning.hidden = false
+        state.warning.textContent = [...warnings, `Не удалось построить график: ${error.message}`].join("\n")
+      }
+    }
+  }
+
+  function selectReportTab (tab) {
+    const panel = byId(tab.dataset.reportTab)
+    if (!panel.hidden) {
+      return
+    }
+    document.querySelectorAll("[data-report-tab]").forEach((button) => {
+      const active = button === tab
+      button.setAttribute("aria-selected", String(active))
+      button.tabIndex = active ? 0 : -1
+      byId(button.dataset.reportTab).hidden = !active
+    })
+    byId("candle-time-note").hidden = !byId("peer-radar").hidden
+    if (byId("peer-radar").hidden) {
+      disposePeerCharts()
+    } else {
+      renderPeerCharts()
+    }
+  }
+
+  function renderPeerRadar () {
+    const radar = report.peerRadar
+    const data = radar?.status === "available" ? radar.data : null
+    byId("peer-radar").dataset.status = data ? "available" : "unavailable"
+    byId("peer-radar-content").hidden = !data
+    byId("peer-radar-warning").textContent = radar?.warning || (data ? "" : "Результат шага 12 не добавлен.")
+    byId("peer-radar-warning").hidden = !byId("peer-radar-warning").textContent
+    if (!data) {
+      byId("peer-radar-status").textContent = "Радар недоступен"
+      return
+    }
+    byId("peer-radar-status").textContent = data.observations.length
+      ? "Наблюдения для ручной проверки"
+      : data.analysisStatus === "skipped_no_candidates"
+        ? "Наблюдений нет: скан шага 11 не нашёл кандидатов; анализ шага 12 пропущен."
+        : "Анализ завершён: наблюдений нет."
+    byId("peer-radar-counts").replaceChildren(...[
+      ["Наблюдений", data.observationCount],
+      ["Обратить внимание", data.watchCount],
+      ["Ограниченная интерпретация", data.observationCount - data.watchCount],
+    ].map(([label, count]) => element("span", "badge", `${label}: ${number(count, 0)}`)))
+    byId("peer-radar-time").textContent = `Срез закрыт: ${publicationTime(data.snapshotClosedAt)} · Анализ выпущен: ${time(data.generatedAt, true)} UTC`
+    byId("peer-radar-coverage").textContent = `Загружено ${number(data.loadedCoinCount, 0)} / ${number(data.universeCoinCount, 0)} монет · Частичное покрытие: ${number(data.coverage.partial, 0)} · Неизвестные связи: ${number(data.coverage.not_covered + data.coverage.unreviewed + data.coverage.unavailable, 0)} · Без соседей: ${number(data.coverage.no_peers, 0)} (не ошибка)`
+    byId("peer-radar-coverage-counts").replaceChildren(...[
+      ["available", "Полное покрытие"], ["partial", "Частичное покрытие"], ["no_peers", "Без соседей"],
+      ["insufficient_data", "Недостаточно данных"], ["not_covered", "Вне справочника"],
+      ["unreviewed", "Не проверено"], ["unavailable", "Справочник недоступен"],
+    ].map(([key, label]) => element("span", "badge", `${label}: ${number(data.coverage[key], 0)}`)))
+    byId("peer-radar-provenance").textContent = `Метка свечи asOf (открытие): ${publicationTime(data.asOf)} · Таймфрейм: ${data.timeframe} · Скан шага 11 выпущен: ${publicationTime(data.scanGeneratedAt)} · Справочник: ${data.registryGeneratedAt == null ? "время выпуска не указано" : publicationTime(data.registryGeneratedAt)}`
+    byId("peer-radar-analysis").textContent = `Кандидатов скана: ${number(data.candidateCount, 0)} · Источник анализа: ${data.analysis.source ?? "—"} · Модель: ${data.analysis.model ?? "—"} · Усилие рассуждения: ${data.analysis.reasoningEffort ?? "—"} · Вызовов: ${number(data.analysis.callCount, 0)}`
+    byId("peer-radar-criteria").replaceChildren(...[
+      ["impulse", "Импульс"], ["lag", "Отставание"], ["reaction", "Реакция"],
+    ].map(([key, label]) => {
+      const item = element("div")
+      item.append(element("dt", "", label), element("dd", "peer-radar-text", data.criteria[key]))
+      return item
+    }))
+    byId("peer-radar-toolbar").hidden = !data.observations.length
+    const observations = [...data.observations].sort((first, second) => Number(second.verdict === "watch") - Number(first.verdict === "watch"))
+    byId("peer-radar-observations").replaceChildren(...observations.map(observation => peerObservation(observation, data.snapshotClosedAt)))
   }
 
   function newsItem (item) {
@@ -690,6 +995,28 @@
     }
   }
 
+  document.querySelectorAll("[data-report-tab]").forEach((tab, index, tabs) => {
+    tab.addEventListener("click", () => selectReportTab(tab))
+    tab.addEventListener("keydown", (event) => {
+      const next = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[event.key]
+      if (next != null) {
+        event.preventDefault()
+        tabs[next].focus()
+        selectReportTab(tabs[next])
+      }
+    })
+  })
+  document.querySelectorAll("[data-peer-days]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const days = Number(button.dataset.peerDays)
+      if (peerDays === days) {
+        return
+      }
+      peerDays = days
+      document.querySelectorAll("[data-peer-days]").forEach(item => item.setAttribute("aria-pressed", String(Number(item.dataset.peerDays) === peerDays)))
+      renderPeerCharts()
+    })
+  })
   byId("top-candidates").addEventListener("click", handleCoinClick)
   byId("candidate-rows").addEventListener("click", handleCoinClick)
   byId("search").addEventListener("input", renderCandidates)
@@ -702,6 +1029,7 @@
     })
   })
   renderSummary()
+  renderPeerRadar()
   renderTopCandidates()
   renderCandidates()
   byId("no-candidates").hidden = Boolean(selectedSymbol)

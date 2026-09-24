@@ -1,13 +1,14 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
+import vm from "node:vm"
 
 import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
 import { parseAgentAnalysis } from "../src/steps/step7-agent-analysis/parse-agent-analysis.js"
 
 function createPayload () {
   return {
-    schemaVersion: 10,
+    schemaVersion: 12,
     asOf: "2026-08-31T09:00:00.000Z",
     timeframe: "1h",
     candidateCount: 2,
@@ -172,6 +173,85 @@ test("agent analysis parser preserves the structured alt-market background in ev
     assert.deepEqual(analysis.assessments[1].counterSignals, [
       `altMarketBackground=${JSON.stringify(background)}: общий фон учитывается отдельно от признаков монеты`,
     ])
+  }
+})
+
+test("agent evidence hydrates complete peer leader objects, empty observations and unavailable data", () => {
+  for (const [status, freshCount, leaders] of [
+    ["unavailable", null, null],
+    ["no_peers", 0, []],
+    ["insufficient_data", null, null],
+    ["partial", 0, []],
+    ["partial", 1, [{
+      symbol: "VET",
+      type: "adjacent",
+      basis: "Связь: общая экосистема",
+      caveat: "Не независимый сигнал",
+      detectedAt: "2026-08-31T08:00:00.000Z",
+      windowStartedAt: "2026-08-31T04:00:00.000Z",
+      ageHours: 2,
+      status: "fresh",
+      return4hPct: 3.123,
+      move4hAtr: 2.568,
+      marketExcess4hAtr: 1.235,
+      relativeVolume4h: 1.877,
+      retainedPct: 87.654,
+      returnSinceStartPct: 3.568,
+      coinReturnSinceStartPct: -0.123,
+      coinMoveSinceStartAtr: null,
+    }]],
+  ]) {
+    const payload = createPayload()
+    payload.schema.peerContext = ["peerStatus", "peerFreshLeaderCount", "peerLeaders"]
+    for (const candidate of payload.candidates) {
+      candidate.peerContext = [status, freshCount, leaders]
+    }
+    const before = structuredClone(payload)
+    const response = createAgentResponse()
+    response.assessments[0].drivers = [{
+      fields: ["peerStatus", "peerFreshLeaderCount", "peerLeaders"],
+      text: "Контекст соседей не заменяет собственный триггер",
+    }]
+    const analysis = parseAgentAnalysis(JSON.stringify(response), JSON.parse(JSON.stringify(payload)))
+
+    assert.deepEqual(analysis.assessments[0].drivers, [
+      `peerStatus=${status} и peerFreshLeaderCount=${freshCount} и peerLeaders=${JSON.stringify(leaders)}: Контекст соседей не заменяет собственный триггер`,
+    ])
+    assert.deepEqual(payload, before)
+    for (const field of ["peerContext", "peerContext.peerLeaders", "peerLeaders[0].symbol", "coinMoveSinceStartAtr"]) {
+      response.assessments[0].drivers[0].fields = [field]
+      assert.throws(() => parseAgentAnalysis(JSON.stringify(response), payload), /references unknown field/)
+    }
+  }
+})
+
+test("report renders nested peer evidence without object coercion or splitting JSON string values", async () => {
+  const source = await readFile(new URL("../src/steps/step13-report/report.js", import.meta.url), "utf8")
+  const featureValue = vm.runInNewContext(`(${source.match(/^ {2}function featureValue [\s\S]*?^ {2}}/m)[0]})`)
+  const list = {
+    children: [],
+    replaceChildren (...children) {
+      this.children = children
+    },
+  }
+  const renderSignals = vm.runInNewContext(`(${source.match(/^ {2}function renderSignals [\s\S]*?^ {2}}/m)[0]})`, {
+    byId: () => list,
+    element: (tag, className = "", text = "") => ({
+      tag, className, textContent: text,
+      append (...children) {
+        this.children = children
+      },
+    }),
+  })
+
+  for (const leaders of [null, [], [{ symbol: "VET", basis: "Связь: \"общая: экосистема\"", caveat: "VET/VTHO: один импульс" }]]) {
+    assert.equal(featureValue("peerLeaders", leaders), leaders === null ? "Нет данных / события" : JSON.stringify(leaders))
+    const values = `peerStatus=partial и peerLeaders=${JSON.stringify(leaders)}`
+    const interpretation = "Контекст: не независимый триггер"
+    renderSignals("drivers", [`${values}: ${interpretation}`])
+
+    assert.equal(list.children.length, 1)
+    assert.deepEqual(list.children[0].children.map(node => node.textContent), [interpretation, values])
   }
 })
 

@@ -6,10 +6,10 @@ import path from "node:path"
 import test from "node:test"
 import { promisify } from "node:util"
 
-import { saveReportHtml } from "../src/steps/step11-report/save-report-html.js"
+import { saveReportHtml } from "../src/steps/step13-report/save-report-html.js"
 
 async function temporaryDirectory (context) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step11-report-save-"))
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step13-report-save-"))
   context.after(() => fs.rm(directory, { recursive: true, force: true }))
   return directory
 }
@@ -72,7 +72,7 @@ for (const timezone of ["UTC", "America/Los_Angeles", "Asia/Tokyo"]) {
   test(`default reports directory survives tmp cleanup and uses GMT+3 with TZ=${timezone}`, async (context) => {
     const directory = await temporaryDirectory(context)
     const { stdout } = await promisify(execFile)(process.execPath, ["--input-type=module", "--eval", `
-      import { saveReportHtml } from ${JSON.stringify(new URL("../src/steps/step11-report/save-report-html.js", import.meta.url).href)}
+      import { saveReportHtml } from ${JSON.stringify(new URL("../src/steps/step13-report/save-report-html.js", import.meta.url).href)}
       import { resetTmpDirectory } from ${JSON.stringify(new URL("../src/helpers/fs-helper.js", import.meta.url).href)}
       const filePath = await saveReportHtml("report", "2026-12-31T21:05:06.789Z")
       await resetTmpDirectory()

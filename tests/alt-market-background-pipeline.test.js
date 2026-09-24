@@ -16,7 +16,7 @@ for (const [name, altMarketBackground] of [
   }],
   ["legacy missing metric becomes null", undefined],
 ]) {
-  test(`CLI steps 5 → 6 → 11: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
+  test(`CLI steps 5 → 6 → 13: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "alt-market-background-pipeline-"))
     context.after(() => fs.rm(directory, { recursive: true, force: true }))
     await fs.mkdir(path.join(directory, "tmp"))
@@ -79,13 +79,13 @@ for (const [name, altMarketBackground] of [
     ])
     await assert.rejects(fs.access(path.join(directory, "tmp", "step3-market-context.json")), { code: "ENOENT" })
 
-    await run("step11-report.js")
+    await run("step13-report.js")
     const reports = await fs.readdir(path.join(directory, "reports"))
     assert.equal(reports.length, 1)
     assert.match(reports[0], /^report-.*\.html$/)
     const html = await fs.readFile(path.join(directory, "reports", reports[0]), "utf8")
     const embedded = html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)
-    assert.ok(embedded, "Step 11 must embed report JSON")
+    assert.ok(embedded, "Step 13 must embed report JSON")
     const report = JSON.parse(embedded[1])
 
     assert.equal(report.asOf, featureMetrics.asOf)

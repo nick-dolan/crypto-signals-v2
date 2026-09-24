@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import vm from "node:vm"
 import test from "node:test"
 
-import { renderReportHtml } from "../src/steps/step11-report/render-report-html.js"
+import { renderReportHtml } from "../src/steps/step13-report/render-report-html.js"
 
 function scripts (html) {
   return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
@@ -13,11 +13,12 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   const report = { asOf: "2026-09-15T09:00:00.000Z", reportCreatedAt: "2026-09-15T11:05:12.345Z", coins: [] }
   const html = await renderReportHtml(report)
   const embedded = scripts(html)
+  const text = html.replace(/\s+/g, " ")
 
   assert.match(html, /^<!doctype html>/i)
   assert.match(html, /<html lang="ru">/)
   assert.match(html, /<meta name="viewport"/)
-  assert.match(html, /ШАГ 11/)
+  assert.match(html, /ШАГ 13/)
   const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
   assert.deepEqual([...sortOptions.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value), [
     "probability", "top", "confidence",
@@ -58,11 +59,38 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="alt-market-background"/)
   assert.match(html, /aria-labelledby="alt-market-heading"/)
   assert.match(html, /Фон альтрынка · 4ч/)
-  assert.match(html, /более 55%.*менее 45%/)
-  assert.match(html, /Это простое правило для текущего среза, не прогноз и не оценка вероятности\./)
+  assert.match(text, /более 55%.*менее 45%/)
+  assert.match(text, /Это простое правило для текущего среза, не прогноз и не оценка вероятности\./)
   assert.ok(html.indexOf("id=\"alt-market-background\"") < html.indexOf("id=\"market-summary\""))
   assert.match(html, /\.alt-market-background\[data-status="up"\]/)
   assert.match(html, /\.alt-market-background\[data-status="down"\]/)
+  assert.match(html, /id="report-tabs"[^>]*role="tablist"[^>]*aria-label="Разделы отчёта"/)
+  assert.match(html, /id="main-tab"[^>]*role="tab"[^>]*aria-controls="main-panel"[^>]*aria-selected="true"[^>]*tabindex="0"/)
+  assert.match(html, /id="peer-radar-tab"[^>]*role="tab"[^>]*aria-controls="peer-radar"[^>]*aria-selected="false"[^>]*tabindex="-1"/)
+  assert.match(html, /id="main-panel"[^>]*role="tabpanel"[^>]*aria-labelledby="main-tab"[^>]*tabindex="0">/)
+  assert.match(html, /id="peer-radar"[^>]*role="tabpanel"[^>]*aria-labelledby="peer-radar-tab"[^>]*tabindex="0"[^>]*hidden/)
+  assert.match(html, /Основной анализ/)
+  assert.match(html, /\.report-tabs button\[aria-selected="true"\]/)
+  assert.deepEqual([...html.matchAll(/data-peer-days="(\d+)" aria-pressed="(true|false)"/g)].map(([, days, pressed]) => [days, pressed]), [
+    ["1", "true"], ["3", "false"], ["7", "false"],
+  ])
+  assert.match(text, /изменение цены закрытия в процентах, не сигнал в ATR/)
+  assert.match(text, /фактическое закрытие часовой свечи, UTC/)
+  assert.match(text, /пропуски часов не соединяются/)
+  assert.match(text, /Только сохранённые данные, без сетевых запросов и обновлений/)
+  assert.match(text, /Радар соседей/)
+  assert.match(text, /Независимый анализ · шаг 12/)
+  assert.match(text, /Для ручного наблюдения, не прогноз и не вероятность движения/)
+  assert.match(text, /не меняется при выборе монеты или Update chart/)
+  assert.match(text, /собственном ATR каждой монеты.*не обязательно означает меньший рост в процентах/)
+  assert.match(text, /flat.*±0,5 своего ATR, а не строго 0%/)
+  assert.match(text, /Несколько лидеров.*независимость подтверждений не гарантируется/)
+  assert.match(text, /no_peers.*это не ошибка/)
+  assert.match(text, /связи неизвестны, а не отсутствуют/)
+  assert.match(html, /id="no-candidates"[^>]*>[^<]*<\/div>\s*<\/div>\s*<\/div>\s*<section id="peer-radar"/)
+  assert.match(html, /id="peer-radar-observations"[^>]*><\/div>\s*<\/div>\s*<\/section>\s*<footer/)
+  assert.match(html, /<details id="peer-radar-method" class="peer-radar-method">/)
+  assert.match(html, /\.peer-observation\[data-verdict="watch"\]/)
   assert.doesNotMatch(html, /ШАГ 7\.1|публикации последующих шагов сюда не входят/)
   assert.match(html, /<style>\s*:root/)
   assert.doesNotMatch(html, /<(?:script|link|img)\b[^>]*(?:src|href)\s*=/i)
@@ -100,6 +128,18 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
     }],
     definitions: { unsafe },
     altMarketBackground: { status: "unavailable", change4hPct: null, breadth4h: null, warning: unsafe },
+    peerRadar: {
+      status: "available", warning: unsafe,
+      histories: { coin: { baseCurrencyId: unsafe, symbol: unsafe, marketSymbol: unsafe, points: [{ time: 1, value: 2 }, { time: 2 }], warning: unsafe } },
+      data: {
+        criteria: { impulse: unsafe, lag: unsafe, reaction: unsafe },
+        analysis: { source: unsafe, model: unsafe, reasoningEffort: unsafe },
+        observations: [{
+          coin: { name: unsafe, symbol: unsafe, marketSymbol: unsafe, tradingViewSymbol: unsafe },
+          explanation: unsafe, caveats: [unsafe], leaders: [{ symbol: unsafe, basis: unsafe, caveat: unsafe }],
+        }],
+      },
+    },
   }
   const html = await renderReportHtml(report)
   const embedded = scripts(html)
@@ -108,6 +148,6 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
   assert.doesNotMatch(embedded[0].content, /</)
   assert.deepEqual(JSON.parse(embedded[0].content), report)
   assert.doesNotMatch(html, /<img src=x|<script>globalThis\.injected/)
-  assert.doesNotMatch(embedded[2].content, /\.innerHTML\s*=/)
+  assert.doesNotMatch(embedded[2].content, /\.(?:innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write\(/)
   assert.match(embedded[2].content, /\.textContent = text/)
 })

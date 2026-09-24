@@ -3,9 +3,9 @@ import path from "node:path"
 import test from "node:test"
 
 import { enrichTopCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-top-candidates-with-context.js"
-import { addReportContext } from "../src/steps/step11-report/add-report-context.js"
-import { buildReportData } from "../src/steps/step11-report/build-report-data.js"
-import { renderReportHtml } from "../src/steps/step11-report/render-report-html.js"
+import { addReportContext } from "../src/steps/step13-report/add-report-context.js"
+import { buildReportData } from "../src/steps/step13-report/build-report-data.js"
+import { renderReportHtml } from "../src/steps/step13-report/render-report-html.js"
 import { enrichTopCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-top-candidates-with-news.js"
 import { enrichTopCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-top-candidates-with-twitter.js"
 

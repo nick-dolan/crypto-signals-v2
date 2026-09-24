@@ -4,13 +4,13 @@ import test from "node:test"
 import vm from "node:vm"
 
 import { isArray, isFinite, isFunction, isSafeInteger, isString } from "../src/helpers/utils.typed.js"
-import { createChartUpdater } from "../src/steps/step11-report/chart-update.js"
+import { createChartUpdater } from "../src/steps/step13-report/chart-update.js"
 
 const script = new vm.Script(
-  await fs.readFile(new URL("../src/steps/step11-report/report.js", import.meta.url), "utf8"),
+  await fs.readFile(new URL("../src/steps/step13-report/report.js", import.meta.url), "utf8"),
   { filename: "report.js" },
 )
-const template = await fs.readFile(new URL("../src/steps/step11-report/report.html", import.meta.url), "utf8")
+const template = await fs.readFile(new URL("../src/steps/step13-report/report.html", import.meta.url), "utf8")
 
 // Only the DOM operations used by report.js; no layout, HTML parsing or event bubbling.
 function createNode (tagName = "div") {
@@ -102,22 +102,63 @@ function createChart (container, options) {
     },
     remove () {
       this.removed = true
+      this.removeCount = (this.removeCount ?? 0) + 1
     },
   }
 }
 
-function runReport (report, { updateChartHistory = () => assert.fail("Unexpected chart update") } = {}) {
+function runReport (report, {
+  updateChartHistory = () => assert.fail("Unexpected chart update"),
+  chartsAvailable = true,
+  configureChart = () => {},
+} = {}) {
+  const document = { activeElement: null }
+  const createElement = (tag) => {
+    const node = createNode(tag)
+    node.focus = () => {
+      document.activeElement = node
+    }
+    return node
+  }
   const nodes = new Map([...template.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)].map(([tag, id]) => {
-    const node = createNode()
+    const node = createElement(tag.match(/^<(\w+)/)[1])
     node.hidden = /\bhidden\b/.test(tag)
+    for (const [, name, value] of tag.matchAll(/([\w-]+)="([^"]*)"/g)) {
+      node.setAttribute(name, value)
+    }
+    node.id = id
+    node.tabIndex = Number(node.attributes.get("tabindex") ?? 0)
+    if (node.attributes.has("data-report-tab")) {
+      node.dataset.reportTab = node.attributes.get("data-report-tab")
+    }
     return [id, node]
   }))
   const byId = id => nodes.get(id) ?? null
-  const days = [...template.matchAll(/<button\b[^>]*data-days="(\d+)"[^>]*>/g)].map(([tag, value]) => {
-    const node = createNode()
-    node.dataset.days = value
+  const rangeButtons = attribute => [...template.matchAll(new RegExp(`<button\\b[^>]*${attribute}="(\\d+)"[^>]*>`, "g"))].map(([tag, value]) => {
+    const node = createElement("button")
+    node.dataset[attribute === "data-days" ? "days" : "peerDays"] = value
     node.setAttribute("aria-pressed", tag.match(/aria-pressed="([^"]+)"/)[1])
     return node
+  })
+  const days = rangeButtons("data-days")
+  const peerDays = rangeButtons("data-peer-days")
+  const tabs = [...nodes.values()].filter(node => node.dataset.reportTab)
+  Object.assign(document, {
+    getElementById: byId,
+    createElement,
+    querySelectorAll (selector) {
+      if (selector === "[data-days]") {
+        return days
+      }
+      if (selector === "[data-peer-days]") {
+        return peerDays
+      }
+      if (selector === "[data-report-tab]") {
+        return tabs
+      }
+      assert.equal(selector, ".top-card")
+      return byId("top-candidates").children.filter(node => node.className === "top-card")
+    },
   })
   byId("report-data").textContent = JSON.stringify(report)
   const sortOptions = template.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
@@ -128,6 +169,7 @@ function runReport (report, { updateChartHistory = () => assert.fail("Unexpected
   const directRequests = []
   script.runInNewContext({
     URL,
+    isFinite,
     updateChartHistory: (coin, asOf, previous) => {
       updateCalls.push({ coin, asOf, previous })
       return updateChartHistory(coin, asOf, previous)
@@ -136,36 +178,30 @@ function runReport (report, { updateChartHistory = () => assert.fail("Unexpected
       directRequests.push(args)
       assert.fail("report.js must not bypass the injected updater")
     },
-    document: {
-      getElementById: byId,
-      createElement: createNode,
-      querySelectorAll (selector) {
-        if (selector === "[data-days]") {
-          return days
+    document,
+    LightweightCharts: chartsAvailable
+      ? {
+          ColorType: { Solid: "solid" },
+          CrosshairMode: { Normal: 0 },
+          CandlestickSeries: "Candlestick",
+          HistogramSeries: "Histogram",
+          LineSeries: "Line",
+          createSeriesMarkers (series, points) {
+            const plugin = { series, data: structuredClone(points) }
+            markers.push(plugin)
+            return plugin
+          },
+          createChart (container, options) {
+            const chart = createChart(container, options)
+            charts.push(chart)
+            chart.radarHiddenAtCreation = byId("peer-radar").hidden
+            configureChart(chart)
+            return chart
+          },
         }
-        assert.equal(selector, ".top-card")
-        return byId("top-candidates").children.filter(node => node.className === "top-card")
-      },
-    },
-    LightweightCharts: {
-      ColorType: { Solid: "solid" },
-      CrosshairMode: { Normal: 0 },
-      CandlestickSeries: "Candlestick",
-      HistogramSeries: "Histogram",
-      LineSeries: "Line",
-      createSeriesMarkers (series, points) {
-        const plugin = { series, data: structuredClone(points) }
-        markers.push(plugin)
-        return plugin
-      },
-      createChart (container, options) {
-        const chart = createChart(container, options)
-        charts.push(chart)
-        return chart
-      },
-    },
+      : undefined,
   }, { timeout: 1_000 })
-  return { byId, charts, days, markers, updateCalls, directRequests }
+  return { byId, charts, days, peerDays, tabs, document, markers, updateCalls, directRequests }
 }
 
 function click (node, target = node) {
@@ -215,6 +251,843 @@ function createReport (symbols = ["COTI"]) {
   })
   return report
 }
+
+function addPeerRadar (report, symbols = ["OUTSIDE", "LIMITED"]) {
+  const observations = symbols.map((symbol, index) => ({
+    coin: {
+      baseCurrencyId: symbol.toLowerCase(), symbol, name: `${symbol} radar coin`,
+      tradingViewSymbol: `${symbol}USDT`, marketSymbol: `BINANCE:${symbol}USDT.P`,
+    },
+    peerStatus: index === 1 ? "partial" : "available",
+    peerCount: 3,
+    availablePeerCount: index === 1 ? 2 : 3,
+    benchmarkCoinCount: 20,
+    baseCurrencyId: symbol.toLowerCase(),
+    verdict: index % 2 ? "limited" : "watch",
+    explanation: `Независимое объяснение ${symbol}`,
+    caveats: [`Оговорка ${symbol}: общая рыночная история`],
+    leaders: [{
+      baseCurrencyId: "leader", symbol: "LEADER", type: "competitor",
+      basis: "Близкий продукт", caveat: "Разные масштабы бизнеса",
+      detectedAt: "2026-09-15T06:00:00.000Z", windowStartedAt: "2026-09-15T02:00:00.000Z",
+      ageHours: 4, status: "fresh", return4hPct: 9, move4hAtr: 4.5, marketExcess4hAtr: 2, relativeVolume4h: 2.4,
+      retainedPct: 50, returnSinceStartPct: 5, moveSinceStartAtr: 2.5,
+      coinReturnSinceStartPct: index === 1 ? 0.8 : -1.25,
+      coinMoveSinceStartAtr: index === 1 ? 0.2 : -0.75,
+      responseRatio: index === 1 ? 0.08 : -0.3,
+      gapAtr: index === 1 ? 2.3 : 3.25,
+      coinReaction: index === 1 ? "flat" : "falling",
+    }],
+  }))
+  const data = {
+    schemaVersion: 1,
+    asOf: report.asOf,
+    snapshotClosedAt: new Date(Date.parse(report.asOf) + 3_600_000).toISOString(),
+    generatedAt: "2026-09-15T10:08:09.000Z",
+    scanGeneratedAt: "2026-09-15T10:02:00.000Z",
+    timeframe: "1h",
+    registryGeneratedAt: "2026-09-01T12:00:00.000Z",
+    universeCoinCount: report.universeCoinCount,
+    loadedCoinCount: 28,
+    coverage: { available: 22, partial: 1, no_peers: 1, insufficient_data: 1, not_covered: 1, unreviewed: 1, unavailable: 1 },
+    criteria: { impulse: "Исходный импульс ≥ 2,5 ATR", lag: "Отставание в своих ATR", reaction: "Реакция на интервале лидера" },
+    candidateCount: observations.length,
+    analysisStatus: observations.length ? "complete" : "skipped_no_candidates",
+    analysis: {
+      source: observations.length ? "copilot" : "none",
+      model: observations.length ? "test-model" : null,
+      reasoningEffort: observations.length ? "high" : null,
+      callCount: observations.length ? 1 : 0,
+    },
+    observationCount: observations.length,
+    watchCount: observations.filter(item => item.verdict === "watch").length,
+    observations,
+  }
+  report.peerRadar = { status: "available", warning: null, data }
+  return data
+}
+
+function addPeerHistories (report) {
+  const data = report.peerRadar.data
+  const members = new Map(data.observations.flatMap(item => [item.coin, ...item.leaders]).map(member => [member.baseCurrencyId, member]))
+  report.peerRadar.histories = Object.fromEntries([...members.values()].map((member, index) => [member.baseCurrencyId, {
+    baseCurrencyId: member.baseCurrencyId,
+    symbol: member.symbol,
+    marketSymbol: `BYBIT:${member.symbol}USDT.P`,
+    points: Array.from({ length: 169 }, (_, hour) => ({
+      time: Date.parse(data.snapshotClosedAt) / 1_000 - (168 - hour) * 3_600,
+      value: 100 + index * 20 + hour * (index % 2 ? -0.1 : 0.2),
+    })),
+    warning: null,
+  }]))
+  return report.peerRadar.histories
+}
+
+function peerPart (card, className) {
+  return descendants(card).find(node => node.className === className)
+}
+
+function radarCharts (browser) {
+  return browser.charts.filter(chart => chart.container.className === "peer-chart")
+}
+
+function pressKey (tab, key) {
+  let prevented = false
+  tab.listeners.get("keydown")({ key, preventDefault: () => {
+    prevented = true
+  } })
+  return prevented
+}
+
+function peerNodes (byId) {
+  return [...template.matchAll(/\bid="(peer-radar(?:-[^"]+)?)"/g)]
+    .filter(([, id]) => id !== "peer-radar-tab")
+    .flatMap(([, id]) => [byId(id), ...descendants(byId(id))])
+}
+
+test("tabs default to main, navigate with arrows/Home/End and preserve the main chart, selection and controls", () => {
+  const report = createReport(["COTI", "SOL"])
+  addPeerRadar(report)
+  addPeerHistories(report)
+  const browser = runReport(report)
+  const { byId, tabs, document, charts, days, peerDays } = browser
+  const [main, radar] = tabs
+  assert.equal(byId("main-panel").hidden, false)
+  assert.equal(byId("peer-radar").hidden, true)
+  assert.deepEqual(tabs.map(tab => tab.attributes.get("aria-selected")), ["true", "false"])
+  assert.deepEqual(tabs.map(tab => tab.tabIndex), [0, -1])
+  assert.equal(charts.length, 1)
+  assert.equal(charts[0].container, byId("chart"))
+  assert.equal(radarCharts(browser).length, 0)
+  for (const tab of tabs) {
+    assert.equal(byId(tab.attributes.get("aria-controls")).attributes.get("aria-labelledby"), tab.id)
+  }
+
+  selectCoin(browser, "SOL")
+  click(days[2])
+  byId("search").value = "SOL"
+  byId("search").listeners.get("input")()
+  byId("sort").value = "confidence"
+  byId("sort").listeners.get("change")()
+  const mainChart = charts.at(-1)
+  mainChart.timeScale().setVisibleRange({ from: chartTime(report, -13), to: chartTime(report, -2) })
+  const ranges = structuredClone(mainChart.ranges)
+  const rows = [...byId("candidate-rows").children]
+  const cards = [...byId("peer-radar-observations").children]
+  const facts = peerPart(cards[0], "peer-observation-facts")
+  facts.open = true
+
+  assert.equal(pressKey(main, "ArrowRight"), true)
+  assert.equal(document.activeElement, radar)
+  assert.equal(byId("main-panel").hidden, true)
+  assert.equal(byId("peer-radar").hidden, false)
+  assert.deepEqual(tabs.map(tab => tab.attributes.get("aria-selected")), ["false", "true"])
+  assert.deepEqual(tabs.map(tab => tab.tabIndex), [-1, 0])
+  assert.deepEqual(peerDays.map(button => button.attributes.get("aria-pressed")), ["true", "false", "false"])
+  const firstCharts = radarCharts(browser)
+  assert.equal(firstCharts.length, 2)
+  assert.ok(firstCharts.every(chart => !chart.radarHiddenAtCreation))
+  click(radar)
+  assert.equal(radarCharts(browser).length, 2)
+  assert.equal(pressKey(radar, "Escape"), false)
+  assert.equal(byId("peer-radar").hidden, false)
+
+  assert.equal(pressKey(radar, "ArrowRight"), true)
+  assert.equal(document.activeElement, main)
+  assert.equal(byId("peer-radar").hidden, true)
+  assert.ok(firstCharts.every(chart => chart.removed && chart.removeCount === 1))
+  assert.equal(mainChart.removed, false)
+  assert.deepEqual(mainChart.ranges, ranges)
+  assert.equal(byId("coin-symbol").textContent, "SOL")
+  assert.equal(byId("search").value, "SOL")
+  assert.equal(byId("sort").value, "confidence")
+  assert.deepEqual(byId("candidate-rows").children, rows)
+  assert.equal(days[2].attributes.get("aria-pressed"), "true")
+
+  assert.equal(pressKey(main, "ArrowLeft"), true)
+  assert.equal(document.activeElement, radar)
+  click(peerDays[1])
+  assert.equal(pressKey(radar, "Home"), true)
+  assert.equal(document.activeElement, main)
+  assert.equal(pressKey(main, "End"), true)
+  assert.equal(document.activeElement, radar)
+  assert.equal(peerDays[1].attributes.get("aria-pressed"), "true")
+  assert.equal(byId("peer-radar-observations").children[0], cards[0])
+  assert.equal(peerPart(cards[0], "peer-observation-facts"), facts)
+  assert.equal(facts.open, true)
+  click(main)
+  assert.ok(radarCharts(browser).every(chart => chart.removed && chart.removeCount === 1))
+  assert.equal(mainChart.removed, false)
+  assert.deepEqual(mainChart.ranges, ranges)
+  assert.equal(browser.updateCalls.length, 0)
+  assert.equal(browser.directRequests.length, 0)
+})
+
+for (const allLimited of [false, true]) {
+  test(`all 23 radar candidates have visible charts, including outsiders and limited (allLimited=${allLimited})`, () => {
+    const report = createReport()
+    const data = addPeerRadar(report, Array.from({ length: 23 }, (_, index) => `OUTSIDE${index}`))
+    if (allLimited) {
+      data.observations.forEach((item) => {
+        item.verdict = "limited"
+      })
+      data.watchCount = 0
+    }
+    data.observations.unshift(data.observations.pop())
+    data.observations[0].leaders.push({ ...data.observations[0].leaders[0], baseCurrencyId: "second", symbol: "SECOND" })
+    addPeerHistories(report)
+    const before = structuredClone(report)
+    const browser = runReport(report)
+    const { byId } = browser
+    const expected = [...data.observations.filter(item => item.verdict === "watch"), ...data.observations.filter(item => item.verdict !== "watch")]
+    const cards = byId("peer-radar-observations").children
+    assert.deepEqual(cards.map(card => card.children[0].children[0].textContent), expected.map(item => item.coin.symbol))
+    assert.equal(radarCharts(browser).length, 0)
+    click(byId("peer-radar-tab"))
+    const charts = radarCharts(browser)
+    assert.equal(charts.length, 23)
+    cards.forEach((card, index) => {
+      assert.equal(charts[index].container, peerPart(card, "peer-chart"))
+      assert.equal(charts[index].container.hidden, false)
+      assert.equal(charts[index].radarHiddenAtCreation, false)
+      assert.equal(peerPart(card, "peer-observation-facts").open, false)
+      assert.deepEqual(charts[index].series.map(series => series.options.title), [
+        `Кандидат ${expected[index].coin.symbol}`, ...expected[index].leaders.map(leader => `Лидер ${leader.symbol}`),
+      ])
+      assert.equal(peerPart(card, "peer-chart-legend").children.length, expected[index].leaders.length + 1)
+      assert.ok(charts[index].series.every(series => series.type === "Line"))
+    })
+    assert.deepEqual(byId("candidate-rows").children.map(node => node.dataset.symbol), ["COTI"])
+    assert.equal(byId("coin-symbol").textContent, "COTI")
+    assert.equal(browser.charts[0].removed, false)
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+    assert.equal(browser.updateCalls.length, 0)
+    assert.equal(browser.directRequests.length, 0)
+  })
+}
+
+test("all radar lines use the same exact close anchor and common 1/3/7-day windows, never the ATR signal", () => {
+  const report = createReport()
+  const data = addPeerRadar(report)
+  const histories = addPeerHistories(report)
+  const browser = runReport(report)
+  const { byId, peerDays } = browser
+  click(byId("peer-radar-tab"))
+  const to = Date.parse(data.snapshotClosedAt) / 1_000
+  const cards = byId("peer-radar-observations").children
+  for (const button of peerDays) {
+    const old = radarCharts(browser).filter(chart => !chart.removed)
+    click(button)
+    const days = Number(button.dataset.peerDays)
+    const from = to - days * 86_400
+    const charts = radarCharts(browser).filter(chart => !chart.removed)
+    assert.equal(charts.length, 2)
+    if (days !== 1) {
+      assert.ok(old.every(chart => chart.removed && chart.removeCount === 1))
+    }
+    assert.deepEqual(peerDays.map(item => item.attributes.get("aria-pressed")), peerDays.map(item => String(item === button)))
+    charts.forEach((chart, index) => {
+      assert.deepEqual(chart.ranges, [{ from, to }])
+      assert.match(chart.options.localization.timeFormatter(to), /15 сент\. 2026 г\., 10:00 UTC · закрытие/)
+      const members = [data.observations[index].coin, ...data.observations[index].leaders]
+      members.forEach((member, lineIndex) => {
+        const history = histories[member.baseCurrencyId]
+        const anchor = history.points.find(point => point.time === from).value
+        const series = chart.series[lineIndex]
+        assert.equal(series.data.length, days * 24 + 1)
+        assert.deepEqual(series.data, history.points.filter(point => point.time >= from).map(point => ({
+          time: point.time, value: (point.value / anchor - 1) * 100,
+        })))
+        assert.deepEqual(series.data[0], { time: from, value: 0 })
+        assert.equal(series.data.at(-1).time, to)
+        assert.equal(series.options.priceFormat.type, "percent")
+        assert.equal(series.options.lineWidth, lineIndex === 0 ? 3 : 2)
+        if (lineIndex) {
+          assert.notEqual(series.options.color, chart.series[0].options.color)
+        }
+      })
+      assert.equal(peerPart(cards[index], "warning").hidden, true)
+      assert.match(peerPart(cards[index], "peer-chart-time").textContent, /10:00 UTC.*% \(не ATR\)/)
+      hoverChart(chart, from)
+      assert.ok(peerPart(cards[index], "peer-chart-legend").children.every(item => item.textContent.endsWith(" · 0%")))
+      assert.ok(peerPart(cards[index], "peer-chart-time").textContent.includes(chart.options.localization.timeFormatter(from).split(" · ")[0]))
+      chart.crosshair({})
+    })
+    assert.match(byId("peer-radar-range-note").textContent, /Общая база \(0%\):.*10:00 UTC → срез:.*10:00 UTC/)
+  }
+  assert.equal(browser.charts[0].removed, false)
+  assert.equal(browser.days[1].attributes.get("aria-pressed"), "true")
+  assert.equal(browser.updateCalls.length, 0)
+  assert.equal(browser.directRequests.length, 0)
+})
+
+test("missing exact anchors disable only that coin, including omitted slots, without rebasing to the next close", () => {
+  const report = createReport()
+  addPeerRadar(report, ["OUTSIDE"])
+  const histories = addPeerHistories(report)
+  histories.outside.points[144] = { time: histories.outside.points[144].time }
+  histories.leader.points.splice(96, 1)
+  const browser = runReport(report)
+  const { byId, peerDays } = browser
+  click(byId("peer-radar-tab"))
+  const card = byId("peer-radar-observations").children[0]
+  let chart = radarCharts(browser).at(-1)
+  assert.deepEqual(chart.series.map(series => series.options.title), ["Лидер LEADER"])
+  assert.match(peerPart(card, "warning").textContent, /OUTSIDE: Нет цены закрытия на общей базе 14 сент\. 2026 г\., 10:00 UTC — линия отключена/)
+  assert.equal(peerPart(card, "peer-chart-legend").children[0].dataset.disabled, "true")
+  assert.match(peerPart(card, "peer-chart-legend").children[0].textContent, /Линия отключена: нет общей базы/)
+  assert.equal(peerPart(card, "peer-chart-legend").children[1].dataset.disabled, "false")
+
+  click(peerDays[1])
+  chart = radarCharts(browser).at(-1)
+  assert.ok(chart.series.every(series => series.options.title === "Кандидат OUTSIDE"))
+  assert.match(peerPart(card, "warning").textContent, /LEADER: Нет цены закрытия на общей базе 12 сент\. 2026 г\., 10:00 UTC — линия отключена/)
+  assert.equal(peerPart(card, "peer-chart-legend").children[0].dataset.disabled, "false")
+  assert.equal(peerPart(card, "peer-chart-legend").children[1].dataset.disabled, "true")
+  click(peerDays[2])
+  chart = radarCharts(browser).at(-1)
+  assert.deepEqual([...new Set(chart.series.map(series => series.options.title))], ["Кандидат OUTSIDE", "Лидер LEADER"])
+  assert.ok(peerPart(card, "peer-chart-legend").children.every(item => item.dataset.disabled === "false"))
+  assert.doesNotMatch(peerPart(card, "warning").textContent, /линия отключена/)
+})
+
+test("radar splits every internal gap into contiguous lines, shows isolated points and keeps missing end hours", () => {
+  const report = createReport()
+  addPeerRadar(report, ["OUTSIDE"])
+  const histories = addPeerHistories(report)
+  for (const index of [145, 167, 168]) {
+    histories.outside.points[index] = { time: histories.outside.points[index].time }
+  }
+  const omitted = histories.outside.points.splice(147, 1)[0].time
+  const browser = runReport(report)
+  const { byId } = browser
+  click(byId("peer-radar-tab"))
+  const card = byId("peer-radar-observations").children[0]
+  const chart = radarCharts(browser)[0]
+  const segments = chart.series.filter(series => series.options.title === "Кандидат OUTSIDE")
+  assert.deepEqual(segments.map(series => series.data.filter(point => point.value != null).length), [1, 1, 19])
+  assert.deepEqual(segments.map(series => series.options.pointMarkersVisible), [true, true, false])
+  assert.ok(segments.every(series => !series.options.lastValueVisible))
+  for (const series of chart.series) {
+    assert.equal(series.data.length, 25)
+    series.data.slice(1).forEach((point, index) => assert.equal(point.time - series.data[index].time, 3_600))
+    const values = series.data.filter(point => point.value != null)
+    values.slice(1).forEach((point, index) => assert.equal(point.time - values[index].time, 3_600))
+  }
+  assert.equal(peerPart(card, "peer-chart-legend").children.length, 2)
+  assert.match(peerPart(card, "warning").textContent, /OUTSIDE: Нет 4 из 25 часовых закрытий; пропуски не соединяются/)
+  assert.match(peerPart(card, "peer-chart-legend").children[0].textContent, /Нет закрытия/)
+  hoverChart(chart, omitted)
+  assert.match(peerPart(card, "peer-chart-legend").children[0].textContent, /Нет закрытия/)
+  hoverChart(chart, omitted - 3_600)
+  assert.doesNotMatch(peerPart(card, "peer-chart-legend").children[0].textContent, /Нет закрытия/)
+  chart.crosshair({})
+  assert.match(peerPart(card, "peer-chart-legend").children[0].textContent, /Нет закрытия/)
+  assert.equal(chart.ranges[0].to, Date.parse(report.peerRadar.data.snapshotClosedAt) / 1_000)
+})
+
+for (const legacy of [true, false]) {
+  test(`unavailable histories keep every card and its facts visible without rebasing or requests (legacy=${legacy})`, () => {
+    const report = createReport([])
+    addPeerRadar(report)
+    if (!legacy) {
+      const histories = addPeerHistories(report)
+      Object.values(histories).forEach(history => Object.assign(history, { points: [], marketSymbol: null, warning: "История недоступна" }))
+    }
+    const browser = runReport(report)
+    const { byId } = browser
+    click(byId("peer-radar-tab"))
+    assert.equal(byId("peer-radar").hidden, false)
+    assert.equal(byId("peer-radar-content").hidden, false)
+    assert.equal(byId("peer-radar-observations").children.length, 2)
+    for (const card of byId("peer-radar-observations").children) {
+      assert.equal(peerPart(card, "warning").hidden, false)
+      assert.match(peerPart(card, "warning").textContent, /линия отключена/)
+      assert.equal(peerPart(card, "empty-state").hidden, false)
+      assert.equal(peerPart(card, "peer-chart").hidden, true)
+      assert.equal(peerPart(card, "peer-observation-facts").hidden, false)
+      assert.match(peerPart(card, "peer-observation-facts").textContent, /Независимое объяснение/)
+    }
+    assert.equal(browser.charts.length, 0)
+    assert.equal(browser.updateCalls.length, 0)
+    assert.equal(browser.directRequests.length, 0)
+  })
+}
+
+test("unavailable chart library leaves per-card warnings, legends and saved facts usable", () => {
+  const report = createReport()
+  addPeerRadar(report)
+  addPeerHistories(report)
+  const browser = runReport(report, { chartsAvailable: false })
+  const { byId } = browser
+  click(byId("peer-radar-tab"))
+  for (const card of byId("peer-radar-observations").children) {
+    assert.equal(peerPart(card, "warning").hidden, false)
+    assert.match(peerPart(card, "warning").textContent, /Не удалось построить график/)
+    assert.equal(peerPart(card, "peer-chart").hidden, true)
+    assert.equal(peerPart(card, "peer-chart-legend").children.length, 2)
+    assert.match(peerPart(card, "peer-observation-facts").textContent, /Независимое объяснение/)
+    peerPart(card, "peer-observation-facts").open = true
+  }
+  click(byId("main-tab"))
+  assert.equal(byId("coin-symbol").textContent, "COTI")
+  assert.equal(byId("coin-detail").hidden, false)
+  assert.equal(browser.charts.length, 0)
+  assert.equal(browser.updateCalls.length, 0)
+})
+
+test("one radar chart failure is isolated and cleaned up; range changes retry without rebuilding facts", () => {
+  const report = createReport()
+  addPeerRadar(report)
+  addPeerHistories(report)
+  let fail = true
+  const browser = runReport(report, {
+    configureChart (chart) {
+      if (chart.container.className !== "peer-chart" || !fail) {
+        return
+      }
+      fail = false
+      const addSeries = chart.addSeries.bind(chart)
+      chart.addSeries = (...args) => {
+        const series = addSeries(...args)
+        series.setData = () => {
+          throw new Error("<img src=x onerror=alert(1)> chart error")
+        }
+        return series
+      }
+    },
+  })
+  const { byId } = browser
+  click(byId("peer-radar-tab"))
+  const cards = byId("peer-radar-observations").children
+  const failed = radarCharts(browser)[0]
+  assert.equal(failed.removed, true)
+  assert.equal(failed.removeCount, 1)
+  assert.equal(radarCharts(browser)[1].removed, false)
+  assert.equal(peerPart(cards[0], "warning").children.length, 0)
+  assert.match(peerPart(cards[0], "warning").textContent, /<img src=x onerror=alert\(1\)> chart error/)
+  const facts = peerPart(cards[0], "peer-observation-facts")
+  facts.open = true
+  click(browser.peerDays[1])
+  assert.equal(radarCharts(browser).filter(chart => !chart.removed).length, 2)
+  assert.equal(peerPart(cards[0], "warning").hidden, true)
+  assert.equal(peerPart(cards[0], "peer-chart").hidden, false)
+  assert.equal(peerPart(cards[0], "peer-observation-facts"), facts)
+  assert.equal(facts.open, true)
+  click(byId("main-tab"))
+  assert.ok(radarCharts(browser).every(chart => chart.removeCount === 1))
+  assert.equal(browser.charts[0].removed, false)
+})
+
+test("visible radar charts and facts survive main updates, selection, search and sort; main caches survive tab toggles", async () => {
+  const report = createReport(["COTI", "SOL"])
+  addPeerRadar(report)
+  addPeerHistories(report)
+  const before = structuredClone(report)
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const { byId } = browser
+  const pending = click(byId("update-chart"))
+  click(byId("peer-radar-tab"))
+  const charts = radarCharts(browser)
+  const cards = [...byId("peer-radar-observations").children]
+  const radarState = peerNodes(byId).map(node => [node, node.textContent, [...node.children]])
+  const result = createUpdate(report)
+  controlled.requests[0].resolve(result)
+  await pending
+  const cached = browser.charts.at(-1)
+  assert.equal(cached.container, byId("chart"))
+  assert.match(byId("chart-update-status").textContent, /Обновлено/)
+  assert.ok(charts.every(chart => !chart.removed && chart.ranges[0].to === Date.parse(report.peerRadar.data.snapshotClosedAt) / 1_000))
+  selectCoin(browser, "SOL")
+  selectCoin(browser, "COTI")
+  byId("search").value = "SOL"
+  byId("search").listeners.get("input")()
+  byId("sort").value = "probability"
+  byId("sort").listeners.get("change")()
+  assert.deepEqual(radarCharts(browser), charts)
+  assert.deepEqual(byId("peer-radar-observations").children, cards)
+  radarState.forEach(([node, text, children]) => {
+    assert.equal(node.textContent, text)
+    assert.deepEqual(node.children, children)
+  })
+  const main = browser.charts.at(-1)
+  click(byId("main-tab"))
+  assert.equal(main.removed, false)
+  click(byId("peer-radar-tab"))
+  click(byId("main-tab"))
+  assert.equal(main.removed, false)
+  const retry = click(byId("update-chart"))
+  assert.equal(browser.updateCalls[1].previous, result)
+  controlled.requests[1].reject(new Error("Offline"))
+  await retry
+  assert.equal(main.removed, false)
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+  assert.equal(browser.updateCalls.length, 2)
+  assert.equal(browser.directRequests.length, 0)
+})
+
+test("radar uses only verified history symbols for leader links and treats all history text as literal offline data", () => {
+  const report = createReport()
+  const data = addPeerRadar(report, ["OUTSIDE"])
+  const unsafe = "</script><img src=x onerror=alert(1)> & <svg onload=alert(2)>"
+  data.observations[0].leaders.push({ ...data.observations[0].leaders[0], baseCurrencyId: "unverified", symbol: "UNVERIFIED" })
+  const histories = addPeerHistories(report)
+  histories.outside.warning = unsafe
+  histories.leader.marketSymbol = "BYBIT:1000LEADERUSDT.P&symbol=OTHER\" onclick=alert(1)"
+  histories.unverified.marketSymbol = null
+  histories.unverified.symbol = unsafe
+  data.observations[0].leaders[1].marketSymbol = "BINANCE:GUESSEDUSDT.P"
+  const browser = runReport(report)
+  const { byId } = browser
+  click(byId("peer-radar-tab"))
+  for (const button of browser.peerDays) {
+    click(button)
+  }
+  const card = byId("peer-radar-observations").children[0]
+  assert.equal(peerPart(card, "warning").textContent, `OUTSIDE: ${unsafe}`)
+  assert.equal(peerPart(card, "warning").children.length, 0)
+  const leaders = descendants(card).filter(node => node.className === "peer-leader")
+  const verifiedLink = descendants(leaders[0]).find(node => node.tagName === "A")
+  assert.equal(new URL(verifiedLink.href).searchParams.get("symbol"), histories.leader.marketSymbol)
+  assert.equal(descendants(leaders[1]).filter(node => node.tagName === "A").length, 0)
+  assert.match(peerPart(card, "peer-chart-legend").textContent, /UNVERIFIED/)
+  const links = descendants(card).filter(node => node.tagName === "A")
+  for (const link of links) {
+    const url = new URL(link.href)
+    assert.equal(url.origin, "https://www.tradingview.com")
+    assert.equal(url.pathname, "/chart/")
+    assert.equal(url.hash, "")
+    assert.equal(url.username, "")
+    assert.equal([...url.searchParams].length, 1)
+    assert.notEqual(url.searchParams.get("symbol"), "BINANCE:GUESSEDUSDT.P")
+    assert.equal(link.rel, "noopener noreferrer")
+    assert.equal(link.target, "_blank")
+    assert.equal(link.listeners.size, 0)
+  }
+  assert.ok(descendants(card).every(node => !["SCRIPT", "IMG", "SVG", "IFRAME"].includes(node.tagName)))
+  assert.equal(browser.updateCalls.length, 0)
+  assert.equal(browser.directRequests.length, 0)
+})
+
+test("peer radar renders independent watch and limited observations with snapshot and release times", () => {
+  const report = createReport()
+  const data = addPeerRadar(report)
+  const before = structuredClone(report)
+  const { byId, updateCalls, directRequests } = runReport(report)
+
+  assert.equal(byId("peer-radar").dataset.status, "available")
+  assert.equal(byId("peer-radar-content").hidden, false)
+  assert.equal(byId("peer-radar-warning").hidden, true)
+  assert.equal(byId("peer-radar-status").textContent, "Наблюдения для ручной проверки")
+  assert.deepEqual(byId("peer-radar-counts").children.map(node => node.textContent), [
+    "Наблюдений: 2", "Обратить внимание: 1", "Ограниченная интерпретация: 1",
+  ])
+  assert.match(byId("peer-radar-time").textContent, /Срез закрыт: 15 сент\. 2026 г\., 10:00 UTC/)
+  assert.match(byId("peer-radar-time").textContent, /Анализ выпущен: 15 сент\. 2026 г\., 10:08:09 UTC/)
+  assert.doesNotMatch(byId("peer-radar-time").textContent, /09:00|11:37/)
+  const cards = byId("peer-radar-observations").children
+  assert.equal(cards.length, 2)
+  for (const [index, verdict] of ["Обратить внимание", "Ограниченная интерпретация"].entries()) {
+    const card = cards[index]
+    const observation = data.observations[index]
+    assert.equal(card.tagName, "ARTICLE")
+    assert.equal(descendants(card).find(node => node.className === "peer-observation-facts").open, false)
+    assert.equal(card.dataset.verdict, observation.verdict)
+    assert.match(card.children[0].textContent, new RegExp(observation.coin.symbol))
+    assert.ok(card.children[0].textContent.includes(observation.coin.name))
+    assert.ok(card.children[0].textContent.includes(verdict))
+    assert.ok(card.textContent.includes(observation.explanation))
+    assert.ok(card.textContent.includes(observation.caveats[0]))
+    const link = descendants(card).find(node => node.tagName === "A")
+    const url = new URL(link.href)
+    assert.equal(url.origin, "https://www.tradingview.com")
+    assert.equal(url.pathname, "/chart/")
+    assert.equal(url.searchParams.get("symbol"), observation.coin.marketSymbol)
+    assert.equal(link.target, "_blank")
+    assert.equal(link.rel, "noopener noreferrer")
+    assert.equal(link.listeners.size, 0)
+  }
+  assert.equal(byId("coin-symbol").textContent, "COTI")
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+  assert.equal(updateCalls.length, 0)
+  assert.equal(directRequests.length, 0)
+})
+
+test("peer radar shows all 23 outsiders watch-first without adding them to the main shortlist or charts", () => {
+  const report = createReport(["COTI", "SOL"])
+  const symbols = Array.from({ length: 23 }, (_, index) => `OUTSIDE${index + 1}`)
+  addPeerRadar(report, symbols)
+  const { byId, charts, updateCalls, directRequests } = runReport(report)
+  const cards = byId("peer-radar-observations").children
+
+  assert.equal(cards.length, 23)
+  assert.deepEqual(cards.map(card => card.children[0].children[0].textContent), [
+    ...symbols.filter((_, index) => index % 2 === 0), ...symbols.filter((_, index) => index % 2 === 1),
+  ])
+  assert.ok(cards.every(card => !card.open))
+  assert.equal(byId("peer-radar-counts").children[0].textContent, "Наблюдений: 23")
+  assert.equal(byId("candidate-count").textContent, "2")
+  for (const id of ["candidate-rows", "top-candidates"]) {
+    assert.deepEqual(byId(id).children.map(node => node.dataset.symbol), ["COTI", "SOL"])
+    assert.doesNotMatch(byId(id).textContent, /OUTSIDE/)
+  }
+  assert.ok(peerNodes(byId).every(node => node.dataset.symbol == null && node.listeners.size === 0))
+  peerPart(cards.at(-1), "peer-observation-facts").open = true
+  assert.equal(byId("coin-symbol").textContent, "COTI")
+  assert.equal(charts.length, 1)
+  assert.equal(charts[0].removed, false)
+  assert.equal(updateCalls.length, 0)
+  assert.equal(directRequests.length, 0)
+})
+
+test("peer radar stays available when the main candidate list is empty", () => {
+  const report = createReport([])
+  addPeerRadar(report)
+  const { byId, charts, updateCalls, directRequests } = runReport(report)
+
+  assert.equal(byId("coin-detail").hidden, true)
+  assert.equal(byId("no-candidates").hidden, false)
+  assert.equal(byId("peer-radar-content").hidden, false)
+  assert.equal(byId("peer-radar").dataset.status, "available")
+  assert.equal(byId("peer-radar-observations").children.length, 2)
+  assert.equal(charts.length, 0)
+  assert.equal(updateCalls.length, 0)
+  assert.equal(directRequests.length, 0)
+})
+
+for (const symbols of [[], ["COTI"]]) {
+  test(`an empty peer scan is available, not unavailable, with ${symbols.length} main candidates`, () => {
+    const report = createReport(symbols)
+    addPeerRadar(report, [])
+    const { byId, updateCalls, directRequests } = runReport(report)
+
+    assert.equal(byId("peer-radar").dataset.status, "available")
+    assert.equal(byId("peer-radar-content").hidden, false)
+    assert.equal(byId("peer-radar-warning").hidden, true)
+    assert.match(byId("peer-radar-status").textContent, /Наблюдений нет.*не нашёл кандидатов.*анализ шага 12 пропущен/)
+    assert.doesNotMatch(byId("peer-radar-status").textContent, /недоступен/)
+    assert.deepEqual(byId("peer-radar-counts").children.map(node => node.textContent), [
+      "Наблюдений: 0", "Обратить внимание: 0", "Ограниченная интерпретация: 0",
+    ])
+    assert.equal(byId("peer-radar-observations").children.length, 0)
+    assert.match(byId("peer-radar-analysis").textContent, /Модель: —.*Вызовов: 0/)
+    assert.equal(byId("coin-detail").hidden, !symbols.length)
+    assert.equal(updateCalls.length, 0)
+    assert.equal(directRequests.length, 0)
+  })
+}
+
+for (const warning of [
+  undefined,
+  "Результат шага 12 не найден.",
+  "Срез шага 12 не совпадает с текущим asOf.",
+  "Результат шага 12 повреждён.",
+  "После нового скана шага 11 нужен свежий анализ шага 12.",
+  "<img src=x onerror=alert(1)> Причина недоступности",
+]) {
+  test(`unavailable or legacy peer radar preserves the rest of the report: ${warning ?? "legacy"}`, () => {
+    const report = createReport()
+    if (warning !== undefined) {
+      report.peerRadar = { status: "unavailable", warning, data: null }
+    }
+    const { byId, charts } = runReport(report)
+
+    assert.equal(byId("peer-radar").dataset.status, "unavailable")
+    assert.equal(byId("peer-radar-status").textContent, "Радар недоступен")
+    assert.equal(byId("peer-radar-content").hidden, true)
+    assert.equal(byId("peer-radar-warning").hidden, false)
+    assert.equal(byId("peer-radar-warning").textContent, warning ?? "Результат шага 12 не добавлен.")
+    assert.equal(byId("peer-radar-warning").children.length, 0)
+    assert.equal(byId("peer-radar-observations").children.length, 0)
+    assert.equal(byId("coin-symbol").textContent, "COTI")
+    assert.equal(byId("explanation").textContent, "Оценка COTI")
+    assert.equal(charts.length, 1)
+  })
+}
+
+test("peer radar exposes partial and unknown coverage without treating no_peers as an error", () => {
+  const report = createReport()
+  const data = addPeerRadar(report)
+  data.registryGeneratedAt = null
+  report.peerRadar.warning = "Доступна только часть справочника."
+  const { byId } = runReport(report)
+
+  assert.equal(byId("peer-radar-coverage").textContent, "Загружено 28 / 30 монет · Частичное покрытие: 1 · Неизвестные связи: 3 · Без соседей: 1 (не ошибка)")
+  assert.deepEqual(byId("peer-radar-coverage-counts").children.map(node => node.textContent), [
+    "Полное покрытие: 22", "Частичное покрытие: 1", "Без соседей: 1", "Недостаточно данных: 1",
+    "Вне справочника: 1", "Не проверено: 1", "Справочник недоступен: 1",
+  ])
+  assert.equal(byId("peer-radar-warning").textContent, report.peerRadar.warning)
+  assert.equal(byId("peer-radar-warning").hidden, false)
+  assert.equal(byId("peer-radar-method").open, false)
+  assert.match(byId("peer-radar-provenance").textContent, /asOf \(открытие\):.*09:00 UTC.*Скан шага 11 выпущен:.*10:02 UTC/)
+  assert.match(byId("peer-radar-provenance").textContent, /Справочник: время выпуска не указано/)
+  assert.match(byId("peer-radar-analysis").textContent, /Источник анализа: copilot.*Модель: test-model.*Усилие рассуждения: high.*Вызовов: 1/)
+  assert.deepEqual(byId("peer-radar-criteria").children.map(node => node.children[1].textContent), Object.values(data.criteria))
+  assert.match(byId("peer-radar-observations").children[1].textContent, /Частичное покрытие · Соседи с данными: 2 \/ 3 · Монет для сравнения с рынком: 20/)
+})
+
+test("each peer leader keeps actual signed returns, own ATR and reaction separate from its frozen 4h trigger", () => {
+  const report = createReport()
+  const data = addPeerRadar(report)
+  data.observations[0].leaders.push({
+    ...data.observations[0].leaders[0],
+    baseCurrencyId: "adjacent", symbol: "ADJACENT", type: "adjacent",
+    basis: "Общая аудитория", caveat: "Не прямой конкурент",
+    detectedAt: "2026-09-15T04:00:00.000Z", windowStartedAt: "2026-09-15T00:00:00.000Z",
+    ageHours: 6, status: "fading", return4hPct: 7.5, move4hAtr: 3.75,
+    retainedPct: 80, returnSinceStartPct: 6, moveSinceStartAtr: 3,
+    coinReturnSinceStartPct: 8.5, coinMoveSinceStartAtr: 1.2, responseRatio: 0.4, gapAtr: 1.8, coinReaction: "rising",
+  })
+  const { byId } = runReport(report)
+  const [watch, limited] = byId("peer-radar-observations").children
+  const leaders = descendants(watch).filter(node => node.className === "peer-leader")
+  const values = metrics => metrics.children.map(node => node.children[1].textContent)
+  assert.equal(leaders.length, 2)
+  assert.equal(leaders[0].children[0].textContent, "LEADER · Конкурент")
+  assert.match(leaders[0].textContent, /Свежий импульс \(fresh\) · Возраст с обнаружения: 4 ч · Обнаружен:.*06:00 UTC/)
+  assert.match(leaders[0].textContent, /Связь по справочнику: Близкий продукт.*Оговорка связи: Разные масштабы бизнеса/)
+  assert.match(leaders[0].children.find(node => node.className === "peer-current-window").textContent, /02:00 UTC →.*10:00 UTC/)
+  assert.equal(leaders[0].children.find(node => node.className === "peer-reaction").textContent, "Реакция OUTSIDE на этом интервале: Снижение (falling)")
+  const current = leaders[0].children.find(node => node.className === "peer-metrics")
+  assert.deepEqual(values(current), ["+5%", "-1,25%", "+2,5 ATR", "-0,75 ATR", "3,25 ATR", "50%", "-0,3×"])
+  assert.doesNotMatch(current.textContent, /\+9%|\+4,5 ATR/)
+  assert.match(current.textContent, /Лидер LEADER · изменение цены.*Кандидат OUTSIDE · изменение цены/)
+  const frozen = leaders[0].children.find(node => node.tagName === "DETAILS")
+  assert.equal(frozen.open, false)
+  assert.equal(frozen.children[0].textContent, "Исходный импульс · 4ч (зафиксирован)")
+  assert.match(frozen.textContent, /02:00 UTC →.*06:00 UTC.*не текущая доходность/)
+  assert.deepEqual(values(frozen.children.find(node => node.className === "peer-metrics")), ["+9%", "+4,5 ATR", "+2 ATR", "2,4×"])
+  assert.equal(leaders[1].children[0].textContent, "ADJACENT · Смежный сосед")
+  assert.match(leaders[1].textContent, /Затухающий импульс \(fading\) · Возраст с обнаружения: 6 ч/)
+  assert.match(leaders[1].children.find(node => node.className === "peer-current-window").textContent, /00:00 UTC →.*10:00 UTC/)
+  assert.equal(leaders[1].children.find(node => node.className === "peer-reaction").textContent, "Реакция OUTSIDE на этом интервале: Рост (rising)")
+  assert.deepEqual(values(leaders[1].children.find(node => node.className === "peer-metrics")), ["+6%", "+8,5%", "+3 ATR", "+1,2 ATR", "1,8 ATR", "80%", "0,4×"])
+  assert.match(limited.textContent, /Реакция LIMITED на этом интервале: Слабая \(flat\)/)
+  assert.match(limited.textContent, /\+0,8%.*\+0,2 ATR/)
+})
+
+test("peer radar DOM, expanded cards and embedded data survive main selection, search, sorting and chart updates", async () => {
+  const report = createReport(["COTI", "SOL"])
+  addPeerRadar(report)
+  const before = structuredClone(report)
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const { byId } = browser
+  const cards = byId("peer-radar-observations").children
+  peerPart(cards[0], "peer-observation-facts").open = true
+  peerPart(cards[0], "peer-original").open = true
+  byId("peer-radar-method").open = true
+  const nodes = peerNodes(byId)
+  const states = nodes.map(node => ({
+    text: node.textContent, hidden: node.hidden, open: node.open, href: node.href,
+    dataset: { ...node.dataset }, children: [...node.children],
+  }))
+  const embedded = byId("report-data").textContent
+  const assertUnchanged = () => {
+    const current = peerNodes(byId)
+    assert.equal(current.length, nodes.length)
+    nodes.forEach((node, index) => {
+      assert.equal(current[index], node)
+      assert.equal(node.textContent, states[index].text)
+      assert.equal(node.hidden, states[index].hidden)
+      assert.equal(node.open, states[index].open)
+      assert.equal(node.href, states[index].href)
+      assert.deepEqual(node.dataset, states[index].dataset)
+      assert.equal(node.children.length, states[index].children.length)
+      node.children.forEach((child, childIndex) => assert.equal(child, states[index].children[childIndex]))
+    })
+    assert.equal(byId("report-data").textContent, embedded)
+    assert.deepEqual(JSON.parse(embedded), before)
+    assert.deepEqual(report, before)
+    assert.equal(browser.directRequests.length, 0)
+  }
+
+  selectCoin(browser, "SOL")
+  assertUnchanged()
+  click(byId("top-candidates"), byId("top-candidates").children[0])
+  assertUnchanged()
+  for (const query of ["SOL", "OUTSIDE", ""]) {
+    byId("search").value = query
+    byId("search").listeners.get("input")()
+    assertUnchanged()
+  }
+  for (const sort of ["probability", "confidence", "top"]) {
+    byId("sort").value = sort
+    byId("sort").listeners.get("change")()
+    assertUnchanged()
+  }
+  for (const day of browser.days) {
+    click(day)
+    assertUnchanged()
+  }
+  assert.equal(browser.updateCalls.length, 0)
+  const pending = click(byId("update-chart"))
+  assertUnchanged()
+  selectCoin(browser, "SOL")
+  assertUnchanged()
+  controlled.requests[0].resolve(createUpdate(report))
+  await pending
+  assertUnchanged()
+  selectCoin(browser, "COTI")
+  assertUnchanged()
+  assert.match(byId("chart-update-status").textContent, /Обновлено/)
+  const failed = click(byId("update-chart"))
+  assertUnchanged()
+  controlled.requests[1].reject(new Error("Offline"))
+  await failed
+  assertUnchanged()
+})
+
+test("peer radar agent and registry text stays literal and market symbols cannot change the TradingView destination", () => {
+  const report = createReport()
+  const data = addPeerRadar(report, ["OUTSIDE", "LIMITED", "THIRD"])
+  const unsafe = "</summary><script>globalThis.injected = true</script><img src=x onerror=alert(1)> & <svg onload=alert(2)>"
+  const marketSymbols = ["javascript:alert(1)", "https://evil.example/@x?symbol=OTHER#hash", "BINANCE:COINUSDT.P&symbol=OTHER\" onclick=alert(1)"]
+  report.peerRadar.warning = unsafe
+  Object.assign(data.analysis, { source: unsafe, model: unsafe, reasoningEffort: unsafe })
+  Object.assign(data.criteria, { impulse: unsafe, lag: unsafe, reaction: unsafe })
+  data.observations.forEach((observation, index) => {
+    Object.assign(observation.coin, { name: unsafe, symbol: unsafe, marketSymbol: marketSymbols[index], tradingViewSymbol: "javascript:alert(1)" })
+    Object.assign(observation, { explanation: unsafe, caveats: [unsafe] })
+    Object.assign(observation.leaders[0], { symbol: unsafe, basis: unsafe, caveat: unsafe })
+  })
+  const { byId, updateCalls, directRequests } = runReport(report)
+  const nodes = peerNodes(byId)
+  const cards = byId("peer-radar-observations").children
+  assert.equal(byId("peer-radar-warning").textContent, unsafe)
+  assert.equal(byId("peer-radar-warning").children.length, 0)
+  assert.ok(byId("peer-radar-analysis").textContent.includes(unsafe))
+  assert.ok(byId("peer-radar-criteria").children.every(node => node.children[1].textContent === unsafe && !node.children[1].children.length))
+  cards.forEach((card, index) => {
+    for (const className of ["peer-symbol", "peer-name", "peer-radar-text"]) {
+      const node = descendants(card).find(node => node.className === className)
+      assert.equal(node.textContent, unsafe)
+      assert.equal(node.children.length, 0)
+    }
+    assert.equal(descendants(card).find(node => node.tagName === "LI").textContent, unsafe)
+    const links = descendants(card).filter(node => node.tagName === "A")
+    assert.equal(links.length, 1)
+    const url = new URL(links[0].href)
+    assert.equal(url.origin, "https://www.tradingview.com")
+    assert.equal(url.pathname, "/chart/")
+    assert.equal(url.hash, "")
+    assert.equal(url.username, "")
+    assert.deepEqual([...url.searchParams], [["symbol", marketSymbols[[0, 2, 1][index]]]])
+    assert.equal(links[0].rel, "noopener noreferrer")
+    assert.equal(links[0].target, "_blank")
+  })
+  assert.ok(nodes.every(node => !["SCRIPT", "IMG", "SVG", "IFRAME"].includes(node.tagName)))
+  assert.ok(nodes.every(node => !Object.hasOwn(node, "innerHTML")))
+  assert.ok(nodes.every(node => !node.className?.includes(unsafe) && !node.dataset.symbol))
+  assert.equal(byId("coin-symbol").textContent, "COTI")
+  assert.equal(updateCalls.length, 0)
+  assert.equal(directRequests.length, 0)
+})
 
 for (const bias of [undefined, "up", "down", "unclear"]) {
   test(`report shows movement estimates without a direction forecast for ${bias ?? "missing"} directionBias`, () => {

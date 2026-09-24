@@ -60,6 +60,7 @@ export function calculateCoinMetrics (
   return {
     atr24hPct,
     categoryContext,
+    peerContext: universeContext.peerContextsByCoin?.get(baseCurrencyId) ?? null,
     featureSeries: {
       volatilityCompression,
       movementLifecycle,

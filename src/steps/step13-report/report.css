@@ -1078,6 +1078,220 @@ summary {
     flex-wrap: wrap;
 }
 
+.report-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+}
+
+.report-tabs button {
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #101722;
+    color: var(--muted);
+}
+
+.report-tabs button[aria-selected="true"] {
+    border-color: var(--accent);
+    color: #dbe9ff;
+    background: #233a57;
+}
+
+.peer-radar {
+    padding: 20px;
+    overflow-wrap: anywhere;
+}
+
+.peer-radar .section-heading {
+    flex-wrap: wrap;
+}
+
+.peer-radar-note,
+.peer-radar-meta {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.peer-radar-meta {
+    font-variant-numeric: tabular-nums;
+}
+
+.peer-radar-status {
+    margin-top: 14px;
+    font-weight: 600;
+}
+
+.peer-radar .warning {
+    margin: 10px 0 0;
+}
+
+#peer-radar-content>*,
+.peer-radar-method>*+*,
+.peer-observation-body>*+*,
+.peer-leader>*+* {
+    margin-top: 12px;
+}
+
+.peer-radar-method,
+.peer-original {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.peer-radar-criteria {
+    margin-bottom: 0;
+}
+
+.peer-radar-criteria dt {
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+.peer-radar-criteria dd {
+    margin: 4px 0 0;
+}
+
+.peer-radar-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.peer-radar-toolbar>p:nth-of-type(n+2) {
+    flex-basis: 100%;
+}
+
+.peer-radar-observations {
+    display: grid;
+    gap: 18px;
+}
+
+.peer-observation {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #131d2a;
+}
+
+.peer-observation-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    padding: 14px;
+}
+
+.peer-observation-facts {
+    border-top: 1px solid var(--border);
+}
+
+.peer-observation-facts>summary {
+    padding: 12px 14px;
+    color: var(--accent);
+}
+
+.peer-symbol {
+    font-size: 14px;
+}
+
+.peer-name {
+    color: #c5d1e1;
+}
+
+.peer-verdict {
+    display: inline-block;
+    color: #b5c3d5;
+}
+
+.peer-observation[data-verdict="watch"] .peer-verdict {
+    color: var(--accent);
+}
+
+.peer-comparison {
+    padding: 0 14px 14px;
+}
+
+.peer-chart {
+    width: 100%;
+    height: 300px;
+}
+
+.peer-chart-time {
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.peer-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 10px 0;
+    font-size: 12px;
+}
+
+.peer-chart-legend [data-disabled="true"] {
+    color: var(--muted);
+}
+
+.peer-line-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.peer-comparison .warning {
+    white-space: pre-line;
+}
+
+.peer-observation-body {
+    padding: 14px;
+}
+
+.peer-radar-text,
+.peer-caveats {
+    white-space: pre-wrap;
+    font-size: 13px;
+    color: #c5d1e1;
+}
+
+.peer-caveats {
+    padding-left: 20px;
+    margin-bottom: 0;
+}
+
+.peer-leader {
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.peer-leader h3,
+.peer-current-window,
+.peer-reaction {
+    font-size: 13px;
+}
+
+.peer-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+    gap: 12px 18px;
+    margin: 12px 0;
+}
+
+.peer-metrics dd {
+    margin: 4px 0 0;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.peer-original .peer-radar-meta {
+    margin-top: 10px;
+}
+
 .page-footer {
     margin: 28px 0 0;
     padding-top: 20px;
@@ -1263,6 +1477,18 @@ summary {
 @media (max-width: 500px) {
     .shell {
         padding: 20px 12px;
+    }
+
+    .peer-radar {
+        padding: 16px;
+    }
+
+    .peer-observation-heading {
+        align-items: flex-start;
+    }
+
+    .peer-chart {
+        height: 260px;
     }
 
     .market-grid {

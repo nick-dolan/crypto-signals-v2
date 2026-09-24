@@ -16,9 +16,10 @@ export async function renderReportHtml (report) {
     styles,
     // Inline a self-contained factory: file:// needs neither module imports nor a build.
     script: `(() => {
+      const isFinite = ${isFinite.toString()};
       const updateChartHistory = (${createChartUpdater.toString()})({
         isArray: Array.isArray,
-        isFinite: ${isFinite.toString()},
+        isFinite,
         isSafeInteger: ${isSafeInteger.toString()},
         isString: ${isString.toString()},
       });

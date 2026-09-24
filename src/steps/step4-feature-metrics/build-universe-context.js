@@ -1,6 +1,7 @@
 import { isArray, isFinite } from "../../helpers/utils.typed.js"
 import { simpleReturns } from "../../scripts/returns.js"
 import { buildAltMarketBackground } from "./build-alt-market-background.js"
+import { buildPeerContext } from "./build-peer-context.js"
 import { buildSustainedStrength } from "./metrics/sustained-strength.js"
 
 function median (values) {
@@ -139,7 +140,7 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
   }
 }
 
-export function buildUniverseContext (baseCoins, marketContext) {
+export function buildUniverseContext (baseCoins, marketContext, coinPeers = null) {
   if (!isArray(baseCoins) || baseCoins.length === 0) {
     throw new Error("baseCoins must be a nonempty array")
   }
@@ -229,6 +230,7 @@ export function buildUniverseContext (baseCoins, marketContext) {
     segmentRotation4h,
     stablecapChange24h: simpleReturns(stableCap, 24),
     categoryContextsByCoin,
+    peerContextsByCoin: buildPeerContext(baseCoins, coinPeers),
     sustainedStrengthByCoin: buildSustainedStrength(baseCoins, total3esClose),
   }
 }

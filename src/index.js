@@ -29,6 +29,8 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
+    let peerRadarFailed = false
+
     for (const step of [
       "step1-crypto-universe.js",
       "step2-data-bootstrap.js",
@@ -41,19 +43,34 @@ async function runAll () {
       "step8-news-enrichment.js",
       "step9-twitter-enrichment.js",
       "step10-context-enrichment.js",
-      "step11-report.js",
+      "step11-peer-radar.js",
+      "step12-peer-radar-analysis.js",
+      "step13-report.js",
     ]) {
+      if (peerRadarFailed && step === "step12-peer-radar-analysis.js") {
+        continue
+      }
+
       const succeeded = await runStep(`src/${step}`)
 
       if (!succeeded) {
         process.exitCode = 1
+        if (["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step)) {
+          peerRadarFailed = true
+          console.warn("⚠ Peer radar failed; continuing to the independent main HTML report")
+          continue
+        }
         return
       }
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
 
-    console.log(`\n✨ All steps completed successfully in ${duration}s!`)
+    if (peerRadarFailed) {
+      console.warn(`\n⚠ Main report completed in ${duration}s, but the peer radar failed`)
+    } else {
+      console.log(`\n✨ All steps completed successfully in ${duration}s!`)
+    }
   } catch (error) {
     const message = isError(error) ? error.message : "Unknown error"
 
