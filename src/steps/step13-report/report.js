@@ -8,7 +8,7 @@
   const topCandidates = report.coins.filter(coin => coin.topRank != null)
     .sort((first, second) => first.topRank - second.topRank)
   let selectedSymbol = topCandidates[0]?.symbol ?? report.coins[0]?.symbol ?? null
-  let selectedDays = 3
+  let selectedDays = 7
   let chart = null
   let peerDays = 1
   const peerCards = []

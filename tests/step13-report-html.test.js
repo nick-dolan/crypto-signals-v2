@@ -42,6 +42,9 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)
   assert.match(html, /id="update-chart"/)
+  assert.deepEqual([...html.matchAll(/data-days="(\d+)" aria-pressed="(true|false)"/g)].map(([, days, pressed]) => [days, pressed]), [
+    ["1", "false"], ["3", "false"], ["7", "true"],
+  ])
   assert.match(html, /id="chart-update-status"/)
   assert.match(html, /id="report-time-note"/)
   assert.match(html, /id="coingecko-badge"[^>]*hidden/)

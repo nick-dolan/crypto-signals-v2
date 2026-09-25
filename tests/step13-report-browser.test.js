@@ -518,7 +518,7 @@ test("all radar lines use the same exact close anchor and common 1/3/7-day windo
     assert.match(byId("peer-radar-range-note").textContent, /Общая база \(0%\):.*10:00 UTC → срез:.*10:00 UTC/)
   }
   assert.equal(browser.charts[0].removed, false)
-  assert.equal(browser.days[1].attributes.get("aria-pressed"), "true")
+  assert.equal(browser.days[2].attributes.get("aria-pressed"), "true")
   assert.equal(browser.updateCalls.length, 0)
   assert.equal(browser.directRequests.length, 0)
 })
@@ -1689,7 +1689,7 @@ function createBinanceApi (report) {
   }
 }
 
-test("initializes the first ranked top candidate, hourly whitespace grid and three-day range", () => {
+test("initializes the first ranked top candidate, hourly whitespace grid and seven-day range", () => {
   const report = createReport(["PLAIN", "SECOND", "FIRST"])
   report.coins[0].topRank = null
   report.coins[0].movementProbability = 0.1
@@ -1722,11 +1722,11 @@ test("initializes the first ranked top candidate, hourly whitespace grid and thr
     assert.equal(series.data.at(-1).time, Date.parse(report.asOf) / 1_000)
   }
   assert.deepEqual(chart.ranges.at(-1), {
-    from: Date.parse("2026-09-12T10:00:00.000Z") / 1_000,
+    from: Date.parse("2026-09-08T10:00:00.000Z") / 1_000,
     to: Date.parse(report.asOf) / 1_000,
   })
-  assert.deepEqual(days.map(node => node.attributes.get("aria-pressed")), ["false", "true", "false"])
-  for (const [value, from] of [["1", "2026-09-14T10:00:00.000Z"], ["7", "2026-09-08T10:00:00.000Z"]]) {
+  assert.deepEqual(days.map(node => node.attributes.get("aria-pressed")), ["false", "false", "true"])
+  for (const [value, from] of [["1", "2026-09-14T10:00:00.000Z"], ["3", "2026-09-12T10:00:00.000Z"], ["7", "2026-09-08T10:00:00.000Z"]]) {
     click(days.find(node => node.dataset.days === value))
     assert.deepEqual(chart.ranges.at(-1), { from: Date.parse(from) / 1_000, to: times.at(-1) })
     assert.deepEqual(days.map(node => node.attributes.get("aria-pressed")), days.map(node => String(node.dataset.days === value)))
@@ -2191,7 +2191,7 @@ test("the hourly grid extends beyond 168 hours and every selected range follows 
     assert.equal(points[0].time, chartTime(report, -167))
     assert.equal(points.at(-1).time, chartTime(report, 200))
   }
-  assert.deepEqual(chart.ranges.at(-1), { from: chartTime(report, 200 - 71), to: chartTime(report, 200) })
+  assert.deepEqual(chart.ranges.at(-1), { from: chartTime(report, 200 - 167), to: chartTime(report, 200) })
   for (const day of browser.days) {
     click(day)
     assert.deepEqual(chart.ranges.at(-1), {
@@ -2333,7 +2333,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   assert.equal(browser.updateCalls[2].coin.symbol, "COTI")
   assert.equal(browser.updateCalls[2].previous, cot)
   assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, refreshed.history.candles)
-  click(browser.days.find(day => day.dataset.days === "7"))
+  click(browser.days.find(day => day.dataset.days === "3"))
   assert.equal(browser.byId("report-data").textContent, embedded)
 
   const reloaded = runReport(JSON.parse(embedded), { updateChartHistory })
@@ -2344,7 +2344,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   assert.match(reloaded.byId("chart-update-status").textContent, /Сохранённый срез/)
   assert.match(reloaded.byId("chart-source").textContent, /сохранённые данные TradingView/)
   assert.equal(reloaded.byId("chart-update-error").hidden, true)
-  assert.deepEqual(reloaded.days.map(day => day.attributes.get("aria-pressed")), ["false", "true", "false"])
+  assert.deepEqual(reloaded.days.map(day => day.attributes.get("aria-pressed")), ["false", "false", "true"])
 })
 
 test("switching coins during an update keeps the inactive success cached without replacing the active chart", async () => {
