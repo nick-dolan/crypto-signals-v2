@@ -129,22 +129,22 @@ async function fetchRecentTweets (
 }
 
 function validateInput (input) {
-  if (!isObject(input) || !isArray(input.topCandidates)) {
-    throw new Error("Step 8 top candidates are required")
+  if (!isObject(input) || !isArray(input.candidates)) {
+    throw new Error("Step 8 enrichment candidates are required")
   }
 
   getRequiredString(input.asOf, "Step 8 asOf")
 
   const symbols = new Set()
 
-  return input.topCandidates.map((candidate, index) => {
+  return input.candidates.map((candidate, index) => {
     const symbol = getRequiredString(
       candidate?.symbol,
-      `Step 8 top candidate ${index} symbol`,
+      `Step 8 enrichment candidate ${index} symbol`,
     ).toUpperCase()
 
     if (symbols.has(symbol)) {
-      throw new Error(`Step 8 top candidates contain duplicate symbol ${symbol}`)
+      throw new Error(`Step 8 enrichment candidates contain duplicate symbol ${symbol}`)
     }
 
     symbols.add(symbol)
@@ -211,10 +211,10 @@ export async function enrichTopCandidatesWithTwitter (
   }
 
   const candidates = validateInput(input)
-  const topCandidates = []
+  const enrichedCandidates = []
 
   for (const [index, candidate] of candidates.entries()) {
-    topCandidates.push(await enrichCandidate(
+    enrichedCandidates.push(await enrichCandidate(
       candidate,
       referenceTimestamp,
       fetchPage,
@@ -228,7 +228,7 @@ export async function enrichTopCandidatesWithTwitter (
 
   return {
     ...input,
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: new Date().toISOString(),
     twitterEnrichment: {
       source: "twitterapi.io",
@@ -237,6 +237,6 @@ export async function enrichTopCandidatesWithTwitter (
       lookbackHours: 24,
       maxPagesPerCandidate: 2,
     },
-    topCandidates,
+    candidates: enrichedCandidates,
   }
 }

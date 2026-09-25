@@ -66,7 +66,7 @@ for (const [name, altMarketBackground] of [
     const sources = {
       asOf: featureMetrics.asOf,
       candidateCount: 0,
-      topCandidates: [],
+      candidates: [],
       newsEnrichment: sourceWindow,
       twitterEnrichment: sourceWindow,
     }

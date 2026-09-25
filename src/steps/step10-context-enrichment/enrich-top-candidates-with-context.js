@@ -8,33 +8,35 @@ import {
 } from "./parse-context-enrichment.js"
 
 function validateInput (input) {
-  if (!isObject(input) || !isArray(input.topCandidates)) {
-    throw new Error("Step 9 top candidates are required")
+  if (!isObject(input) || !isArray(input.candidates)) {
+    throw new Error("Step 9 enrichment candidates are required")
   }
 
   const asOf = getRequiredString(input.asOf, "Step 9 asOf")
   const symbols = new Set()
-  const candidates = input.topCandidates.map((candidate, index) => {
+  const candidates = input.candidates.map((candidate, index) => {
     const symbol = getRequiredString(
       candidate?.symbol,
-      `Step 9 top candidate ${index} symbol`,
+      `Step 9 enrichment candidate ${index} symbol`,
     )
-    const explanation = getRequiredString(
-      candidate?.explanation,
-      `Step 9 top candidate ${symbol} explanation`,
-    )
+
+    if (!isString(candidate.explanation)) {
+      throw new Error(`Step 9 enrichment candidate ${symbol} explanation must be a string`)
+    }
+
+    const explanation = candidate.explanation.trim()
     const normalizedSymbol = symbol.toUpperCase()
 
     if (symbols.has(normalizedSymbol)) {
-      throw new Error(`Step 9 top candidates contain duplicate symbol ${normalizedSymbol}`)
+      throw new Error(`Step 9 enrichment candidates contain duplicate symbol ${normalizedSymbol}`)
     }
 
     if (!isObject(candidate.news)) {
-      throw new Error(`Step 9 top candidate ${symbol} news are required`)
+      throw new Error(`Step 9 enrichment candidate ${symbol} news are required`)
     }
 
     if (!isObject(candidate.twitter)) {
-      throw new Error(`Step 9 top candidate ${symbol} twitter data are required`)
+      throw new Error(`Step 9 enrichment candidate ${symbol} twitter data are required`)
     }
 
     symbols.add(normalizedSymbol)
@@ -49,6 +51,7 @@ function buildUserMessage (asOf, { candidate, explanation, symbol }) {
     asOf,
     symbol,
     explanation,
+    ...(!explanation ? { drivers: candidate.drivers, counterSignals: candidate.counterSignals } : {}),
     news: candidate.news,
     twitter: candidate.twitter,
   })
@@ -83,7 +86,7 @@ async function enrichCandidate (
 
   return {
     ...omit(candidate.candidate, ["news", "twitter"]),
-    enrichedExplanation: `${candidate.explanation} ${enrichment.informationBackground}`,
+    enrichedExplanation: [candidate.explanation, enrichment.informationBackground].filter(Boolean).join(" "),
   }
 }
 
@@ -101,10 +104,10 @@ export async function enrichTopCandidatesWithContext (
   }
 
   const { asOf, candidates } = validateInput(input)
-  const topCandidates = []
+  const enrichedCandidates = []
 
   for (const candidate of candidates) {
-    topCandidates.push(await enrichCandidate(
+    enrichedCandidates.push(await enrichCandidate(
       asOf,
       candidate,
       systemPrompt,
@@ -114,14 +117,14 @@ export async function enrichTopCandidatesWithContext (
 
   return {
     ...input,
-    schemaVersion: 5,
+    schemaVersion: 6,
     generatedAt: new Date().toISOString(),
     contextEnrichment: {
       source: "github-copilot-unofficial",
       model: "gemini-3.7-flash",
       reasoningEffort: "medium",
-      candidateCallCount: topCandidates.length,
+      candidateCallCount: enrichedCandidates.length,
     },
-    topCandidates,
+    candidates: enrichedCandidates,
   }
 }

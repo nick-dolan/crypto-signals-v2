@@ -32,9 +32,8 @@ function createHistory (coin, asOf) {
   }
 }
 
-function createInput () {
+function createInput (symbols = ["BTC", "ETH"]) {
   const asOf = "2027-01-15T08:00:00.000Z"
-  const symbols = ["BTC", "ETH"]
   const shortlist = {
     asOf,
     timeframe: "1h",
@@ -91,12 +90,105 @@ function createInput () {
   return { analysis, histories, payload, shortlist }
 }
 
-test("empty top candidates skip enrichment while all assessments reach the rendered report", async () => {
+test("trending report coins get sources and analysis with or without agent tops", async (t) => {
+  for (const topSymbols of [[], ["BTC", "ETH"]]) {
+    await t.test(`top: ${topSymbols.join(", ") || "none"}`, async () => {
+      const input = createInput(["BTC", "ETH", "SOL", "ADA"])
+      for (const candidate of input.shortlist.candidates) {
+        if (["BTC", "SOL"].includes(candidate.coin.symbol)) {
+          candidate.coin.coingecko = { isTrending: true }
+        }
+      }
+      input.payload.schema.coingecko = ["coingeckoTrending"]
+      input.payload.definitions.coingeckoTrending = "Поисковое внимание CoinGecko"
+      input.payload.candidates.forEach((candidate) => {
+        candidate.coingecko = [["BTC", "SOL"].includes(candidate.symbol) ? true : null]
+      })
+      input.analysis.topCandidates = topSymbols.map(symbol => ({
+        symbol,
+        movementProbability: input.analysis.assessments.find(coin => coin.symbol === symbol).movementProbability,
+        explanation: `Исходное объяснение ${symbol}.`,
+      }))
+      const before = structuredClone(input)
+      const expectedSymbols = [...new Set([...topSymbols, "BTC", "SOL"])]
+      const referenceTimestamp = Date.parse("2027-01-15T08:05:00.000Z") / 1_000
+      const calls = { news: [], twitter: [], context: [] }
+      const news = await enrichTopCandidatesWithNews(input.analysis, input.shortlist, {
+        referenceTimestamp,
+        fetchNews: async ({ symbol }) => {
+          calls.news.push(symbol)
+          return { items: [{ id: symbol, title: "Обновление сети", published: referenceTimestamp - 60 }] }
+        },
+        fetchStory: async () => assert.fail("No story URLs to fetch"),
+      })
+      const sources = await enrichTopCandidatesWithTwitter(news, {
+        referenceTimestamp,
+        wait: async () => {},
+        fetchPage: async (query) => {
+          calls.twitter.push(query)
+          return { tweets: [{ id: query, text: "Обсуждение обновления", createdAt: new Date(referenceTimestamp * 1_000).toISOString() }] }
+        },
+      })
+      const context = await enrichTopCandidatesWithContext(sources, "System prompt", {
+        callAgent: async (_, userMessage) => {
+          const message = JSON.parse(userMessage)
+          calls.context.push(message.symbol)
+          assert.equal(message.news.items.length, 1)
+          assert.equal(message.twitter.tweets.length, 1)
+          if (!topSymbols.includes(message.symbol)) {
+            const assessment = input.analysis.assessments.find(coin => coin.symbol === message.symbol)
+            assert.equal(message.explanation, "")
+            assert.deepEqual(message.drivers, assessment.drivers)
+            assert.deepEqual(message.counterSignals, assessment.counterSignals)
+          }
+          return JSON.stringify({ schemaVersion: 1, symbol: message.symbol, informationBackground: `Информационный фон ${message.symbol}.` })
+        },
+      })
+      const report = await buildReportData(input.analysis, input.payload, input.shortlist, {
+        readCoinData: async relativePath => input.histories.get(relativePath),
+      })
+      const completeReport = addReportContext(report, sources, context)
+      const html = await renderReportHtml(completeReport)
+
+      assert.deepEqual(calls, {
+        news: expectedSymbols.map(symbol => `CRYPTO:${symbol}USD`),
+        twitter: expectedSymbols.map(symbol => `$${symbol}`),
+        context: expectedSymbols,
+      })
+      for (const output of [news, sources, context]) {
+        assert.deepEqual(output.candidates.map(coin => coin.symbol), expectedSymbols)
+        assert.equal(Object.hasOwn(output, "topCandidates"), false)
+      }
+      assert.equal(context.contextEnrichment.candidateCallCount, expectedSymbols.length)
+      assert.equal(completeReport.candidateCount, 4)
+      assert.deepEqual(completeReport.coins.map(coin => coin.symbol), ["BTC", "ETH", "SOL", "ADA"])
+      for (const [index, coin] of completeReport.coins.entries()) {
+        const original = report.coins[index]
+        assert.deepEqual(coin, expectedSymbols.includes(coin.symbol)
+          ? {
+              ...original,
+              explanation: [original.explanation, `Информационный фон ${coin.symbol}.`].filter(Boolean).join(" "),
+              information: {
+                news: sources.candidates.find(candidate => candidate.symbol === coin.symbol).news,
+                twitter: sources.candidates.find(candidate => candidate.symbol === coin.symbol).twitter,
+              },
+            }
+          : original)
+      }
+      const embeddedData = html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)
+      assert.ok(embeddedData)
+      assert.deepEqual(JSON.parse(embeddedData[1]), completeReport)
+      assert.deepEqual(input, before)
+    })
+  }
+})
+
+test("no top or trending candidates skip enrichment while all assessments reach the rendered report", async () => {
   const input = createInput()
   const sourceCalls = []
   const forbidden = source => async () => {
     sourceCalls.push(source)
-    throw new Error(`${source} must not be called without top candidates`)
+    throw new Error(`${source} must not be called without enrichment candidates`)
   }
   const referenceTimestamp = Date.parse("2027-01-15T08:05:00.000Z") / 1_000
   const news = await enrichTopCandidatesWithNews(
@@ -131,9 +223,9 @@ test("empty top candidates skip enrichment while all assessments reach the rende
   )
 
   assert.deepEqual(sourceCalls, [])
-  assert.deepEqual(news.topCandidates, [])
-  assert.deepEqual(sources.topCandidates, [])
-  assert.deepEqual(context.topCandidates, [])
+  assert.deepEqual(news.candidates, [])
+  assert.deepEqual(sources.candidates, [])
+  assert.deepEqual(context.candidates, [])
   assert.equal(context.contextEnrichment.candidateCallCount, 0)
   assert.equal(completeReport.coins.length, input.analysis.assessments.length)
   assert.deepEqual(completeReport.coins.map(coin => coin.symbol), ["BTC", "ETH"])

@@ -37,7 +37,7 @@ async function runContextEnrichmentStep () {
   const outputPath = await writeTmpJson("step10-context-enrichment.json", output)
 
   console.log(
-    `✓ Added news and Twitter context to ${output.topCandidates.length} candidate explanations in ${outputPath}`,
+    `✓ Added news and Twitter context to ${output.candidates.length} report candidate explanations in ${outputPath}`,
   )
 }
 

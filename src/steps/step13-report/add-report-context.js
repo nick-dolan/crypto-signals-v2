@@ -8,9 +8,9 @@ function getTimestamp (value, label) {
   return Date.parse(value)
 }
 
-function indexTopCandidates (candidates, label) {
+function indexCandidates (candidates, label) {
   if (!isArray(candidates)) {
-    throw new Error(`${label} top candidates must be an array`)
+    throw new Error(`${label} candidates must be an array`)
   }
 
   const bySymbol = new Map()
@@ -19,11 +19,11 @@ function indexTopCandidates (candidates, label) {
     const symbol = candidate?.symbol
 
     if (!isString(symbol) || !symbol.trim()) {
-      throw new Error(`${label} top candidate has an invalid symbol`)
+      throw new Error(`${label} candidate has an invalid symbol`)
     }
 
     if (bySymbol.has(symbol)) {
-      throw new Error(`${label} top candidates contain duplicate symbol ${symbol}`)
+      throw new Error(`${label} candidates contain duplicate symbol ${symbol}`)
     }
 
     bySymbol.set(symbol, candidate)
@@ -75,18 +75,20 @@ export function addReportContext (report, sources, context) {
     throw new Error("Report coins must be an array")
   }
 
-  const reportTop = indexTopCandidates(report.coins.filter(coin => coin.topRank != null), "Report")
-  const sourcesBySymbol = indexTopCandidates(sources.topCandidates, "Step 9")
-  const contextBySymbol = indexTopCandidates(context.topCandidates, "Step 10")
+  const reportCandidates = indexCandidates(
+    report.coins.filter(coin => coin.topRank != null || coin.features?.coingeckoTrending === true), "Report",
+  )
+  const sourcesBySymbol = indexCandidates(sources.candidates, "Step 9")
+  const contextBySymbol = indexCandidates(context.candidates, "Step 10")
 
   for (const [label, bySymbol] of [["Step 9", sourcesBySymbol], ["Step 10", contextBySymbol]]) {
-    if (bySymbol.size !== reportTop.size || [...reportTop.keys()].some(symbol => !bySymbol.has(symbol))) {
-      throw new Error(`${label} top candidate set does not match the report`)
+    if (bySymbol.size !== reportCandidates.size || [...reportCandidates.keys()].some(symbol => !bySymbol.has(symbol))) {
+      throw new Error(`${label} candidate set does not match the report`)
     }
   }
 
   const coins = report.coins.map((coin) => {
-    if (coin.topRank == null) {
+    if (!reportCandidates.has(coin.symbol)) {
       return coin
     }
 

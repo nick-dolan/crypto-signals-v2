@@ -1552,14 +1552,14 @@ function addOiGaps (report) {
   return segments
 }
 
-function addInformation (report) {
+function addInformation (report, coin = report.coins[0]) {
   report.informationSources = {
     news: { from: "2026-09-14T10:45:00.000Z", asOf: "2026-09-15T10:45:00.000Z" },
     twitter: { from: "2026-09-14T11:00:00.000Z", asOf: "2026-09-15T11:00:00.000Z" },
     contextGeneratedAt: "2026-09-15T11:05:00.000Z",
   }
-  report.coins[0].explanation = "Исходная оценка. Дополненное объяснение из шага 10."
-  report.coins[0].information = {
+  coin.explanation = [coin.topRank == null ? "" : "Исходная оценка.", "Дополненное объяснение из шага 10."].filter(Boolean).join(" ")
+  coin.information = {
     news: {
       status: "available", error: null,
       items: [{
@@ -1577,7 +1577,7 @@ function addInformation (report) {
       }],
     },
   }
-  return report.coins[0].information
+  return coin.information
 }
 
 function descendants (node) {
@@ -1875,31 +1875,53 @@ test("an empty candidate list renders its empty states without creating a chart"
   assert.equal(byId("coin-detail").hidden, true)
 })
 
-test("top candidates show enriched explanations, news, tweets and their independent collection times", () => {
-  const report = createReport()
-  addInformation(report)
-  const { byId } = runReport(report)
-  assert.equal(byId("information-panel").hidden, false)
-  assert.equal(byId("news-details").open, false)
-  assert.equal(byId("twitter-details").open, false)
-  assert.equal(byId("explanation").textContent, report.coins[0].explanation)
-  assert.match(byId("analysis-source").textContent, /шаге 10/)
-  assert.match(byId("context-generated").textContent, /11:05/)
-  assert.match(byId("news-window").textContent, /10:45/)
-  assert.match(byId("twitter-window").textContent, /11:00/)
-  assert.equal(byId("as-of").dateTime, report.asOf)
-  assert.equal(byId("news-count").textContent, "1")
-  assert.equal(byId("twitter-count").textContent, "1")
-  assert.equal(byId("news-status").hidden, true)
-  assert.equal(byId("twitter-status").hidden, true)
-  assert.match(byId("news-items").textContent, /Crypto News.*10:30/)
-  assert.match(byId("news-items").textContent, /Полный сохранённый текст\nВторой абзац/)
-  assert.match(byId("twitter-items").textContent, /@researcher.*10:50/)
-  assert.match(byId("twitter-items").textContent, /Лайки: 12.*Репосты: 3.*Просмотры: 456/)
-  const links = [...descendants(byId("news-items")), ...descendants(byId("twitter-items"))].filter(node => node.tagName === "A")
-  assert.deepEqual(links.map(link => link.href), ["https://example.com/news", "https://www.tradingview.com/news/story/", "https://x.com/i/status/1234567890123456789"])
-  assert.ok(links.every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
-})
+for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending", null, true], ["top and trending", 1, true]]) {
+  test(`${label} candidates show enriched explanations, news, tweets and their independent collection times once`, () => {
+    const report = createReport()
+    report.coins[0].topRank = topRank
+    report.coins[0].features.coingeckoTrending = trending
+    addInformation(report)
+    const before = structuredClone(report)
+    const { byId, updateCalls, directRequests } = runReport(report)
+    assert.equal(byId("information-panel").hidden, false)
+    assert.equal(byId("news-details").open, false)
+    assert.equal(byId("twitter-details").open, false)
+    assert.equal(byId("explanation").hidden, false)
+    assert.equal(byId("explanation").textContent, report.coins[0].explanation)
+    if (topRank == null) {
+      assert.equal(byId("explanation").textContent, "Дополненное объяснение из шага 10.")
+    }
+    assert.match(byId("analysis-source").textContent, /шаге 10/)
+    assert.match(byId("context-generated").textContent, /11:05/)
+    assert.match(byId("news-window").textContent, /10:45/)
+    assert.match(byId("twitter-window").textContent, /11:00/)
+    assert.equal(byId("as-of").dateTime, report.asOf)
+    assert.equal(byId("news-count").textContent, "1")
+    assert.equal(byId("twitter-count").textContent, "1")
+    assert.equal(byId("news-items").children.length, 1)
+    assert.equal(byId("twitter-items").children.length, 1)
+    assert.equal(byId("news-status").hidden, true)
+    assert.equal(byId("twitter-status").hidden, true)
+    assert.match(byId("news-items").textContent, /Crypto News.*10:30/)
+    assert.match(byId("news-items").textContent, /Полный сохранённый текст\nВторой абзац/)
+    assert.match(byId("twitter-items").textContent, /@researcher.*10:50/)
+    assert.match(byId("twitter-items").textContent, /Лайки: 12.*Репосты: 3.*Просмотры: 456/)
+    const links = [...descendants(byId("news-items")), ...descendants(byId("twitter-items"))].filter(node => node.tagName === "A")
+    assert.deepEqual(links.map(link => link.href), ["https://example.com/news", "https://www.tradingview.com/news/story/", "https://x.com/i/status/1234567890123456789"])
+    assert.ok(links.every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
+    assert.equal(byId("candidate-rows").children.length, 1)
+    assert.equal(byId("candidate-count").textContent, "1")
+    assert.equal(byId("top-candidates").children.filter(node => node.dataset.symbol === "COTI").length, topRank == null ? 0 : 1)
+    assert.equal(byId("top-rank").hidden, topRank == null)
+    assert.match(byId("coin-badges").textContent, /P движения 80%/)
+    assert.match(byId("drivers").textContent, /Сжатие волатильности/)
+    assert.match(byId("counter-signals").textContent, /Нет подтверждения объёмом/)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+    assert.deepEqual(report, before)
+    assert.deepEqual(updateCalls, [])
+    assert.deepEqual(directRequests, [])
+  })
+}
 
 test("empty searches and failed sources have distinct messages, while missing article text stays visible", () => {
   const report = createReport(["EMPTY", "ARTICLE"])
@@ -1924,25 +1946,86 @@ test("empty searches and failed sources have distinct messages, while missing ar
   assert.match(byId("news-items").textContent, /ограниченный доступ/)
 })
 
-test("switching to a non-top candidate clears and hides all source data and collapses the source panels", () => {
-  const report = createReport(["TOP", "PLAIN"])
+test("non-top trending coins keep empty searches, failed sources and partial publications visible", () => {
+  const report = createReport(["TOP", "TRENDING"])
   report.coins[1].topRank = null
-  addInformation(report)
-  const { byId } = runReport(report)
-  byId("news-details").open = true
-  byId("twitter-details").open = true
-  const row = byId("candidate-rows").children.find(node => node.dataset.symbol === "PLAIN")
-  click(byId("candidate-rows"), row)
-  assert.equal(byId("information-panel").hidden, true)
-  assert.equal(byId("news-items").children.length, 0)
-  assert.equal(byId("twitter-items").children.length, 0)
-  assert.equal(byId("context-generated").textContent, "")
-  assert.equal(byId("analysis-source").textContent, "Анализ шага 7")
-  assert.equal(byId("explanation").textContent, report.coins[1].explanation)
-  click(byId("top-candidates"), byId("top-candidates").children[0])
+  report.coins[1].features.coingeckoTrending = true
+  const information = addInformation(report, report.coins[1])
+  information.news = { status: "empty", error: null, items: [] }
+  information.twitter.status = "failed"
+  information.twitter.error = "Second page unavailable"
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+  selectCoin(browser, "TRENDING")
+
   assert.equal(byId("information-panel").hidden, false)
-  assert.equal(byId("news-details").open, false)
-  assert.equal(byId("twitter-details").open, false)
+  assert.equal(byId("news-status").hidden, false)
+  assert.match(byId("news-status").textContent, /ничего не найдено/)
+  assert.equal(byId("news-count").textContent, "0")
+  assert.equal(byId("news-items").children.length, 0)
+  assert.equal(byId("twitter-status").hidden, false)
+  assert.match(byId("twitter-status").textContent, /Ошибка загрузки: Second page unavailable/)
+  assert.equal(byId("twitter-count").textContent, "ошибка")
+  assert.equal(byId("twitter-items").children.length, 1)
+  assert.match(byId("twitter-items").textContent, /Публикация о монете/)
+  assert.equal(byId("explanation").textContent, report.coins[1].explanation)
+  assert.match(byId("analysis-source").textContent, /шаге 10/)
+  assert.deepEqual(report, before)
+})
+
+test("switching from a top or trending coin to a plain non-top clears source data and collapses the panels", () => {
+  const report = createReport(["TOP", "TRENDING", "PLAIN"])
+  report.coins[1].topRank = null
+  report.coins[1].features.coingeckoTrending = true
+  report.coins[2].topRank = null
+  report.coins[2].explanation = ""
+  addInformation(report)
+  const trending = addInformation(report, report.coins[1])
+  trending.news.items[0].title = "Новость о трендовой монете"
+  trending.twitter.tweets[0].text = "Обсуждение трендовой монеты"
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+
+  for (const symbol of ["TOP", "TRENDING"]) {
+    selectCoin(browser, symbol)
+    assert.equal(byId("information-panel").hidden, false)
+    byId("news-details").open = true
+    byId("twitter-details").open = true
+    selectCoin(browser, "PLAIN")
+    assert.equal(byId("information-panel").hidden, true)
+    for (const key of ["news", "twitter"]) {
+      assert.equal(byId(`${key}-items`).children.length, 0)
+      assert.equal(byId(`${key}-count`).textContent, "")
+      assert.equal(byId(`${key}-window`).textContent, "")
+      assert.equal(byId(`${key}-status`).textContent, "")
+      assert.equal(byId(`${key}-status`).hidden, true)
+      assert.equal(byId(`${key}-details`).open, false)
+    }
+    assert.equal(byId("context-generated").textContent, "")
+    assert.equal(byId("analysis-source").textContent, "Анализ шага 7")
+    assert.equal(byId("explanation").textContent, report.coins[2].explanation)
+    assert.equal(byId("explanation").hidden, true)
+    selectCoin(browser, symbol)
+    assert.equal(byId("information-panel").hidden, false)
+    assert.equal(byId("news-details").open, false)
+    assert.equal(byId("twitter-details").open, false)
+    assert.equal(byId("news-items").children.length, 1)
+    assert.equal(byId("twitter-items").children.length, 1)
+    const coin = report.coins.find(coin => coin.symbol === symbol)
+    assert.equal(byId("explanation").textContent, coin.explanation)
+    assert.ok(byId("news-items").textContent.includes(coin.information.news.items[0].title))
+    assert.ok(byId("twitter-items").textContent.includes(coin.information.twitter.tweets[0].text))
+  }
+
+  assert.equal(byId("candidate-count").textContent, "3")
+  assert.deepEqual(byId("candidate-rows").children.map(node => node.dataset.symbol), ["TOP", "TRENDING", "PLAIN"])
+  assert.deepEqual(byId("top-candidates").children.map(node => node.dataset.symbol), ["TOP"])
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+  assert.deepEqual(browser.updateCalls, [])
+  assert.deepEqual(browser.directRequests, [])
 })
 
 test("source markup is literal text, unsafe URLs and tweet IDs never create active links", () => {

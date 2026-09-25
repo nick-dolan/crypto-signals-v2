@@ -15,19 +15,19 @@ async function runTwitterEnrichmentStep () {
   const input = await readTmpJson("step8-news-enrichment.json")
   const output = await enrichTopCandidatesWithTwitter(input)
   const outputPath = await writeTmpJson("step9-twitter-enrichment.json", output)
-  const tweetCount = output.topCandidates.reduce((total, candidate) => (
+  const tweetCount = output.candidates.reduce((total, candidate) => (
     total + candidate.twitter.tweets.length
   ), 0)
-  const failedCandidateCount = output.topCandidates.filter(candidate => (
+  const failedCandidateCount = output.candidates.filter(candidate => (
     candidate.twitter.status === "failed"
   )).length
 
   console.log(
-    `✓ Enriched ${output.topCandidates.length} top candidates with ${tweetCount} tweets from the last 24 hours in ${outputPath}`,
+    `✓ Enriched ${output.candidates.length} report candidates with ${tweetCount} tweets from the last 24 hours in ${outputPath}`,
   )
 
   if (failedCandidateCount > 0) {
-    console.log(`✗ Twitter unavailable for ${failedCandidateCount} top candidates`)
+    console.log(`✗ Twitter unavailable for ${failedCandidateCount} report candidates`)
   }
 }
 

@@ -668,7 +668,7 @@
       byId(`${key}-status`).hidden = true
     }
     byId("context-generated").textContent = ""
-    byId("information-panel").hidden = coin.topRank == null || !coin.information
+    byId("information-panel").hidden = !coin.information
     byId("analysis-source").textContent = byId("information-panel").hidden ? "Анализ шага 7" : "Объяснение дополнено на шаге 10"
     if (byId("information-panel").hidden) {
       return

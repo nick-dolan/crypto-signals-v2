@@ -32,7 +32,7 @@ async function runReportStep () {
   const html = await renderReportHtml(report)
   const outputPath = await saveReportHtml(html, report.reportCreatedAt)
 
-  console.log(`✓ Saved ${report.candidateCount} candidates with weekly charts and top-candidate news/Twitter context to ${outputPath}`)
+  console.log(`✓ Saved ${report.candidateCount} candidates with weekly charts and news/Twitter context for top and CoinGecko trending candidates to ${outputPath}`)
   if (report.peerRadar.warning) {
     console.warn(`⚠ ${report.peerRadar.warning}`)
   }

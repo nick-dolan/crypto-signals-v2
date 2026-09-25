@@ -218,7 +218,7 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
   const sources = {
     asOf: radar.asOf,
     candidateCount: 1,
-    topCandidates: [],
+    candidates: [],
     newsEnrichment: { from: "2026-09-23T07:00:00.000Z", asOf: radar.generatedAt },
     twitterEnrichment: { from: "2026-09-23T07:00:00.000Z", asOf: radar.generatedAt },
   }

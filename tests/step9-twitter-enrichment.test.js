@@ -6,14 +6,14 @@ import { enrichTopCandidatesWithTwitter } from "../src/steps/step9-twitter-enric
 
 function createInput () {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: "2027-01-15T08:01:00.000Z",
     asOf: "2027-01-15T08:00:00.000Z",
     newsEnrichment: {
       source: "tradingview",
       lookbackHours: 24,
     },
-    topCandidates: [
+    candidates: [
       {
         symbol: "BTC",
         movementProbability: 0.7,
@@ -100,7 +100,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
     { query: "$ETH", cursor: "" },
   ])
   assert.deepEqual(waits, [300, 300])
-  assert.equal(result.schemaVersion, 4)
+  assert.equal(result.schemaVersion, 5)
   assert.equal(result.asOf, createInput().asOf)
   assert.deepEqual(result.newsEnrichment, createInput().newsEnrichment)
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
@@ -112,7 +112,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
     maxPagesPerCandidate: 2,
   })
 
-  const [btc, eth] = result.topCandidates
+  const [btc, eth] = result.candidates
 
   assert.equal(btc.twitter.query, "$BTC")
   assert.equal(btc.twitter.status, "available")
@@ -134,7 +134,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
     authorUsername: "btc-new-author",
     authorFollowers: 1_000,
   })
-  assert.deepEqual(btc.news, createInput().topCandidates[0].news)
+  assert.deepEqual(btc.news, createInput().candidates[0].news)
   assert.deepEqual(eth.twitter, {
     query: "$ETH",
     status: "empty",
@@ -162,7 +162,7 @@ test("keeps candidate failures isolated", async () => {
       }
     },
   })
-  const [btc, eth] = result.topCandidates
+  const [btc, eth] = result.candidates
 
   assert.deepEqual(btc.twitter, {
     query: "$BTC",
@@ -182,11 +182,11 @@ test("validates the step 8 input and Twitter dependencies", async () => {
       fetchPage: async () => ({}),
       wait: async () => {},
     }),
-    /Step 8 top candidates are required/,
+    /Step 8 enrichment candidates are required/,
   )
 
   const input = createInput()
-  input.topCandidates[1].symbol = "btc"
+  input.candidates[1].symbol = "btc"
 
   await assert.rejects(
     enrichTopCandidatesWithTwitter(input, {

@@ -164,7 +164,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
     storyCalls.map(call => call.id),
     [sharedId, "provider:sushi:0"],
   )
-  assert.equal(result.schemaVersion, 3)
+  assert.equal(result.schemaVersion, 4)
   assert.equal(result.asOf, "2027-01-15T08:00:00.000Z")
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.newsEnrichment, {
@@ -176,7 +176,7 @@ test("enriches candidates through CRYPTO symbols and fetches each story once", a
   })
   assert.ok(!Object.hasOwn(result, "assessments"))
 
-  const [sushi, btc] = result.topCandidates
+  const [sushi, btc] = result.candidates
 
   assert.equal(sushi.news.requestedSymbol, "CRYPTO:SUSHIUSD")
   assert.equal(sushi.news.status, "available")
@@ -277,7 +277,7 @@ test("deduplicates all recent news before keeping the latest three", async () =>
       },
     },
   )
-  const [sushi, btc] = result.topCandidates
+  const [sushi, btc] = result.candidates
 
   assert.deepEqual(sushi.news, {
     requestedSymbol: "CRYPTO:SUSHIUSD",
@@ -334,7 +334,7 @@ test("keeps an explicit empty result without falling back to old news", async ()
     },
   )
 
-  for (const candidate of result.topCandidates) {
+  for (const candidate of result.candidates) {
     assert.equal(candidate.news.status, "empty")
     assert.equal(candidate.news.error, null)
     assert.equal(candidate.news.recentItemCount, 0)
@@ -343,6 +343,62 @@ test("keeps an explicit empty result without falling back to old news", async ()
   }
 
   assert.equal(storyCallCount, 0)
+})
+
+test("enriches top and assessed trending coins once, excluding other and unassessed coins", async () => {
+  const analysis = createAnalysis()
+  const shortlist = createShortlist()
+  shortlist.candidates[0].coin.coingecko = { isTrending: true }
+  shortlist.candidates.push(...["SOL", "ETH", "DOGE"].map(symbol => ({
+    coin: {
+      symbol,
+      baseCurrencyId: `XTVC${symbol}`,
+      tradingViewSymbol: `CRYPTO:${symbol}USD`,
+      coingecko: { isTrending: symbol !== "ETH" },
+    },
+  })))
+  analysis.assessments.push(
+    { symbol: "SOL", movementProbability: 0.3, drivers: ["Внимание растёт"], counterSignals: ["Объём слабый"] },
+    { symbol: "ETH" },
+  )
+  const before = structuredClone({ analysis, shortlist })
+  const calls = []
+  const result = await enrichTopCandidatesWithNews(analysis, shortlist, {
+    referenceTimestamp: 1_800_000_000,
+    fetchNews: async ({ symbol }) => {
+      calls.push(symbol)
+      return { items: [] }
+    },
+    fetchStory: async () => assert.fail("No stories to fetch"),
+  })
+
+  assert.deepEqual(calls, ["CRYPTO:SUSHIUSD", "CRYPTO:BTCUSD", "CRYPTO:SOLUSD"])
+  assert.deepEqual(result.candidates.map(candidate => candidate.symbol), ["SUSHI", "BTC", "SOL"])
+  assert.equal(result.candidates[0].explanation, analysis.topCandidates[0].explanation)
+  assert.deepEqual(result.candidates[2], {
+    ...analysis.assessments[2],
+    explanation: "",
+    news: {
+      requestedSymbol: "CRYPTO:SOLUSD",
+      status: "empty",
+      error: null,
+      recentItemCount: 0,
+      uniqueItemCount: 0,
+      items: [],
+    },
+  })
+  assert.equal(Object.hasOwn(result, "topCandidates"), false)
+  assert.deepEqual({ analysis, shortlist }, before)
+})
+
+test("rejects duplicate assessments before requesting sources", async () => {
+  const analysis = createAnalysis()
+  analysis.assessments.push(analysis.assessments[0])
+
+  await assert.rejects(enrichTopCandidatesWithNews(analysis, createShortlist(), {
+    fetchNews: async () => assert.fail("Invalid candidates must not reach sources"),
+    fetchStory: async () => assert.fail("Invalid candidates must not reach sources"),
+  }), /assessments contain duplicate symbols/)
 })
 
 test("requires matching step snapshots and TradingView coin symbols", async () => {

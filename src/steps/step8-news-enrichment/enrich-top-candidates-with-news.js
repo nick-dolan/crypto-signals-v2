@@ -33,8 +33,8 @@ function mergeStrings (...values) {
 }
 
 function validateInputs (analysis, shortlist) {
-  if (!isObject(analysis) || !isArray(analysis.topCandidates)) {
-    throw new Error("Step 7 top candidates are required")
+  if (!isObject(analysis) || !isArray(analysis.topCandidates) || !isArray(analysis.assessments)) {
+    throw new Error("Step 7 top candidates and assessments are required")
   }
 
   if (!isObject(shortlist) || !isArray(shortlist.candidates)) {
@@ -62,6 +62,7 @@ function validateInputs (analysis, shortlist) {
     }
 
     coinBySymbol.set(symbol, {
+      isTrending: coin.coingecko?.isTrending === true,
       baseCurrencyId: getRequiredString(
         coin.baseCurrencyId,
         `Step 5 candidate ${symbol} baseCurrencyId`,
@@ -73,9 +74,20 @@ function validateInputs (analysis, shortlist) {
     })
   })
 
-  const topSymbols = new Set()
+  const assessedSymbols = new Set(analysis.assessments.map(assessment => (
+    getRequiredString(assessment?.symbol, "Step 7 assessment symbol")
+  )))
 
-  return analysis.topCandidates.map((candidate, index) => {
+  if (assessedSymbols.size !== analysis.assessments.length) {
+    throw new Error("Step 7 assessments contain duplicate symbols")
+  }
+
+  if ([...assessedSymbols].some(symbol => !coinBySymbol.has(symbol))) {
+    throw new Error("Step 7 assessments must belong to step 5 candidates")
+  }
+
+  const topSymbols = new Set()
+  const topCandidates = analysis.topCandidates.map((candidate, index) => {
     const symbol = getRequiredString(
       candidate?.symbol,
       `Step 7 top candidate ${index} symbol`,
@@ -90,9 +102,21 @@ function validateInputs (analysis, shortlist) {
       throw new Error(`Step 7 top candidate ${symbol} is missing from step 5`)
     }
 
+    if (!assessedSymbols.has(symbol)) {
+      throw new Error(`Step 7 top candidate ${symbol} is missing from assessments`)
+    }
+
     topSymbols.add(symbol)
     return { candidate, coin }
   })
+  const trendingCandidates = analysis.assessments
+    .filter(candidate => !topSymbols.has(candidate.symbol) && coinBySymbol.get(candidate.symbol).isTrending)
+    .map(candidate => ({
+      candidate: { ...candidate, explanation: "" },
+      coin: coinBySymbol.get(candidate.symbol),
+    }))
+
+  return [...topCandidates, ...trendingCandidates]
 }
 
 function normalizeTitle (value) {
@@ -317,8 +341,8 @@ export async function enrichTopCandidatesWithNews (
     throw new Error("News referenceTimestamp must be a positive Unix timestamp")
   }
 
-  const topCandidates = validateInputs(analysis, shortlist)
-  const candidateNews = await Promise.all(topCandidates.map(candidate => (
+  const candidates = validateInputs(analysis, shortlist)
+  const candidateNews = await Promise.all(candidates.map(candidate => (
     fetchCandidateNews(candidate, referenceTimestamp, fetchNews)
   )))
   const articles = collectArticles(candidateNews)
@@ -334,7 +358,7 @@ export async function enrichTopCandidatesWithNews (
   )
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: new Date().toISOString(),
     asOf: analysis.asOf,
     newsEnrichment: {
@@ -344,7 +368,7 @@ export async function enrichTopCandidatesWithNews (
       lookbackHours: 24,
       maxItemsPerCandidate: 3,
     },
-    topCandidates: topCandidates.map(({ candidate, coin }) => {
+    candidates: candidates.map(({ candidate, coin }) => {
       const result = candidateNewsById.get(coin.baseCurrencyId)
       const items = result.items.map(item => enrichedArticleById.get(item.id))
 
