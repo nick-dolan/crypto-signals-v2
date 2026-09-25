@@ -1,0 +1,3673 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-25T09:15:32.017Z",
+  "language": "ru",
+  "universe": {
+    "sourcePath": "tmp/step1-crypto-universe.json",
+    "sourceGeneratedAt": "2026-09-24T20:51:45.534Z"
+  },
+  "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
+  "coinCount": 250,
+  "coins": [
+    {
+      "baseCurrencyId": "XTVCBTC",
+      "symbol": "BTC",
+      "name": "Bitcoin",
+      "description": "Bitcoin — децентрализованная сеть для прямых денежных переводов без единого оператора. BTC служит её платёжной единицей; небольшие переводы также могут выполняться через надстройку Lightning.",
+      "sources": [
+        {
+          "url": "https://bitcoin.org/en/bitcoin-for-individuals",
+          "checkedAt": "2026-09-22T15:23:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCETH",
+      "symbol": "ETH",
+      "name": "Ethereum",
+      "description": "Ethereum — блокчейн для смарт-контрактов и приложений, включая обмен активами, кредитование и NFT. ETH используется для оплаты вычислений и транзакций, а также в стейкинге, обеспечивающем работу сети.",
+      "sources": [
+        {
+          "url": "https://ethereum.org/what-is-ether/",
+          "checkedAt": "2026-09-22T15:25:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBNB",
+      "symbol": "BNB",
+      "name": "BNB",
+      "description": "BNB Smart Chain — блокчейн для смарт-контрактов, совместимый с виртуальной машиной и инструментами Ethereum. BNB используется для оплаты газа и стейкинга, участвующего в обеспечении работы этой сети.",
+      "sources": [
+        {
+          "url": "https://docs.bnbchain.org/bnb-smart-chain/introduction/",
+          "checkedAt": "2026-09-22T15:25:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXRP",
+      "symbol": "XRP",
+      "name": "XRP",
+      "description": "XRP Ledger — сеть для цифровых платежей, в том числе переводов с конвертацией между валютами. XRP — собственная валюта этой сети, которая может использоваться как промежуточный актив при расчётах; это не доля в компании Ripple.",
+      "sources": [
+        {
+          "url": "https://xrpl.org/docs/introduction/what-is-xrp",
+          "checkedAt": "2026-09-22T15:24:25Z"
+        },
+        {
+          "url": "https://xrpl.org/docs/concepts/payment-types/cross-currency-payments",
+          "checkedAt": "2026-09-22T15:41:25Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSOL",
+      "symbol": "SOL",
+      "name": "Solana",
+      "description": "Solana — блокчейн для программ и приложений, включая биржи, кредитование и торговлю производными инструментами. SOL — собственная валюта сети, которой оплачиваются комиссии за транзакции и выполнение программ.",
+      "sources": [
+        {
+          "url": "https://solana.com/docs/core/fees",
+          "checkedAt": "2026-09-22T15:25:35Z"
+        },
+        {
+          "url": "https://solana.com/docs/defi",
+          "checkedAt": "2026-09-22T15:41:25Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTRX",
+      "symbol": "TRX",
+      "name": "TRON",
+      "description": "TRON — блокчейн для смарт-контрактов и переводов цифровых активов, в том числе стейблкоина USDT. TRX используется для получения ресурсов исполнения сети, оплаты комиссий и голосования; сам TRX не является стейблкоином.",
+      "sources": [
+        {
+          "url": "https://developers.tron.network/docs/resource-model",
+          "checkedAt": "2026-09-22T15:24:25Z"
+        },
+        {
+          "url": "https://trondao.org/key-features",
+          "checkedAt": "2026-09-22T15:28:17Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZEC",
+      "symbol": "ZEC",
+      "name": "Zcash",
+      "description": "Zcash — платёжная сеть с возможностью скрывать сведения о переводах с помощью криптографических доказательств. ZEC служит её денежной единицей; конфиденциальность зависит от использования защищённого режима переводов.",
+      "sources": [
+        {
+          "url": "https://z.cash/learn/what-is-zcash/",
+          "checkedAt": "2026-09-22T15:23:36Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCHYPEH",
+      "symbol": "HYPE",
+      "name": "Hyperliquid",
+      "description": "Hyperliquid — блокчейн с биржевыми книгами заявок для спотовой торговли и бессрочных фьючерсов в системе HyperCore. HYPE делегируется валидаторам и участвует в стейкинге, обеспечивающем безопасность консенсуса сети.",
+      "sources": [
+        {
+          "url": "https://hyperliquid.gitbook.io/hyperliquid-docs/hypercore/staking",
+          "checkedAt": "2026-09-22T15:22:46Z"
+        },
+        {
+          "url": "https://hyperliquid.gitbook.io/hyperliquid-docs",
+          "checkedAt": "2026-09-22T15:22:46Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDOGE",
+      "symbol": "DOGE",
+      "name": "Dogecoin",
+      "description": "Dogecoin — самостоятельная сеть прямых электронных платежей, возникшая вокруг интернет-мема с собакой Shiba Inu. DOGE используется как денежная единица для переводов, расчётов и инициатив сообщества, включая благотворительность.",
+      "sources": [
+        {
+          "url": "https://dogecoin.com/dogepedia/articles/what-is-dogecoin/",
+          "checkedAt": "2026-09-22T15:23:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXMR",
+      "symbol": "XMR",
+      "name": "Monero",
+      "description": "Monero — сеть электронной наличности, в которой конфиденциальность переводов применяется по умолчанию. XMR — собственная платёжная единица сети; её протокол скрывает сведения об отправителе, получателе и сумме перевода.",
+      "sources": [
+        {
+          "url": "https://www.getmonero.org/get-started/what-is-monero/",
+          "checkedAt": "2026-09-22T15:23:36Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLINK",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "description": "Chainlink предоставляет смарт-контрактам внешние данные, включая цены, и межсетевое взаимодействие через CCIP. LINK используется для оплаты сервисов сети и экономического стимулирования операторов, которые обслуживают эту инфраструктуру.",
+      "sources": [
+        {
+          "url": "https://chain.link/faqs",
+          "checkedAt": "2026-09-22T15:23:32Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCADA",
+      "symbol": "ADA",
+      "name": "Cardano",
+      "description": "Cardano — блокчейн со смарт-контрактами для торговых, кредитных, игровых и других приложений. ADA — собственная валюта сети, используемая для переводов и делегирования в системе стейкинга, поддерживающей её безопасность.",
+      "sources": [
+        {
+          "url": "https://cardano.org/what-is-ada/",
+          "checkedAt": "2026-09-22T15:26:13Z"
+        },
+        {
+          "url": "https://cardano.org/smart-contracts/",
+          "checkedAt": "2026-09-22T15:26:13Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXLM",
+      "symbol": "XLM",
+      "name": "Stellar",
+      "description": "Stellar — платёжная сеть для выпуска и перевода цифровых валют и других активов. XLM — её собственный токен, необходимый для оплаты сетевых комиссий и поддержания минимальных балансов учётных записей.",
+      "sources": [
+        {
+          "url": "https://stellar.org/learn/lumens",
+          "checkedAt": "2026-09-22T15:24:25Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBCH",
+      "symbol": "BCH",
+      "name": "Bitcoin Cash",
+      "description": "Bitcoin Cash — самостоятельная сеть электронных платежей, возникшая в результате отделения от Bitcoin. BCH служит её денежной единицей для прямых переводов и расчётов между пользователями, а не представляет BTC в другой сети.",
+      "sources": [
+        {
+          "url": "https://bitcoincash.org/",
+          "checkedAt": "2026-09-22T15:23:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNEAR",
+      "symbol": "NEAR",
+      "name": "NEAR Protocol",
+      "description": "NEAR Protocol — блокчейн для смарт-контрактов и приложений, развивающий межсетевое взаимодействие и инфраструктуру ИИ-агентов. NEAR используется для оплаты транзакций и вычислений, а также стейкинга, обеспечивающего безопасность сети.",
+      "sources": [
+        {
+          "url": "https://docs.near.org/protocol/network/tokens.md",
+          "checkedAt": "2026-09-25T09:07:33.185Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/near",
+          "checkedAt": "2026-09-25T08:58:12.595Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCUNI",
+      "symbol": "UNI",
+      "name": "Uniswap",
+      "description": "Uniswap — протокол децентрализованного обмена активами через автоматизированные пулы ликвидности. UNI используется для управления протоколом, включая решения об обновлениях и протокольных комиссиях, а не представляет вклад в отдельный пул.",
+      "sources": [
+        {
+          "url": "https://developers.uniswap.org/docs/ecosystem/governance/overview",
+          "checkedAt": "2026-09-22T15:22:21Z"
+        },
+        {
+          "url": "https://developers.uniswap.org/docs/protocols/overview",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLTC",
+      "symbol": "LTC",
+      "name": "Litecoin",
+      "description": "Litecoin — самостоятельная сеть электронных платежей и переводов между пользователями. LTC — её собственная денежная единица; сеть также поддерживает опциональные механизмы конфиденциальности, не обязательные для каждого перевода.",
+      "sources": [
+        {
+          "url": "https://litecoin.com/",
+          "checkedAt": "2026-09-22T15:23:36Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAVAX",
+      "symbol": "AVAX",
+      "name": "Avalanche",
+      "description": "Avalanche — блокчейн-платформа, в которой C-Chain исполняет смарт-контракты и приложения, совместимые с Ethereum. AVAX используется в стейкинге Primary Network, обеспечивающем безопасность базовой инфраструктуры Avalanche.",
+      "sources": [
+        {
+          "url": "https://support.avax.network/en/articles/6077308-what-are-the-differences-between-the-x-p-and-c-chains",
+          "checkedAt": "2026-09-22T15:26:27Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCCCA",
+      "symbol": "CC",
+      "name": "Canton",
+      "description": "Canton — сеть для приложений с институциональными активами, смарт-контрактами Daml и настраиваемой приватностью данных. CC, или Canton Coin, используется для оплаты синхронизации и расчётов между участниками сети.",
+      "sources": [
+        {
+          "url": "https://www.canton.network/faq",
+          "checkedAt": "2026-09-22T15:28:17Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/canton-network",
+          "checkedAt": "2026-09-25T08:58:15.247Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSUI",
+      "symbol": "SUI",
+      "name": "Sui",
+      "description": "Sui — блокчейн для приложений на языке Move, со связанными компонентами для торговли и хранения данных. SUI оплачивает вычисления и хранение состояния сети, а также используется в стейкинге и управлении.",
+      "sources": [
+        {
+          "url": "https://docs.sui.io/develop/sui-architecture/tokenomics-overview",
+          "checkedAt": "2026-09-22T15:26:27Z"
+        },
+        {
+          "url": "https://docs.sui.io/",
+          "checkedAt": "2026-09-22T15:26:27Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCHBAR",
+      "symbol": "HBAR",
+      "name": "Hedera",
+      "description": "Hedera — распределённая сеть для смарт-контрактов и выпуска цифровых активов, в том числе институциональных. HBAR — собственный токен сети, которым оплачиваются комиссии за использование её сервисов.",
+      "sources": [
+        {
+          "url": "https://hedera.com/",
+          "checkedAt": "2026-09-22T15:28:48Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTAOB",
+      "symbol": "TAO",
+      "name": "Bittensor",
+      "description": "Bittensor организует подсети для задач ИИ: одни участники выполняют задания, другие оценивают качество результатов и распределяют стимулы. TAO — базовый токен для стейкинга, комиссий и ликвидности отдельных токенов подсетей ALPHA.",
+      "sources": [
+        {
+          "url": "https://learnbittensor.org/concepts/tokenomics/tao",
+          "checkedAt": "2026-09-22T15:22:50Z"
+        },
+        {
+          "url": "https://learnbittensor.org/concepts/protocol-participants",
+          "checkedAt": "2026-09-22T15:22:50Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMEMECORE",
+      "symbol": "M",
+      "name": "MemeCore",
+      "description": "MemeCore — EVM-совместимый блокчейн для выпуска мем-токенов и вознаграждения культурного вклада сообщества. M — собственный токен экосистемы, используемый, в частности, для вознаграждения валидаторов сети.",
+      "sources": [
+        {
+          "url": "https://docs.memecore.com/",
+          "checkedAt": "2026-09-22T15:27:12Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/memecore",
+          "checkedAt": "2026-09-25T08:58:17.957Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXAUT",
+      "symbol": "XAUT",
+      "name": "Tether Gold",
+      "description": "Tether Gold — цифровой токен для представления физического золота в блокчейне. По данным эмитента, один XAUT обеспечен одной тройской унцией физического золота, хранящегося в Швейцарии.",
+      "sources": [
+        {
+          "url": "https://tether.io/news/tether-reports-xaut-grows-amid-shifting-monetary-landscape-releases-its-first-attestation-for-q1-2025-more-than-7-7-tons-of-physical-gold-backing-the-token-in-circulation/",
+          "checkedAt": "2026-09-22T15:23:47Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCONDO",
+      "symbol": "ONDO",
+      "name": "Ondo",
+      "description": "Ondo предлагает токенизированные финансовые активы, включая продукты USDY и OUSG, связанные с казначейскими бумагами, и токенизированные акции. ONDO управляет Ondo DAO и Flux Finance, но не представляет долю в этих продуктах или акциях.",
+      "sources": [
+        {
+          "url": "https://docs.ondo.foundation/ondo-token",
+          "checkedAt": "2026-09-22T15:23:47Z"
+        },
+        {
+          "url": "https://docs.ondo.finance/",
+          "checkedAt": "2026-09-22T15:23:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAAVE",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "description": "Aave — протокол кредитования, позволяющий размещать криптоактивы с начислением процентов и брать займы под избыточный залог. AAVE используется для управления протоколом и принятия решений о его работе.",
+      "sources": [
+        {
+          "url": "https://aave.com/help/aave-101/introduction-to-aave",
+          "checkedAt": "2026-09-22T15:22:46Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCENA",
+      "symbol": "ENA",
+      "name": "Ethena",
+      "description": "Ethena выпускает синтетический доллар USDe и сберегательный токен sUSDe, используя хеджирование и другие стратегии. ENA — отдельный токен проекта со стейкингом через sENA; его вознаграждения не означают гарантированного права на доход протокола.",
+      "sources": [
+        {
+          "url": "https://docs.ethena.fi/video-guides/how-to-stake-ena",
+          "checkedAt": "2026-09-22T15:23:14Z"
+        },
+        {
+          "url": "https://docs.ethena.fi/",
+          "checkedAt": "2026-09-22T15:22:46Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDOT",
+      "symbol": "DOT",
+      "name": "Polkadot",
+      "description": "Polkadot предоставляет связанным блокчейнам общую инфраструктуру валидации и доступ к ней через механизм coretime. DOT используется для покупки этого ресурса, оплаты комиссий, стейкинга и участия в управлении сетью.",
+      "sources": [
+        {
+          "url": "https://docs.polkadot.com/reference/polkadot-hub/consensus-and-security/agile-coretime/",
+          "checkedAt": "2026-09-22T15:27:45Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCASTER2",
+      "symbol": "ASTER",
+      "name": "Aster",
+      "description": "Aster — децентрализованная биржа бессрочных контрактов с книгой заявок и собственной сетью Aster Chain. ASTER используется для обеспечения безопасности сети, управления и поощрения участия в экосистеме.",
+      "sources": [
+        {
+          "url": "https://docs.asterdex.com/usdaster-token/overview",
+          "checkedAt": "2026-09-22T15:23:47Z"
+        },
+        {
+          "url": "https://docs.asterdex.com/",
+          "checkedAt": "2026-09-22T15:23:14Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/aster-2",
+          "checkedAt": "2026-09-25T08:58:20.557Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPAXG",
+      "symbol": "PAXG",
+      "name": "PAX Gold",
+      "description": "PAX Gold — выпускаемый Paxos токен, представляющий владение физическим золотом на хранении. Один PAXG соответствует одной тройской унции золота и может быть обменён или погашен по правилам эмитента.",
+      "sources": [
+        {
+          "url": "https://www.paxos.com/pax-gold",
+          "checkedAt": "2026-09-22T15:22:21Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPUMPF",
+      "symbol": "PUMP",
+      "name": "Pump.fun",
+      "description": "Pump.fun объединяет выпуск токенов, биржу PumpSwap и торговый терминал. PUMP — токен этой экосистемы, для которого проводятся обратные выкупы и сжигания; владение им не означает долю в платформе или позицию поставщика ликвидности.",
+      "sources": [
+        {
+          "url": "https://pump.fun/pump-token",
+          "checkedAt": "2026-09-22T15:53:47Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/pump-fun",
+          "checkedAt": "2026-09-25T08:58:23.222Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCWLFIO",
+      "symbol": "WLFI",
+      "name": "World Liberty Financial",
+      "description": "World Liberty Financial развивает финансовые продукты, включая стейблкоин USD1 и рынки залогового кредитования через Dolomite. WLFI — отдельный токен управления проектом, а не стейблкоин USD1 и не депозит в кредитном продукте.",
+      "sources": [
+        {
+          "url": "https://worldlibertyfinancial.com/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/world-liberty-financial",
+          "checkedAt": "2026-09-25T08:58:25.870Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSKY2",
+      "symbol": "SKY",
+      "name": "Sky",
+      "description": "Sky — протокол выпуска обеспеченного стейблкоина USDS и сберегательного продукта sUSDS. SKY заменил MKR как токен управления протоколом; он отличается от USDS и sUSDS и сам не является стейблкоином.",
+      "sources": [
+        {
+          "url": "https://sky.money/blog/understanding-the-sky-token",
+          "checkedAt": "2026-09-22T15:24:41Z"
+        },
+        {
+          "url": "https://sky.money/blog/what-is-usds",
+          "checkedAt": "2026-09-22T15:24:41Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCICP",
+      "symbol": "ICP",
+      "name": "Internet Computer",
+      "description": "Internet Computer исполняет приложения в программных контейнерах canister с проверяемым состоянием. ICP преобразуется в вычислительные единицы cycles для оплаты работы приложений и используется в управлении сетью через NNS.",
+      "sources": [
+        {
+          "url": "https://internetcomputer.org/",
+          "checkedAt": "2026-09-22T15:27:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCWLDW",
+      "symbol": "WLD",
+      "name": "Worldcoin",
+      "description": "World развивает World ID — систему подтверждения того, что пользователь является уникальным человеком. WLD — токен экосистемы и распределений для подтверждённых пользователей; децентрализованное управление в документации описано как цель, а не действующая функция.",
+      "sources": [
+        {
+          "url": "https://whitepaper.world.org/designing-for-scale",
+          "checkedAt": "2026-09-22T15:33:42Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCVVV",
+      "symbol": "VVV",
+      "name": "Venice Token",
+      "description": "Venice предоставляет доступ к ИИ-моделям через API с разными режимами конфиденциальности. Стейкинг VVV служит основой для выпуска DIEM, который даёт фиксированный кредит на использование API; VVV и DIEM выполняют разные роли.",
+      "sources": [
+        {
+          "url": "https://venice.ai/blog/introducing-diem-as-tokenized-intelligence-the-next-evolution-of-vvv",
+          "checkedAt": "2026-09-22T15:28:00Z"
+        },
+        {
+          "url": "https://venice.ai/",
+          "checkedAt": "2026-09-22T15:34:54Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/venice-token",
+          "checkedAt": "2026-09-25T08:58:28.514Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCETC",
+      "symbol": "ETC",
+      "name": "Ethereum Classic",
+      "description": "Ethereum Classic — самостоятельный блокчейн для EVM-совместимых смарт-контрактов с акцентом на неизменность истории. ETC оплачивает выполнение контрактов этой сети; это отдельная валюта, а не обёртка ETH.",
+      "sources": [
+        {
+          "url": "https://ethereumclassic.org/why-classic/",
+          "checkedAt": "2026-09-22T15:27:15Z"
+        },
+        {
+          "url": "https://ethereumclassic.org/faqs/developers/",
+          "checkedAt": "2026-09-22T15:41:25Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCARBI",
+      "symbol": "ARB",
+      "name": "Arbitrum",
+      "description": "Arbitrum предоставляет сети исполнения смарт-контрактов и инструменты создания отдельных цепей с расчётным слоем Ethereum. ARB — токен управления ArbitrumDAO, используемый для решений об обновлениях, бюджете и развитии экосистемы.",
+      "sources": [
+        {
+          "url": "https://blog.arbitrum.foundation/joining-arbitrumdao-your-complete-governance-guide/",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        },
+        {
+          "url": "https://docs.arbitrum.io/",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMORPHO",
+      "symbol": "MORPHO",
+      "name": "Morpho",
+      "description": "Morpho — протокол некастодиального кредитования: пользователи предоставляют ликвидность или берут займы под избыточный залог. MORPHO используется для управления протоколом и принятия решений о его параметрах.",
+      "sources": [
+        {
+          "url": "https://docs.morpho.org/learn/",
+          "checkedAt": "2026-09-22T15:22:46Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLITL",
+      "symbol": "LIT",
+      "name": "Lighter",
+      "description": "Lighter — децентрализованная торговая платформа с проверяемым сопоставлением заявок и ликвидациями. Стейкинг LIT даёт доступ к пулу ликвидности LLP и наградам; протокол также выкупает токен за счёт торговых комиссий.",
+      "sources": [
+        {
+          "url": "https://docs.lighter.xyz/",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://docs.lighter.xyz/about-lighter/lit-utility.md",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/lighter",
+          "checkedAt": "2026-09-25T08:58:31.228Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPOLYG",
+      "symbol": "POL",
+      "name": "Polygon (prev. MATIC)",
+      "description": "Polygon PoS — сеть для Ethereum-совместимых приложений и переводов активов. POL заменил MATIC в качестве токена газа и стейкинга Polygon PoS; расширенные функции в AggLayer следует отличать от этих действующих применений.",
+      "sources": [
+        {
+          "url": "https://support.polygon.technology/support/solutions/articles/82000912578-what-is-the-significance-of-the-pol-token-",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKAS",
+      "symbol": "KAS",
+      "name": "Kaspa",
+      "description": "Kaspa — самостоятельная платёжная сеть с доказательством работы и структурой блоков blockDAG. KAS — её собственная криптовалюта для переводов и расчётов между участниками, а не токен поверх другого блокчейна.",
+      "sources": [
+        {
+          "url": "https://kaspa.org/lore",
+          "checkedAt": "2026-09-22T15:23:36Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCQNT",
+      "symbol": "QNT",
+      "name": "Quant",
+      "description": "Quant развивает Overledger — инфраструктуру соединения блокчейнов и API для корпоративных приложений, работающих с несколькими сетями. QNT — служебный токен, используемый для оплаты подписки на сервисы этой платформы.",
+      "sources": [
+        {
+          "url": "https://quant.network/frequently-asked-questions/",
+          "checkedAt": "2026-09-22T15:27:19Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCALGO",
+      "symbol": "ALGO",
+      "name": "Algorand",
+      "description": "Algorand — блокчейн для цифровых платежей, приложений и представления активов в виде токенов. ALGO — собственная валюта сети, используемая в стейкинге для участия в обеспечении её безопасности и работы.",
+      "sources": [
+        {
+          "url": "https://algorand.co/",
+          "checkedAt": "2026-09-22T15:27:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCJUPI",
+      "symbol": "JUP",
+      "name": "Jupiter",
+      "description": "Jupiter объединяет агрегацию обменов на Solana, торговлю бессрочными контрактами и другие финансовые сервисы. JUP используется в управлении DAO: стейкинг даёт голосование и ASR-награды, но не прямое право на долю комиссий платформы.",
+      "sources": [
+        {
+          "url": "https://docs.jup.ag/user-docs/more/jup-token",
+          "checkedAt": "2026-09-22T15:25:38Z"
+        },
+        {
+          "url": "https://docs.jup.ag/",
+          "checkedAt": "2026-09-22T15:24:20Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRENDER",
+      "symbol": "RENDER",
+      "name": "Render",
+      "description": "Render связывает заказчиков рендеринга и ИИ-вычислений с поставщиками мощностей графических процессоров. Текущий RENDER в Solana заменяет прежний RNDR и используется в механизме оплаты заданий и вознаграждения поставщиков через сжигание и выпуск токенов.",
+      "sources": [
+        {
+          "url": "https://know.rendernetwork.com/basics/burn-mint-equilibrium",
+          "checkedAt": "2026-09-22T15:24:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCATOM",
+      "symbol": "ATOM",
+      "name": "Cosmos",
+      "description": "Cosmos Hub — блокчейн экосистемы Cosmos, который также предоставляет другим сетям безопасность своих валидаторов через Interchain Security. ATOM используется для делегирования валидаторам и управления именно Cosmos Hub, а не всеми сетями Cosmos.",
+      "sources": [
+        {
+          "url": "https://docs.cosmos.network/hub/latest",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        },
+        {
+          "url": "https://cosmos.github.io/interchain-security/faq",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCJST",
+      "symbol": "JST",
+      "name": "JUST",
+      "description": "JUST включает JustLend — протокол залогового кредитования в TRON, а также сервисы ликвидного стейкинга TRX и аренды ресурса Energy. JST используется для управления протоколом и принятия решений в JustLend DAO.",
+      "sources": [
+        {
+          "url": "https://docs.justlend.org/",
+          "checkedAt": "2026-09-22T15:27:40Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCAKE",
+      "symbol": "CAKE",
+      "name": "PancakeSwap",
+      "description": "PancakeSwap — децентрализованная биржа, где обмены проходят через автоматизированные пулы ликвидности. CAKE используется как награда участникам программ фарминга, предоставляющим ликвидность протоколу.",
+      "sources": [
+        {
+          "url": "https://docs.pancakeswap.finance/trade/pancakeswap-exchange",
+          "checkedAt": "2026-09-22T15:25:38Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFIL",
+      "symbol": "FIL",
+      "name": "Filecoin",
+      "description": "Filecoin — сеть проверяемого децентрализованного хранения данных, на которой также строятся сервисы размещения веб-приложений. FIL используется для оплаты хранения; отдельные сервисы допускают расчёты и в других токенах.",
+      "sources": [
+        {
+          "url": "https://www.filecoin.io/blog/introducing-filecoin-onchain-cloud",
+          "checkedAt": "2026-09-22T15:26:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCINJ",
+      "symbol": "INJ",
+      "name": "Injective",
+      "description": "Injective — блокчейн с инфраструктурой для торговли, производных инструментов, токенизации активов и платежей. INJ используется в стейкинге для обеспечения безопасности сети и в управлении её развитием.",
+      "sources": [
+        {
+          "url": "https://injective.com/inj",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://injective.com/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDASH",
+      "symbol": "DASH",
+      "name": "Dash",
+      "description": "Dash — сеть цифровых платежей с механизмом ускоренного подтверждения InstantSend и функцией смешивания CoinJoin. DASH — собственная валюта для переводов и расчётов; в работе инфраструктуры сети участвуют мастерноды.",
+      "sources": [
+        {
+          "url": "https://www.dash.org/learning-resources/",
+          "checkedAt": "2026-09-22T15:23:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCVET",
+      "symbol": "VET",
+      "name": "VeChain",
+      "description": "VeChainThor — блокчейн для бизнес-приложений; экосистема включает VeBetter и инструменты ИИ-агентов AgentSuite. VET используется в стейкинге для генерации VTHO, а комиссии за выполнение транзакций оплачиваются отдельным токеном VTHO.",
+      "sources": [
+        {
+          "url": "https://docs.vechain.org/introduction-to-vechain/dual-token-economic-model/vethor-vtho",
+          "checkedAt": "2026-09-22T15:29:11Z"
+        },
+        {
+          "url": "https://vechain.org/",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAPTO",
+      "symbol": "APT",
+      "name": "Aptos",
+      "description": "Aptos — блокчейн для приложений на языке Move, включая финансовые сервисы и переводы стейблкоинов. APT — собственная валюта сети для оплаты газа и участия в стейкинге, обеспечивающем работу валидаторов.",
+      "sources": [
+        {
+          "url": "https://aptosnetwork.com/currents/the-ultimate-aptos-onboarding-guide",
+          "checkedAt": "2026-09-22T15:26:13Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSTABLE3",
+      "symbol": "STABLE",
+      "name": "Stable",
+      "description": "Stable — сеть расчётов в USDT, в которой этот же стейблкоин используется для оплаты газа. STABLE — отдельный токен безопасности и управления сетью, а не сам USDT и не стейблкоин.",
+      "sources": [
+        {
+          "url": "https://www.stable.xyz/whitepaper.pdf",
+          "checkedAt": "2026-09-22T15:25:06Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/stable-2",
+          "checkedAt": "2026-09-25T08:58:33.955Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAEROD",
+      "symbol": "AERO",
+      "name": "Aerodrome Finance",
+      "description": "Aerodrome Finance — автоматизированная биржа и система пулов ликвидности в сети Base. AERO — протокольный токен, блокировка которого создаёт позиции veNFT для голосования по распределению эмиссии между пулами и получения связанных комиссий.",
+      "sources": [
+        {
+          "url": "https://github.com/aerodrome-finance/contracts",
+          "checkedAt": "2026-09-22T15:26:20Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCETHFI",
+      "symbol": "ETHFI",
+      "name": "ether.fi",
+      "description": "ether.fi предоставляет ликвидный стейкинг ETH с токеном weETH, а рестейкинг выделен в отдельный продукт weETHs. ETHFI — токен управления DAO; он не заменяет weETH и сам по себе не представляет вложенный ETH.",
+      "sources": [
+        {
+          "url": "https://governance.ether.fi/t/welcome-to-the-ether-fi-dao-discourse/17",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        },
+        {
+          "url": "https://www.ether.fi/stake",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        },
+        {
+          "url": "https://ether.fi/blog/hardening-weeth-creating-the-market-standard",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPENGUPUD",
+      "symbol": "PENGU",
+      "name": "Pudgy Penguins",
+      "description": "Pudgy Penguins — NFT-бренд с сообществом вокруг коллекционных изображений пингвинов. PENGU — развлекательный токен этого сообщества в Solana; его владение не равнозначно владению NFT и не даёт связанных с NFT прав на изображения.",
+      "sources": [
+        {
+          "url": "https://claim.pudgypenguins.com/",
+          "checkedAt": "2026-09-22T15:24:21Z"
+        },
+        {
+          "url": "https://claim.pudgypenguins.com/ip-rights",
+          "checkedAt": "2026-09-22T15:24:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTRUMPOF",
+      "symbol": "TRUMP",
+      "name": "OFFICIAL TRUMP",
+      "description": "OFFICIAL TRUMP — мем-токен на основе образа Дональда Трампа и лицензированного бренда. TRUMP служит цифровым символом поддержки и участия в сообществе вокруг этой темы, а не токеном самостоятельного блокчейна.",
+      "sources": [
+        {
+          "url": "https://gettrumpmemes.com/",
+          "checkedAt": "2026-09-22T15:23:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRAY",
+      "symbol": "RAY",
+      "name": "Raydium",
+      "description": "Raydium — биржевой протокол на Solana с автоматизированными пулами ликвидности и сервисом запуска токенов LaunchLab. RAY используется в стейкинге и механизме обратного выкупа за часть комиссий протокола.",
+      "sources": [
+        {
+          "url": "https://docs.raydium.io/ray/index",
+          "checkedAt": "2026-09-22T15:34:51Z"
+        },
+        {
+          "url": "https://docs.raydium.io/",
+          "checkedAt": "2026-09-22T15:26:20Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSTXS",
+      "symbol": "STX",
+      "name": "Stacks",
+      "description": "Stacks создаёт среду смарт-контрактов и финансовых приложений вокруг Bitcoin, включая использование sBTC. STX оплачивает работу приложений и участвует в механизме Stacking; это отдельный токен, а не представление BTC.",
+      "sources": [
+        {
+          "url": "https://www.stacks.co/stx",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZROL",
+      "symbol": "ZRO",
+      "name": "LayerZero",
+      "description": "LayerZero — протокол межсетевого взаимодействия, позволяющий приложениям передавать сообщения между блокчейнами через независимые службы проверки и исполнения. ZRO — отдельный токен экосистемы LayerZero.",
+      "sources": [
+        {
+          "url": "https://docs.layerzero.network/v2/developers/evm/protocol-contracts-overview",
+          "checkedAt": "2026-09-25T09:06:02Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/layerzero",
+          "checkedAt": "2026-09-25T08:58:41.925Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCRV",
+      "symbol": "CRV",
+      "name": "Curve DAO Token",
+      "description": "Curve — децентрализованная биржа с пулами ликвидности и сервисом обеспеченных займов Llamalend. CRV используется в управлении через блокировку в veCRV, позволяющую голосовать по решениям протокола.",
+      "sources": [
+        {
+          "url": "https://docs.curve.finance/",
+          "checkedAt": "2026-09-22T15:49:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPYTH",
+      "symbol": "PYTH",
+      "name": "Pyth Network",
+      "description": "Pyth Network поставляет ценовые данные для блокчейн-приложений, включая биржи и кредитные протоколы. PYTH используется для управления сетью и стейкинга, связанного с ответственностью за качество публикуемых данных.",
+      "sources": [
+        {
+          "url": "https://docs.pyth.network/pyth-token",
+          "checkedAt": "2026-09-22T15:23:32Z"
+        },
+        {
+          "url": "https://docs.pyth.network/oracle-integrity-staking",
+          "checkedAt": "2026-09-22T15:23:32Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFET",
+      "symbol": "FET",
+      "name": "Artificial Superintelligence Alliance",
+      "description": "Artificial Superintelligence Alliance развивает инфраструктуру ИИ-агентов, включая сеть Fetch.ai. FET остаётся действующим токеном для регистрации агентов, микроплатежей, стейкинга и оплаты ИИ-ресурсов.",
+      "sources": [
+        {
+          "url": "https://network.fetch.ai/docs/guides/network/intro-fet-token",
+          "checkedAt": "2026-09-22T15:27:43Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCVIRTUAL",
+      "symbol": "VIRTUAL",
+      "name": "Virtuals Protocol",
+      "description": "Virtuals Protocol предоставляет ИИ-агентам идентификацию, кошельки и инструменты взаимодействия и торговли через ACP. VIRTUAL используется как базовый актив ликвидности для выпускаемых в экосистеме токенов агентов.",
+      "sources": [
+        {
+          "url": "https://whitepaper.virtuals.io/about-virtuals/about-virtuals-protocol.md",
+          "checkedAt": "2026-09-22T15:28:34Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPIEVERSE",
+      "symbol": "PIEVERSE",
+      "name": "Pieverse",
+      "description": "Pieverse развивает платёжную инфраструктуру для ИИ-агентов, включая защищённые кошельки и операции с цифровыми активами. PIEVERSE — токен экосистемы, предназначенный для доступа к сервисам, стимулирования участников и управления.",
+      "sources": [
+        {
+          "url": "https://www.pieverse.io/whitepaper",
+          "checkedAt": "2026-09-22T15:27:33Z"
+        },
+        {
+          "url": "https://docs.pieverse.io/getting-started",
+          "checkedAt": "2026-09-22T15:27:12Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/pieverse",
+          "checkedAt": "2026-09-25T08:58:44.593Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSEI",
+      "symbol": "SEI",
+      "name": "Sei",
+      "description": "Sei — блокчейн с EVM-средой для приложений на Solidity и инструментов, совместимых с Ethereum. SEI делегируется валидаторам для участия в обеспечении безопасности сети и используется в её управлении.",
+      "sources": [
+        {
+          "url": "https://docs.sei.io/learn/general-staking",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://docs.sei.io/evm",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPENDLE",
+      "symbol": "PENDLE",
+      "name": "Pendle",
+      "description": "Pendle позволяет разделять доходные активы на основную сумму (PT) и будущий доход (YT), чтобы торговать ими отдельно. PENDLE размещается в стейкинге с получением sPENDLE для участия в управлении и вознаграждениях.",
+      "sources": [
+        {
+          "url": "https://app.pendle.finance/",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTIA2",
+      "symbol": "TIA",
+      "name": "Celestia",
+      "description": "Celestia предоставляет роллапам слой доступности данных: место для публикации информации, необходимой для проверки их работы. TIA используется для оплаты этого ресурса, стейкинга валидаторов и управления сетью.",
+      "sources": [
+        {
+          "url": "https://docs.celestia.org/learn/TIA/overview/",
+          "checkedAt": "2026-09-22T15:26:00Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBSV",
+      "symbol": "BSV",
+      "name": "Bitcoin SV",
+      "description": "Bitcoin SV — самостоятельная сеть электронной наличности и микроплатежей с доказательством работы и программируемыми UTXO. BSV служит её денежной единицей для расчётов и переводов, а не представляет BTC в другой сети.",
+      "sources": [
+        {
+          "url": "https://bsvblockchain.org/",
+          "checkedAt": "2026-09-22T15:25:06Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFF",
+      "symbol": "FF",
+      "name": "Falcon Finance",
+      "description": "Falcon Finance позволяет выпускать обеспеченный синтетический доллар USDf под залог активов и размещать его в доходном продукте sUSDf. FF — отдельный токен экосистемы, а не сам USDf или доля в sUSDf.",
+      "sources": [
+        {
+          "url": "https://docs.falcon.finance/ff-token",
+          "checkedAt": "2026-09-22T15:32:15Z"
+        },
+        {
+          "url": "https://docs.falcon.finance/resources/frequently-asked-questions-faq",
+          "checkedAt": "2026-09-22T15:34:02Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/falcon-finance-ff",
+          "checkedAt": "2026-09-25T08:58:47.509Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSPX6",
+      "symbol": "SPX",
+      "name": "SPX6900",
+      "description": "SPX6900 — мем-проект, использующий сатиру на авторитет традиционного фондового рынка и образ S&P 500. SPX — токен сообщества, а не фондовый индекс, доля в индексном фонде или право на акции компаний.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/spx6900",
+          "checkedAt": "2026-09-22T15:26:52Z"
+        },
+        {
+          "url": "https://www.aeons6900.com/about",
+          "checkedAt": "2026-09-22T15:51:45Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNIGHTMI",
+      "symbol": "NIGHT",
+      "name": "Midnight",
+      "description": "Midnight — блокчейн для приложений с программируемой приватностью и выборочным раскрытием данных на основе доказательств с нулевым разглашением. NIGHT генерирует непередаваемый ресурс DUST, используемый для операций в сети.",
+      "sources": [
+        {
+          "url": "https://midnight.network/blog/state-of-the-network-april-2026",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/midnight-3",
+          "checkedAt": "2026-09-25T08:58:52.836Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLDO",
+      "symbol": "LDO",
+      "name": "Lido DAO",
+      "description": "Lido предоставляет ликвидный стейкинг с основным фокусом на Ethereum, позволяя использовать токены, представляющие размещённые активы. LDO служит для управления DAO и параметрами протокола, а не представляет сам вклад в стейкинг ETH.",
+      "sources": [
+        {
+          "url": "https://docs.lido.fi/",
+          "checkedAt": "2026-09-22T15:25:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXTZ",
+      "symbol": "XTZ",
+      "name": "Tezos",
+      "description": "Tezos — блокчейн для смарт-контрактов, цифровых активов и NFT; связанная сеть Etherlink поддерживает Ethereum-совместимые приложения. XTZ — собственная валюта Tezos для оплаты комиссий, используемая также в Etherlink.",
+      "sources": [
+        {
+          "url": "https://docs.tezos.com/architecture/tokens",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        },
+        {
+          "url": "https://docs.etherlink.com/evm/",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKITE",
+      "symbol": "KITE",
+      "name": "Kite",
+      "description": "Kite разрабатывает блокчейн-инфраструктуру для платежей ИИ-агентов с проверяемыми полномочиями и расчётами в стейблкоинах. KITE — токен экосистемы, экономическая модель которой предусматривает стейкинг, управление и стимулы участникам.",
+      "sources": [
+        {
+          "url": "https://gokite.ai/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://docs.gokite.ai/kite-chain/tokenomics",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/kite-2",
+          "checkedAt": "2026-09-25T08:58:58.168Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSUN",
+      "symbol": "SUN",
+      "name": "Sun (New)",
+      "description": "SUN.io объединяет обмены и пулы ликвидности SunSwap, операции со стейблкоинами и запуск токенов через SunPump. SUN блокируется в veSUN для участия в управлении SUN DAO и получения предусмотренных протоколом наград.",
+      "sources": [
+        {
+          "url": "https://docs.sun.io/",
+          "checkedAt": "2026-09-22T15:49:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCOP",
+      "symbol": "OP",
+      "name": "Optimism",
+      "description": "Optimism развивает OP Mainnet — сеть второго уровня Ethereum — и стек OP Stack для запуска совместимых сетей. OP — токен управления с возможностью делегировать голоса; его роль отделена от оплаты сетевых комиссий.",
+      "sources": [
+        {
+          "url": "https://specs.optimism.io/governance/gov-token.html",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        },
+        {
+          "url": "https://optimism.io/blog/what-is-op-mainnet",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCIMX",
+      "symbol": "IMX",
+      "name": "Immutable",
+      "description": "Immutable предоставляет инфраструктуру для блокчейн-игр, включая выпуск и продажу игровых NFT в Immutable zkEVM. IMX используется для оплаты газа в этой сети; приложения могут спонсировать такие комиссии за пользователей.",
+      "sources": [
+        {
+          "url": "https://devsupport.immutable.com/v1/guides/zkevm/new-collection/",
+          "checkedAt": "2026-09-22T15:23:43Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAR",
+      "symbol": "AR",
+      "name": "Arweave",
+      "description": "Arweave — децентрализованная сеть постоянного хранения данных с разовой оплатой загрузки. AR используется для оплаты транзакций и размещения данных, а также вознаграждения майнеров, которые сохраняют данные и подтверждают доступ к ним.",
+      "sources": [
+        {
+          "url": "https://docs.arweave.org/developers/development/motivation",
+          "checkedAt": "2026-09-25T09:06:02Z"
+        },
+        {
+          "url": "https://docs.arweave.org/developers/arweave-node-server/http-api.md",
+          "checkedAt": "2026-09-25T09:07:33.185Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/arweave",
+          "checkedAt": "2026-09-25T08:59:00.740Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCENS",
+      "symbol": "ENS",
+      "name": "Ethereum Name Service",
+      "description": "Ethereum Name Service связывает читаемые имена с адресами кошельков и другими ресурсами, упрощая их использование в приложениях. ENS — токен управления DAO, позволяющий голосовать по решениям протокола или делегировать голос.",
+      "sources": [
+        {
+          "url": "https://ens.domains/governance",
+          "checkedAt": "2026-09-22T15:27:19Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXPL",
+      "symbol": "XPL",
+      "name": "Plasma",
+      "description": "Plasma — блокчейн для переводов и платежей в стейблкоинах, включая USDT; на нём работает сервис Plasma One. XPL — собственный токен сети, используемый для вознаграждения валидаторов, а не долларовый стейблкоин.",
+      "sources": [
+        {
+          "url": "https://www.plasma.org/company/blog/plasma-mainnet-beta-and-xpl",
+          "checkedAt": "2026-09-22T15:24:46Z"
+        },
+        {
+          "url": "https://www.plasma.org/",
+          "checkedAt": "2026-09-22T15:41:25Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/plasma",
+          "checkedAt": "2026-09-25T08:59:03.311Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMONAD",
+      "symbol": "MON",
+      "name": "Monad",
+      "description": "Monad — самостоятельный EVM-совместимый блокчейн для запуска смарт-контрактов и приложений с инструментами Ethereum. MON — собственная валюта сети, которой оплачиваются транзакции и выполнение контрактов.",
+      "sources": [
+        {
+          "url": "https://docs.monad.xyz/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://docs.monad.xyz/developer-essentials/gas-pricing",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/monad",
+          "checkedAt": "2026-09-25T08:59:05.917Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSTRKS",
+      "symbol": "STRK",
+      "name": "Starknet",
+      "description": "Starknet — сеть второго уровня Ethereum для смарт-контрактов, использующая доказательства корректности вычислений. STRK применяется в стейкинге и выплате вознаграждений участникам, обеспечивающим работу сети.",
+      "sources": [
+        {
+          "url": "https://www.starknet.io/staking/",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCUSELESS",
+      "symbol": "USELESS",
+      "name": "Useless Coin",
+      "description": "Useless Coin — мем-токен Solana, запущенный через BONKfun и построенный на иронии вокруг «бесполезности» мем-монет. USELESS представляет сообщество вокруг этого образа, а не отдельный финансовый или вычислительный сервис.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/useless-3",
+          "checkedAt": "2026-09-22T15:26:52Z"
+        },
+        {
+          "url": "https://web3.bitget.com/how-to-buy/useless-sol-Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
+          "checkedAt": "2026-09-22T15:51:45Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGRT",
+      "symbol": "GRT",
+      "name": "The Graph",
+      "description": "The Graph индексирует данные блокчейнов и позволяет приложениям получать их через запросы. GRT используется для оплаты запросов, стейкинга индексаторов, отбора полезных наборов данных и вознаграждения участников сети.",
+      "sources": [
+        {
+          "url": "https://thegraph.com/docs/en/resources/tokenomics/",
+          "checkedAt": "2026-09-22T15:27:19Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCFX",
+      "symbol": "CFX",
+      "name": "Conflux",
+      "description": "Conflux — блокчейн для смарт-контрактов, чья среда eSpace поддерживает Ethereum-приложения и инструменты EVM. CFX используется для оплаты сетевых комиссий и резервируется для хранения данных в сети.",
+      "sources": [
+        {
+          "url": "https://doc.confluxnetwork.org/docs/espace/Overview/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://doc.confluxnetwork.org/docs/core/core-space-basics/transactions/transaction-fee/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSYRUP",
+      "symbol": "SYRUP",
+      "name": "Maple Finance",
+      "description": "Maple Finance предоставляет сверхобеспеченные кредиты институциональным заёмщикам и через продукт Syrup открывает этот рынок пользователям DeFi. SYRUP — текущий токен управления Maple, который стейкается для голосования и получения наград, а не прежний MPL.",
+      "sources": [
+        {
+          "url": "https://docs.maple.finance/maple-for-token-holders/mpl-token",
+          "checkedAt": "2026-09-22T15:28:40Z"
+        },
+        {
+          "url": "https://docs.maple.finance/",
+          "checkedAt": "2026-09-22T15:25:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTWT",
+      "symbol": "TWT",
+      "name": "Trust Wallet Token",
+      "description": "Trust Wallet — криптовалютный кошелёк, в котором пользователь сам контролирует ключи. TWT — его служебный токен, используемый для доступа к пулам наград Trust Alpha и дополнительным бонусам внутри экосистемы кошелька.",
+      "sources": [
+        {
+          "url": "https://trustwallet.com/blog/company/introducing-trust-alpha-early-access-and-real-rewards-powered-by-twt",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCOMP",
+      "symbol": "COMP",
+      "name": "Compound",
+      "description": "Compound — протокол криптокредитования, где пользователи размещают активы под процент и берут займы под криптовалютный залог. COMP используется для управления Compound III, включая параметры залога, процентных ставок и кредитных рынков.",
+      "sources": [
+        {
+          "url": "https://docs.compound.finance/governance/",
+          "checkedAt": "2026-09-22T15:24:55Z"
+        },
+        {
+          "url": "https://docs.compound.finance/",
+          "checkedAt": "2026-09-22T15:25:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCWIF",
+      "symbol": "WIF",
+      "name": "dogwifhat",
+      "description": "dogwifhat — мем-токен Solana, построенный вокруг изображения собаки в вязаной шапке. WIF представляет сообщество и распространение этого интернет-мема, а не токен самостоятельного блокчейна.",
+      "sources": [
+        {
+          "url": "https://dogwifcoin.org/",
+          "checkedAt": "2026-09-22T15:23:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCEIGEN",
+      "symbol": "EIGEN",
+      "name": "EigenCloud",
+      "description": "EigenCloud предлагает инфраструктуру проверяемых вычислений и доступности данных, включая EigenDA, EigenCompute и EigenAI. EIGEN используется для обеспечения безопасности EigenLayer, лежащего в основе этой экосистемы.",
+      "sources": [
+        {
+          "url": "https://www.eigencloud.xyz/",
+          "checkedAt": "2026-09-22T15:34:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCJASMY",
+      "symbol": "JASMY",
+      "name": "JasmyCoin",
+      "description": "Jasmy развивает цифровую идентичность и Personal Data Locker для хранения и обмена персональными данными под контролем владельца, в том числе в сфере IoT. JASMY связан с этой экосистемой и используется для оплаты газа в действующей сети JasmyChain на Arbitrum Orbit.",
+      "sources": [
+        {
+          "url": "https://jasmy.global/did.html",
+          "checkedAt": "2026-09-22T15:37:43Z"
+        },
+        {
+          "url": "https://prtimes.jp/main/html/rd/p/000000026.000155995.html",
+          "checkedAt": "2026-09-22T15:46:38Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCIOTA",
+      "symbol": "IOTA",
+      "name": "IOTA",
+      "description": "IOTA — сеть первого уровня со смарт-контрактами на Move и объектной моделью данных, применяемая в том числе для токенизации активов. Токен IOTA оплачивает вычисления и хранение, а также стейкается у валидаторов для обеспечения работы сети.",
+      "sources": [
+        {
+          "url": "https://www.iota.org/products/mainnet",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://www.iota.org/learn/tokenomics",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTHETA",
+      "symbol": "THETA",
+      "name": "Theta Network",
+      "description": "Theta Network развивает распределённую инфраструктуру для видео, ИИ и рендеринга, включая рынок GPU-вычислений EdgeCloud. THETA используется для управления и стейкинга, тогда как операции и выплаты поставщикам ресурсов оплачиваются отдельным токеном TFUEL.",
+      "sources": [
+        {
+          "url": "https://docs.thetatoken.org/docs/what-is-theta-network",
+          "checkedAt": "2026-09-22T15:25:03Z"
+        },
+        {
+          "url": "https://docs.thetatoken.org/docs/theta-edgecloud-client-guide",
+          "checkedAt": "2026-09-22T15:24:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZAMA",
+      "symbol": "ZAMA",
+      "name": "Zama",
+      "description": "Zama создаёт слой конфиденциальных смарт-контрактов поверх существующих блокчейнов с помощью полностью гомоморфного шифрования, а не отдельную L1 или L2. ZAMA используется для оплаты шифрования и расшифрования, а также вознаграждения операторов и участников стейкинга.",
+      "sources": [
+        {
+          "url": "https://docs.zama.org/protocol/zama-protocol-litepaper",
+          "checkedAt": "2026-09-22T15:33:42Z"
+        },
+        {
+          "url": "https://www.zama.org/post/zama-token-launch",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKAIA",
+      "symbol": "KAIA",
+      "name": "Kaia",
+      "description": "Kaia — EVM-совместимая сеть для расчётов в стейблкоинах и пользовательских приложений, включая мини-приложения LINE и игровые платежи. KAIA — нативная монета для оплаты газа и вознаграждения узлов сети, пришедшая на смену KLAY и FNSA.",
+      "sources": [
+        {
+          "url": "https://docs.kaia.io/learn/token-economics/kaia-native-token/",
+          "checkedAt": "2026-09-22T15:38:29Z"
+        },
+        {
+          "url": "https://www.kaia.io/",
+          "checkedAt": "2026-09-22T15:38:29Z"
+        },
+        {
+          "url": "https://docs.kaia.io/minidapps/unity/quick-start/",
+          "checkedAt": "2026-09-22T15:38:41Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKMNO",
+      "symbol": "KMNO",
+      "name": "Kamino",
+      "description": "Kamino — DeFi-протокол Solana для займов под залог, размещения средств и автоматического управления ликвидностью. KMNO — собственный токен экосистемы, часть предложения которого выделена сообществу, грантам и развитию протокола.",
+      "sources": [
+        {
+          "url": "https://kamino.com/docs/kmno",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://kamino.com/docs/llms.txt",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/kamino",
+          "checkedAt": "2026-09-25T08:59:08.522Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCB",
+      "symbol": "B",
+      "name": "BUILDon",
+      "description": "BUILDon — мем-проект BNB Chain, развивающий сообщество и продукты вокруг использования стейблкоина USD1. B — отдельный токен сообщества; он не является самим USD1 и не имеет фиксированной привязки к доллару.",
+      "sources": [
+        {
+          "url": "https://www.buildon.online/",
+          "checkedAt": "2026-09-22T15:29:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRUNE",
+      "symbol": "RUNE",
+      "name": "THORChain",
+      "description": "THORChain — протокол обмена нативных активов разных блокчейнов через автоматизированные пулы, без их замены обёрнутыми токенами. RUNE участвует в пулах ликвидности и вносится узлами в залог для обеспечения безопасности сети.",
+      "sources": [
+        {
+          "url": "https://docs.thorchain.org/",
+          "checkedAt": "2026-09-22T15:27:18Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAKT",
+      "symbol": "AKT",
+      "name": "Akash Network",
+      "description": "Akash Network — децентрализованный рынок облачных вычислений, на котором пользователи арендуют ресурсы у поставщиков инфраструктуры. AKT используется в расчётах внутри этой системы, для стейкинга и участия в управлении сетью.",
+      "sources": [
+        {
+          "url": "https://akash.network/token/",
+          "checkedAt": "2026-09-22T15:24:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCVX",
+      "symbol": "CVX",
+      "name": "Convex Finance",
+      "description": "Convex Finance помогает поставщикам ликвидности Curve получать повышенные CRV-награды через объединённую инфраструктуру протокола. CVX распределяется пользователям, а его участники стейкинга получают часть комиссий за результат работы стратегий.",
+      "sources": [
+        {
+          "url": "https://docs.convexfinance.com/convexfinance/general-information/why-convex",
+          "checkedAt": "2026-09-22T15:28:40Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCEDGEX",
+      "symbol": "EDGE",
+      "name": "edgeX",
+      "description": "edgeX — биржа бессрочных контрактов с инфраструктурой сопоставления заявок, ликвидаций и управления торговыми рисками. EDGE — токен платформы, распределённый пользователям; официальный сайт описывает его выкуп и сжигание за счёт накопленной выручки.",
+      "sources": [
+        {
+          "url": "https://pro.edgex.exchange/fr-FR/tokenomics",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        },
+        {
+          "url": "https://edgex-1.gitbook.io/edgex-documentation",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/edgex",
+          "checkedAt": "2026-09-25T08:59:11.185Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVC2Z",
+      "symbol": "2Z",
+      "name": "DoubleZero",
+      "description": "DoubleZero предоставляет выделенную сетевую инфраструктуру для передачи данных между валидаторами и RPC-сервисами блокчейнов. 2Z используется для оплаты подключения валидаторов и вознаграждения поставщиков пропускной способности и сетевого оборудования.",
+      "sources": [
+        {
+          "url": "https://docs.malbeclabs.com/glossary/",
+          "checkedAt": "2026-09-22T15:34:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAXS",
+      "symbol": "AXS",
+      "name": "Axie Infinity",
+      "description": "Axie Infinity — экосистема игр с коллекционными существами и игровыми NFT, работающая в сети Ronin. AXS используется для управления проектом и оплаты NFT; комиссии сети Ronin оплачиваются отдельным токеном RON.",
+      "sources": [
+        {
+          "url": "https://axieinfinity.com/axs",
+          "checkedAt": "2026-09-22T15:24:21Z"
+        },
+        {
+          "url": "https://blog.roninchain.com/p/ronin-is-home",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFARTCOIN",
+      "symbol": "FARTCOIN",
+      "name": "Fartcoin",
+      "description": "Fartcoin — мем-токен Solana, концепция которого связана с ИИ-персоной Truth Terminal и сообществом вокруг неё. FARTCOIN представляет мем-культуру, а не доступ к языковой модели, вычислительным мощностям или другому ИИ-сервису.",
+      "sources": [
+        {
+          "url": "https://assets-cms.kraken.com/files/51n36hrp/facade/b3e9c34487d21636dc43c7b29e2bafde18eebe92.pdf",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMINA",
+      "symbol": "MINA",
+      "name": "Mina",
+      "description": "Mina — блокчейн для приложений с доказательствами с нулевым разглашением, где вычисления могут выполняться локально, а сеть проверяет результат без раскрытия исходных данных. MINA используется для транзакций, работы zkApps и обеспечения сети через стейкинг.",
+      "sources": [
+        {
+          "url": "https://minaprotocol.com/zkapps",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        },
+        {
+          "url": "https://minaprotocol.com/get-started-with-mina",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMETE",
+      "symbol": "MET",
+      "name": "Meteora",
+      "description": "Meteora разрабатывает пулы ликвидности и инструменты запуска токенов в Solana. MET — токен экосистемы, часть предложения которого выделена для стимулирования поставщиков ликвидности и поддержки площадок запуска токенов.",
+      "sources": [
+        {
+          "url": "https://docs.meteora.ag/protocol/met/tokenomics",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://docs.meteora.ag/llms.txt",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/meteora",
+          "checkedAt": "2026-09-25T08:59:13.871Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNEO",
+      "symbol": "NEO",
+      "name": "Neo",
+      "description": "Neo — блокчейн для выпуска цифровых активов и смарт-контрактов с поддержкой нескольких языков программирования. NEO используется для управления сетью и распределением вознаграждений, а вычисления и хранение оплачиваются отдельным токеном GAS.",
+      "sources": [
+        {
+          "url": "https://neo.org/neogas",
+          "checkedAt": "2026-09-22T15:29:11Z"
+        },
+        {
+          "url": "https://neo.org/",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMANA",
+      "symbol": "MANA",
+      "name": "Decentraland",
+      "description": "Decentraland — пользовательский виртуальный мир, в котором можно создавать пространства, взаимодействовать с другими участниками и приобретать цифровые объекты. MANA — его ERC-20 валюта для покупки участков LAND, имён и цифровых товаров.",
+      "sources": [
+        {
+          "url": "https://docs.decentraland.org/faqs/decentraland-101",
+          "checkedAt": "2026-09-22T15:23:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCHZ",
+      "symbol": "CHZ",
+      "name": "Chiliz",
+      "description": "Chiliz — блокчейн для приложений спортивных и развлекательных сообществ, включая проекты фанатских токенов. CHZ — нативный актив Chiliz Chain, используемый для оплаты сетевого газа и участия в стейкинге.",
+      "sources": [
+        {
+          "url": "https://docs.chiliz.com/learn/about-chiliz-chain",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAVU",
+      "symbol": "A",
+      "name": "Vaulta",
+      "description": "Vaulta — продолжающая работу сеть EOS под новым названием, ориентированная на финансовые приложения и смарт-контракты. A заменил EOS при обмене 1:1 и унаследовал роль токена сетевых ресурсов и управления; это не токен отдельно созданной сети.",
+      "sources": [
+        {
+          "url": "https://www.vaulta.com/resources/vaulta-token-swap-live",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        },
+        {
+          "url": "https://www.vaulta.com/protocol",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        },
+        {
+          "url": "https://www.vaulta.com/resources/vaulta-token-swap-a-begins-may-14",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDEXE",
+      "symbol": "DEXE",
+      "name": "DeXe",
+      "description": "DeXe предоставляет инструменты создания DAO, организации голосований, делегирования полномочий и управления другими протоколами через DAO Studio. DEXE — служебный и управляющий токен DeXe DAO, используемый для принятия решений о развитии протокола.",
+      "sources": [
+        {
+          "url": "https://www.dexe.network/token",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://docs.dexe.io/",
+          "checkedAt": "2026-09-22T15:28:40Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSENTIE",
+      "symbol": "SENT",
+      "name": "Sentient",
+      "description": "Sentient развивает экосистему открытого ИИ, в которой сеть GRID координирует участников и вознаграждает их вклад в общие разработки. SENT используется для управления, стейкинга, комиссий, платежей и распределения наград внутри этой экосистемы.",
+      "sources": [
+        {
+          "url": "https://sentientfoundation.co/news/sent-tokenomics",
+          "checkedAt": "2026-09-22T15:28:58Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAPE",
+      "symbol": "APE",
+      "name": "ApeCoin",
+      "description": "ApeCoin — токен экосистемы BAYC и игровых проектов, включая Otherside, с инфраструктурой ApeChain на Arbitrum Orbit. APE оплачивает газ ApeChain и используется как валюта Otherside; прежнее управление через DAO сменилось моделью ApeCo.",
+      "sources": [
+        {
+          "url": "https://docs.apechain.com/",
+          "checkedAt": "2026-09-22T15:24:33Z"
+        },
+        {
+          "url": "https://opensea.io/token/ape",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSFP",
+      "symbol": "SFP",
+      "name": "SafePal",
+      "description": "SafePal — экосистема программных и аппаратных кошельков для самостоятельного хранения криптоактивов и работы с приложениями. SFP — служебный токен для бонусных программ, Earn, вознаграждений за стейкинг и дополнительных сервисов кошелька.",
+      "sources": [
+        {
+          "url": "https://www.safepal.com/en/sfp",
+          "checkedAt": "2026-09-22T15:25:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVC1INCH",
+      "symbol": "1INCH",
+      "name": "1inch",
+      "description": "1inch объединяет ликвидность децентрализованных бирж и предоставляет исполнение обменов, включая кроссчейн-операции и заявки на желаемый результат. Токен 1INCH стейкается для получения Unicorn Power и участия в голосованиях DAO.",
+      "sources": [
+        {
+          "url": "https://help.1inch.com/en/articles/4767696-how-to-participate-in-1inch-dao-governance",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://business.1inch.com/portal/documentation/overview/welcome",
+          "checkedAt": "2026-09-22T15:26:37Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCEGLD",
+      "symbol": "EGLD",
+      "name": "MultiversX",
+      "description": "MultiversX — блокчейн для выпуска активов и смарт-контрактов, на котором работают приложения, включая децентрализованную биржу xExchange. EGLD оплачивает выпуск активов и исполнение контрактов, а также используется для вознаграждения валидаторов сети.",
+      "sources": [
+        {
+          "url": "https://docs.multiversx.com/learn/economics/",
+          "checkedAt": "2026-09-22T15:38:30Z"
+        },
+        {
+          "url": "https://help.multiversx.com/en/articles/6976640-what-is-xexchange",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZEN",
+      "symbol": "ZEN",
+      "name": "Horizen",
+      "description": "Horizen — EVM-сеть третьего уровня на Base для конфиденциальных вычислений, где Vela выполняет приватные приложения в защищённых аппаратных средах TEE. ZEN после миграции стал ERC-20 токеном на Base для управления и функций экосистемы, а не прежней монетой приватных платежей.",
+      "sources": [
+        {
+          "url": "https://horizen.io/zen",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        },
+        {
+          "url": "https://docs.horizen.io/",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBAT",
+      "symbol": "BAT",
+      "name": "Basic Attention Token",
+      "description": "Basic Attention Token связан с рекламной экосистемой браузера Brave, где пользователи могут получать награды за просмотр рекламы с защитой приватности. BAT используется для этих вознаграждений и поддержки авторов контента.",
+      "sources": [
+        {
+          "url": "https://basicattentiontoken.org/",
+          "checkedAt": "2026-09-22T15:25:15Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZKSY",
+      "symbol": "ZK",
+      "name": "zkSync",
+      "description": "ZKsync развивает инфраструктуру масштабирования Ethereum и исполнения приложений с использованием доказательств с нулевым разглашением. ZK — токен управления экосистемой; возможное применение для газа Gateway описано как будущее, а не действующее назначение.",
+      "sources": [
+        {
+          "url": "https://www.zksync.io/token",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCH",
+      "symbol": "H",
+      "name": "Humanity",
+      "description": "Humanity создаёт систему подтверждения уникальности человека с биометрией ладони и цифровыми удостоверениями для защиты приложений от ботов. H — токен экосистемы, используемый для вознаграждения участников проверки личности.",
+      "sources": [
+        {
+          "url": "https://www.humanity.org/h-token",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        },
+        {
+          "url": "https://www.humanity.org/hincidentupdate",
+          "checkedAt": "2026-09-22T15:34:52Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/humanity",
+          "checkedAt": "2026-09-25T09:01:33.330Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGLM",
+      "symbol": "GLM",
+      "name": "Golem",
+      "description": "Golem — распределённый рынок вычислительных ресурсов, на котором заказчики арендуют мощности у независимых поставщиков. GLM — текущий ERC-20 токен оплаты такой аренды, заменивший прежний токен проекта GNT.",
+      "sources": [
+        {
+          "url": "https://docs.golem.network/docs/golem/overview/golem-token",
+          "checkedAt": "2026-09-22T15:24:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSAND",
+      "symbol": "SAND",
+      "name": "The Sandbox",
+      "description": "The Sandbox — виртуальная игровая платформа, где пользователи создают игровые пространства и цифровые предметы и могут монетизировать своё творчество. SAND используется для покупки LAND и игровых активов, расчётов внутри экосистемы и участия в управлении.",
+      "sources": [
+        {
+          "url": "https://docs.sandbox.game/en/owners/sand",
+          "checkedAt": "2026-09-22T15:23:35Z"
+        },
+        {
+          "url": "https://www.sandbox.game/en/",
+          "checkedAt": "2026-09-22T15:36:47Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAWE",
+      "symbol": "AWE",
+      "name": "AWE",
+      "description": "AWE Network развивает автономные цифровые миры, симуляции и взаимодействие ИИ-агентов. AWE заменил STPT при миграции 1:1 на Base и используется для управления, оплаты работы агентов, симуляций и выполнения ИИ-моделей.",
+      "sources": [
+        {
+          "url": "https://www.awenetwork.ai/blog/welcome-to-awe-network",
+          "checkedAt": "2026-09-22T15:29:12Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCATHAE",
+      "symbol": "ATH",
+      "name": "Aethir",
+      "description": "Aethir предоставляет облачные вычислительные ресурсы для задач искусственного интеллекта и облачного гейминга. ATH используется для оплаты вычислений и как залог операторов, участвующих в предоставлении инфраструктуры сети.",
+      "sources": [
+        {
+          "url": "https://docs.aethir.com/aethir-tokenomics/ath-tokens-utility-and-purpose",
+          "checkedAt": "2026-09-22T15:24:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGENIUS",
+      "symbol": "GENIUS",
+      "name": "Genius Terminal",
+      "description": "Genius Terminal — торговый терминал, объединяющий ликвидность децентрализованных бирж и операции в разных сетях. GENIUS — токен его экосистемы; функции управления и доступа к премиальным возможностям заявлены как планируемые.",
+      "sources": [
+        {
+          "url": "https://www.binance.com/en/academy/articles/what-is-genius-terminal-genius",
+          "checkedAt": "2026-09-22T15:34:02Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/genius-3",
+          "checkedAt": "2026-09-25T09:01:38.649Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPLUME",
+      "symbol": "PLUME",
+      "name": "Plume",
+      "description": "Plume — EVM-совместимая сеть для выпуска токенизированных реальных активов и их использования в обменах, залогах и кредитовании DeFi. PLUME — нативный токен действующей сети, используемый для газа, стейкинга и управления.",
+      "sources": [
+        {
+          "url": "https://docs.plume.org/plume",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        },
+        {
+          "url": "https://www.plume.org/blog/genesis",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSONI",
+      "symbol": "S",
+      "name": "Sonic",
+      "description": "Sonic — EVM-совместимый блокчейн первого уровня для DeFi-приложений со встроенным вознаграждением разработчиков. S используется для газа, стейкинга и управления сетью; прежний FTM переводится в S по курсу обмена 1:1.",
+      "sources": [
+        {
+          "url": "https://www.soniclabs.com/token",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        },
+        {
+          "url": "https://docs.soniclabs.com/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSOON2",
+      "symbol": "SOON",
+      "name": "SOON",
+      "description": "SOON развивает rollup-инфраструктуру с исполнением приложений в виртуальной машине Solana и инструменты запуска собственных SVM-сетей. SOON — отдельный служебный и управляющий токен этой экосистемы, а не SOL и не его обёртка.",
+      "sources": [
+        {
+          "url": "https://soo.network/Soon-MiCA-Whitepaper-20250912.pdf",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFLUID3",
+      "symbol": "FLUID",
+      "name": "Fluid",
+      "description": "Fluid объединяет кредитование, хранилища залоговых позиций и децентрализованную биржу в одной DeFi-инфраструктуре. FLUID — переименованный токен INST экосистемы Instadapp/Fluid, предоставляющий права голосования по управлению протоколом.",
+      "sources": [
+        {
+          "url": "https://instadapp.io/mica-whitepaper.pdf",
+          "checkedAt": "2026-09-22T15:46:39Z"
+        },
+        {
+          "url": "https://docs.fluid.instadapp.io/",
+          "checkedAt": "2026-09-22T15:28:40Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFORMF",
+      "symbol": "FORM",
+      "name": "Four",
+      "description": "Four — проект, ранее известный как BinaryX, с историей разработки блокчейн-игр и инструментов запуска проектов в BNB Chain. FORM заменил токен BNX при переименовании и обмене в соотношении 1:1.",
+      "sources": [
+        {
+          "url": "https://coinspot.zendesk.com/hc/en-us/articles/12070035048591-CoinSpot-will-support-the-BinaryX-BNX-Rebranding-Token-Swap-Plan-to-Four-FORM",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/four",
+          "checkedAt": "2026-09-25T09:01:41.320Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDEEPB",
+      "symbol": "DEEP",
+      "name": "DeepBook Protocol",
+      "description": "DeepBook — работающая в Sui торговая инфраструктура с общей книгой лимитных заявок для бирж, кошельков и профессиональных маркетмейкеров. DEEP — токен протокола, участвующий в его экономике и механизмах стейкинга.",
+      "sources": [
+        {
+          "url": "https://docs.sui.io/onchain-finance/deepbook/deepbookv3/deepbook",
+          "checkedAt": "2026-09-22T15:28:16Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDYDXN",
+      "symbol": "DYDX",
+      "name": "dYdX",
+      "description": "dYdX — торговая платформа бессрочных контрактов с книгами заявок и собственной сетью dYdX Chain. Здесь DYDX — нативный токен этой сети для стейкинга, безопасности и управления, а не старый Ethereum-токен; участники стейкинга получают комиссии в USDC с установленными удержаниями.",
+      "sources": [
+        {
+          "url": "https://help.dydx.trade/en/articles/178571-staking-unstaking-on-dydx-chain-interface",
+          "checkedAt": "2026-09-22T15:23:47Z"
+        },
+        {
+          "url": "https://docs.dydx.xyz/",
+          "checkedAt": "2026-09-22T15:23:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSUPER",
+      "symbol": "SUPER",
+      "name": "SuperVerse",
+      "description": "SuperVerse объединяет игровые проекты и инструменты вокруг общей токеновой экосистемы. SUPER используется для управления и игровых операций; в интеграции PLYR он применяется для ставок, покупки NFT и чаевых.",
+      "sources": [
+        {
+          "url": "https://docs.superverse.co/superverse-docs/introduction",
+          "checkedAt": "2026-09-22T15:25:37Z"
+        },
+        {
+          "url": "https://www.superverse.co/integrations/PLYR",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRSR",
+      "symbol": "RSR",
+      "name": "Reserve Rights",
+      "description": "Reserve предоставляет инфраструктуру для токенизированных портфелей активов DTF и обеспеченных цифровых валют. RSR используется для управления и страхового обеспечения доходных DTF; он не является самим портфельным токеном или стейблкоином.",
+      "sources": [
+        {
+          "url": "https://docs.reserve.org/faq",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        },
+        {
+          "url": "https://docs.reserve.org/",
+          "checkedAt": "2026-09-22T15:26:37Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGRASS2",
+      "symbol": "GRASS",
+      "name": "GRASS",
+      "description": "Grass собирает публичные веб-данные через распределённые узлы, предоставляющие пропускную способность, и готовит наборы данных для ИИ и бизнеса. GRASS — токен сети и один из видов вознаграждения поставщикам ресурсов; выплаты могут также производиться в USDC.",
+      "sources": [
+        {
+          "url": "https://www.grass.io/",
+          "checkedAt": "2026-09-22T15:29:28Z"
+        },
+        {
+          "url": "https://grass-foundation.gitbook.io/grass-docs",
+          "checkedAt": "2026-09-22T15:29:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMELANIAO",
+      "symbol": "MELANIA",
+      "name": "Official Melania Meme",
+      "description": "MELANIA — мем-токен Solana, связанный с образом Мелании Трамп и компанией MKT World. Он представляет сообщество вокруг публичного персонажа, а не долю в компании или право на её доходы.",
+      "sources": [
+        {
+          "url": "https://koinbxsupport.freshdesk.com/support/solutions/articles/82000920215-official-melania-meme-melania-",
+          "checkedAt": "2026-09-22T15:24:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCQTUM",
+      "symbol": "QTUM",
+      "name": "Qtum",
+      "description": "Qtum — блокчейн, совмещающий модель учёта UTXO с EVM-смарт-контрактами для создания приложений. QTUM стейкается для участия в выпуске блоков; вознаграждения участников включают комиссии за операции со смарт-контрактами.",
+      "sources": [
+        {
+          "url": "https://qtum.org/tech",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        },
+        {
+          "url": "https://qtum.org/blog/understanding-staking-on-qtum",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZRX",
+      "symbol": "ZRX",
+      "name": "0x Protocol",
+      "description": "0x предоставляет инфраструктуру исполнения обменов криптоактивами с использованием ордеров и внешней ликвидности. ZRX связан с прежней моделью управления и стейкинга; управление протоколом после перехода на Settler находится в неактивном состоянии.",
+      "sources": [
+        {
+          "url": "https://help.0x.org/articles/3953981845-how-to-get-support-for-0x-protocol-0x-governance-or-zrx-staking-questions",
+          "checkedAt": "2026-09-22T15:53:47Z"
+        },
+        {
+          "url": "https://docs.0xprotocol.org/en/latest/",
+          "checkedAt": "2026-09-22T15:53:47Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBEAM2",
+      "symbol": "BEAM",
+      "name": "Beam",
+      "description": "Beam — игровая блокчейн-инфраструктура для приложений и цифровых предметов, не связанная с одноимённой монетой приватных платежей. BEAM используется для газа, участия в валидации и управлении сетью, а также покупки игровых NFT.",
+      "sources": [
+        {
+          "url": "https://token.onbeam.com/",
+          "checkedAt": "2026-09-22T15:22:57Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSKRS",
+      "symbol": "SKR",
+      "name": "Seeker",
+      "description": "Solana Mobile развивает смартфон Seeker и магазин децентрализованных приложений. SKR стейкается с делегированием Guardians, проверяющим устройства и приложения, и используется для вознаграждений и участия в управлении мобильной экосистемой.",
+      "sources": [
+        {
+          "url": "https://solanamobile.com/skr",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/seeker",
+          "checkedAt": "2026-09-25T09:01:43.993Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGALA",
+      "symbol": "GALA",
+      "name": "Gala",
+      "description": "Gala развивает GalaChain — платформу для игр, развлечений и приложений сторонних разработчиков с поддержкой цифровых активов. GALA оплачивает газ при выпуске токенов, обменах, операциях с NFT и переводах; потраченные на газ токены сжигаются.",
+      "sources": [
+        {
+          "url": "https://support.gala.com/hc/en-us/articles/28275828208539-GalaChain-Gas-Fees",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        },
+        {
+          "url": "https://galachain.com/",
+          "checkedAt": "2026-09-22T15:25:37Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPROM",
+      "symbol": "PROM",
+      "name": "Prom",
+      "description": "Prom — действующая сеть на Polygon CDK для масштабируемого исполнения блокчейн-приложений, а не только прежний NFT-проект. PROM используется для оплаты газа, доступа к функциям экосистемы и участия в её управлении.",
+      "sources": [
+        {
+          "url": "https://prom.io/",
+          "checkedAt": "2026-09-22T15:27:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLSK",
+      "symbol": "LSK",
+      "name": "Lisk",
+      "description": "Lisk — EVM-совместимая сеть второго уровня Ethereum на OP Stack, пришедшая на смену прежней архитектуре отдельного блокчейна первого уровня. LSK используется для управления Lisk DAO и принятия решений о развитии экосистемы.",
+      "sources": [
+        {
+          "url": "https://docs.lisk.com/",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCORDI",
+      "symbol": "ORDI",
+      "name": "ORDI",
+      "description": "ORDI — взаимозаменяемый токен стандарта BRC-20, выпускаемый и учитываемый с помощью записей в блокчейне Bitcoin. Это отдельный актив в экосистеме Ordinals, а не токен управления всем протоколом или обязательной оплаты его услуг.",
+      "sources": [
+        {
+          "url": "https://www.binance.com/en/support/announcement/detail/4bd64404aa384fe5a00e0f9b131035db",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBTWBI",
+      "symbol": "BTW",
+      "name": "Bitway",
+      "description": "Bitway развивает финансовую инфраструктуру и продукт Bitway Earn, направляющий USDT и USDC в торговые стратегии с кастодиальным хранением. BTW — токен управления, стимулирования участников и обеспечения PoS-сети экосистемы.",
+      "sources": [
+        {
+          "url": "https://docs.bitway.com/resources/btw-bitway-token",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://docs.bitway.com/bitway-earn/how-does-it-work",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAKE",
+      "symbol": "AKE",
+      "name": "AKEDO",
+      "description": "AKEDO предлагает ИИ-агентов для создания игровых карт, правил и историй, включая разработку игр по текстовому описанию. AKE используется для работы агентов, генерации и публикации игр, стейкинга и протокольных комиссий; доступность отдельных функций остаётся ограниченной.",
+      "sources": [
+        {
+          "url": "https://learn.akedo.fun/farming/",
+          "checkedAt": "2026-09-22T15:27:53Z"
+        },
+        {
+          "url": "https://learn.akedo.fun/",
+          "checkedAt": "2026-09-22T15:36:47Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/akedo",
+          "checkedAt": "2026-09-25T09:01:46.646Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCUBUN",
+      "symbol": "UB",
+      "name": "Unibase",
+      "description": "Unibase создаёт инфраструктуру долговременной памяти, идентичности и взаимодействия ИИ-агентов, включая Membase. UB предназначен для оплаты памяти и сервисов, стейкинга и вознаграждения участников; модули проекта развиваются поэтапно.",
+      "sources": [
+        {
+          "url": "https://www.bitmart.com/en-US/support/articles/7923014477723/360001026214/40984427955739",
+          "checkedAt": "2026-09-22T15:29:56Z"
+        },
+        {
+          "url": "https://www.binance.com/en/square/post/01-08-2026-unibase-ub-ethereum-gave-smart-contracts-state-unibase-gives-ai-agents-memory-34811851521593",
+          "checkedAt": "2026-09-22T15:36:03Z"
+        },
+        {
+          "url": "https://unibaseio.gitbook.io/unibase-docs",
+          "checkedAt": "2026-09-22T15:34:54Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/unibase",
+          "checkedAt": "2026-09-25T09:01:49.333Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBRBE",
+      "symbol": "BR",
+      "name": "Bedrock",
+      "description": "Bedrock предлагает ликвидный стейкинг и рестейкинг активов, связанных с BTC и ETH, включая продукты uniBTC и uniETH. BR — токен управления стратегиями Bedrock, а не сама ликвидная позиция в застейканном активе.",
+      "sources": [
+        {
+          "url": "https://www.bedrock.technology/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://docs.bedrock.technology/",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLONGXIA",
+      "symbol": "LONGXIA",
+      "name": "Long Xia  (Lobster)",
+      "description": "Long Xia — мем-токен BNB Chain с китайским сообществом, образом антропоморфного лобстера и морским юмором. LONGXIA представляет этот мем; упоминания ИИ в истории проекта не подтверждают наличие ИИ-продукта или служебной функции токена в вычислениях.",
+      "sources": [
+        {
+          "url": "https://www.lbank.com/support/articles/2030866623732121600",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCQUAC",
+      "symbol": "Q",
+      "name": "Quack AI",
+      "description": "Quack AI развивает ИИ-инструменты автоматизации DAO, включая голосование, делегирование и анализ настроений. Q — служебный и управляющий токен проекта; документация платёжной инфраструктуры Q402 также описывает отдельные операции его стейкинга.",
+      "sources": [
+        {
+          "url": "https://quackai.ai/blog/introducing-q-powering-the-future-of-ai-governance",
+          "checkedAt": "2026-09-22T15:28:00Z"
+        },
+        {
+          "url": "https://q402.quackai.ai/docs",
+          "checkedAt": "2026-09-22T15:35:55Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/quack-ai",
+          "checkedAt": "2026-09-25T09:01:52.044Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBULLA2",
+      "symbol": "BULLA",
+      "name": "Bulla",
+      "description": "BULLA — мем-токен BNB Chain, связанный с Хасбуллой и сообществом вокруг его медийного образа. Проект использует развлекательный контент и кампании для вовлечения поклонников; это не токен биржи Bulla Exchange.",
+      "sources": [
+        {
+          "url": "https://www.hotcoin.com/en_US/support/notice/spot-bulla/",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/bulla-3",
+          "checkedAt": "2026-09-25T09:01:54.782Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCORCA",
+      "symbol": "ORCA",
+      "name": "Orca",
+      "description": "Orca — децентрализованная биржа Solana с пулами концентрированной ликвидности Whirlpools и инструментами создания рынков. ORCA — токен управления и участия в системе xORCA, использующей стейкинг и выкупы за счёт торговых комиссий.",
+      "sources": [
+        {
+          "url": "https://docs.orca.so/governance/tokenomics",
+          "checkedAt": "2026-09-22T15:25:38Z"
+        },
+        {
+          "url": "https://docs.orca.so/",
+          "checkedAt": "2026-09-22T15:24:20Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCHIPUS",
+      "symbol": "CHIP",
+      "name": "USD.AI",
+      "description": "USD.AI финансирует ИИ-инфраструктуру займами под залог GPU и предлагает связанные с кредитами финансовые продукты. CHIP управляет параметрами кредитования, риска и комиссий; он не является стейблкоином, долей в оборудовании или токеном оплаты вычислений.",
+      "sources": [
+        {
+          "url": "https://docs.usd.ai/governance/chip",
+          "checkedAt": "2026-09-22T15:34:02Z"
+        },
+        {
+          "url": "https://docs.usd.ai/",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/chip-2",
+          "checkedAt": "2026-09-25T09:02:00.165Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGAS",
+      "symbol": "GAS",
+      "name": "Gas",
+      "description": "GAS — расходуемый токен сети Neo, поддерживающей выпуск активов и выполнение смарт-контрактов на нескольких языках программирования. Он оплачивает вычисления и хранение данных, тогда как управление сетью относится к отдельному токену NEO.",
+      "sources": [
+        {
+          "url": "https://neo.org/neogas",
+          "checkedAt": "2026-09-22T15:29:11Z"
+        },
+        {
+          "url": "https://neo.org/",
+          "checkedAt": "2026-09-22T15:42:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRIF",
+      "symbol": "RIF",
+      "name": "Rootstock Infrastructure Framework",
+      "description": "Rootstock Infrastructure Framework — набор инфраструктурных инструментов для приложений экосистемы Rootstock, совместимой с EVM и связанной с Bitcoin. RIF стейкается в RootstockCollective для голосования и поддержки разработчиков таких приложений.",
+      "sources": [
+        {
+          "url": "https://rootstockcollective.xyz/",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCHUMA",
+      "symbol": "HUMA",
+      "name": "Huma Finance",
+      "description": "Huma Finance предоставляет ликвидность для международных платежей, карточных расчётов и выплат зарплат через инфраструктуру PayFi. HUMA — токен экосистемы с механизмом стейкинга, отдельный от долей в её кредитных пулах.",
+      "sources": [
+        {
+          "url": "https://blog.huma.finance/huma-build-to-last",
+          "checkedAt": "2026-09-22T15:34:02Z"
+        },
+        {
+          "url": "https://docs.huma.finance/about-huma/what-is-huma",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTAGG",
+      "symbol": "TAG",
+      "name": "Tagger",
+      "description": "Tagger организует сбор, разметку и проверку данных для искусственного интеллекта, сочетая ручную работу и инструменты-помощники. TAG используется для оплаты заданий и вознаграждения участников, создающих и проверяющих такие наборы данных.",
+      "sources": [
+        {
+          "url": "https://tagger.gitbook.io/tagger-documentation/tokenomics/task-reward-calculation",
+          "checkedAt": "2026-09-22T15:28:34Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCFG",
+      "symbol": "CFG",
+      "name": "Centrifuge",
+      "description": "Centrifuge предоставляет инфраструктуру токенизации реальных активов и их использования в DeFi. CFG — токен экосистемы на Ethereum, выделяемый на её развитие и стимулирование участников; он не представляет долю в токенизированных фондах.",
+      "sources": [
+        {
+          "url": "https://docs.centrifuge.io/",
+          "checkedAt": "2026-09-22T15:55:31Z"
+        },
+        {
+          "url": "https://docs.centrifuge.io/getting-started/token-summary/",
+          "checkedAt": "2026-09-25T09:08:13Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/centrifuge-2",
+          "checkedAt": "2026-09-25T09:02:02.916Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCWALR",
+      "symbol": "WAL",
+      "name": "Walrus",
+      "description": "Walrus — распределённая система хранения файлов и других массивов данных, координируемая через блокчейн Sui. WAL используется для оплаты хранения на выбранное число эпох.",
+      "sources": [
+        {
+          "url": "https://docs.wal.app/docs/console/overview",
+          "checkedAt": "2026-09-22T15:25:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCYFI",
+      "symbol": "YFI",
+      "name": "Yearn",
+      "description": "Yearn автоматизирует размещение средств в DeFi-стратегиях через хранилища yVaults и предлагает инструменты работы с заблокированными управляющими токенами. YFI стейкается в системе stYFI для участия в голосованиях и получения вознаграждений.",
+      "sources": [
+        {
+          "url": "https://docs.yearn.fi/contributing/governance/styfi",
+          "checkedAt": "2026-09-22T15:32:15Z"
+        },
+        {
+          "url": "https://docs.yearn.fi/getting-started/intro",
+          "checkedAt": "2026-09-22T15:28:16Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSAFE3",
+      "symbol": "SAFE",
+      "name": "Safe",
+      "description": "Safe предоставляет смарт-аккаунты и инструменты управления DAO-казначействами: несколько подписей, роли, лимиты и проверку исполнения транзакций. SAFE — токен управления экосистемой, также используемый в стейкинге для безопасности Safenet.",
+      "sources": [
+        {
+          "url": "https://safefoundation.org/token",
+          "checkedAt": "2026-09-22T15:25:37Z"
+        },
+        {
+          "url": "https://safe.global/",
+          "checkedAt": "2026-09-22T15:48:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSNX",
+      "symbol": "SNX",
+      "name": "Synthetix",
+      "description": "Synthetix предоставляет инфраструктуру торговли бессрочными контрактами, работающую в основной сети Ethereum. SNX используется для стейкинга в экосистеме Synthetix и является отдельным активом, который не следует смешивать со стейблкоином sUSD.",
+      "sources": [
+        {
+          "url": "https://blog.synthetix.io/snx-staking-is-here/",
+          "checkedAt": "2026-09-22T15:34:51Z"
+        },
+        {
+          "url": "https://docs.synthetix.io/",
+          "checkedAt": "2026-09-22T15:27:18Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKSM",
+      "symbol": "KSM",
+      "name": "Kusama",
+      "description": "Kusama — действующая экспериментальная сеть на технологическом стеке Polkadot, а не тестовая среда с условными монетами. KSM используется для комиссий, стейкинга, управления и покупки сетевых вычислительных ресурсов coretime.",
+      "sources": [
+        {
+          "url": "https://wiki.polkadot.com/kusama/kusama-getting-started/",
+          "checkedAt": "2026-09-22T15:28:48Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGMX",
+      "symbol": "GMX",
+      "name": "GMX",
+      "description": "GMX — децентрализованная платформа обменов и торговли бессрочными контрактами с кредитным плечом. GMX — токен управления и стейкинга, отдельный от токенов, представляющих ликвидность торговых пулов.",
+      "sources": [
+        {
+          "url": "https://docs.gmx.io/docs/tokenomics/gmx-token/",
+          "checkedAt": "2026-09-22T15:34:51Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKAITO",
+      "symbol": "KAITO",
+      "name": "KAITO",
+      "description": "Kaito индексирует информацию о Web3 и предоставляет поиск и сводки по токенам, темам и тенденциям с помощью языковых моделей. KAITO стейкается с получением sKAITO и связан с управлением Kaito Connect и доступом к возможностям экосистемы.",
+      "sources": [
+        {
+          "url": "https://faq.launchpad.kaito.ai/yapper-launchpad-faqs/staking-mechanics",
+          "checkedAt": "2026-09-22T15:44:11Z"
+        },
+        {
+          "url": "https://kaito-ai.gitbook.io/product-docs",
+          "checkedAt": "2026-09-22T15:44:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCREDS",
+      "symbol": "RED",
+      "name": "RedStone",
+      "description": "RedStone — сеть оракулов, поставляющая смарт-контрактам ценовые потоки и данные, в том числе о токенизированных активах. RED — служебный токен, используемый в стейкинге для обеспечения безопасности этой инфраструктуры данных.",
+      "sources": [
+        {
+          "url": "https://www.redstone.finance/red-token",
+          "checkedAt": "2026-09-22T15:24:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCOW",
+      "symbol": "COW",
+      "name": "CoW Protocol",
+      "description": "CoW Protocol исполняет обмены через пакетные аукционы, сопоставление встречных потребностей пользователей и внешнюю блокчейн-ликвидность. COW — токен управления протоколом; право голоса также предоставляется владельцам vCOW.",
+      "sources": [
+        {
+          "url": "https://docs.cow.fi/governance",
+          "checkedAt": "2026-09-22T15:32:15Z"
+        },
+        {
+          "url": "https://docs.cow.fi/",
+          "checkedAt": "2026-09-22T15:49:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCUAIU",
+      "symbol": "UAI",
+      "name": "UnifAI Network",
+      "description": "UnifAI Network предоставляет кошелёк для ИИ-агентов, торговые стратегии и инструменты поиска данных и сервисов для разработчиков агентов. UAI — служебный и управляющий токен этой экосистемы.",
+      "sources": [
+        {
+          "url": "https://docs.unifai.network/tokenomics/token-utility/",
+          "checkedAt": "2026-09-22T15:28:34Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/unifai-network",
+          "checkedAt": "2026-09-25T09:02:05.611Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPROSPH",
+      "symbol": "PROS",
+      "name": "Pharos",
+      "description": "Pharos — EVM-совместимый блокчейн для токенизированных финансовых активов и объединения ликвидности традиционных и децентрализованных рынков. PROS — его нативный актив; это не одноимённый тикер проекта Prosper.",
+      "sources": [
+        {
+          "url": "https://www.theblock.co/press-releases/pharos-launches-pacific-ocean-mainnet-to-expand-rwa-distribution-and-reduce-liquidity-fragmentation-399101",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        },
+        {
+          "url": "https://github.com/PharosNetwork/pharos-mcp",
+          "checkedAt": "2026-09-22T15:41:25Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/pharos-network",
+          "checkedAt": "2026-09-25T09:02:08.275Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZETAC",
+      "symbol": "ZETA",
+      "name": "ZetaChain",
+      "description": "ZetaChain — блокчейн-платформа, развивающая в том числе ИИ-сервисы с приватной памятью, включая Anuma. ZETA — токен экосистемы; его блокировка позволяет получать кредиты на использование этих ИИ-сервисов.",
+      "sources": [
+        {
+          "url": "https://www.zetachain.com/",
+          "checkedAt": "2026-09-22T15:38:54Z"
+        },
+        {
+          "url": "https://www.zetachain.com/blog/bringing-zeta-and-private-ai-to-solana",
+          "checkedAt": "2026-09-22T15:39:27Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLPT",
+      "symbol": "LPT",
+      "name": "Livepeer",
+      "description": "Livepeer объединяет вычислительные ресурсы GPU для перекодирования видео и его обработки ИИ в реальном времени. LPT используется узлами-оркестраторами и делегируется держателями для обеспечения безопасности сети.",
+      "sources": [
+        {
+          "url": "https://livepeer.org/primer",
+          "checkedAt": "2026-09-22T15:25:03Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBANANAFO",
+      "symbol": "BANANAS31",
+      "name": "Banana For Scale",
+      "description": "BANANAS31 — мем-токен BNB Smart Chain, основанный на шутке об измерении предметов бананом и её связи с изображением на Starship S31. Представляет сообщество вокруг этого мема и отличается от одноимённого токена BANANA в Solana.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/banana-for-scale-2",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNXPC",
+      "symbol": "NXPC",
+      "name": "NEXPACE",
+      "description": "NEXPACE развивает экономику MapleStory Universe, связывающую игровую активность, торговлю предметами и NFT. NXPC используется для вознаграждения за вклад в экосистему и обмена с игровыми NFT, а не просто как внутриигровая расчётная единица.",
+      "sources": [
+        {
+          "url": "https://medium.com/maplestory-universe/whitepaper-nxpc-a-protocol-for-lasting-rewards-09dca7bea6d1",
+          "checkedAt": "2026-09-22T15:27:12Z"
+        },
+        {
+          "url": "https://msu.io/notices",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCROSS",
+      "symbol": "CROSS",
+      "name": "CROSS",
+      "description": "CROSS предоставляет инфраструктуру игровых токенов и NFT: обмен, ликвидность, кошельки и SDK для разработчиков, включая Unity. Токен CROSS оплачивает газ переводов в системе CROSS Gametoken.",
+      "sources": [
+        {
+          "url": "https://docs.crosstoken.io/docs/trading-fee",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        },
+        {
+          "url": "https://docs.crosstoken.io/docs/sdk",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCVTHO",
+      "symbol": "VTHO",
+      "name": "VeThor Token",
+      "description": "VeThor Token — расходный токен сети VeChainThor, оплачивающий выполнение транзакций и операций приложений. VTHO генерируется через стейкинг VET; это отдельная роль в двухтокенной модели, а не другое название VET.",
+      "sources": [
+        {
+          "url": "https://docs.vechain.org/introduction-to-vechain/dual-token-economic-model/vethor-vtho",
+          "checkedAt": "2026-09-22T15:29:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCHOT",
+      "symbol": "HOT",
+      "name": "Holo",
+      "description": "Holo развивает распределённое размещение приложений Holochain. HOT — токен-ваучер, выпущенный для финансирования проекта; его не следует путать с планируемой расчётной единицей HoloFuel или считать действующей оплатой хостинга.",
+      "sources": [
+        {
+          "url": "https://holo.host/resources/currency/",
+          "checkedAt": "2026-09-22T15:25:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBIOPR",
+      "symbol": "BIO",
+      "name": "Bio Protocol",
+      "description": "Bio Protocol организует отбор и финансирование биотехнологических исследований через исследовательские сообщества BioDAO. BIO применяется для участия в таком отборе и финансировании, а также для получения токенов исследовательских организаций.",
+      "sources": [
+        {
+          "url": "https://www.bio.xyz/blog/bio-v1-curation-commit-your-bio-get-discounted-biodao-tokens",
+          "checkedAt": "2026-09-22T15:26:04Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCW",
+      "symbol": "W",
+      "name": "Wormhole",
+      "description": "Wormhole предоставляет инфраструктуру передачи сообщений и токенов между блокчейнами, позволяя приложениям взаимодействовать с несколькими сетями. W — токен управления протоколом, а не сам переводимый через него актив.",
+      "sources": [
+        {
+          "url": "https://wormhole.com/blog/connecting-the-internet-economy-wormhole-and-the-w-tokens-past-present-and",
+          "checkedAt": "2026-09-22T15:26:49Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCKAVA",
+      "symbol": "KAVA",
+      "name": "Kava",
+      "description": "Kava — сеть для смарт-контрактов, сочетающая EVM-среду для Solidity-приложений с инфраструктурой Cosmos и межсетевым протоколом IBC. KAVA используется для оплаты газа при выполнении операций в сети.",
+      "sources": [
+        {
+          "url": "https://docs.kava.io/docs/ethereum/overview/",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBERA",
+      "symbol": "BERA",
+      "name": "Berachain",
+      "description": "Berachain — EVM-совместимый блокчейн, связывающий безопасность сети со стимулированием ликвидности через Proof of Liquidity. BERA используется для оплаты газа и стейкинга, а его обёрнутая версия WBERA — в механизмах ликвидности.",
+      "sources": [
+        {
+          "url": "https://docs.berachain.com/",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        },
+        {
+          "url": "https://github.com/berachain/docs/blob/main/UBIQUITOUS_LANGUAGE.md",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZIL",
+      "symbol": "ZIL",
+      "name": "Zilliqa",
+      "description": "Zilliqa — блокчейн-платформа для смарт-контрактов, развивающая также проверку цифровых удостоверений для институциональных расчётов. ZIL — нативный токен сети, используемый в стейкинге для обеспечения её безопасности.",
+      "sources": [
+        {
+          "url": "https://www.zilliqa.com/",
+          "checkedAt": "2026-09-22T15:40:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSUSHI",
+      "symbol": "SUSHI",
+      "name": "SushiSwap",
+      "description": "SushiSwap предоставляет децентрализованный обмен через автоматические пулы ликвидности и агрегатор торговых маршрутов в нескольких сетях. SUSHI используется для управления протоколом и стимулирования участников.",
+      "sources": [
+        {
+          "url": "https://www.sushi.com/faq/general/about-sushi/what-is-sushi",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCARCAIR",
+      "symbol": "ARC",
+      "name": "AI Rig Complex",
+      "description": "AI Rig Complex связан с разработкой Rig — открытого Rust-фреймворка для ИИ-агентов, работы с моделями и внешними инструментами. ARC — токен в Solana, предназначенный для стимулов участникам; обязательная оплата библиотеки в ARC не подтверждена.",
+      "sources": [
+        {
+          "url": "https://assets-cms.kraken.com/files/51n36hrp/facade/76319ea9814ad139943620ce115f581a7a71b9b3.pdf",
+          "checkedAt": "2026-09-22T15:37:43Z"
+        },
+        {
+          "url": "https://github.com/0xplaygrounds/rig",
+          "checkedAt": "2026-09-22T15:30:42Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTURBO",
+      "symbol": "TURBO",
+      "name": "Turbo",
+      "description": "Turbo — мем-проект, возникший как эксперимент по созданию криптовалюты с помощью ИИ и развиваемый сообществом. TURBO представляет этот мем-проект; его ИИ-тематика связана прежде всего с историей создания.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/turbo",
+          "checkedAt": "2026-09-22T15:26:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNMR",
+      "symbol": "NMR",
+      "name": "Numeraire",
+      "description": "Numerai собирает прогнозы участников и объединяет их в общую модель для инвестиционных решений. NMR участники ставят на качество собственных прогнозов: результат может принести вознаграждение или привести к сжиганию поставленных токенов.",
+      "sources": [
+        {
+          "url": "https://docs.numer.ai/numerai-tournament/staking",
+          "checkedAt": "2026-09-22T15:22:50Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBOME",
+      "symbol": "BOME",
+      "name": "BOOK OF MEME",
+      "description": "BOOK OF MEME — мем-проект Solana, посвящённый созданию цифрового архива интернет-мемов с использованием IPFS и Arweave. BOME — токен сообщества вокруг сохранения и распространения мем-культуры.",
+      "sources": [
+        {
+          "url": "https://bomebookofmemes.com/",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCKB",
+      "symbol": "CKB",
+      "name": "Nervos Network",
+      "description": "Nervos предоставляет блокчейн для хранения состояния и выполнения контрактов, в том числе для Bitcoin-связанных активов через RGB++. CKB оплачивает комиссии и даёт вместимость для состояния сети: один CKB соответствует одному байту.",
+      "sources": [
+        {
+          "url": "https://www.nervos.org/ckbpage",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        },
+        {
+          "url": "https://www.nervos.org/knowledge-base/the-case-for-rgbpp",
+          "checkedAt": "2026-09-22T15:39:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGPS",
+      "symbol": "GPS",
+      "name": "GoPlus Security",
+      "description": "GoPlus Security предоставляет API проверки рисков токенов, NFT, разрешений кошельков и симуляции транзакций. GPS — служебный токен для экономики сервисов безопасности, стейкинга и управления проектом.",
+      "sources": [
+        {
+          "url": "https://gopluslabs.io/micar-whitepaper.html",
+          "checkedAt": "2026-09-22T15:27:53Z"
+        },
+        {
+          "url": "https://docs.gopluslabs.io/docs/getting-started",
+          "checkedAt": "2026-09-22T15:37:29Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSPKS",
+      "symbol": "SPK",
+      "name": "Spark",
+      "description": "Spark объединяет кредитный рынок SparkLend и сберегательные продукты, распределяя ликвидность экосистемы Sky. SPK — отдельный токен управления и стейкинга, а не стейблкоин или депозит в SparkLend.",
+      "sources": [
+        {
+          "url": "https://docs.spark.finance/governance/spk-token",
+          "checkedAt": "2026-09-22T15:25:38Z"
+        },
+        {
+          "url": "https://docs.spark.finance/",
+          "checkedAt": "2026-09-22T15:24:55Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBANC",
+      "symbol": "BAN",
+      "name": "Comedian",
+      "description": "BAN — мем-токен Solana, отсылающий к работе Маурицио Каттелана «Comedian» — банану, приклеенному к стене. Токен представляет мем-сообщество вокруг сатиры на стоимость современного искусства.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/comedian",
+          "checkedAt": "2026-09-22T15:26:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLINEA",
+      "symbol": "LINEA",
+      "name": "Linea",
+      "description": "Linea — сеть второго уровня Ethereum, исполняющая совместимые с Ethereum приложения с помощью zkEVM и доказательств с нулевым разглашением. LINEA — отдельный токен её экосистемы с механизмом сжигания.",
+      "sources": [
+        {
+          "url": "https://linea.build/blog/2025-launched-a-new-era-for-linea-and-l2s",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAXL",
+      "symbol": "AXL",
+      "name": "Axelar",
+      "description": "Axelar предоставляет межсетевые коммуникации, позволяя приложениям передавать сообщения и взаимодействовать с активами разных блокчейнов. AXL используется для безопасности сети, управления, межсетевых комиссий и программ стимулирования.",
+      "sources": [
+        {
+          "url": "https://www.axelar.network/blog/mds-axl-token-utility",
+          "checkedAt": "2026-09-22T15:26:49Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCROSE",
+      "symbol": "ROSE",
+      "name": "Oasis",
+      "description": "Oasis предоставляет инфраструктуру конфиденциальных приложений, включая Sapphire — EVM-среду с приватной обработкой данных. ROSE оплачивает газ, в том числе в Sapphire, и используется для стейкинга и управления сетью.",
+      "sources": [
+        {
+          "url": "https://docs.oasis.io/general/manage-tokens/",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        },
+        {
+          "url": "https://docs.oasis.io/general/manage-tokens/how-to-bridge-assets/",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCACH",
+      "symbol": "ACH",
+      "name": "Alchemy Pay",
+      "description": "Alchemy Pay соединяет фиатные платёжные каналы с криптовалютами: сервис покупки криптоактивов принимает карты и локальные банковские платежи. ACH — служебный токен, который компании вносят в залог для доступа к платёжному шлюзу.",
+      "sources": [
+        {
+          "url": "https://www.okx.com/en-eu/learn/alchemy-pay-white-paper",
+          "checkedAt": "2026-09-22T15:39:27Z"
+        },
+        {
+          "url": "https://support.alchemypay.org/hc/en-us/articles/23455052460443-What-payment-methods-and-currencies-are-supported-on-Alchemy-Pay",
+          "checkedAt": "2026-09-22T15:38:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCASTR",
+      "symbol": "ASTR",
+      "name": "Astar",
+      "description": "Astar — блокчейн-экосистема приложений, использующая ASTR для газа, стейкинга и управления. Токен также применяется в Yoki Arcade и Yoki Legacy на Soneium для игровых действий, выпуска объектов и вознаграждений.",
+      "sources": [
+        {
+          "url": "https://www.astar.network/astr/",
+          "checkedAt": "2026-09-22T15:38:29Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGGRA",
+      "symbol": "G",
+      "name": "Gravity",
+      "description": "Gravity — сеть, связанная с экосистемой Galxe, где работают сервисы заданий, идентификации и проверки репутации. G заменил GAL и используется для газа Gravity, оплаты Passport, Score и Quest, а также стейкинга и управления.",
+      "sources": [
+        {
+          "url": "https://www.galxe.com/blog/gal-g",
+          "checkedAt": "2026-09-22T15:38:35Z"
+        },
+        {
+          "url": "https://www.galxe.com/passport",
+          "checkedAt": "2026-09-22T15:38:54Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCIONE",
+      "symbol": "IO",
+      "name": "io.net",
+      "description": "io.net объединяет распределённые GPU-ресурсы для предоставления вычислительных мощностей, в том числе ИИ-приложениям. IO связан с вознаграждениями поставщиков оборудования и механизмом сжигания токенов за счёт выручки от вычислений.",
+      "sources": [
+        {
+          "url": "https://io.net/tokenomics",
+          "checkedAt": "2026-09-22T15:24:52Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCT",
+      "symbol": "T",
+      "name": "Threshold",
+      "description": "Threshold обеспечивает работу tBTC — токенизированного представления биткоина для использования в других сетях. T — отдельный токен управления и экономического участия в сети Threshold, а не сам tBTC или право обменять T на BTC.",
+      "sources": [
+        {
+          "url": "https://docs.threshold.network/",
+          "checkedAt": "2026-09-22T15:27:18Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCOAICH",
+      "symbol": "COAI",
+      "name": "ChainOpera AI",
+      "description": "ChainOpera AI развивает ИИ-терминал, социальную сеть агентов и платформу разработки с поставщиками вычислений, моделей и данных. COAI — служебный токен этих сервисов и регистрации поставщиков; он не описан как право на долю их доходов.",
+      "sources": [
+        {
+          "url": "https://paper.chainopera.ai/tokenomics-and-protocol-design/overview-and-token-utility",
+          "checkedAt": "2026-09-22T15:28:34Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAGTAL",
+      "symbol": "AGT",
+      "name": "Alaya Governance Token",
+      "description": "Alaya AI организует сбор, автоматическую разметку, калибровку и запросы данных для ИИ. AGT — служебный и управляющий токен платформы; его стейкинг открывает участникам доступ к заданиям по работе с данными.",
+      "sources": [
+        {
+          "url": "https://alaya-ai.gitbook.io/alaya-ai/user-manual/usdagt-token",
+          "checkedAt": "2026-09-22T15:28:34Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBABYL",
+      "symbol": "BABY",
+      "name": "Babylon",
+      "description": "Babylon Genesis — сеть, координирующая стейкинг нативного биткоина для обеспечения безопасности блокчейн-сервисов. BABY оплачивает газ Genesis и используется для её стейкинга и управления; это не токенизированный BTC.",
+      "sources": [
+        {
+          "url": "https://docs.babylonlabs.io/guides/overview/babylon_genesis/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBASBN",
+      "symbol": "BAS",
+      "name": "BNB Attestation Service",
+      "description": "BNB Attestation Service предоставляет проверяемые удостоверения и переносимую репутацию людей и ИИ-агентов через BNB Passport и Agent Passport. BAS предназначен для комиссий за аттестации, доступа к расширенным API, стейкинга и управления.",
+      "sources": [
+        {
+          "url": "https://www.kucoin.com/blog/en-kucoin-ama-with-bnb-attestation-service-bas-enabling-reusable-proofs-for-secure-decentralized-applications",
+          "checkedAt": "2026-09-22T15:35:35Z"
+        },
+        {
+          "url": "https://www.bas.io/",
+          "checkedAt": "2026-09-22T15:35:35Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCID",
+      "symbol": "ID",
+      "name": "SPACE ID",
+      "description": "SPACE ID предоставляет Web3-домены и инструменты интеграции имён в приложения, чтобы использовать понятные имена вместо адресов кошельков. ID служит для управления, а его стейкинг даёт скидки при регистрации доменов и торговле ими.",
+      "sources": [
+        {
+          "url": "https://docs.space.id/overview/id-token",
+          "checkedAt": "2026-09-22T15:27:19Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNIL",
+      "symbol": "NIL",
+      "name": "Nillion",
+      "description": "Nillion развивает инфраструктуру приватных данных и ИИ nilDB/nilAI, а также Covenants — механизм условного раскрытия зашифрованных инструкций. NIL используется для стейкинга и вознаграждения узлов сети.",
+      "sources": [
+        {
+          "url": "https://docs.nillion.com/blind-computer/learn/overview",
+          "checkedAt": "2026-09-25T09:11:13.218Z"
+        },
+        {
+          "url": "https://docs.nillion.com/blacklight/learn/staking-and-rewards",
+          "checkedAt": "2026-09-25T09:11:13.218Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/nillion",
+          "checkedAt": "2026-09-25T09:02:10.852Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBLUR",
+      "symbol": "BLUR",
+      "name": "Blur",
+      "description": "Blur — NFT-маркетплейс и агрегатор для активной торговли коллекционными токенами, связанный также с протоколом NFT-кредитования Blend. BLUR — ERC-20 токен управления этими протоколами, а не отдельный NFT или кредитный актив.",
+      "sources": [
+        {
+          "url": "https://docs.blur.foundation/governance",
+          "checkedAt": "2026-09-22T15:29:53Z"
+        },
+        {
+          "url": "https://blur.io/",
+          "checkedAt": "2026-09-22T15:42:57Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCALLO",
+      "symbol": "ALLO",
+      "name": "Allora",
+      "description": "Allora объединяет ИИ-модели в сеть прогнозных сигналов для DeFi и агентов, оценивая качество получаемых результатов. ALLO оплачивает выводы моделей и регистрацию участников, используется в стейкинге и для вознаграждений.",
+      "sources": [
+        {
+          "url": "https://docs.allora.network/learn/tokenomics",
+          "checkedAt": "2026-09-22T15:22:50Z"
+        },
+        {
+          "url": "https://www.allora.network/blog/allora-foundation-announces-launch-of-allora-mainnet-and-allo-token",
+          "checkedAt": "2026-09-22T15:28:00Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCONT",
+      "symbol": "ONT",
+      "name": "Ontology",
+      "description": "Ontology развивает инфраструктуру цифровой идентичности, проверяемых удостоверений и переносимой репутации через ONT ID и Orange Protocol. ONT используется для стейкинга и управления, тогда как операционный газ оплачивается отдельным токеном ONG.",
+      "sources": [
+        {
+          "url": "https://ont.io/",
+          "checkedAt": "2026-09-22T15:38:27Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPOLYX",
+      "symbol": "POLYX",
+      "name": "Polymesh",
+      "description": "Polymesh — блокчейн с контролируемым допуском участников для выпуска и обращения регулируемых активов, включая токенизированные ценные бумаги. POLYX используется для комиссий, стейкинга и управления сетью.",
+      "sources": [
+        {
+          "url": "https://polymesh.network/polyx",
+          "checkedAt": "2026-09-22T15:33:42Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTRB",
+      "symbol": "TRB",
+      "name": "Tellor",
+      "description": "Tellor предоставляет внешние данные блокчейн-приложениям через сеть репортёров и действующую оракульную L1 Tellor-1. TRB используется для стейкинга репортёров и их вознаграждения за предоставление данных.",
+      "sources": [
+        {
+          "url": "https://docs.tellor.io/tellor",
+          "checkedAt": "2026-09-22T15:24:14Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCENJ",
+      "symbol": "ENJ",
+      "name": "Enjin Coin",
+      "description": "Enjin предоставляет блокчейн, кошелёк, маркетплейс и инструменты для игровых NFT. ENJ используется в стейкинге Enjin Blockchain; для прежнего ERC-20 ENJ предусмотрен перенос в нативный токен 1:1 со сжиганием старой версии.",
+      "sources": [
+        {
+          "url": "https://enjin.io/technology/blockchain/",
+          "checkedAt": "2026-09-22T15:23:43Z"
+        },
+        {
+          "url": "https://enjin.io/blog/enjin-token-migration-faqs/",
+          "checkedAt": "2026-09-22T15:23:43Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSOMI",
+      "symbol": "SOMI",
+      "name": "Somnia",
+      "description": "Somnia — блокчейн для приложений, которым нужны быстрые интерактивные операции, включая DeFi, рынки предсказаний и автономных агентов. SOMI — нативный токен для оплаты газа и участия в стейкинге.",
+      "sources": [
+        {
+          "url": "https://docs.somnia.network/concepts/tokenomics/overview",
+          "checkedAt": "2026-09-22T15:38:29Z"
+        },
+        {
+          "url": "https://blog.somnia.network/p/investors-back-somnias-strategic",
+          "checkedAt": "2026-09-22T15:38:53Z"
+        },
+        {
+          "url": "https://blog.somnia.network/p/somnia-the-agentic-l1-blockchain",
+          "checkedAt": "2026-09-22T15:38:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCELO",
+      "symbol": "CELO",
+      "name": "Celo",
+      "description": "Celo — действующая сеть второго уровня Ethereum для мобильных приложений, DeFi и платёжных сервисов, а не прежняя самостоятельная L1. Заблокированные CELO дают держателям голоса в управлении сетью.",
+      "sources": [
+        {
+          "url": "https://docs.celo.org/home/celo",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        },
+        {
+          "url": "https://github.com/celo-org/governance",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBRETT2",
+      "symbol": "BRETT",
+      "name": "Brett (Based)",
+      "description": "BRETT — мем-токен сети Base по мотивам персонажа комикса Boys’ Club. Токен представляет сообщество вокруг этого персонажа и позиционируется как неофициальный маскот Base; это не одноимённый Brett в Solana.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/brett-2",
+          "checkedAt": "2026-09-22T15:27:05Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCALTL",
+      "symbol": "ALT",
+      "name": "AltLayer",
+      "description": "AltLayer предоставляет инфраструктуру запуска роллапов, их верификации, финализации и секвенирования с использованием разных технологических стеков и рестейкинга. ALT — ERC-20 токен, используемый в стейкинге AltLayer.",
+      "sources": [
+        {
+          "url": "https://docs.altlayer.io/rollup-as-a-service/altlayers-raas-offering/",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        },
+        {
+          "url": "https://docs.altlayer.io/alt-restaking/staking-info-and-parameters/",
+          "checkedAt": "2026-09-22T15:37:31Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRAVED",
+      "symbol": "RAVE",
+      "name": "RaveDAO",
+      "description": "RaveDAO проводит электронные музыкальные мероприятия, объединяя локальные сообщества, NFT участия и благотворительные инициативы. RAVE — токен этой культурной экономики для управления и распределения участникам событий и сообществам.",
+      "sources": [
+        {
+          "url": "https://ravedao.com/",
+          "checkedAt": "2026-09-22T15:27:53Z"
+        },
+        {
+          "url": "https://ravedao.gitbook.io/ravedao-whitepaper/readme/ravedao-tokenomics/introducing-usdrave",
+          "checkedAt": "2026-09-22T15:36:47Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCJELLYJELLY",
+      "symbol": "JELLYJELLY",
+      "name": "Jelly-My-Jelly",
+      "description": "JELLYJELLY — мем-токен Solana, связанный с социальной видеоплатформой JellyJelly. Его нельзя автоматически отождествлять с внутренними платёжными единицами приложения: их соответствие этому токену не подтверждено.",
+      "sources": [
+        {
+          "url": "https://jellyjelly.com/faq",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/jelly-my-jelly",
+          "checkedAt": "2026-09-25T09:02:13.502Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPOPCAT2",
+      "symbol": "POPCAT",
+      "name": "Popcat (SOL)",
+      "description": "POPCAT — мем-токен в Solana, посвящённый вирусному изображению кота Oatmeal с открывающимся ртом. Токен представляет сообщество вокруг конкретного интернет-мема, а не отдельную игровую или вычислительную платформу.",
+      "sources": [
+        {
+          "url": "https://about.popcatsolana.xyz/",
+          "checkedAt": "2026-09-22T15:24:21Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPNUTP",
+      "symbol": "PNUT",
+      "name": "Peanut the Squirrel",
+      "description": "PNUT — мем-токен Solana, связанный с историей белки Peanut и протестной реакцией на действия властей США. Представляет сообщество вокруг этого сюжета; политическая тема не означает официального статуса токена.",
+      "sources": [
+        {
+          "url": "https://pnutsol.com/",
+          "checkedAt": "2026-09-22T15:36:47Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFLOW",
+      "symbol": "FLOW",
+      "name": "Flow",
+      "description": "Flow — блокчейн для потребительских приложений и цифровых коллекционных предметов, включая брендовые NFT. FLOW используется для оплаты газа и хранения данных, а также для стейкинга, обеспечивающего работу сети.",
+      "sources": [
+        {
+          "url": "https://www.flow.com/faq",
+          "checkedAt": "2026-09-22T15:23:43Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXVS",
+      "symbol": "XVS",
+      "name": "Venus",
+      "description": "Venus — децентрализованный денежный рынок для предоставления активов и получения займов под залог. XVS служит для управления: блокируется в Vault, позволяет делегировать голоса и голосовать по предложениям об изменении протокола.",
+      "sources": [
+        {
+          "url": "https://docs-v4.venus.io/tokens/xvs",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        },
+        {
+          "url": "https://docs-v4.venus.io/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVC0G",
+      "symbol": "0G",
+      "name": "0G",
+      "description": "0G — EVM-совместимая сеть и инфраструктурный стек для ИИ с приватными вычислениями, зашифрованным хранением и расчётами за проверяемый вывод моделей. Токен 0G является нативным активом её работающей основной сети.",
+      "sources": [
+        {
+          "url": "https://0g.ai/faq",
+          "checkedAt": "2026-09-22T15:26:49Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCHOLOW",
+      "symbol": "HOLO",
+      "name": "Holoworld AI",
+      "description": "Holoworld AI развивает среду запуска ИИ-агентов и приложений через Agentic App Store, HoloLaunch и инструменты MCP. HOLO используется как валюта запуска и ликвидности, а также для управления; проект не связан с назначением HOT/HoloFuel.",
+      "sources": [
+        {
+          "url": "https://docs.holoworld.com/holoworld/usdholo",
+          "checkedAt": "2026-09-22T15:29:56Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTOSHI3",
+      "symbol": "TOSHI",
+      "name": "Toshi",
+      "description": "TOSHI — мем-токен сообщества Base с образом кота, который проект позиционирует как «лицо Base». Он связан с NFT-коллекцией и культурой сообщества, но не является официальным нативным токеном сети Base.",
+      "sources": [
+        {
+          "url": "https://www.toshithecat.com/",
+          "checkedAt": "2026-09-22T15:23:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMEGAE",
+      "symbol": "MEGA",
+      "name": "MegaETH",
+      "description": "MegaETH — сеть второго уровня Ethereum для EVM-приложений с малой задержкой исполнения. Для MEGA предусмотрены инфраструктурный доступ и механизмы выкупа и вознаграждений; их полное внедрение не подтверждено.",
+      "sources": [
+        {
+          "url": "https://www.megaeth.com/token",
+          "checkedAt": "2026-09-22T15:35:54Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/megaeth",
+          "checkedAt": "2026-09-25T09:02:16.178Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBARDL",
+      "symbol": "BARD",
+      "name": "Lombard",
+      "description": "Lombard развивает инфраструктуру использования биткоина в DeFi, включая токенизированные активы LBTC и BTC.b. BARD — отдельный токен управления экосистемой, а не представление BTC или доля в доходном продукте.",
+      "sources": [
+        {
+          "url": "https://docs.lombard.finance/learn/tokenomics",
+          "checkedAt": "2026-09-22T15:34:02Z"
+        },
+        {
+          "url": "https://docs.lombard.finance/",
+          "checkedAt": "2026-09-22T15:27:40Z"
+        },
+        {
+          "url": "https://docs.lombard.finance/learn/products/assets",
+          "checkedAt": "2026-09-22T15:48:32Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCESPRES",
+      "symbol": "ESP",
+      "name": "Espresso",
+      "description": "Espresso предоставляет роллапам инфраструктуру финализации транзакций, доступности данных и межсетевых сообщений. ESP используется в стейкинге валидаторов, обеспечивающих работу этой инфраструктуры.",
+      "sources": [
+        {
+          "url": "https://www.espressosys.com/faq",
+          "checkedAt": "2026-09-22T15:26:14Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/espresso",
+          "checkedAt": "2026-09-25T09:02:18.891Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSSV",
+      "symbol": "SSV",
+      "name": "ssv.network",
+      "description": "ssv.network распределяет работу валидаторов Ethereum между несколькими операторами с помощью технологии DVT. SSV используется для управления и стейкинга оракулов; расчёты с операторами в текущей модели ведутся в ETH.",
+      "sources": [
+        {
+          "url": "https://docs.ssv.network/learn/tokenomics/",
+          "checkedAt": "2026-09-22T15:34:51Z"
+        },
+        {
+          "url": "https://docs.ssv.network/",
+          "checkedAt": "2026-09-22T15:27:18Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCXVG",
+      "symbol": "XVG",
+      "name": "Verge",
+      "description": "Verge — платёжная сеть с использованием Tor для защиты сетевых метаданных пользователей. XVG служит её платёжной валютой, при этом реестр и балансы публичны: защита сетевого соединения не равнозначна сокрытию сумм и истории переводов.",
+      "sources": [
+        {
+          "url": "https://vergecurrency.com/static/blackpaper/verge-blackpaper-v5.0.pdf",
+          "checkedAt": "2026-09-22T15:24:35Z"
+        },
+        {
+          "url": "https://vergecurrency.com/milestones",
+          "checkedAt": "2026-09-22T15:25:06Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCOTI",
+      "symbol": "COTI",
+      "name": "COTI",
+      "description": "COTI — валюта сети COTI V2, конфиденциальной EVM-совместимой L2 на Ethereum. Проект использует garbled circuits — криптографический метод вычислений над скрытыми данными — для приложений, которым нужна приватная обработка информации.",
+      "sources": [
+        {
+          "url": "https://docs.coti.io/coti-documentation/networks/mainnet",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCACU",
+      "symbol": "ACU",
+      "name": "Acurast",
+      "description": "Acurast объединяет смартфоны в сеть для выполнения вычислительных задач, включая API, автоматические запросы и конфиденциальные ИИ-вычисления в защищённой среде TEE. ACU оплачивает вычисления и используется для вознаграждения владельцев устройств.",
+      "sources": [
+        {
+          "url": "https://docs.acurast.com/",
+          "checkedAt": "2026-09-22T15:31:08Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/acurast",
+          "checkedAt": "2026-09-25T09:02:21.596Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCANKR",
+      "symbol": "ANKR",
+      "name": "Ankr",
+      "description": "Ankr предоставляет разработчикам RPC/API-доступ к блокчейнам, инфраструктуру собственных сетей и сервисы стейкинга. ANKR — служебный токен экосистемы, связанный в том числе с программами вознаграждения участников.",
+      "sources": [
+        {
+          "url": "https://www.ankr.com/about-forge/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        },
+        {
+          "url": "https://www.ankr.com/docs/",
+          "checkedAt": "2026-09-22T15:36:28Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRIVER",
+      "symbol": "RIVER",
+      "name": "River",
+      "description": "River предоставляет систему Omni-CDP, позволяющую внести залог в одной сети и выпустить обеспеченный им стейблкоин satUSD в другой. RIVER — отдельный токен стейкинга и управления протоколом, а не сам satUSD.",
+      "sources": [
+        {
+          "url": "https://blog.riverai.inc/season-6-is-live/",
+          "checkedAt": "2026-09-22T15:43:23Z"
+        },
+        {
+          "url": "https://chainwire.org/2025/08/14/river-launches-chain-abstraction-stablecoin-system-connecting-liquidity-across-ecosystems/",
+          "checkedAt": "2026-09-22T15:43:23Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/river",
+          "checkedAt": "2026-09-25T09:02:24.245Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCNOT",
+      "symbol": "NOT",
+      "name": "Notcoin",
+      "description": "Notcoin развивает игры и программы знакомства с Web3 в Telegram на сети TON, включая игровые проекты и задания Explore. NOT связан с игровыми и Explore-пулами вознаграждений; в экономике проекта также используется сжигание токенов.",
+      "sources": [
+        {
+          "url": "https://notcoin.org/ecosystem/",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        },
+        {
+          "url": "https://notcoin.org/study/",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPEOPLE",
+      "symbol": "PEOPLE",
+      "name": "ConstitutionDAO",
+      "description": "ConstitutionDAO собирал средства на покупку экземпляра Конституции США, но проект завершён. PEOPLE сохранил возможность погашения за ETH по исходному соотношению и не даёт действующих прав управления или участия в новой деятельности DAO.",
+      "sources": [
+        {
+          "url": "https://www.constitutiondao.com/",
+          "checkedAt": "2026-09-22T15:27:12Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAZTEC",
+      "symbol": "AZTEC",
+      "name": "Aztec",
+      "description": "Aztec развивает сеть приватных смарт-контрактов с доказательствами с нулевым разглашением; её Alpha mainnet работает с реальными активами, но остаётся ранней версией. AZTEC используется для стейкинга секвенсоров и управления сетью.",
+      "sources": [
+        {
+          "url": "https://aztec.network/token",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        },
+        {
+          "url": "https://docs.aztec.network/networks",
+          "checkedAt": "2026-09-22T15:30:05Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/aztec",
+          "checkedAt": "2026-09-25T09:02:26.857Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRON",
+      "symbol": "RON",
+      "name": "Ronin",
+      "description": "Ronin — сеть второго уровня Ethereum на OP Stack для игр и приложений с цифровыми активами. RON используется для оплаты газа и платежей, а также в управлении казначейством экосистемы.",
+      "sources": [
+        {
+          "url": "https://www.roninchain.com/ron",
+          "checkedAt": "2026-09-22T15:22:57Z"
+        },
+        {
+          "url": "https://blog.roninchain.com/p/ronin-is-home",
+          "checkedAt": "2026-09-22T15:35:33Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMOODENG",
+      "symbol": "MOODENG",
+      "name": "Moo Deng",
+      "description": "MOODENG — мем-токен Solana, посвящённый карликовой бегемотихе Му Денг из тайского зоопарка, ставшей героиней вирусных публикаций. Токен представляет мем-сообщество вокруг этого животного и его интернет-образа.",
+      "sources": [
+        {
+          "url": "https://www.moodengsol.com/",
+          "checkedAt": "2026-09-22T15:26:34Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMAGMA",
+      "symbol": "MAGMA",
+      "name": "Magma Finance",
+      "description": "Magma Finance — децентрализованная биржа на Sui с автоматическими пулами для обмена активов и предоставления ликвидности. MAGMA — служебный и управляющий токен протокола, используемый также для стимулирования поставщиков ликвидности.",
+      "sources": [
+        {
+          "url": "https://magma-finance-1.gitbook.io/magma-finance/tokenomics/introducing-usdmagma",
+          "checkedAt": "2026-09-22T15:43:23Z"
+        },
+        {
+          "url": "https://magma-finance-1.gitbook.io/magma-finance",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/magma-finance",
+          "checkedAt": "2026-09-25T09:02:29.506Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSKYAI2",
+      "symbol": "SKYAI",
+      "name": "SKYAI",
+      "description": "SkyAI развивает экосистему ИИ на основе MCP для подключения языковых моделей к блокчейн-данным и инструментам разработки. SKYAI — токен проекта в сети BNB Smart Chain.",
+      "sources": [
+        {
+          "url": "https://skyai.pro/",
+          "checkedAt": "2026-09-25T09:07:33.108Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/skyai",
+          "checkedAt": "2026-09-25T09:02:32.171Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMASK",
+      "symbol": "MASK",
+      "name": "Mask Network",
+      "description": "Mask Network предоставляет расширение для социальных сетей и самостоятельный мультисетевой EVM-кошелёк с обменом активов и проверками безопасности. MASK может использоваться для оплаты газа через функцию Smart Pay.",
+      "sources": [
+        {
+          "url": "https://www.mask.io/",
+          "checkedAt": "2026-09-22T15:44:02Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCSYN",
+      "symbol": "SYN",
+      "name": "Synapse",
+      "description": "Synapse предоставляет мост и обмен межсетевыми сообщениями; экосистема также развивает опционный продукт Hypercall. SYN — токен управления, сохраняющий взаимозаменяемость с CX после ребрендинга в Cortex.",
+      "sources": [
+        {
+          "url": "https://medium.com/synapse-protocol/holder-update-2e7fa30cca24",
+          "checkedAt": "2026-09-22T15:38:35Z"
+        },
+        {
+          "url": "https://hypercall.xyz/",
+          "checkedAt": "2026-09-22T15:39:27Z"
+        },
+        {
+          "url": "https://hypercall.xyz/synapse",
+          "checkedAt": "2026-09-22T15:44:11Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCALCH",
+      "symbol": "ALCH",
+      "name": "Alchemist AI",
+      "description": "Alchemist AI создаёт приложения и игры по текстовому описанию с помощью языковых моделей и генерации кода, без необходимости писать код вручную. ALCH — токен проекта в сети Solana.",
+      "sources": [
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/alchemist-ai",
+          "checkedAt": "2026-09-25T09:02:34.812Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCME2",
+      "symbol": "ME",
+      "name": "Magic Eden",
+      "description": "Magic Eden — платформа торговли NFT в Solana, развивающая также продукты Packs и Lucky Buy. ME — токен её экосистемы, а не отдельный NFT или право собственности на торговую площадку.",
+      "sources": [
+        {
+          "url": "https://help.magiceden.io/en/articles/13885504-magic-eden-marketplace-updates-service-changes",
+          "checkedAt": "2026-09-22T15:29:53Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRPL",
+      "symbol": "RPL",
+      "name": "Rocket Pool",
+      "description": "Rocket Pool предоставляет ликвидный стейкинг ETH с выдачей rETH и инфраструктуру для операторов узлов Ethereum. Стейкинг RPL связан с экономикой операторов, но после изменений Saturn токен нельзя считать обязательным залогом для любого нового узла.",
+      "sources": [
+        {
+          "url": "https://rpips.rocketpool.net/tokenomics-explainers/005-rework-prelude",
+          "checkedAt": "2026-09-22T15:42:09Z"
+        },
+        {
+          "url": "https://docs.rocketpool.net/protocol/",
+          "checkedAt": "2026-09-22T15:25:38Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPROVE",
+      "symbol": "PROVE",
+      "name": "Succinct",
+      "description": "Succinct Prover Network объединяет исполнителей, создающих доказательства с нулевым разглашением для программ на виртуальной машине SP1. Заказчики оплачивают в PROVE генерацию доказательств, а исполнители получают его за выполненную работу.",
+      "sources": [
+        {
+          "url": "https://explorer.succinct.xyz/faq",
+          "checkedAt": "2026-09-22T15:26:14Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/succinct",
+          "checkedAt": "2026-09-25T09:02:37.470Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMUBARAK",
+      "symbol": "MUBARAK",
+      "name": "Mubarak",
+      "description": "Mubarak — мем-токен BNB Smart Chain, ориентированный на арабскую культурную аудиторию. MUBARAK представляет сообщество вокруг этой культурной темы, а не самостоятельную блокчейн-инфраструктуру.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/mubarak",
+          "checkedAt": "2026-09-22T15:34:26Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCOPENL",
+      "symbol": "OPEN",
+      "name": "OpenLedger",
+      "description": "OpenLedger — инфраструктура для создания ИИ-моделей и выполнения их запросов с учётом вклада поставщиков данных. OPEN оплачивает газ, построение моделей и получение их ответов, а также используется для вознаграждения поставщиков данных через Proof of Attribution.",
+      "sources": [
+        {
+          "url": "https://docs.openledgerfoundation.com/open-tokenomics",
+          "checkedAt": "2026-09-22T15:30:22Z"
+        },
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/openledger-2",
+          "checkedAt": "2026-09-25T09:02:40.149Z"
+        }
+      ]
+    }
+  ]
+}
