@@ -542,6 +542,36 @@ table {
     margin-left: 6px;
 }
 
+.social-indicator {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    vertical-align: -2px;
+    color: var(--muted);
+}
+
+.social-indicator svg {
+    width: 100%;
+    height: 100%;
+}
+
+.social-indicator[data-sentiment="positive"] {
+    color: var(--positive);
+}
+
+.social-indicator[data-sentiment="negative"] {
+    color: var(--negative);
+}
+
+.social-indicator[data-sentiment="mixed"] {
+    color: #e2c18a;
+}
+
+.social-indicator[data-sentiment="neutral"] {
+    color: var(--muted);
+}
+
 .coin-button small {
     display: block;
     color: var(--muted);

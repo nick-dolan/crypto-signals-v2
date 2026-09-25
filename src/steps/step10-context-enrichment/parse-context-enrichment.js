@@ -1,3 +1,4 @@
+import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isError, isObject, isString } from "../../helpers/utils.typed.js"
 
 export class InvalidContextEnrichmentError extends Error {
@@ -48,11 +49,11 @@ export function parseContextEnrichment (content, expectedSymbol) {
 
   assertExactKeys(
     enrichment,
-    ["schemaVersion", "symbol", "informationBackground"],
+    ["schemaVersion", "symbol", "informationBackground", "socialSignificant", "socialReason", "socialSentiment"],
   )
 
-  if (enrichment.schemaVersion !== 1) {
-    invalidEnrichment("schemaVersion must equal 1")
+  if (enrichment.schemaVersion !== 2) {
+    invalidEnrichment("schemaVersion must equal 2")
   }
 
   if (enrichment.symbol !== expectedSymbol) {
@@ -67,8 +68,17 @@ export function parseContextEnrichment (content, expectedSymbol) {
     invalidEnrichment("informationBackground must be a short non-empty string")
   }
 
+  let socialSignal
+
+  try {
+    socialSignal = readSocialSignal(enrichment)
+  } catch (error) {
+    invalidEnrichment(isError(error) ? error.message : "invalid social signal")
+  }
+
   return {
     ...enrichment,
+    ...socialSignal,
     informationBackground: enrichment.informationBackground.trim(),
   }
 }

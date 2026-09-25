@@ -39,6 +39,18 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /\.coin-description-sources\s*\{/)
   assert.match(html, /Описание пока не добавлено/)
   assert.match(html, /id="information-panel"/)
+  assert.match(html, /id="social-reason"[^>]*class="source-text"[^>]*hidden/)
+  assert.ok(html.indexOf("id=\"information-panel\"") < html.indexOf("id=\"social-reason\""))
+  assert.ok(html.indexOf("id=\"social-reason\"") < html.indexOf("id=\"news-details\""))
+  assert.match(html, /\.social-indicator\s*\{[^}]*width: 14px;[^}]*height: 14px;/)
+  for (const [sentiment, color] of [
+    ["positive", "var(--positive)"], ["negative", "var(--negative)"],
+    ["mixed", "#e2c18a"], ["neutral", "var(--muted)"],
+  ]) {
+    const selector = `.social-indicator[data-sentiment="${sentiment}"]`
+    const styles = html.slice(html.indexOf(selector)).match(/^[^{]+\{([^}]+)\}/)[1]
+    assert.ok(styles.includes(`color: ${color};`))
+  }
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)
   assert.match(html, /id="update-chart"/)
@@ -129,6 +141,7 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
   const report = {
     coins: [{
       symbol: unsafe, explanation: unsafe, drivers: [unsafe], history: { warning: unsafe },
+      socialSignificant: true, socialReason: unsafe, socialSentiment: "negative",
       features: { coingeckoId: "coin", coingeckoTrending: true, coingeckoTrendingCategories: [unsafe] },
       information: {
         news: { status: "failed", error: unsafe, items: [{ title: unsafe, content: unsafe, shortDescription: unsafe }] },

@@ -159,6 +159,41 @@
     return badge
   }
 
+  function socialSignalText (coin) {
+    if (coin.socialSignificant !== true) {
+      return coin.socialReason ?? ""
+    }
+    const label = {
+      positive: "Позитивный инфоповод",
+      negative: "Негативный инфоповод",
+      mixed: "Смешанный инфоповод",
+      neutral: "Нейтральный инфоповод",
+    }[coin.socialSentiment]
+    return `${label}: ${coin.socialReason}`
+  }
+
+  function createSocialIndicator (coin) {
+    const indicator = element("span", "social-indicator")
+    indicator.dataset.sentiment = coin.socialSentiment
+    indicator.title = socialSignalText(coin)
+    indicator.setAttribute("role", "img")
+    indicator.setAttribute("aria-label", indicator.title)
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    svg.setAttribute("viewBox", "0 0 24 24")
+    svg.setAttribute("fill", "none")
+    svg.setAttribute("stroke", "currentColor")
+    svg.setAttribute("stroke-width", "2")
+    svg.setAttribute("stroke-linecap", "round")
+    svg.setAttribute("stroke-linejoin", "round")
+    svg.setAttribute("aria-hidden", "true")
+    svg.setAttribute("focusable", "false")
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute("d", "M3 9h4l13-5v16L7 15H3V9Z M7 9v6 M7 15l2 6h4l-2-4.5")
+    svg.append(path)
+    indicator.append(svg)
+    return indicator
+  }
+
   function renderTopCandidates () {
     byId("top-candidates").replaceChildren(...topCandidates.map((coin) => {
       const card = element("button", "top-card")
@@ -213,6 +248,9 @@
       button.append(element("strong", "", coin.symbol))
       if (coin.topRank != null) {
         button.append(element("span", "top-star", `★ ${coin.topRank}`))
+      }
+      if (coin.socialSignificant === true) {
+        button.append(createSocialIndicator(coin))
       }
       if (coin.features.coingeckoTrending === true) {
         button.append(createCoinGeckoBadge())
@@ -668,6 +706,8 @@
       byId(`${key}-status`).hidden = true
     }
     byId("context-generated").textContent = ""
+    byId("social-reason").textContent = socialSignalText(coin)
+    byId("social-reason").hidden = !byId("social-reason").textContent
     byId("information-panel").hidden = !coin.information
     byId("analysis-source").textContent = byId("information-panel").hidden ? "Анализ шага 7" : "Объяснение дополнено на шаге 10"
     if (byId("information-panel").hidden) {

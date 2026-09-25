@@ -1,3 +1,4 @@
+import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isArray, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
 
 function getTimestamp (value, label) {
@@ -108,6 +109,7 @@ export function addReportContext (report, sources, context) {
 
     return {
       ...coin,
+      ...readSocialSignal(contextCandidate),
       explanation: contextCandidate.enrichedExplanation,
       information: { news: sourceCandidate.news, twitter: sourceCandidate.twitter },
     }

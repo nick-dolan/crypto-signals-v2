@@ -146,6 +146,11 @@ function runReport (report, {
   Object.assign(document, {
     getElementById: byId,
     createElement,
+    createElementNS (namespaceURI, tag) {
+      const node = createElement(tag)
+      node.namespaceURI = namespaceURI
+      return node
+    },
     querySelectorAll (selector) {
       if (selector === "[data-days]") {
         return days
@@ -1923,6 +1928,126 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
   })
 }
 
+for (const [sentiment, label] of [
+  ["positive", "Позитивный инфоповод"],
+  ["negative", "Негативный инфоповод"],
+  ["mixed", "Смешанный инфоповод"],
+  ["neutral", "Нейтральный инфоповод"],
+]) {
+  test(`${sentiment} social news uses an accessible sidebar SVG and the exact reason for top and trending coins`, () => {
+    const report = createReport(["TOP", "TRENDING"])
+    report.coins[1].topRank = null
+    report.coins[1].features.coingeckoTrending = true
+    report.coins.forEach((coin) => {
+      addInformation(report, coin)
+      Object.assign(coin, { socialSignificant: true, socialSentiment: sentiment, socialReason: `Событие ${coin.symbol}: «точная причина».` })
+    })
+    const before = structuredClone(report)
+    const browser = runReport(report)
+    const { byId } = browser
+
+    for (const coin of report.coins) {
+      const row = byId("candidate-rows").children.find(row => row.dataset.symbol === coin.symbol)
+      const indicators = descendants(row).filter(node => node.className === "social-indicator")
+      assert.equal(indicators.length, 1)
+      const indicator = indicators[0]
+      const title = `${label}: ${coin.socialReason}`
+      assert.equal(row.children[0].children[0].children[coin.topRank == null ? 1 : 2], indicator)
+      assert.equal(indicator.dataset.sentiment, sentiment)
+      assert.equal(indicator.title, title)
+      assert.equal(indicator.attributes.get("role"), "img")
+      assert.equal(indicator.attributes.get("aria-label"), title)
+      const svg = indicator.children[0]
+      assert.equal(svg.tagName, "SVG")
+      assert.equal(svg.namespaceURI, "http://www.w3.org/2000/svg")
+      assert.equal(svg.attributes.get("viewBox"), "0 0 24 24")
+      assert.equal(svg.attributes.get("fill"), "none")
+      assert.equal(svg.attributes.get("stroke"), "currentColor")
+      assert.equal(svg.attributes.get("aria-hidden"), "true")
+      assert.equal(svg.attributes.get("focusable"), "false")
+      assert.equal(svg.children[0].tagName, "PATH")
+      assert.equal(svg.children[0].namespaceURI, svg.namespaceURI)
+      assert.ok(svg.children[0].attributes.get("d"))
+
+      click(byId("candidate-rows"), svg.children[0])
+      assert.equal(byId("coin-symbol").textContent, coin.symbol)
+      assert.equal(byId("top-rank").hidden, coin.topRank == null)
+      assert.equal(byId("information-panel").hidden, false)
+      assert.equal(byId("social-reason").hidden, false)
+      assert.equal(byId("social-reason").textContent, title)
+    }
+    assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+    assert.deepEqual(report, before)
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+  })
+}
+
+test("sidebar social indicators require literal true, never false, unknown, absent or truthy alternatives", () => {
+  for (const socialSignificant of [false, null, undefined, 0, 1, "true", {}, []]) {
+    const report = createReport()
+    addInformation(report)
+    if (socialSignificant !== undefined) {
+      Object.assign(report.coins[0], { socialSignificant, socialReason: "Значимость не подтверждена", socialSentiment: null })
+    }
+    const { byId } = runReport(report)
+    assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
+    assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
+  }
+})
+
+test("switching coins replaces the social reason and clears it for unknown, legacy and unenriched coins", () => {
+  const report = createReport(["TOP", "TRENDING", "QUIET", "UNKNOWN", "LEGACY", "PLAIN"])
+  report.coins[1].topRank = null
+  report.coins[1].features.coingeckoTrending = true
+  report.coins[5].topRank = null
+  report.coins.slice(0, 5).forEach(coin => addInformation(report, coin))
+  Object.assign(report.coins[0], { socialSignificant: true, socialReason: "Новое партнёрство", socialSentiment: "positive" })
+  Object.assign(report.coins[1], { socialSignificant: true, socialReason: "Взлом протокола", socialSentiment: "negative" })
+  Object.assign(report.coins[2], { socialSignificant: false, socialReason: "Только повторяющиеся упоминания", socialSentiment: null })
+  Object.assign(report.coins[3], { socialSignificant: null, socialReason: null, socialSentiment: null })
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+
+  for (const [symbol, text] of [
+    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
+    ["TRENDING", "Негативный инфоповод: Взлом протокола"],
+    ["QUIET", "Только повторяющиеся упоминания"],
+    ["UNKNOWN", ""],
+    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
+    ["LEGACY", ""],
+    ["TRENDING", "Негативный инфоповод: Взлом протокола"],
+    ["PLAIN", ""],
+    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
+  ]) {
+    selectCoin(browser, symbol)
+    assert.equal(byId("social-reason").textContent, text)
+    assert.equal(byId("social-reason").hidden, !text)
+    assert.equal(byId("information-panel").hidden, symbol === "PLAIN")
+  }
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+})
+
+test("social reason markup stays literal in the tooltip, accessible name and information section", () => {
+  const report = createReport()
+  addInformation(report)
+  const unsafe = "</script><img src=x onerror=alert(1)>\" aria-label=\"injected & <svg onload=alert(2)>"
+  Object.assign(report.coins[0], { socialSignificant: true, socialReason: unsafe, socialSentiment: "negative" })
+  const { byId } = runReport(report)
+  const indicator = descendants(byId("candidate-rows")).find(node => node.className === "social-indicator")
+
+  assert.equal(indicator.title, `Негативный инфоповод: ${unsafe}`)
+  assert.equal(indicator.attributes.get("aria-label"), indicator.title)
+  assert.equal(byId("social-reason").textContent, indicator.title)
+  assert.deepEqual(byId("social-reason").children, [])
+  assert.deepEqual(descendants(indicator).map(node => node.tagName), ["SVG", "PATH"])
+  assert.equal(indicator.attributes.has("onerror"), false)
+  assert.equal(indicator.children[0].attributes.has("onload"), false)
+})
+
 test("empty searches and failed sources have distinct messages, while missing article text stays visible", () => {
   const report = createReport(["EMPTY", "ARTICLE"])
   const information = addInformation(report)
@@ -2138,14 +2263,23 @@ test("the market background stays at the original universe snapshot during chart
   assert.equal(browser.byId("report-data").textContent, embedded)
 })
 
-test("agent top is the default sort and other sorts preserve their candidate ordering", () => {
+test("social indicators preserve top selection, sorting, filtering and movement assessments", () => {
   const report = createReport(["COTI", "SOL", "ADA", "BTC"])
   Object.assign(report.coins[0], { topRank: 2, estimateConfidence: "low" })
   Object.assign(report.coins[1], { topRank: null, estimateConfidence: "low" })
   Object.assign(report.coins[2], { topRank: null, estimateConfidence: "high" })
   Object.assign(report.coins[3], { topRank: 1, estimateConfidence: "medium" })
-  const { byId } = runReport(report)
+  report.coins.slice(1, 3).forEach((coin) => {
+    coin.features.coingeckoTrending = true
+    addInformation(report, coin)
+    Object.assign(coin, { socialSignificant: true, socialReason: `Событие ${coin.symbol}`, socialSentiment: "mixed" })
+  })
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
 
+  assert.equal(byId("coin-symbol").textContent, "BTC")
+  assert.deepEqual(byId("top-candidates").children.map(card => card.dataset.symbol), ["BTC", "COTI"])
   assert.equal(byId("sort").value, "top")
   assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["BTC", "COTI", "SOL", "ADA"])
 
@@ -2157,7 +2291,28 @@ test("agent top is the default sort and other sorts preserve their candidate ord
     byId("sort").value = sort
     byId("sort").listeners.get("change")()
     assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), expected)
+    assert.equal(byId("coin-symbol").textContent, "BTC")
+    assert.equal(byId("candidate-rows").children.find(row => row.className === "selected").dataset.symbol, "BTC")
+    for (const row of byId("candidate-rows").children) {
+      const coin = report.coins.find(coin => coin.symbol === row.dataset.symbol)
+      assert.equal(row.children[1].textContent, `${Math.round(coin.movementProbability * 100)}%`)
+    }
   }
+  selectCoin(browser, "SOL")
+  byId("search").value = "ADA"
+  byId("search").listeners.get("input")()
+  assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["ADA"])
+  assert.equal(byId("coin-symbol").textContent, "SOL")
+  assert.equal(byId("social-reason").textContent, "Смешанный инфоповод: Событие SOL")
+  assert.equal(byId("top-rank").hidden, true)
+  assert.equal(byId("candidate-count").textContent, "4")
+  assert.equal(byId("explanation").textContent, report.coins[1].explanation)
+  assert.match(byId("drivers").textContent, /Сжатие волатильности/)
+  assert.deepEqual(byId("counter-signals").children.map(node => node.textContent), report.coins[1].counterSignals)
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+  assert.deepEqual(browser.updateCalls, [])
+  assert.deepEqual(browser.directRequests, [])
 })
 
 test("startup, coin selection, periods, search and sorting never call the updater or fetch", async () => {

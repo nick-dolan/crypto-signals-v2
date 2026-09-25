@@ -75,6 +75,14 @@ async function enrichCandidate (
 
   try {
     enrichment = parseContextEnrichment(content, candidate.symbol)
+
+    if (
+      enrichment.socialSignificant !== null
+      && ![candidate.candidate.news.items, candidate.candidate.twitter.tweets]
+        .some(items => isArray(items) && items.length > 0)
+    ) {
+      throw new InvalidContextEnrichmentError("socialSignificant must be null without source publications")
+    }
   } catch (error) {
     if (error instanceof InvalidContextEnrichmentError) {
       error.symbol = candidate.symbol
@@ -87,6 +95,9 @@ async function enrichCandidate (
   return {
     ...omit(candidate.candidate, ["news", "twitter"]),
     enrichedExplanation: [candidate.explanation, enrichment.informationBackground].filter(Boolean).join(" "),
+    socialSignificant: enrichment.socialSignificant,
+    socialReason: enrichment.socialReason,
+    socialSentiment: enrichment.socialSentiment,
   }
 }
 
@@ -117,7 +128,7 @@ export async function enrichTopCandidatesWithContext (
 
   return {
     ...input,
-    schemaVersion: 6,
+    schemaVersion: 7,
     generatedAt: new Date().toISOString(),
     contextEnrichment: {
       source: "github-copilot-unofficial",

@@ -111,6 +111,11 @@ test("trending report coins get sources and analysis with or without agent tops"
       }))
       const before = structuredClone(input)
       const expectedSymbols = [...new Set([...topSymbols, "BTC", "SOL"])]
+      const socialSignals = {
+        BTC: { socialSignificant: true, socialReason: "Объявлено важное обновление сети.", socialSentiment: "positive" },
+        ETH: { socialSignificant: false, socialReason: "Только общий обзор рынка.", socialSentiment: null },
+        SOL: { socialSignificant: true, socialReason: "Подтверждён серьёзный сбой сети.", socialSentiment: "negative" },
+      }
       const referenceTimestamp = Date.parse("2027-01-15T08:05:00.000Z") / 1_000
       const calls = { news: [], twitter: [], context: [] }
       const news = await enrichTopCandidatesWithNews(input.analysis, input.shortlist, {
@@ -141,7 +146,12 @@ test("trending report coins get sources and analysis with or without agent tops"
             assert.deepEqual(message.drivers, assessment.drivers)
             assert.deepEqual(message.counterSignals, assessment.counterSignals)
           }
-          return JSON.stringify({ schemaVersion: 1, symbol: message.symbol, informationBackground: `Информационный фон ${message.symbol}.` })
+          return JSON.stringify({
+            schemaVersion: 2,
+            symbol: message.symbol,
+            informationBackground: `Информационный фон ${message.symbol}.`,
+            ...socialSignals[message.symbol],
+          })
         },
       })
       const report = await buildReportData(input.analysis, input.payload, input.shortlist, {
@@ -168,6 +178,7 @@ test("trending report coins get sources and analysis with or without agent tops"
           ? {
               ...original,
               explanation: [original.explanation, `Информационный фон ${coin.symbol}.`].filter(Boolean).join(" "),
+              ...socialSignals[coin.symbol],
               information: {
                 news: sources.candidates.find(candidate => candidate.symbol === coin.symbol).news,
                 twitter: sources.candidates.find(candidate => candidate.symbol === coin.symbol).twitter,

@@ -148,6 +148,9 @@ test("joins reordered top and trending coins by symbol without changing assessme
 
       return {
         ...coin,
+        socialSignificant: null,
+        socialReason: null,
+        socialSentiment: null,
         explanation: context.enrichedExplanation,
         information: { news: source.news, twitter: source.twitter },
       }
@@ -202,6 +205,109 @@ test("leaves non-top coins without an exact trending flag untouched", () => {
 
     assert.equal(result.coins.at(-1), input.report.coins.at(-1))
     assert.equal(Object.hasOwn(result.coins.at(-1), "information"), false)
+  }
+})
+
+for (const [socialSignificant, socialSentiment, reason] of [
+  [true, "positive", "Позитивное событие"],
+  [true, "negative", "Негативное событие"],
+  [true, "mixed", "Противоречивые события"],
+  [true, "neutral", "Значимое нейтральное событие"],
+  [false, null, "Значимый инфоповод не найден"],
+  [null, null, "Недостаточно данных"],
+  [null, null, null],
+]) {
+  test(`copies step 10 social fields (${socialSignificant}/${socialSentiment}/${reason}) only for the enrichment union`, () => {
+    const input = createInput()
+    input.sources.candidates.reverse().forEach((candidate) => {
+      Object.assign(candidate, { socialSignificant: "ignore step 9", socialReason: 42, socialSentiment: "up" })
+    })
+    input.context.candidates.reverse().forEach((candidate) => {
+      Object.assign(candidate, {
+        socialSignificant, socialSentiment,
+        socialReason: reason == null ? null : ` \n${reason}: ${candidate.symbol}.\t `,
+      })
+    })
+    const before = structuredClone(input)
+    const result = addContext(input)
+
+    assert.equal(result.candidateCount, input.report.candidateCount)
+    assert.equal(result.universeCoinCount, input.report.universeCoinCount)
+    assert.deepEqual(result.coins.map(coin => coin.symbol), input.report.coins.map(coin => coin.symbol))
+    for (const [index, coin] of result.coins.entries()) {
+      const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
+      if (!context) {
+        assert.equal(coin, input.report.coins[index])
+        assert.equal(Object.hasOwn(coin, "socialSignificant"), false)
+        continue
+      }
+      const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
+      assert.deepEqual(coin, {
+        ...input.report.coins[index],
+        socialSignificant, socialSentiment,
+        socialReason: reason == null ? null : `${reason}: ${coin.symbol}.`,
+        explanation: context.enrichedExplanation,
+        information: { news: source.news, twitter: source.twitter },
+      })
+      assert.equal(coin.information.news, source.news)
+      assert.equal(coin.information.twitter, source.twitter)
+      assert.equal(coin.history, input.report.coins[index].history)
+      assert.equal(coin.features, input.report.coins[index].features)
+    }
+    assert.deepEqual(input, before)
+  })
+}
+
+test("legacy context stays unknown even when step 9 or the original report has a social signal", () => {
+  const input = createInput()
+  for (const candidate of [...input.sources.candidates, input.report.coins[0]]) {
+    Object.assign(candidate, { socialSignificant: true, socialReason: "Не брать отсюда", socialSentiment: "positive" })
+  }
+  const before = structuredClone(input)
+  const result = addContext(input)
+
+  for (const coin of result.coins.filter(coin => coin.information)) {
+    assert.equal(coin.socialSignificant, null)
+    assert.equal(coin.socialReason, null)
+    assert.equal(coin.socialSentiment, null)
+  }
+  assert.equal(result.coins.at(-1), input.report.coins.at(-1))
+  for (const key of ["socialSignificant", "socialReason", "socialSentiment"]) {
+    assert.equal(Object.hasOwn(result.coins.at(-1), key), false)
+  }
+  assert.deepEqual(input, before)
+})
+
+test("rejects partial or invalid step 10 social fields for both top and non-top trending coins", async (t) => {
+  for (const fields of [
+    { socialSignificant: true },
+    { socialReason: "Причина" },
+    { socialSentiment: "positive" },
+    { socialSignificant: false, socialReason: "Причина" },
+    { socialSignificant: null, socialReason: null },
+    { socialSignificant: "true", socialReason: "Причина", socialSentiment: "positive" },
+    { socialSignificant: 1, socialReason: "Причина", socialSentiment: "positive" },
+    { socialSignificant: undefined, socialReason: null, socialSentiment: null },
+    { socialSignificant: true, socialReason: null, socialSentiment: "positive" },
+    { socialSignificant: true, socialReason: "", socialSentiment: "positive" },
+    { socialSignificant: true, socialReason: " \n ", socialSentiment: "positive" },
+    { socialSignificant: true, socialReason: 42, socialSentiment: "positive" },
+    { socialSignificant: true, socialReason: "Причина", socialSentiment: null },
+    { socialSignificant: true, socialReason: "Причина", socialSentiment: "bullish" },
+    { socialSignificant: true, socialReason: "Причина", socialSentiment: "Positive" },
+    { socialSignificant: false, socialReason: null, socialSentiment: null },
+    { socialSignificant: false, socialReason: "Причина", socialSentiment: "positive" },
+    { socialSignificant: false, socialReason: "Причина", socialSentiment: "neutral" },
+    { socialSignificant: null, socialReason: 42, socialSentiment: null },
+    { socialSignificant: null, socialReason: "Причина", socialSentiment: "neutral" },
+  ]) {
+    for (const symbol of ["XVG", "DOGE"]) {
+      await t.test(`${symbol}: ${JSON.stringify(fields)}`, () => {
+        const input = createInput()
+        Object.assign(input.context.candidates.find(coin => coin.symbol === symbol), fields)
+        assert.throws(() => addContext(input), /socialSignificant|socialReason|socialSentiment/)
+      })
+    }
   }
 })
 
