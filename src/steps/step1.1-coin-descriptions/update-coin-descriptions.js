@@ -39,12 +39,43 @@ async function readRegistry (readFile) {
       return {
         schemaVersion: 1,
         language: "ru",
-        sourceNotes: "Накопительный справочник. Краткие описания составлены по CoinGecko API; checkedAt — дата получения источника, а не обновления проекта. universe указывает последний список, из которого добавлялись монеты.",
+        sourceNotes: "Накопительный справочник. Новые описания составлены по страницам, прочитанным через Tavily; checkedAt — дата получения текста, а не обновления проекта. universe указывает последний список, из которого добавлялись монеты.",
         coins: [],
       }
     }
 
     throw new Error("Cannot read coin-descriptions.json; leaving the registry unchanged", { cause: error })
+  }
+}
+
+async function loadCoinGeckoDetails (coin, coinIdsByMarket, { request, pause, onWarning }) {
+  const coinId = coinIdsByMarket.get(coin.market?.tradingViewSymbol)
+
+  if (!coinId) {
+    return null
+  }
+
+  try {
+    await pause(2_000)
+    const details = await request(`/coins/${encodeURIComponent(coinId)}`, {
+      searchParams: {
+        localization: false,
+        tickers: false,
+        market_data: false,
+        community_data: false,
+        developer_data: false,
+        sparkline: false,
+      },
+    })
+
+    if (details?.id !== coinId) {
+      throw new Error(`CoinGecko response ID does not match ${coinId}`)
+    }
+
+    return details
+  } catch (error) {
+    onWarning(`⚠ CoinGecko context for ${coin.symbol}: ${isError(error) ? error.message : "Unknown error"}; continuing with web research`)
+    return null
   }
 }
 
@@ -55,6 +86,7 @@ export async function updateCoinDescriptions (
     readFile = fs.readFile,
     saveRegistry = data => writeDataJson("coin-descriptions.json", data),
     request = requestCoinGeckoJson,
+    requestTavily,
     callAgent,
     pause = sleep,
     onProgress = () => {},
@@ -78,45 +110,29 @@ export async function updateCoinDescriptions (
 
   const prompt = getRequiredString(systemPrompt, "Coin description system prompt")
   const sourceGeneratedAt = toIsoTimestamp(sourceUniverse.generatedAt, "Step 1 generatedAt")
-  const futures = await request("/derivatives/exchanges/binance_futures", {
-    searchParams: { include_tickers: "unexpired" },
-  })
-  const { coinIdsByMarket } = indexBinanceMarkets(futures)
+  let coinIdsByMarket = new Map()
+
+  try {
+    const futures = await request("/derivatives/exchanges/binance_futures", {
+      searchParams: { include_tickers: "unexpired" },
+    })
+    coinIdsByMarket = indexBinanceMarkets(futures).coinIdsByMarket
+  } catch (error) {
+    onWarning(`⚠ CoinGecko context unavailable: ${isError(error) ? error.message : "Unknown error"}; continuing with web research`)
+  }
+
   const additions = []
 
   for (const [index, coin] of missing.entries()) {
     try {
-      const coinId = coinIdsByMarket.get(coin.market?.tradingViewSymbol)
-
-      if (!coinId) {
-        throw new Error("No exact CoinGecko match for the Binance USDT perpetual market")
-      }
-
-      await pause(2_000)
-      const endpoint = `/coins/${encodeURIComponent(coinId)}`
-      const details = await request(endpoint, {
-        searchParams: {
-          localization: false,
-          tickers: false,
-          market_data: false,
-          community_data: false,
-          developer_data: false,
-          sparkline: false,
-        },
-      })
-      const checkedAt = new Date().toISOString()
-
-      if (details?.id !== coinId) {
-        throw new Error(`CoinGecko response ID does not match ${coinId}`)
-      }
-
-      const description = await describeCoin(coin, details, prompt, { callAgent })
+      const details = await loadCoinGeckoDetails(coin, coinIdsByMarket, { request, pause, onWarning })
+      const { description, sources } = await describeCoin(coin, details, prompt, { callAgent, requestTavily })
       additions.push({
         baseCurrencyId: coin.baseCurrencyId,
         symbol: coin.symbol,
         name: coin.name,
         description,
-        sources: [{ url: `https://api.coingecko.com/api/v3${endpoint}`, checkedAt }],
+        sources,
       })
     } catch (error) {
       result.failedCount += 1

@@ -1,31 +1,39 @@
-import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
+import { callCopilotWithTools } from "../../api/copilot/chat.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
-import { isObject, isString } from "../../helpers/utils.typed.js"
+import { isArray, isObject, isString } from "../../helpers/utils.typed.js"
+import { createCoinResearchTools } from "./create-coin-research-tools.js"
 
 export async function describeCoin (
   coin,
   details,
   systemPrompt,
-  { callAgent = callUnofficialCopilot } = {},
+  { callAgent = callCopilotWithTools, requestTavily } = {},
 ) {
-  const sourceDescription = isString(details?.description?.en)
-    ? details.description.en.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-    : ""
-
-  if (!sourceDescription) {
-    throw new Error(`CoinGecko ${details?.id} has no description`)
-  }
-
   const baseCurrencyId = getRequiredString(coin.baseCurrencyId, "Candidate baseCurrencyId")
+  const coingecko = details
+    ? {
+        id: getRequiredString(details.id, "CoinGecko coin id"),
+        symbol: isString(details.symbol) ? details.symbol : null,
+        name: isString(details.name) ? details.name : null,
+      }
+    : null
+  const research = createCoinResearchTools({
+    request: requestTavily,
+    seedUrls: coingecko
+      ? [
+          ...(isArray(details.links?.homepage) ? details.links.homepage : []),
+          `https://www.coingecko.com/en/coins/${encodeURIComponent(coingecko.id)}`,
+        ]
+      : [],
+  })
   const content = await callAgent(systemPrompt, JSON.stringify({
     baseCurrencyId,
     symbol: getRequiredString(coin.symbol, "Candidate symbol"),
     name: getRequiredString(coin.name, "Candidate name"),
-    coingecko: {
-      id: details.id,
-      description: sourceDescription.slice(0, 16_000),
-    },
-  }), { model: "gemini-3.7-flash", reasoningEffort: "medium" })
+    marketSymbol: isString(coin.market?.tradingViewSymbol) ? coin.market.tradingViewSymbol : null,
+    coingecko,
+    seedUrls: research.seedUrls,
+  }), { model: "GPT-5.6 Sol", reasoningEffort: "medium", tools: research.tools })
   const json = getRequiredString(content, "Agent response").replace(
     /^```(?:json)?\s*([\s\S]*?)\s*```$/i,
     "$1",
@@ -38,8 +46,12 @@ export async function describeCoin (
     throw new Error("Agent description response is not valid JSON")
   }
 
-  if (!isObject(result) || Object.keys(result).length !== 2 || result.baseCurrencyId !== baseCurrencyId) {
+  if (!isObject(result) || Object.keys(result).length !== 4 || result.baseCurrencyId !== baseCurrencyId) {
     throw new Error("Agent description response has an unexpected structure or candidate ID")
+  }
+
+  if (result.identityConfirmed !== true) {
+    throw new Error("Agent could not confirm the project identity")
   }
 
   if (result.description === null) {
@@ -52,5 +64,5 @@ export async function describeCoin (
     throw new Error("Agent description must be short Russian text without HTML or links")
   }
 
-  return description
+  return { description, sources: research.selectSources(result.sourceIds) }
 }

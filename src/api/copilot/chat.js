@@ -81,7 +81,7 @@ async function sendCopilotRequest (
       enableConfigDiscovery: false,
       onPermissionRequest: () => ({
         kind: "reject",
-        feedback: "Only explicitly registered read-only market tools are allowed.",
+        feedback: "Only explicitly registered read-only tools are allowed.",
       }),
       systemMessage: {
         mode: "customize",
