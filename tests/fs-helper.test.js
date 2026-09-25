@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 
-import { resetTmpSubdirectory, writeTmpCompactJson, writeTmpJson } from "../src/helpers/fs-helper.js"
+import { resetTmpSubdirectory, writeDataJson, writeTmpCompactJson, writeTmpJson } from "../src/helpers/fs-helper.js"
 
 test("writeTmpJson creates nested data directories", async (context) => {
   const directoryName = `fs-helper-test-${process.pid}-${Date.now()}`
@@ -29,3 +30,28 @@ test("writeTmpJson creates nested data directories", async (context) => {
 
   assert.deepEqual(await fs.readdir(directoryPath), [])
 })
+
+for (const method of ["writeFile", "rename"]) {
+  test(`writeDataJson leaves the previous registry intact when ${method} fails`, async (t) => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "data-json-"))
+    const previousDirectory = process.cwd()
+
+    try {
+      process.chdir(directory)
+      const filePath = await writeDataJson("registry.json", { coins: [{ baseCurrencyId: "OLD" }] })
+      const original = await fs.readFile(filePath, "utf8")
+      assert.equal(filePath, path.join(directory, "data", "registry.json"))
+
+      t.mock.method(fs, method, async () => {
+        throw new Error("Disk failure")
+      })
+
+      await assert.rejects(writeDataJson("registry.json", { coins: [] }), /Disk failure/)
+      assert.equal(await fs.readFile(filePath, "utf8"), original)
+      assert.deepEqual(await fs.readdir(path.join(directory, "data")), ["registry.json"])
+    } finally {
+      process.chdir(previousDirectory)
+      await fs.rm(directory, { recursive: true, force: true })
+    }
+  })
+}

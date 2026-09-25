@@ -65,6 +65,13 @@ export async function writeTmpCompactJson (filename, data) {
   )
 }
 
+export async function writeDataJson (filename, data) {
+  return writeJson(
+    path.join(path.resolve(process.cwd(), "data"), filename),
+    data,
+  )
+}
+
 export async function writeOutputJson (filename, data) {
   return writeJson(
     path.join(path.resolve(process.cwd(), "output"), filename),

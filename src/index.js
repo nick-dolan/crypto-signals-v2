@@ -29,10 +29,12 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
+    let coinDescriptionsFailed = false
     let peerRadarFailed = false
 
     for (const step of [
       "step1-crypto-universe.js",
+      "step1.1-coin-descriptions.js",
       "step2-data-bootstrap.js",
       "step3-market-context.js",
       "step3.1-coingecko-trending.js",
@@ -54,6 +56,11 @@ async function runAll () {
       const succeeded = await runStep(`src/${step}`)
 
       if (!succeeded) {
+        if (step === "step1.1-coin-descriptions.js") {
+          coinDescriptionsFailed = true
+          console.warn("⚠ Optional coin descriptions enrichment failed (step 1.1); continuing the pipeline")
+          continue
+        }
         process.exitCode = 1
         if (["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step)) {
           peerRadarFailed = true
@@ -66,8 +73,12 @@ async function runAll () {
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
 
-    if (peerRadarFailed) {
-      console.warn(`\n⚠ Main report completed in ${duration}s, but the peer radar failed`)
+    if (coinDescriptionsFailed || peerRadarFailed) {
+      const failures = [
+        coinDescriptionsFailed && "optional coin descriptions enrichment failed (step 1.1)",
+        peerRadarFailed && "the peer radar failed",
+      ].filter(Boolean).join("; ")
+      console.warn(`\n⚠ Main report completed in ${duration}s, but ${failures}`)
     } else {
       const completedAt = new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" })
       console.log(`\n✨ All steps completed successfully in ${duration}s! · ${completedAt} UTC+3`)

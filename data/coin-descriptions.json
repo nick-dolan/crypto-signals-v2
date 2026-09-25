@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-25T09:15:32.017Z",
+  "generatedAt": "2026-09-25T13:47:06.528Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-24T20:51:45.534Z"
+    "sourceGeneratedAt": "2026-09-25T10:17:35.127Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 250,
+  "coinCount": 252,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3666,6 +3666,30 @@
         {
           "url": "https://api.coingecko.com/api/v3/coins/openledger-2",
           "checkedAt": "2026-09-25T09:02:40.149Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPHA",
+      "symbol": "PHA",
+      "name": "Phala Network",
+      "description": "Phala Network — это уровень исполнения для Web3 AI, который обеспечивает взаимодействие искусственного интеллекта с блокчейнами. Проект использует гибридную систему на базе блокчейна и доверенной среды исполнения (TEE), позволяя создавать защищенных децентрализованных ИИ-агентов и интегрировать их со смарт-контрактами.",
+      "sources": [
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/pha",
+          "checkedAt": "2026-09-25T13:46:41.680Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCONG",
+      "symbol": "ONG",
+      "name": "Ontology Gas",
+      "description": "Ontology представляет собой платформу публичных блокчейнов и распределенного доверительного сотрудничества, поддерживающую смарт-контракты и кастомизацию сетей под различные приложения. В рамках двухтокенной модели экосистемы ONG выступает в качестве утилитарного токена, используемого для оплаты и работы ончейн-сервисов.",
+      "sources": [
+        {
+          "url": "https://api.coingecko.com/api/v3/coins/ong",
+          "checkedAt": "2026-09-25T13:46:53.043Z"
         }
       ]
     }

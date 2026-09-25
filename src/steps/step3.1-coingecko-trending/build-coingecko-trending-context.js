@@ -1,5 +1,6 @@
+import { indexBinanceMarkets } from "../../api/coingecko/index-binance-markets.js"
 import { getRequiredString, toIsoTimestamp } from "../../helpers/normalization-helper.js"
-import { isArray, isString } from "../../helpers/utils.typed.js"
+import { isArray } from "../../helpers/utils.typed.js"
 
 export function normalizeCoinGeckoTrending (trending) {
   if (!isArray(trending?.coins) || !isArray(trending?.categories)) {
@@ -24,39 +25,6 @@ export function normalizeCoinGeckoTrending (trending) {
       name: getRequiredString(category.name, "CoinGecko trending category name"),
     })),
   }
-}
-
-function indexBinanceMarkets (futures) {
-  if (!isArray(futures?.tickers)) {
-    throw new Error("CoinGecko Binance Futures response must contain a tickers array")
-  }
-
-  const coinIdsByMarket = new Map()
-  let skippedMissingCoinIdCount = 0
-
-  for (const ticker of futures.tickers) {
-    if (ticker?.target !== "USDT" || ticker?.contract_type !== "perpetual") {
-      continue
-    }
-
-    if (!isString(ticker.coin_id) || !ticker.coin_id.trim()) {
-      skippedMissingCoinIdCount += 1
-      continue
-    }
-
-    const coinId = ticker.coin_id.trim()
-    const symbol = getRequiredString(ticker.symbol, "CoinGecko Binance Futures symbol")
-    const marketSymbol = `BINANCE:${symbol}.P`
-    const previousId = coinIdsByMarket.get(marketSymbol)
-
-    if (previousId && previousId !== coinId) {
-      throw new Error(`CoinGecko Binance market ${marketSymbol} has conflicting coin IDs`)
-    }
-
-    coinIdsByMarket.set(marketSymbol, coinId)
-  }
-
-  return { coinIdsByMarket, skippedMissingCoinIdCount }
 }
 
 export function buildCoinGeckoTrendingContext (
