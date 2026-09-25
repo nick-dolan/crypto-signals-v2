@@ -227,6 +227,7 @@ export async function buildReportData (
       explanation: isString(top?.explanation) ? top.explanation : "",
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,
       name: coin.name,
+      baseCurrencyId: coin.baseCurrencyId,
       marketSymbol: coin.marketSymbol,
       features: row,
       history: await readHistory(coin, asOfTimestamp, readCoinData),

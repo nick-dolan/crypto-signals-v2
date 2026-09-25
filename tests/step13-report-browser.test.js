@@ -232,6 +232,7 @@ function createReport (symbols = ["COTI"]) {
     }))
     return {
       symbol,
+      baseCurrencyId: `XTVC${symbol}`,
       name: `${symbol} coin`,
       marketSymbol: `BINANCE:${symbol}USDT.P`,
       topRank: index + 1,
@@ -1139,6 +1140,185 @@ for (const bias of [undefined, "up", "down", "unclear"]) {
     assert.deepEqual(report, before)
   })
 }
+
+function addDescriptions (report) {
+  const coins = [...report.coins, ...(report.peerRadar?.data?.observations ?? []).map(observation => observation.coin)]
+  report.coinDescriptions = Object.fromEntries(coins.map(coin => [coin.baseCurrencyId, {
+    description: `${coin.name} — краткое описание проекта и назначения токена.`,
+    sources: [
+      { url: `https://www.example.com/${coin.baseCurrencyId}`, checkedAt: "2026-09-25T09:00:00.000Z" },
+      { url: `https://api.coingecko.com/api/v3/coins/${coin.symbol.toLowerCase()}` },
+    ],
+  }]))
+  return report.coinDescriptions
+}
+
+test("coin descriptions and compact source links follow selection and clear when an entry is missing", () => {
+  const report = createReport(["COTI", "SOL", "MINA"])
+  const descriptions = addDescriptions(report)
+  delete descriptions.XTVCMINA
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+  const section = () => byId("coin-description").children[0]
+  const links = () => descendants(section()).filter(node => node.tagName === "A")
+
+  assert.equal(section().tagName, "SECTION")
+  assert.equal(section().attributes.get("aria-label"), "О монете COTI")
+  assert.equal(section().children[0].textContent, descriptions.XTVCCOTI.description)
+  assert.equal(section().hidden, false)
+  assert.equal(byId("coin-description").hidden, false)
+  assert.deepEqual(links().map(link => link.textContent), ["example.com", "CoinGecko"])
+  assert.deepEqual(links().map(link => link.href), descriptions.XTVCCOTI.sources.map(source => source.url))
+  assert.match(links()[0].title, /Проверено:.*2026.*UTC/)
+  assert.equal(links()[1].title, undefined)
+  assert.ok(links().every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
+  assert.equal(peerPart(section(), "coin-description-sources").children[0].textContent, "Источники:")
+
+  selectCoin(browser, "SOL")
+  assert.equal(section().children[0].textContent, descriptions.XTVCSOL.description)
+  assert.deepEqual(links().map(link => link.href), descriptions.XTVCSOL.sources.map(source => source.url))
+  assert.equal(section().attributes.get("aria-label"), "О монете SOL")
+
+  selectCoin(browser, "MINA")
+  assert.equal(section().textContent, "Описание пока не добавлено")
+  assert.deepEqual(links(), [])
+  assert.equal(peerPart(section(), "coin-description-sources"), undefined)
+
+  selectCoin(browser, "COTI")
+  assert.equal(byId("coin-description").children.length, 1)
+  assert.equal(section().children[0].textContent, descriptions.XTVCCOTI.description)
+  assert.equal(links().length, 2)
+  assert.deepEqual(report, before)
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(browser.updateCalls, [])
+  assert.deepEqual(browser.directRequests, [])
+})
+
+test("descriptions never fall back to a ticker, name or inherited object key", () => {
+  for (const baseCurrencyId of [undefined, "DIFFERENT-ID", "__proto__", "constructor", "toString"]) {
+    const report = createReport()
+    addDescriptions(report)
+    report.coins[0].baseCurrencyId = baseCurrencyId
+    report.coinDescriptions.COTI = { description: "Wrong same-ticker entry", sources: [] }
+    const { byId } = runReport(report)
+
+    assert.equal(byId("coin-description").textContent, "Описание пока не добавлено")
+    assert.equal(descendants(byId("coin-description")).filter(node => node.tagName === "A").length, 0)
+  }
+})
+
+test("legacy reports without a description lookup retain the candidate and chart", () => {
+  for (const coinDescriptions of [undefined, null, {}]) {
+    const report = createReport()
+    report.coinDescriptions = coinDescriptions
+    const { byId, charts } = runReport(report)
+
+    assert.equal(byId("coin-detail").hidden, false)
+    assert.equal(byId("coin-description").textContent, "Описание пока не добавлено")
+    assert.equal(byId("explanation").textContent, report.coins[0].explanation)
+    assert.equal(charts.length, 1)
+  }
+})
+
+test("radar descriptions appear before charts even with collapsed facts and distinguish same-ticker coins by ID", () => {
+  const report = createReport()
+  const radar = addPeerRadar(report, ["COTI", "OUTSIDE", "NOINFO"])
+  const descriptions = addDescriptions(report)
+  delete descriptions.noinfo
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+  click(byId("peer-radar-tab"))
+  const cards = byId("peer-radar-observations").children
+
+  for (const observation of radar.observations) {
+    const card = cards.find(card => card.children[0].children[0].textContent === observation.coin.symbol)
+    const section = card.children.find(node => node.className === "coin-description")
+    const info = descriptions[observation.coin.baseCurrencyId]
+    const links = descendants(section).filter(node => node.tagName === "A")
+    assert.ok(card.children.indexOf(section) > 0)
+    assert.ok(card.children.indexOf(section) < card.children.indexOf(peerPart(card, "peer-comparison")))
+    assert.equal(section.children[0].textContent, info?.description ?? "Описание пока не добавлено")
+    assert.equal(section.hidden, false)
+    assert.equal(peerPart(card, "peer-observation-facts").open, false)
+    assert.deepEqual(links.map(link => link.href), (info?.sources ?? []).map(source => source.url))
+    assert.ok(links.every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
+  }
+  assert.notEqual(descriptions.coti.description, descriptions.XTVCCOTI.description)
+  assert.equal(byId("coin-description").children[0].children[0].textContent, descriptions.XTVCCOTI.description)
+  assert.equal(report.coins.length, 1)
+  assert.deepEqual(report, before)
+  assert.deepEqual(browser.updateCalls, [])
+  assert.deepEqual(browser.directRequests, [])
+})
+
+test("radar descriptions remain available without any main candidates", () => {
+  const report = createReport([])
+  addPeerRadar(report, ["OUTSIDE"])
+  const descriptions = addDescriptions(report)
+  const { byId, directRequests } = runReport(report)
+  click(byId("peer-radar-tab"))
+  const card = byId("peer-radar-observations").children[0]
+
+  assert.equal(byId("coin-detail").hidden, true)
+  assert.equal(peerPart(card, "coin-description").children[0].textContent, descriptions.outside.description)
+  assert.equal(descendants(peerPart(card, "coin-description")).filter(node => node.tagName === "A").length, 2)
+  assert.deepEqual(directRequests, [])
+})
+
+test("description text stays literal and both views activate only absolute HTTP/HTTPS source URLs", () => {
+  const report = createReport()
+  addPeerRadar(report, ["OUTSIDE"])
+  const descriptions = addDescriptions(report)
+  const unsafe = "</script><script>alert(1)</script><img src=x onerror=alert(1)>"
+  for (const info of Object.values(descriptions)) {
+    info.description = unsafe
+    info.sources = [
+      { url: "javascript:alert(1)" },
+      { url: "data:text/html,<script>alert(1)</script>" },
+      { url: "file:///tmp/private" },
+      { url: "//example.com/relative" },
+      { url: "not a URL" },
+      { url: "mailto:test@example.com" },
+      { url: `https://www.safe.example/about?text=${encodeURIComponent(unsafe)}`, checkedAt: unsafe },
+      { url: "http://docs.safe.example/about", checkedAt: "2026-09-25T09:00:00.000Z" },
+    ]
+  }
+  const { byId, updateCalls, directRequests } = runReport(report)
+  click(byId("peer-radar-tab"))
+  const sections = [byId("coin-description").children[0], peerPart(byId("peer-radar-observations").children[0], "coin-description")]
+
+  for (const section of sections) {
+    const links = descendants(section).filter(node => node.tagName === "A")
+    assert.equal(section.children[0].textContent, unsafe)
+    assert.equal(section.children[0].children.length, 0)
+    assert.deepEqual(links.map(link => link.textContent), ["safe.example", "docs.safe.example"])
+    assert.ok(links.every(link => ["http:", "https:"].includes(new URL(link.href).protocol)))
+    assert.ok(links.every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
+    assert.equal(links[0].title, "Проверено: Время не указано")
+    assert.ok(descendants(section).every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
+  }
+  assert.deepEqual(updateCalls, [])
+  assert.deepEqual(directRequests, [])
+})
+
+test("empty or unsafe-only source lists leave descriptions visible without a dangling sources label", () => {
+  for (const sources of [[], [{ url: "javascript:alert(1)" }]]) {
+    const report = createReport()
+    addPeerRadar(report, ["OUTSIDE"])
+    const descriptions = addDescriptions(report)
+    Object.values(descriptions).forEach(info => info.sources = sources)
+    const { byId } = runReport(report)
+    const sections = [byId("coin-description").children[0], peerPart(byId("peer-radar-observations").children[0], "coin-description")]
+
+    for (const section of sections) {
+      assert.match(section.children[0].textContent, /краткое описание проекта/)
+      assert.equal(section.children.length, 1)
+      assert.equal(section.hidden, false)
+    }
+  }
+})
 
 test("CoinGecko badges and categories follow the selected coin without leaking stale data", () => {
   const report = createReport(["COTI", "SOL", "MINA"])
@@ -2351,6 +2531,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
     coingeckoId: "coti", coingeckoTrending: true, coingeckoTrendingCategories: ["Privacy"],
   })
   addInformation(report)
+  addDescriptions(report)
   const before = structuredClone(report)
   const controlled = controlledUpdater()
   const browser = runReport(report, controlled)
@@ -2367,7 +2548,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
     "information-panel", "context-generated", "news-window", "news-count", "news-status", "news-items", "twitter-window",
     "twitter-count", "twitter-status", "twitter-items",
     "sustained-strength-status", "sustained-strength-history", "sustained-strength-current",
-    "coingecko-badge", "coingecko-context", "coingecko-categories", "coingecko-category-status",
+    "coingecko-badge", "coingecko-context", "coingecko-categories", "coingecko-category-status", "coin-description",
   ].map(id => ({ id, text: browser.byId(id).textContent, hidden: browser.byId(id).hidden, children: [...browser.byId(id).children] }))
   const assertUnchanged = () => {
     assert.equal(browser.byId("report-data").textContent, embedded)

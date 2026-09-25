@@ -618,6 +618,27 @@ table {
     font-size: 10px;
 }
 
+.coin-description {
+    display: grid;
+    gap: 8px;
+    padding: 0 22px 16px;
+}
+
+.coin-description-text {
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.coin-description-sources {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
 .coin-meta {
     padding: 0 22px 17px;
     display: flex;
@@ -1183,6 +1204,10 @@ summary {
     padding: 14px;
 }
 
+.peer-observation>.coin-description {
+    padding: 0 14px 14px;
+}
+
 .peer-observation-facts {
     border-top: 1px solid var(--border);
 }
@@ -1521,6 +1546,7 @@ summary {
         padding: 16px;
     }
 
+    .coin-description,
     .coin-meta {
         padding: 0 16px 14px;
     }

@@ -32,6 +32,12 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   ])
   assert.doesNotMatch(html, /directionBias|Уклон|предполагаемым направлением|Направление неясно|Нет оценки направления/)
   assert.match(html, /Вероятность — оценка агента, не статистически откалиброванный прогноз\. Это не торговая рекомендация\./)
+  assert.match(html, /id="coin-description"/)
+  assert.ok(html.indexOf("id=\"coin-name\"") < html.indexOf("id=\"coin-description\""))
+  assert.ok(html.indexOf("id=\"coin-description\"") < html.indexOf("id=\"chart\""))
+  assert.match(html, /\.coin-description\s*\{/)
+  assert.match(html, /\.coin-description-sources\s*\{/)
+  assert.match(html, /Описание пока не добавлено/)
   assert.match(html, /id="information-panel"/)
   assert.match(html, /id="news-details"/)
   assert.match(html, /id="twitter-details"/)
@@ -126,6 +132,9 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
         twitter: { status: "available", tweets: [{ text: unsafe, authorUsername: unsafe }] },
       },
     }],
+    coinDescriptions: {
+      unsafe: { description: unsafe, sources: [{ url: unsafe, checkedAt: unsafe }] },
+    },
     definitions: { unsafe },
     altMarketBackground: { status: "unavailable", change4hPct: null, breadth4h: null, warning: unsafe },
     peerRadar: {

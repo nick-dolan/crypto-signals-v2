@@ -197,12 +197,23 @@ for (const [name, change] of [
   })
 }
 
-test("step 13 reads step 12 optionally, embeds outsider observations and preserves main results", { timeout: 40_000 }, async (t) => {
+test("step 13 embeds outsider descriptions without changing radar data or main results", { timeout: 40_000 }, async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "peer-radar-html-"))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
   await fs.mkdir(path.join(directory, "tmp"))
   await fs.mkdir(path.join(directory, "reports"))
+  await fs.mkdir(path.join(directory, "data"))
   const radar = createRadar()
+  const registryPath = path.join(directory, "data", "coin-descriptions.json")
+  const registry = {
+    coins: ["MAIN", "OUTSIDE", "LEADER", "UNUSED"].map(baseCurrencyId => ({
+      baseCurrencyId,
+      symbol: baseCurrencyId,
+      name: `Coin ${baseCurrencyId}`,
+      description: `Description ${baseCurrencyId}`,
+      sources: [{ url: `https://example.com/${baseCurrencyId}`, checkedAt: "2026-09-24T07:00:00.000Z" }],
+    })),
+  }
   const writeJson = (filename, value) => fs.writeFile(path.join(directory, "tmp", filename), JSON.stringify(value))
   const sources = {
     asOf: radar.asOf,
@@ -245,9 +256,10 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
     return JSON.parse(html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)[1])
   }
   const mainOnly = (report) => {
-    const { peerRadar, reportCreatedAt, ...main } = report
+    const { peerRadar, reportCreatedAt, coinDescriptions, ...main } = report
     assert.ok(peerRadar)
     assert.ok(reportCreatedAt)
+    assert.ok(coinDescriptions)
     return main
   }
 
@@ -255,6 +267,17 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   assert.equal(baseline.peerRadar.status, "unavailable")
   assert.deepEqual(baseline.peerRadar.histories, {})
   assert.deepEqual(baseline.coins.map(coin => coin.symbol), ["MAIN"])
+  assert.equal(baseline.coins[0].baseCurrencyId, "MAIN")
+  assert.deepEqual(baseline.coinDescriptions, {})
+
+  await fs.writeFile(registryPath, JSON.stringify(registry))
+  const described = await run()
+  assert.deepEqual(described.coinDescriptions, {
+    MAIN: { description: registry.coins[0].description, sources: registry.coins[0].sources },
+  })
+  assert.deepEqual(mainOnly(described), mainOnly(baseline))
+  assert.deepEqual(described.peerRadar, baseline.peerRadar)
+
   await writeJson("step12-peer-radar-analysis.json", radar)
   await writeJson("step11-peer-radar.json", scanFor(radar))
   const enriched = await run()
@@ -266,6 +289,11 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
     assert.match(history.warning, /недоступна/)
   }
   assert.deepEqual(mainOnly(enriched), mainOnly(baseline))
+  assert.deepEqual(enriched.coinDescriptions.MAIN, described.coinDescriptions.MAIN)
+  assert.deepEqual(enriched.coinDescriptions.OUTSIDE, {
+    description: registry.coins[1].description, sources: registry.coins[1].sources,
+  })
+  assert.deepEqual(Object.keys(enriched.coinDescriptions).sort(), ["MAIN", "OUTSIDE"])
   assert.equal(enriched.peerRadar.data.observations[0].coin.symbol, "OUTSIDE")
   assert.equal(enriched.coins[0].movementProbability, 0.6)
 
@@ -289,6 +317,7 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   const charted = await run()
   assert.deepEqual(charted.peerRadar.data, radar)
   assert.deepEqual(mainOnly(charted), mainOnly(baseline))
+  assert.deepEqual(charted.coinDescriptions, enriched.coinDescriptions)
   assert.deepEqual(Object.keys(charted.peerRadar.histories).sort(), ["LEADER", "OUTSIDE"])
   assert.equal(charted.peerRadar.histories.LEADER.marketSymbol, "BYBIT:LEADERUSDT.P")
   for (const history of Object.values(charted.peerRadar.histories)) {
@@ -299,6 +328,13 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   }
   assert.equal(await fs.readFile(path.join(directory, "tmp", "step12-peer-radar-analysis.json"), "utf8"), JSON.stringify(radar))
 
+  await fs.writeFile(registryPath, "{broken JSON")
+  const withoutDescriptions = await run()
+  assert.deepEqual(withoutDescriptions.coinDescriptions, {})
+  assert.deepEqual(mainOnly(withoutDescriptions), mainOnly(charted))
+  assert.deepEqual(withoutDescriptions.peerRadar, charted.peerRadar)
+  await fs.writeFile(registryPath, JSON.stringify(registry))
+
   await writeJson(createBootstrapDataRelativePath({ symbol: "LEADER", baseCurrencyId: "LEADER" }), { broken: true })
   const partial = await run()
   assert.equal(partial.peerRadar.status, "available")
@@ -307,6 +343,7 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   assert.match(partial.peerRadar.histories.LEADER.warning, /некорректный формат/)
   assert.equal(partial.peerRadar.histories.OUTSIDE.warning, null)
   assert.deepEqual(mainOnly(partial), mainOnly(baseline))
+  assert.deepEqual(partial.coinDescriptions, enriched.coinDescriptions)
 
   await writeJson("step12-peer-radar-analysis.json", createRadar(true))
   const empty = await run()
@@ -314,12 +351,14 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   assert.deepEqual(empty.peerRadar.data.observations, [])
   assert.deepEqual(empty.peerRadar.histories, {})
   assert.deepEqual(mainOnly(empty), mainOnly(baseline))
+  assert.deepEqual(empty.coinDescriptions, described.coinDescriptions)
 
   await fs.writeFile(path.join(directory, "tmp", "step12-peer-radar-analysis.json"), "{broken JSON")
   const malformed = await run()
   assert.equal(malformed.peerRadar.status, "unavailable")
   assert.equal(malformed.peerRadar.data, null)
   assert.deepEqual(mainOnly(malformed), mainOnly(baseline))
+  assert.deepEqual(malformed.coinDescriptions, described.coinDescriptions)
 
   await writeJson("step12-peer-radar-analysis.json", radar)
   await writeJson("step11-peer-radar.json", { ...scanFor(radar), generatedAt: "2026-09-24T07:30:00.000Z" })
@@ -328,6 +367,7 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   assert.deepEqual(stale.peerRadar.histories, {})
   assert.match(stale.peerRadar.warning, /текущему скану/)
   assert.deepEqual(mainOnly(stale), mainOnly(baseline))
+  assert.deepEqual(stale.coinDescriptions, described.coinDescriptions)
 
   const otherSnapshot = { ...radar, asOf: "2026-09-24T05:00:00.000Z", snapshotClosedAt: "2026-09-24T06:00:00.000Z" }
   await writeJson("step12-peer-radar-analysis.json", otherSnapshot)
@@ -335,9 +375,11 @@ test("step 13 reads step 12 optionally, embeds outsider observations and preserv
   assert.equal(mismatched.peerRadar.status, "unavailable")
   assert.match(mismatched.peerRadar.warning, /другому срезу/)
   assert.deepEqual(mainOnly(mismatched), mainOnly(baseline))
+  assert.deepEqual(mismatched.coinDescriptions, described.coinDescriptions)
 
   for (const [filename, data] of Object.entries(mainInputs)) {
     assert.equal(await fs.readFile(path.join(directory, "tmp", filename), "utf8"), JSON.stringify(data))
   }
   assert.equal(await fs.readFile(path.join(directory, "reports", "peer-radar-archive.json"), "utf8"), JSON.stringify(radar))
+  assert.equal(await fs.readFile(registryPath, "utf8"), JSON.stringify(registry))
 })

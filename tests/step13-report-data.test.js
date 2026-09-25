@@ -143,6 +143,22 @@ test("report omits legacy direction predictions but preserves assessments, direc
   assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], before)
 })
 
+test("preserves the shortlist baseCurrencyId without changing selection, assessments or histories", async () => {
+  const input = createInput()
+  const baseline = await build(input)
+  input.shortlist.candidates[0].coin.baseCurrencyId = "INDEPENDENT-ID"
+  input.histories[0].coin.baseCurrencyId = "INDEPENDENT-ID"
+  input.analysis.assessments[0].baseCurrencyId = "NOT-THE-SHORTLIST-ID"
+  const before = structuredClone([input.analysis, input.payload, input.shortlist, input.histories])
+  const report = await build(input)
+
+  assert.deepEqual(report, {
+    ...baseline,
+    coins: baseline.coins.map(coin => ({ ...coin, baseCurrencyId: "INDEPENDENT-ID" })),
+  })
+  assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], before)
+})
+
 test("report preserves confirmed, empty and unknown CoinGecko context from the agent payload", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
   const contexts = [
@@ -215,6 +231,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
       explanation: input.analysis.topCandidates.find(top => top.symbol === coin.symbol)?.explanation ?? "",
       topRank: [2, null, 1][index],
       name: `Coin ${coin.symbol}`,
+      baseCurrencyId: `XTVC${coin.symbol}`,
       marketSymbol: `BINANCE:${coin.symbol}USDT.P`,
       features: {
         volumeZ: candidate.volume[0],

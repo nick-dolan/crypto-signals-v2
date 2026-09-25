@@ -3,6 +3,7 @@
 (() => {
   const report = JSON.parse(document.getElementById("report-data").textContent)
   const coinsBySymbol = new Map(report.coins.map(coin => [coin.symbol, coin]))
+  const coinDescriptions = new Map(Object.entries(report.coinDescriptions ?? {}))
   const chartStates = new Map(report.coins.map(coin => [coin.symbol, { data: null, pending: false, error: null, requested: false }]))
   const topCandidates = report.coins.filter(coin => coin.topRank != null)
     .sort((first, second) => first.topRank - second.topRank)
@@ -276,6 +277,34 @@
     return "Время не указано"
   }
 
+  function coinDescription (coin) {
+    const info = coinDescriptions.get(coin.baseCurrencyId)
+    const section = element("section", "coin-description")
+    section.setAttribute("aria-label", `О монете ${coin.symbol}`)
+    section.append(element(
+      "p", info ? "coin-description-text" : "coin-description-text muted",
+      info?.description || "Описание пока не добавлено",
+    ))
+    const links = (info?.sources ?? []).flatMap((source) => {
+      const link = sourceLink("", source.url)
+      if (link.tagName !== "A") {
+        return []
+      }
+      const { hostname } = new URL(link.href)
+      link.textContent = hostname === "api.coingecko.com" ? "CoinGecko" : hostname.replace(/^www\./, "")
+      if (source.checkedAt) {
+        link.title = `Проверено: ${publicationTime(source.checkedAt)}`
+      }
+      return [link]
+    })
+    if (links.length) {
+      const sources = element("div", "coin-description-sources")
+      sources.append(element("span", "muted", "Источники:"), ...links)
+      section.append(sources)
+    }
+    return section
+  }
+
   function peerMetrics (entries) {
     const metrics = element("dl", "peer-metrics")
     metrics.append(...entries.map(([label, value, unit, signed = false]) => {
@@ -386,7 +415,7 @@
     }
     body.append(...observation.leaders.map(leader => peerLeader(leader, coin, snapshotClosedAt)))
     facts.append(element("summary", "", "Факты и объяснение агента · ATR"), body)
-    card.append(heading, comparison, facts)
+    card.append(heading, coinDescription(coin), comparison, facts)
     return card
   }
 
@@ -961,6 +990,7 @@
     byId("coin-detail").hidden = false
     byId("coin-symbol").textContent = coin.symbol
     byId("coin-name").textContent = `${coin.name} · ${coin.marketSymbol}`
+    byId("coin-description").replaceChildren(coinDescription(coin))
     byId("top-rank").textContent = `ТОП ${coin.topRank}`
     byId("top-rank").hidden = coin.topRank == null
     byId("coin-badges").replaceChildren(

@@ -3,6 +3,7 @@ import { runStep } from "./helpers/run-step-helper.js"
 import { addReportContext } from "./steps/step13-report/add-report-context.js"
 import { buildPeerRadarHistories } from "./steps/step13-report/build-peer-radar-histories.js"
 import { buildReportData } from "./steps/step13-report/build-report-data.js"
+import { readCoinDescriptions } from "./steps/step13-report/read-coin-descriptions.js"
 import { readPeerRadarReport } from "./steps/step13-report/read-peer-radar-report.js"
 import { renderReportHtml } from "./steps/step13-report/render-report-html.js"
 import { saveReportHtml } from "./steps/step13-report/save-report-html.js"
@@ -24,6 +25,10 @@ async function runReportStep () {
     },
     reportCreatedAt: new Date().toISOString(),
   }
+  report.coinDescriptions = await readCoinDescriptions([
+    ...report.coins,
+    ...(report.peerRadar.data?.observations ?? []).map(observation => observation.coin),
+  ])
   const html = await renderReportHtml(report)
   const outputPath = await saveReportHtml(html, report.reportCreatedAt)
 
