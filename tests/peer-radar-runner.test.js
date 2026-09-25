@@ -28,8 +28,11 @@ for (const failedStep of [null, "step11-peer-radar.js", "step12-peer-radar-analy
       `)
     }
 
-    const result = await promisify(execFile)(process.execPath, ["src/index.js"], { cwd: directory, timeout: 20_000 })
-      .then(output => ({ ...output, code: 0 }), error => error)
+    const startedAt = Math.floor(Date.now() / 1_000)
+    const result = await promisify(execFile)(process.execPath, ["src/index.js"], {
+      cwd: directory, timeout: 20_000, env: { ...process.env, TZ: "UTC" },
+    }).then(output => ({ ...output, code: 0 }), error => error)
+    const finishedAt = Math.floor(Date.now() / 1_000)
     const order = (await fs.readFile(path.join(directory, "order.txt"), "utf8")).trim().split("\n")
     assert.equal(result.code, failedStep ? 1 : 0)
     assert.deepEqual(order.slice(0, 8), [
@@ -52,7 +55,12 @@ for (const failedStep of [null, "step11-peer-radar.js", "step12-peer-radar-analy
       assert.match(result.stderr, /Main report completed.*peer radar failed/)
       assert.doesNotMatch(result.stdout, /All steps completed successfully/)
     } else {
-      assert.match(result.stdout, /All steps completed successfully/)
+      const completion = result.stdout.match(/✨ All steps completed successfully in \d+\.\ds! · (\d{2}:\d{2}:\d{2}) \(Санкт-Петербург, UTC\+3\)/)
+      assert.ok(completion)
+      const expectedTimes = Array.from({ length: finishedAt - startedAt + 1 }, (_, index) => (
+        new Date((startedAt + index + 3 * 3_600) * 1_000).toISOString().slice(11, 19)
+      ))
+      assert.ok(expectedTimes.includes(completion[1]), "Completion time must use UTC+3 even when the process timezone is UTC")
     }
   })
 }

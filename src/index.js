@@ -69,7 +69,8 @@ async function runAll () {
     if (peerRadarFailed) {
       console.warn(`\n⚠ Main report completed in ${duration}s, but the peer radar failed`)
     } else {
-      console.log(`\n✨ All steps completed successfully in ${duration}s!`)
+      const completedAt = new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" })
+      console.log(`\n✨ All steps completed successfully in ${duration}s! · ${completedAt} UTC+3`)
     }
   } catch (error) {
     const message = isError(error) ? error.message : "Unknown error"
