@@ -78,12 +78,14 @@ for (const failedSteps of [
       assert.match(result.stderr, /Main report completed.*peer radar failed/)
     }
     if (!failedSteps.length) {
-      const completion = result.stdout.match(/✨ All steps completed successfully in \d+\.\ds! · (\d{2}:\d{2}:\d{2}) UTC\+3/)
+      const completion = result.stdout.match(/✨ All steps completed successfully in \d+\.\ds! · (\d{1,2} [A-Z][a-z]+ \d{2}:\d{2}) UTC\+3/)
       assert.ok(completion)
-      const expectedTimes = Array.from({ length: finishedAt - startedAt + 1 }, (_, index) => (
-        new Date((startedAt + index + 3 * 3_600) * 1_000).toISOString().slice(11, 19)
-      ))
-      assert.ok(expectedTimes.includes(completion[1]), "Completion time must use UTC+3 even when the process timezone is UTC")
+      const expectedTimes = Array.from({ length: finishedAt - startedAt + 1 }, (_, index) => {
+        const date = new Date((startedAt + index + 3 * 3_600) * 1_000)
+        const month = date.toLocaleDateString("en-GB", { timeZone: "UTC", month: "long" })
+        return `${date.getUTCDate()} ${month} ${date.toISOString().slice(11, 16)}`
+      })
+      assert.ok(expectedTimes.includes(completion[1]), "Completion date and time must use UTC+3 even when the process timezone is UTC")
     }
   })
 }

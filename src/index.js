@@ -80,8 +80,14 @@ async function runAll () {
       ].filter(Boolean).join("; ")
       console.warn(`\n⚠ Main report completed in ${duration}s, but ${failures}`)
     } else {
-      const completedAt = new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" })
-      console.log(`\n✨ All steps completed successfully in ${duration}s! · ${completedAt} UTC+3`)
+      const completedAt = new Date()
+      const date = completedAt.toLocaleDateString("en-GB", {
+        timeZone: "Europe/Moscow", day: "numeric", month: "long",
+      })
+      const time = completedAt.toLocaleTimeString("en-GB", {
+        timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit",
+      })
+      console.log(`\n✨ All steps completed successfully in ${duration}s! · ${date} ${time} UTC+3`)
     }
   } catch (error) {
     const message = isError(error) ? error.message : "Unknown error"
