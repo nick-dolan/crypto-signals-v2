@@ -4,10 +4,10 @@
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-26T07:23:55.556Z"
+    "sourceGeneratedAt": "2026-09-26T19:41:12.235Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 254,
+  "coinCount": 255,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3722,6 +3722,22 @@
         {
           "url": "https://www.binance.th/en/faq/coin-information/bfac41156c2246d5a11a782582b915ea",
           "checkedAt": "2026-09-26T07:24:08.519Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRE",
+      "symbol": "RE",
+      "name": "Re",
+      "description": "Re — ончейн-платформа, предоставляющая доступ к полностью обеспеченным договорам перестрахования с проверяемыми премиями, резервами и платёжеспособностью. Токен RE используется для управления обновлениями протокола, техническими разрешениями и политиками стимулирования.",
+      "sources": [
+        {
+          "url": "https://re.xyz/home",
+          "checkedAt": "2026-09-26T19:41:21.272Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/re",
+          "checkedAt": "2026-09-26T19:41:20.725Z"
         }
       ]
     }
