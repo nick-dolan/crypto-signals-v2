@@ -3,7 +3,7 @@ import test from "node:test"
 
 import { fetchTweetPage } from "../src/api/twitter-api.js"
 
-test("requests the latest Twitter search page", async (context) => {
+test("passes the fixed time window unchanged to the latest Twitter search page", async (context) => {
   const previousApiKey = process.env.TWITTERAPI_IO_KEY
 
   process.env.TWITTERAPI_IO_KEY = "twitter-test-key"
@@ -17,7 +17,7 @@ test("requests the latest Twitter search page", async (context) => {
         headers: { "content-type": "application/json" },
       })
     ))
-    const result = await fetchTweetPage("$BTC", "current-page")
+    const result = await fetchTweetPage("$BTC since_time:1799913600 until_time:1800000001", "current-page")
 
     assert.equal(fetchMock.mock.callCount(), 1)
 
@@ -26,7 +26,7 @@ test("requests the latest Twitter search page", async (context) => {
 
     assert.equal(url.origin, "https://api.twitterapi.io")
     assert.equal(url.pathname, "/twitter/tweet/advanced_search")
-    assert.equal(url.searchParams.get("query"), "$BTC")
+    assert.equal(url.searchParams.get("query"), "$BTC since_time:1799913600 until_time:1800000001")
     assert.equal(url.searchParams.get("queryType"), "Latest")
     assert.equal(url.searchParams.get("cursor"), "current-page")
     assert.equal(options.headers["X-API-Key"], "twitter-test-key")

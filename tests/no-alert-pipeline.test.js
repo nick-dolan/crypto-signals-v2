@@ -162,7 +162,9 @@ test("trending report coins get sources and analysis with or without agent tops"
 
       assert.deepEqual(calls, {
         news: expectedSymbols.map(symbol => `CRYPTO:${symbol}USD`),
-        twitter: expectedSymbols.map(symbol => `$${symbol}`),
+        twitter: expectedSymbols.map(symbol => (
+          `$${symbol} since_time:${referenceTimestamp - 86_400} until_time:${referenceTimestamp + 1}`
+        )),
         context: expectedSymbols,
       })
       for (const output of [news, sources, context]) {

@@ -58,7 +58,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
     fetchPage: async (query, cursor = "") => {
       calls.push({ query, cursor })
 
-      if (query === "$BTC" && !cursor) {
+      if (query.startsWith("$BTC ") && !cursor) {
         return {
           next_cursor: "btc-page-2",
           tweets: [
@@ -75,7 +75,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
         }
       }
 
-      if (query === "$BTC" && cursor === "btc-page-2") {
+      if (query.startsWith("$BTC ") && cursor === "btc-page-2") {
         return {
           next_cursor: "ignored-page-3",
           tweets: [
@@ -87,6 +87,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
 
       return {
         next_cursor: "eth-page-2",
+        has_next_page: false,
         tweets: [
           createTweet({ id: "eth-old", timestamp: referenceTimestamp - 24 * 60 * 60 - 1 }),
         ],
@@ -95,9 +96,9 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
   })
 
   assert.deepEqual(calls, [
-    { query: "$BTC", cursor: "" },
-    { query: "$BTC", cursor: "btc-page-2" },
-    { query: "$ETH", cursor: "" },
+    { query: "$BTC since_time:1799913600 until_time:1800000001", cursor: "" },
+    { query: "$BTC since_time:1799913600 until_time:1800000001", cursor: "btc-page-2" },
+    { query: "$ETH since_time:1799913600 until_time:1800000001", cursor: "" },
   ])
   assert.deepEqual(waits, [300, 300])
   assert.equal(result.schemaVersion, 5)
@@ -114,7 +115,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
 
   const [btc, eth] = result.candidates
 
-  assert.equal(btc.twitter.query, "$BTC")
+  assert.equal(btc.twitter.query, "$BTC since_time:1799913600 until_time:1800000001")
   assert.equal(btc.twitter.status, "available")
   assert.equal(btc.twitter.error, null)
   assert.equal(btc.twitter.fetchedPageCount, 2)
@@ -136,7 +137,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
   })
   assert.deepEqual(btc.news, createInput().candidates[0].news)
   assert.deepEqual(eth.twitter, {
-    query: "$ETH",
+    query: "$ETH since_time:1799913600 until_time:1800000001",
     status: "empty",
     error: null,
     fetchedPageCount: 1,
@@ -151,7 +152,7 @@ test("keeps candidate failures isolated", async () => {
     referenceTimestamp,
     wait: async () => {},
     fetchPage: async (query) => {
-      if (query === "$BTC") {
+      if (query.startsWith("$BTC ")) {
         throw new Error("Twitter request failed")
       }
 
@@ -165,7 +166,7 @@ test("keeps candidate failures isolated", async () => {
   const [btc, eth] = result.candidates
 
   assert.deepEqual(btc.twitter, {
-    query: "$BTC",
+    query: "$BTC since_time:1799913600 until_time:1800000001",
     status: "failed",
     error: "Twitter request failed",
     fetchedPageCount: null,
@@ -174,6 +175,109 @@ test("keeps candidate failures isolated", async () => {
   })
   assert.equal(eth.twitter.status, "available")
   assert.equal(eth.twitter.recentTweetCount, 1)
+})
+
+test("continues past an empty filtered page and keeps both boundaries of the fixed window", async (t) => {
+  const referenceTimestamp = 1_800_000_000
+  for (const [name, firstTweets] of [
+    ["tweets newer than the snapshot", [createTweet({ id: "too-new", timestamp: referenceTimestamp + 17 * 60 })]],
+    ["empty API page", []],
+    ["invalid timestamps", [createTweet({ id: "invalid", timestamp: referenceTimestamp, createdAt: "invalid" })]],
+  ]) {
+    await t.test(name, async () => {
+      const input = createInput()
+      input.candidates = [input.candidates[0]]
+      const before = structuredClone(input)
+      const calls = []
+      const waits = []
+      const result = await enrichTopCandidatesWithTwitter(input, {
+        referenceTimestamp,
+        wait: async milliseconds => waits.push(milliseconds),
+        fetchPage: async (query, cursor = "") => {
+          calls.push({ query, cursor })
+          return cursor
+            ? {
+                has_next_page: true,
+                next_cursor: "ignored-third-page",
+                tweets: [
+                  createTweet({ id: "as-of", timestamp: referenceTimestamp }),
+                  createTweet({ id: "inside", timestamp: referenceTimestamp - 60 }),
+                  createTweet({ id: "inside", timestamp: referenceTimestamp - 60 }),
+                  createTweet({ id: "from", timestamp: referenceTimestamp - 24 * 60 * 60 }),
+                  createTweet({ id: "old", timestamp: referenceTimestamp - 24 * 60 * 60 - 1 }),
+                  createTweet({ id: "future", timestamp: referenceTimestamp + 1 }),
+                ],
+              }
+            : { has_next_page: true, next_cursor: "older-page", tweets: firstTweets }
+        },
+      })
+
+      assert.deepEqual(calls, [
+        { query: "$BTC since_time:1799913600 until_time:1800000001", cursor: "" },
+        { query: "$BTC since_time:1799913600 until_time:1800000001", cursor: "older-page" },
+      ])
+      assert.deepEqual(waits, [300])
+      const { twitter } = result.candidates[0]
+      assert.equal(twitter.query, calls[0].query)
+      assert.equal(twitter.status, "available")
+      assert.equal(twitter.fetchedPageCount, 2)
+      assert.equal(twitter.recentTweetCount, 3)
+      assert.deepEqual(twitter.tweets.map(tweet => tweet.id), ["as-of", "inside", "from"])
+      assert.equal(twitter.tweets[0].createdAt, result.twitterEnrichment.asOf)
+      assert.equal(twitter.tweets.at(-1).createdAt, result.twitterEnrichment.from)
+      assert.deepEqual(input, before)
+    })
+  }
+})
+
+test("does not request another page after the last page or without a usable cursor", async () => {
+  for (const pagination of [
+    { has_next_page: false, next_cursor: "unused-cursor" },
+    { has_next_page: true, next_cursor: "" },
+    { has_next_page: true, next_cursor: " \n " },
+  ]) {
+    const input = createInput()
+    input.candidates = [input.candidates[0]]
+    let callCount = 0
+    const result = await enrichTopCandidatesWithTwitter(input, {
+      referenceTimestamp: 1_800_000_000,
+      wait: async () => assert.fail("No pagination wait expected"),
+      fetchPage: async () => {
+        callCount += 1
+        return { ...pagination, tweets: [] }
+      },
+    })
+    assert.equal(callCount, 1)
+    assert.equal(result.candidates[0].twitter.fetchedPageCount, 1)
+    assert.equal(result.candidates[0].twitter.status, "empty")
+  }
+})
+
+test("default queries keep the pipeline start boundary when collection runs later", async (context) => {
+  const previousStartedAt = process.env.PIPELINE_STARTED_AT
+  process.env.PIPELINE_STARTED_AT = "1800000000"
+  context.after(() => {
+    if (previousStartedAt === undefined) {
+      delete process.env.PIPELINE_STARTED_AT
+    } else {
+      process.env.PIPELINE_STARTED_AT = previousStartedAt
+    }
+  })
+  context.mock.method(Date, "now", () => 1_800_001_020_000)
+  const queries = []
+  const result = await enrichTopCandidatesWithTwitter(createInput(), {
+    wait: async () => {},
+    fetchPage: async (query) => {
+      queries.push(query)
+      return { has_next_page: false, next_cursor: "", tweets: [] }
+    },
+  })
+
+  assert.deepEqual(queries, [
+    "$BTC since_time:1799913600 until_time:1800000001",
+    "$ETH since_time:1799913600 until_time:1800000001",
+  ])
+  assert.equal(result.twitterEnrichment.asOf, new Date(1_800_000_000_000).toISOString())
 })
 
 test("validates the step 8 input and Twitter dependencies", async () => {

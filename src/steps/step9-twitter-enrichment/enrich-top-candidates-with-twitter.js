@@ -96,19 +96,18 @@ function mergeTweets (...groups) {
 }
 
 async function fetchRecentTweets (
-  symbol,
+  query,
   referenceTimestamp,
   fetchPage,
   wait,
 ) {
-  const query = `$${symbol.toUpperCase()}`
   const firstPage = await fetchPage(query)
   const firstPageTweets = selectRecentTweets(firstPage, 1, referenceTimestamp)
   const cursor = isString(firstPage.next_cursor)
     ? firstPage.next_cursor.trim()
     : ""
 
-  if (!cursor || firstPageTweets.length === 0) {
+  if (!cursor || firstPage.has_next_page === false) {
     return {
       query,
       fetchedPageCount: 1,
@@ -158,11 +157,16 @@ async function enrichCandidate (
   fetchPage,
   wait,
 ) {
-  const query = `$${symbol}`
+  // until_time is exclusive; the local window includes the exact snapshot second.
+  const query = [
+    `$${symbol}`,
+    `since_time:${referenceTimestamp - 24 * 60 * 60}`,
+    `until_time:${referenceTimestamp + 1}`,
+  ].join(" ")
 
   try {
     const result = await fetchRecentTweets(
-      symbol,
+      query,
       referenceTimestamp,
       fetchPage,
       wait,
