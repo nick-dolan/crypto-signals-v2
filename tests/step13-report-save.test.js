@@ -6,82 +6,163 @@ import path from "node:path"
 import test from "node:test"
 import { promisify } from "node:util"
 
-import { saveReportHtml } from "../src/steps/step13-report/save-report-html.js"
+import { createReportStore } from "../src/reports/store.js"
 
-async function temporaryDirectory (context) {
+async function prepareInputs (t, empty = false) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step13-report-save-"))
-  context.after(() => fs.rm(directory, { recursive: true, force: true }))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const asOf = "2026-09-26T11:00:00.000Z"
+  const coin = { symbol: "COTI", name: "Coti", baseCurrencyId: "XTVCCOTI", marketSymbol: "BINANCE:COTIUSDT.P" }
+  const window = { from: "2026-09-25T11:00:00.000Z", asOf }
+  const candidates = empty
+    ? []
+    : [{
+        symbol: coin.symbol,
+        explanation: "Техническое объяснение",
+        news: { status: "available", items: [{ title: "Новость <script>", url: "https://example.com/news" }] },
+        twitter: { status: "empty", tweets: [] },
+      }]
+  const inputs = {
+    "step5-preliminary-filter.json": {
+      asOf, timeframe: "1h", candidateCount: candidates.length, universeCoinCount: 250,
+      candidates: empty ? [] : [{ coin }],
+    },
+    "step6-agent-payload.json": {
+      schemaVersion: 10, asOf, timeframe: "1h", candidateCount: candidates.length,
+      objective: "P(сильное движение в следующие 4–12 часов)",
+      marketContext: { breadth4h: 0.5 }, marketDefinitions: { breadth4h: "Ширина" },
+      schema: { volume: ["volumeZ"] }, definitions: { volumeZ: "Аномалия объёма" }, flagDefinitions: {},
+      candidates: empty ? [] : [{ symbol: coin.symbol, name: coin.name, selectionRank: 1, volume: [2.5], flags: [] }],
+    },
+    "step7-agent-analysis.json": {
+      asOf, candidateCount: candidates.length,
+      topCandidates: empty ? [] : [{ symbol: coin.symbol, explanation: candidates[0].explanation }],
+      assessments: empty
+        ? []
+        : [{
+            symbol: coin.symbol, movementProbability: 0.7, estimateConfidence: "medium",
+            drivers: ["Объём"], counterSignals: [], tradingViewUrl: "https://www.tradingview.com/",
+          }],
+    },
+    "step9-twitter-enrichment.json": {
+      asOf, newsEnrichment: window, twitterEnrichment: window, candidates,
+    },
+    "step10-context-enrichment.json": {
+      asOf, generatedAt: "2026-09-26T12:00:00.000Z", newsEnrichment: window, twitterEnrichment: window,
+      candidates: candidates.map(({ symbol, explanation }) => ({
+        symbol, explanation, enrichedExplanation: "Объяснение и новости </script>",
+        socialSignificant: true, socialReason: "Обновление проекта", socialSentiment: "positive",
+      })),
+    },
+    "step2-data-bootstrap/COTI--XTVCCOTI/data.json": {
+      coin, timeframe: "1h", chart: { periods: [{
+        time: Date.parse(asOf) / 1_000, open: 1, max: 2, min: 0.5, close: 1.5, volume: 100,
+      }] },
+    },
+  }
+  for (const [name, value] of Object.entries(inputs)) {
+    const filename = path.join(directory, "tmp", name)
+    await fs.mkdir(path.dirname(filename), { recursive: true })
+    await fs.writeFile(filename, JSON.stringify(value))
+  }
+  await fs.mkdir(path.join(directory, "data"))
+  await fs.writeFile(path.join(directory, "data", "coin-descriptions.json"), JSON.stringify({
+    coins: [{ ...coin, description: "Описание на момент отчёта", sources: [{ url: "https://example.com/about" }] }],
+  }))
   return directory
 }
 
-for (const [createdAt, filename] of [
-  ["2026-09-16T13:30:40.123Z", "report-2026-09-16_16-30-40_GMT+3.html"],
-  ["2026-09-16T21:05:06.789Z", "report-2026-09-17_00-05-06_GMT+3.html"],
-  ["2026-12-31T22:59:59.999Z", "report-2027-01-01_01-59-59_GMT+3.html"],
-  ["2026-01-15T00:00:00.000Z", "report-2026-01-15_03-00-00_GMT+3.html"],
-  ["2026-07-15T00:00:00.000Z", "report-2026-07-15_03-00-00_GMT+3.html"],
-]) {
-  test(`saves ${createdAt} as ${filename} in a new directory`, async (context) => {
-    const directory = path.join(await temporaryDirectory(context), "reports")
-    const html = "<!doctype html><html lang=\"ru\"><body>Сохранённый отчёт</body></html>"
-    const filePath = await saveReportHtml(html, createdAt, directory)
+function runStep (directory) {
+  return promisify(execFile)(process.execPath, [
+    new URL("../src/step13-report.js", import.meta.url).pathname,
+  ], { cwd: directory, timeout: 20_000 })
+}
 
-    assert.equal(filePath, path.join(directory, filename))
-    assert.equal(await fs.readFile(filePath, "utf8"), html)
-    assert.deepEqual(await fs.readdir(directory), [filename])
+function runInjected (directory, code) {
+  return promisify(execFile)(process.execPath, ["--input-type=module", "--eval", `
+    import assert from "node:assert/strict"
+    import { runReportStep } from ${JSON.stringify(new URL("../src/step13-report.js", import.meta.url).href)}
+    ${code}
+  `], { cwd: directory, timeout: 20_000 })
+}
+
+for (const empty of [false, true]) {
+  test(`step 13 archives ${empty ? "empty" : "complete"} data without HTML or independent radar files`, { timeout: 30_000 }, async (t) => {
+    const directory = await prepareInputs(t, empty)
+    const { stdout, stderr } = await runStep(directory)
+    assert.match(stdout, /Parquet snapshot/)
+    assert.match(stderr, /Результат шага 12 отсутствует/)
+    const store = await createReportStore({ directory: path.join(directory, "reports") })
+    try {
+      const [metadata] = await store.list()
+      assert.ok(metadata)
+      assert.equal(metadata.candidateCount, empty ? 0 : 1)
+      assert.equal(metadata.asOf, "2026-09-26T11:00:00.000Z")
+      assert.deepEqual(await fs.readdir(path.join(directory, "reports")), [metadata.id])
+      assert.deepEqual((await fs.readdir(path.join(directory, "reports", metadata.id))).sort(), [
+        "coins.parquet", "history.parquet", "peer-radar.parquet", "report.parquet",
+      ])
+      const report = await store.read(metadata.id)
+      assert.equal(report.peerRadar.status, "unavailable")
+      assert.deepEqual(report.peerRadar.histories, {})
+      if (!empty) {
+        assert.equal(report.coins[0].features.volumeZ, 2.5)
+        assert.equal(report.coins[0].movementProbability, 0.7)
+        assert.equal(report.coins[0].explanation, "Объяснение и новости </script>")
+        assert.equal(report.coins[0].socialSignificant, true)
+        assert.equal(report.coins[0].information.news.items[0].title, "Новость <script>")
+        assert.equal(report.coins[0].history.candles[0].close, 1.5)
+        assert.deepEqual(report.coins[0].history.openInterest, [{ time: Date.parse(metadata.asOf) / 1_000 }])
+        assert.equal(report.coinDescriptions.XTVCCOTI.description, "Описание на момент отчёта")
+      }
+      await fs.rm(path.join(directory, "tmp"), { recursive: true })
+      await fs.rm(path.join(directory, "data"), { recursive: true })
+      assert.deepEqual(await store.read(metadata.id), report)
+    } finally {
+      await store.close()
+    }
   })
 }
 
-test("repeated reports within the same second keep the existing file and use a suffix", async (context) => {
-  const directory = await temporaryDirectory(context)
-  const first = await saveReportHtml("first report", "2026-09-16T13:30:40.123Z", directory)
-  const second = await saveReportHtml("second report", "2026-09-16T13:30:40.999Z", directory)
-
-  assert.equal(path.basename(first), "report-2026-09-16_16-30-40_GMT+3.html")
-  assert.equal(path.basename(second), "report-2026-09-16_16-30-40_GMT+3-1.html")
-  assert.equal(await fs.readFile(first, "utf8"), "first report")
-  assert.equal(await fs.readFile(second, "utf8"), "second report")
+test("rebuilding step 13 creates another immutable snapshot and preserves legacy files", { timeout: 30_000 }, async (t) => {
+  const directory = await prepareInputs(t)
+  await fs.mkdir(path.join(directory, "reports"))
+  await fs.writeFile(path.join(directory, "reports", "legacy.html"), "Legacy report")
+  await runStep(directory)
+  const store = await createReportStore({ directory: path.join(directory, "reports") })
+  try {
+    const [first] = await store.list()
+    const before = await store.read(first.id)
+    await runStep(directory)
+    assert.equal((await store.list()).length, 2)
+    assert.deepEqual(await store.read(first.id), before)
+    assert.equal(await fs.readFile(path.join(directory, "reports", "legacy.html"), "utf8"), "Legacy report")
+  } finally {
+    await store.close()
+  }
 })
 
-test("concurrent saves never overwrite one another", async (context) => {
-  const directory = await temporaryDirectory(context)
-  const reports = ["first report", "second report", "third report"]
-  const paths = await Promise.all(reports.map(html => saveReportHtml(html, "2026-09-16T13:30:40.123Z", directory)))
-
-  assert.equal(new Set(paths).size, reports.length)
-  assert.deepEqual(await Promise.all(paths.map(filePath => fs.readFile(filePath, "utf8"))), reports)
-  assert.deepEqual((await fs.readdir(directory)).sort(), [
-    "report-2026-09-16_16-30-40_GMT+3-1.html",
-    "report-2026-09-16_16-30-40_GMT+3-2.html",
-    "report-2026-09-16_16-30-40_GMT+3.html",
-  ])
+test("a failed archive save closes its store and propagates the error", async (t) => {
+  const directory = await prepareInputs(t, true)
+  await runInjected(directory, `
+    let closed = 0
+    await assert.rejects(runReportStep({
+      createStore: async () => ({
+        save: async () => { throw new Error("Disk full") },
+        close: async () => { closed += 1 },
+      }),
+    }), /Disk full/)
+    assert.equal(closed, 1)
+  `)
+  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
 })
 
-test("write errors other than filename collisions are propagated", async (context) => {
-  const directory = await temporaryDirectory(context)
-  const error = Object.assign(new Error("Permission denied"), { code: "EACCES" })
-  const write = context.mock.method(fs, "writeFile", async () => {
-    throw error
-  })
-
-  await assert.rejects(saveReportHtml("report", "2026-09-16T13:30:40.123Z", directory), error)
-  assert.equal(write.mock.callCount(), 1)
+test("inconsistent inputs fail before creating an archive", async (t) => {
+  const directory = await prepareInputs(t, true)
+  const filename = path.join(directory, "tmp", "step6-agent-payload.json")
+  const payload = JSON.parse(await fs.readFile(filename, "utf8"))
+  payload.asOf = "2026-09-26T10:00:00.000Z"
+  await fs.writeFile(filename, JSON.stringify(payload))
+  await assert.rejects(runStep(directory), error => error.code === 1 && /same closed hourly snapshot/.test(error.stderr))
+  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
 })
-
-for (const timezone of ["UTC", "America/Los_Angeles", "Asia/Tokyo"]) {
-  test(`default reports directory survives tmp cleanup and uses GMT+3 with TZ=${timezone}`, async (context) => {
-    const directory = await temporaryDirectory(context)
-    const { stdout } = await promisify(execFile)(process.execPath, ["--input-type=module", "--eval", `
-      import { saveReportHtml } from ${JSON.stringify(new URL("../src/steps/step13-report/save-report-html.js", import.meta.url).href)}
-      import { resetTmpDirectory } from ${JSON.stringify(new URL("../src/helpers/fs-helper.js", import.meta.url).href)}
-      const filePath = await saveReportHtml("report", "2026-12-31T21:05:06.789Z")
-      await resetTmpDirectory()
-      console.log(filePath)
-    `], { cwd: directory, env: { ...process.env, TZ: timezone }, timeout: 10_000 })
-    const expected = path.join(directory, "reports", "report-2027-01-01_00-05-06_GMT+3.html")
-
-    assert.equal(await fs.realpath(stdout.trim()), await fs.realpath(expected))
-    assert.equal(await fs.readFile(expected, "utf8"), "report")
-    assert.deepEqual(await fs.readdir(path.join(directory, "tmp")), [])
-  })
-}

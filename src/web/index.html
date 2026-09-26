@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Crypto Signals · Отчёты</title>
+    <link rel="stylesheet" href="/assets/report.css">
+    <link rel="stylesheet" href="/assets/web.css">
+    <script defer src="/assets/browser-helpers.js"></script>
+    <script defer src="/assets/reports-list.js"></script>
+</head>
+
+<body>
+    <main class="shell reports-shell">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS</p>
+                <h1>Сохранённые отчёты</h1>
+                <p class="subtitle">Рынок перед движением · оценки на ближайшие <strong>4–12 часов</strong></p>
+            </div>
+            <button id="reports-refresh" class="web-button" type="button">Обновить список</button>
+        </header>
+        <div class="reports-toolbar">
+            <div class="range-buttons" role="group" aria-label="Группировка по времени создания отчёта">
+                <button id="group-week" type="button" aria-pressed="true">По неделям</button>
+                <button id="group-month" type="button" aria-pressed="false">По месяцам</button>
+            </div>
+            <p class="muted">UTC+3 · неделя с понедельника · новые сверху</p>
+        </div>
+        <p id="reports-summary" class="muted" aria-live="polite"></p>
+        <section id="reports-state" class="web-state" aria-label="Состояние списка">
+            <p id="reports-message" role="status" aria-live="polite">Загружаем отчёты…</p>
+            <button id="reports-retry" class="web-button" type="button" hidden>Повторить</button>
+        </section>
+        <div id="report-groups" aria-busy="true"></div>
+        <nav class="reports-pagination" aria-label="Страницы отчётов">
+            <button id="reports-previous" class="web-button" type="button" disabled>← Назад</button>
+            <span id="reports-page" class="muted">Страница 1</span>
+            <button id="reports-next" class="web-button" type="button" disabled>Далее →</button>
+        </nav>
+        <footer class="page-footer">
+            <p>По 30 отчётов на странице. Неделя или месяц могут продолжаться на следующей странице.</p>
+            <p>Новые отчёты появятся после «Обновить список»; текущий просмотр не сдвигается.</p>
+            <p>Оценки агента — не торговая рекомендация. Каждый отчёт можно скачать и открыть без интернета.</p>
+        </footer>
+        <noscript>
+            <p class="warning">Для загрузки списка включите JavaScript в браузере.</p>
+        </noscript>
+    </main>
+</body>
+
+</html>

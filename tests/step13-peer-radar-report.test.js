@@ -7,6 +7,8 @@ import test from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
+import { renderReportHtml } from "../src/reports/render-report-html.js"
+import { createReportStore } from "../src/reports/store.js"
 import { createBootstrapDataRelativePath } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
 import { readPeerRadarReport } from "../src/steps/step13-report/read-peer-radar-report.js"
 
@@ -241,19 +243,26 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
   }
   await Promise.all(Object.entries(mainInputs).map(([filename, data]) => writeJson(filename, data)))
   await fs.writeFile(path.join(directory, "reports", "peer-radar-archive.json"), JSON.stringify(radar))
-  let files = await fs.readdir(path.join(directory, "reports"))
+  const store = await createReportStore({ directory: path.join(directory, "reports") })
+  t.after(() => store.close())
+  let reports = await store.list()
+  assert.deepEqual(reports, [])
   const run = async () => {
     await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../src/step13-report.js", import.meta.url))], {
       cwd: directory, timeout: 10_000,
     })
-    const current = await fs.readdir(path.join(directory, "reports"))
-    const added = current.filter(filename => !files.includes(filename))
+    const current = await store.list()
+    const added = current.filter(({ id }) => !reports.some(report => report.id === id))
     assert.equal(added.length, 1)
-    assert.match(added[0], /^report-.*\.html$/)
-    files = current
-    const html = await fs.readFile(path.join(directory, "reports", added[0]), "utf8")
+    reports = current
+    const report = await store.read(added[0].id)
+    assert.ok(report, "Step 13 must publish a readable report snapshot")
+    const html = await renderReportHtml(report)
     assert.match(html, /id="peer-radar"/)
-    return JSON.parse(html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)[1])
+    const embedded = html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)
+    assert.ok(embedded, "Report export must embed report JSON")
+    assert.deepEqual(JSON.parse(embedded[1]), report)
+    return report
   }
   const mainOnly = (report) => {
     const { peerRadar, reportCreatedAt, coinDescriptions, ...main } = report

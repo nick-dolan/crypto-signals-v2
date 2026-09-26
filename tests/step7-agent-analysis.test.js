@@ -226,7 +226,7 @@ test("agent evidence hydrates complete peer leader objects, empty observations a
 })
 
 test("report renders nested peer evidence without object coercion or splitting JSON string values", async () => {
-  const source = await readFile(new URL("../src/steps/step13-report/report.js", import.meta.url), "utf8")
+  const source = await readFile(new URL("../src/web/report.js", import.meta.url), "utf8")
   const featureValue = vm.runInNewContext(`(${source.match(/^ {2}function featureValue [\s\S]*?^ {2}}/m)[0]})`)
   const list = {
     children: [],

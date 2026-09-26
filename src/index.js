@@ -64,7 +64,7 @@ async function runAll () {
         process.exitCode = 1
         if (["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step)) {
           peerRadarFailed = true
-          console.warn("⚠ Peer radar failed; continuing to the independent main HTML report")
+          console.warn("⚠ Peer radar failed; continuing to the independent main Parquet snapshot")
           continue
         }
         return

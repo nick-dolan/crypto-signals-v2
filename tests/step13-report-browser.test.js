@@ -4,13 +4,15 @@ import test from "node:test"
 import vm from "node:vm"
 
 import { isArray, isFinite, isFunction, isSafeInteger, isString } from "../src/helpers/utils.typed.js"
-import { createChartUpdater } from "../src/steps/step13-report/chart-update.js"
+import { renderReportHtml } from "../src/reports/render-report-html.js"
+import { createChartUpdater } from "../src/web/chart-update.js"
+import { readWebAsset } from "../src/web/read-web-asset.js"
 
 const script = new vm.Script(
-  await fs.readFile(new URL("../src/steps/step13-report/report.js", import.meta.url), "utf8"),
+  await fs.readFile(new URL("../src/web/report.js", import.meta.url), "utf8"),
   { filename: "report.js" },
 )
-const template = await fs.readFile(new URL("../src/steps/step13-report/report.html", import.meta.url), "utf8")
+const template = await fs.readFile(new URL("../src/web/report.html", import.meta.url), "utf8")
 
 // Only the DOM operations used by report.js; no layout, HTML parsing or event bubbling.
 function createNode (tagName = "div") {
@@ -111,6 +113,7 @@ function runReport (report, {
   updateChartHistory = () => assert.fail("Unexpected chart update"),
   chartsAvailable = true,
   configureChart = () => {},
+  browserScript = script,
 } = {}) {
   const document = { activeElement: null }
   const createElement = (tag) => {
@@ -172,7 +175,7 @@ function runReport (report, {
   const markers = []
   const updateCalls = []
   const directRequests = []
-  script.runInNewContext({
+  browserScript.runInNewContext({
     URL,
     isFinite,
     updateChartHistory: (coin, asOf, previous) => {
@@ -2856,5 +2859,32 @@ for (const value of [22, 0, undefined]) {
     hoverChart(chart)
     assert.equal(oiLegend(browser.byId), expected)
     assert.equal(browser.byId("chart-legend").children.at(-2).textContent, "Объём 17")
+  })
+}
+
+for (const mode of ["download", "website"]) {
+  test(`${mode} executes the generated shared renderer with the original charts, controls and no startup requests`, async () => {
+    const report = createReport(["COTI", "SOL"])
+    addDescriptions(report)
+    addPeerRadar(report)
+    addPeerHistories(report)
+    const html = mode === "download" ? await renderReportHtml(report) : null
+    const source = html
+      ? [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+      : `${(await readWebAsset("report.js")).content}\nglobalThis.renderReport()`
+    const browser = runReport(report, { browserScript: new vm.Script(source) })
+    assert.equal(browser.byId("coin-symbol").textContent, "COTI")
+    assert.equal(browser.charts.length, 1)
+    assert.equal(browser.charts[0].series[0].type, "Candlestick")
+    assert.ok(browser.byId("coin-description").textContent.includes(report.coinDescriptions[report.coins[0].baseCurrencyId].description))
+    selectCoin(browser, "SOL")
+    assert.equal(browser.byId("coin-symbol").textContent, "SOL")
+    click(browser.days[0])
+    click(browser.tabs[1])
+    assert.equal(browser.byId("peer-radar").hidden, false)
+    assert.ok(radarCharts(browser).length > 0)
+    assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), report)
+    assert.equal(browser.directRequests.length, 0)
+    assert.equal(browser.updateCalls.length, 0)
   })
 }

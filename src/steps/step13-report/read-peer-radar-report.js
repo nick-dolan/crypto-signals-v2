@@ -82,10 +82,10 @@ export async function readPeerRadarReport (asOf, { readJson = readTmpJson } = {}
       return unavailable("Некорректный формат результата шага 12. Перезапустите анализ радара; основной отчёт сохранён.")
     }
     if (data.asOf !== asOf) {
-      return unavailable("Результат шага 12 относится к другому срезу рынка. Для этого HTML нужны шаги 11–12 с тем же asOf.")
+      return unavailable("Результат шага 12 относится к другому срезу рынка. Для этого отчёта нужны шаги 11–12 с тем же asOf.")
     }
 
-    // A standalone step 12 report is self-contained; when a newer scan exists, don't show old analysis.
+    // When a newer scan exists, don't include an older analysis in the snapshot.
     const scan = await readJson("step11-peer-radar.json").catch((error) => {
       if (error.code === "ENOENT") {
         return undefined

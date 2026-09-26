@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import vm from "node:vm"
 import test from "node:test"
 
-import { renderReportHtml } from "../src/steps/step13-report/render-report-html.js"
+import { renderReportHtml } from "../src/reports/render-report-html.js"
 
 function scripts (html) {
   return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]

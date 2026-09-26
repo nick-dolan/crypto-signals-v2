@@ -7,6 +7,9 @@ import test from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
+import { renderReportHtml } from "../src/reports/render-report-html.js"
+import { createReportStore } from "../src/reports/store.js"
+
 for (const [name, altMarketBackground] of [
   ["canonical metric keeps full precision", {
     status: "up",
@@ -80,13 +83,16 @@ for (const [name, altMarketBackground] of [
     await assert.rejects(fs.access(path.join(directory, "tmp", "step3-market-context.json")), { code: "ENOENT" })
 
     await run("step13-report.js")
-    const reports = await fs.readdir(path.join(directory, "reports"))
+    const store = await createReportStore({ directory: path.join(directory, "reports") })
+    context.after(() => store.close())
+    const reports = await store.list()
     assert.equal(reports.length, 1)
-    assert.match(reports[0], /^report-.*\.html$/)
-    const html = await fs.readFile(path.join(directory, "reports", reports[0]), "utf8")
+    const report = await store.read(reports[0].id)
+    assert.ok(report, "Step 13 must publish a readable report snapshot")
+    const html = await renderReportHtml(report)
     const embedded = html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)
-    assert.ok(embedded, "Step 13 must embed report JSON")
-    const report = JSON.parse(embedded[1])
+    assert.ok(embedded, "Report export must embed report JSON")
+    assert.deepEqual(JSON.parse(embedded[1]), report)
 
     assert.equal(report.asOf, featureMetrics.asOf)
     assert.equal(report.candidateCount, 0)

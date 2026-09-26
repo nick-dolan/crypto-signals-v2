@@ -1,0 +1,144 @@
+.reports-shell {
+    max-width: 1120px;
+}
+
+.web-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #151e2a;
+    color: var(--accent);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.web-button:hover:not(:disabled) {
+    background: #1c2a3d;
+    text-decoration: none;
+}
+
+.web-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.web-actions,
+.reports-toolbar,
+.reports-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.web-navigation {
+    padding-top: 20px;
+    padding-bottom: 0;
+}
+
+.web-state {
+    padding: 24px;
+    margin-top: 20px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #101822;
+    color: var(--muted);
+}
+
+.web-state .web-button {
+    margin-top: 14px;
+}
+
+.reports-toolbar {
+    margin-bottom: 16px;
+}
+
+.reports-toolbar .muted,
+#reports-summary,
+.reports-pagination {
+    font-size: 12px;
+}
+
+.report-group {
+    margin-top: 18px;
+    padding: 18px 20px 0;
+}
+
+.report-group .section-heading {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.report-group h2 {
+    overflow-wrap: anywhere;
+}
+
+.report-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+}
+
+.report-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 0.7fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+}
+
+.report-row-main,
+.report-counts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.report-open {
+    font-weight: 600;
+}
+
+.report-row .muted,
+.report-counts,
+.report-download {
+    font-size: 12px;
+}
+
+.reports-pagination {
+    margin-top: 24px;
+}
+
+@media (max-width: 650px) {
+    .report-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+    }
+
+    .report-counts {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .report-download {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+
+    .report-group {
+        padding: 14px 14px 0;
+    }
+}
+
+@media (max-width: 380px) {
+    .report-row {
+        display: flex;
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

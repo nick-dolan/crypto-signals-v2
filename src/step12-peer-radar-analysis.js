@@ -5,7 +5,6 @@ import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { analyzePeerRadar } from "./steps/step12-peer-radar-analysis/analyze-peer-radar.js"
 import { InvalidPeerRadarAnalysisError } from "./steps/step12-peer-radar-analysis/parse-peer-radar-analysis.js"
-import { savePeerRadarReport } from "./steps/step12-peer-radar-analysis/save-peer-radar-report.js"
 
 export async function runPeerRadarAnalysisStep ({ callAgent } = {}) {
   const [scan, systemPrompt] = await Promise.all([
@@ -29,12 +28,11 @@ export async function runPeerRadarAnalysisStep ({ callAgent } = {}) {
     throw error
   }
 
-  const reportPath = await savePeerRadarReport(report)
   const outputPath = await writeTmpJson("step12-peer-radar-analysis.json", report)
 
-  console.log(`✓ Saved ${report.observationCount} peer radar observations (${report.watchCount} watch) to ${outputPath} and ${reportPath}`)
+  console.log(`✓ Prepared ${report.observationCount} peer radar observations (${report.watchCount} watch) in ${outputPath}; step 13 archives the complete report`)
 
-  return { report, outputPath, reportPath }
+  return { report, outputPath }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

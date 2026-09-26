@@ -1,0 +1,13 @@
+<div class="shell web-navigation">
+    <nav class="web-actions" aria-label="Навигация отчёта">
+        <a href="/">← Все отчёты</a>
+        <a id="report-download" class="web-button" hidden download>Скачать HTML</a>
+    </nav>
+    <section id="report-load-state" class="web-state" aria-busy="true" aria-label="Загрузка отчёта">
+        <p id="report-load-message" role="status" aria-live="polite">Загружаем отчёт…</p>
+        <button id="report-retry" class="web-button" type="button" hidden>Повторить</button>
+    </section>
+    <noscript>
+        <p class="warning">Для загрузки отчёта включите JavaScript в браузере.</p>
+    </noscript>
+</div>

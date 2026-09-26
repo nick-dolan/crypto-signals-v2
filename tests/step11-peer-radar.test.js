@@ -283,10 +283,7 @@ test("CLI 11 → 12 works with only steps 1–2 and the registry, leaving main o
   assert.deepEqual(report.observations[0].leaders, scan.candidates[0].leaders)
   assert.deepEqual(await readJson("tmp/step7-agent-analysis.json"), { untouched: true, topCandidates: [] })
   assert.equal(await fs.readFile(path.join(directory, "reports", "main.html"), "utf8"), "Unchanged main report")
-  const jsonReports = (await fs.readdir(path.join(directory, "reports"))).filter(filename => filename.endsWith(".json"))
-  assert.equal(jsonReports.length, 1)
-  assert.match(jsonReports[0], /^peer-radar-.*_GMT\+3\.json$/)
-  assert.deepEqual(await readJson(`reports/${jsonReports[0]}`), report)
+  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), ["main.html"])
 
   await fs.rm(path.join(directory, "data", "coin-peers.json"))
   await run(process.execPath, [fileURLToPath(new URL("../src/step11-peer-radar.js", import.meta.url))], { cwd: directory, timeout: 10_000 })
@@ -296,6 +293,7 @@ test("CLI 11 → 12 works with only steps 1–2 and the registry, leaving main o
   assert.equal(empty.analysis.callCount, 0)
   assert.equal(empty.coverage.unavailable, 5)
   assert.deepEqual(empty.observations, [])
+  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), ["main.html"])
 
   await writeJson("tmp/step2-data-bootstrap.json", { coinCount: 6 })
   await assert.rejects(run(process.execPath, [fileURLToPath(new URL("../src/step11-peer-radar.js", import.meta.url))], { cwd: directory, timeout: 10_000 }), /declares 6 coins/)

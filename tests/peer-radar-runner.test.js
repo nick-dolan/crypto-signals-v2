@@ -37,7 +37,7 @@ for (const failedSteps of [
       await fs.writeFile(path.join(directory, "src", filename), `
         import fs from "node:fs/promises"
         await fs.appendFile("order.txt", ${JSON.stringify(filename + "\n")})
-        ${filename === "step13-report.js" ? "await fs.writeFile(\"reports/main.html\", \"Main report\")" : ""}
+        ${filename === "step13-report.js" ? "await fs.writeFile(\"reports/main.parquet\", \"Saved report data\")" : ""}
         process.exitCode = ${failedSteps.includes(filename) ? 1 : 0}
       `)
     }
@@ -62,7 +62,7 @@ for (const failedSteps of [
     }
     if (failedSteps.includes("step7-agent-analysis.js")) {
       assert.equal(order.length, 9)
-      await assert.rejects(fs.access(path.join(directory, "reports", "main.html")), { code: "ENOENT" })
+      await assert.rejects(fs.access(path.join(directory, "reports", "main.parquet")), { code: "ENOENT" })
       return
     }
 
@@ -70,7 +70,7 @@ for (const failedSteps of [
     assert.equal(order.at(-1), "step13-report.js")
     assert.equal(order.includes("step12-peer-radar-analysis.js"), !failedSteps.includes("step11-peer-radar.js"))
     assert.ok(order.indexOf("step11-peer-radar.js") > order.indexOf("step10-context-enrichment.js"))
-    assert.equal(await fs.readFile(path.join(directory, "reports", "main.html"), "utf8"), "Main report")
+    assert.equal(await fs.readFile(path.join(directory, "reports", "main.parquet"), "utf8"), "Saved report data")
     if (failedSteps.includes("step1.1-coin-descriptions.js")) {
       assert.match(result.stderr, /Main report completed.*optional coin descriptions enrichment failed \(step 1\.1\)/)
     }

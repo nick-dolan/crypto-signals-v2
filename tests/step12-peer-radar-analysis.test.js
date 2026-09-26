@@ -436,7 +436,7 @@ for (const field of ["probability", "movementProbability", "confidence", "score"
   })
 }
 
-test("standalone empty step writes both JSON outputs without touching other pipeline files", async (context) => {
+test("standalone empty step prepares tmp data without archiving or touching other pipeline files", async (context) => {
   const scan = createScan(0)
   const directory = await prepareStepDirectory(context, scan)
   await fs.writeFile(path.join(directory, "tmp", "step7-agent-analysis.json"), "main analysis sentinel")
@@ -449,18 +449,16 @@ test("standalone empty step writes both JSON outputs without touching other pipe
 
   const output = JSON.parse(await fs.readFile(path.join(directory, "tmp", "step12-peer-radar-analysis.json"), "utf8"))
   const names = await fs.readdir(path.join(directory, "reports"))
-  const radarName = names.find(name => name.startsWith("peer-radar-"))
-  assert.match(radarName, /^peer-radar-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_GMT\+3\.json$/)
-  assert.equal(names.length, 2)
+  assert.deepEqual(names, ["main-report.html"])
   assert.equal(output.analysisStatus, "skipped_no_candidates")
   assert.equal(output.analysis.callCount, 0)
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "reports", radarName), "utf8")), output)
+
   assert.equal(await fs.readFile(path.join(directory, "tmp", "step7-agent-analysis.json"), "utf8"), "main analysis sentinel")
   assert.equal(await fs.readFile(path.join(directory, "reports", "main-report.html"), "utf8"), "main report sentinel")
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "tmp", "step11-peer-radar.json"), "utf8")), scan)
 })
 
-test("injected step saves the complete report with exact facts to tmp and lowercase reports", async (context) => {
+test("injected step prepares the complete radar with exact facts in tmp only", async (context) => {
   const scan = createScan(7)
   const directory = await prepareStepDirectory(context, scan)
   const response = createResponse(scan)
@@ -478,19 +476,17 @@ test("injected step saves the complete report with exact facts to tmp and lowerc
     assert.equal(calls, 1)
     assert.equal(result.report.analysisStatus, "complete")
     assert.ok(result.outputPath.endsWith("step12-peer-radar-analysis.json"))
-    assert.ok(result.reportPath.includes("reports"))
+    assert.equal(Object.hasOwn(result, "reportPath"), false)
   `)
 
   const output = JSON.parse(await fs.readFile(path.join(directory, "tmp", "step12-peer-radar-analysis.json"), "utf8"))
-  const reports = await fs.readdir(path.join(directory, "reports"))
-  assert.equal(reports.length, 1)
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "reports", reports[0]), "utf8")), output)
+  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
   assert.deepEqual(output.observations, [0, 2, 4, 6, 1, 3, 5].map(index => ({
     ...scan.candidates[index],
     ...response.observations[index],
   })))
   assert.equal(Object.hasOwn(output, "candidates"), false)
-  assert.deepEqual((await fs.readdir(directory)).sort(), ["reports", "tmp"])
+  assert.deepEqual(await fs.readdir(directory), ["tmp"])
 })
 
 test("invalid agent JSON is archived and the step rejects without creating success outputs", async (context) => {
@@ -521,13 +517,11 @@ test("a failed later analysis does not replace any previous successful report", 
   `)
   const tmpPath = path.join(directory, "tmp", "step12-peer-radar-analysis.json")
   const before = await fs.readFile(tmpPath, "utf8")
-  const reports = await fs.readdir(path.join(directory, "reports"))
-  const datedBefore = await fs.readFile(path.join(directory, "reports", reports[0]), "utf8")
+  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
   await runInjectedStep(directory, `
     await assert.rejects(runPeerRadarAnalysisStep({ callAgent: async () => "{}" }), /unexpected structure/)
   `)
 
   assert.equal(await fs.readFile(tmpPath, "utf8"), before)
-  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), reports)
-  assert.equal(await fs.readFile(path.join(directory, "reports", reports[0]), "utf8"), datedBefore)
+  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
 })
