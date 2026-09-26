@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-25T18:31:05.631Z",
+  "generatedAt": "2026-09-26T07:24:13.053Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-25T18:30:19.415Z"
+    "sourceGeneratedAt": "2026-09-26T07:23:55.556Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 253,
+  "coinCount": 254,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3706,6 +3706,22 @@
         {
           "url": "https://arkscic.com/whitepaper.pdf",
           "checkedAt": "2026-09-25T18:31:00.927Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAVNT",
+      "symbol": "AVNT",
+      "name": "Avantis",
+      "description": "Veranta, ранее Avantis, — платформа для торговли бессрочными контрактами на криптоактивы и реальные рынки, включая акции, валюты, металлы и индексы. Токен AVNT используется для защиты поставщиков ликвидности через стейкинг и получения скидок на торговые комиссии.",
+      "sources": [
+        {
+          "url": "https://www.veranta.xyz/",
+          "checkedAt": "2026-09-26T07:24:08.021Z"
+        },
+        {
+          "url": "https://www.binance.th/en/faq/coin-information/bfac41156c2246d5a11a782582b915ea",
+          "checkedAt": "2026-09-26T07:24:08.519Z"
         }
       ]
     }
