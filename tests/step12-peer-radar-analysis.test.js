@@ -139,7 +139,7 @@ test("empty peer scan skips the agent and retains complete coverage metadata", a
   assert.equal(report.timeframe, "1h")
   assert.deepEqual(report.analysis, {
     source: "github-copilot-sdk",
-    model: "GPT-6-Astra",
+    model: "Claude Opus 5.5",
     reasoningEffort: "high",
     callCount: 0,
   })
@@ -147,7 +147,7 @@ test("empty peer scan skips the agent and retains complete coverage metadata", a
   assert.equal(Object.hasOwn(report, "candidates"), false)
 })
 
-test("one GPT-6-Astra high call receives only whitelisted peer facts and no tools", async () => {
+test("one Claude Opus 5.5 high call receives only whitelisted peer facts and no tools", async () => {
   const expected = createScan()
   expected.registryGeneratedAt = "2026-09-23T07:00:00.000Z"
   const scan = structuredClone(expected)
@@ -189,7 +189,7 @@ test("one GPT-6-Astra high call receives only whitelisted peer facts and no tool
   assert.deepEqual(calls, [{
     prompt: "Peer-only prompt",
     payload: expected,
-    options: { model: "GPT-6-Astra", reasoningEffort: "high" },
+    options: { model: "Claude Opus 5.5", reasoningEffort: "high" },
   }])
   assert.equal(Object.hasOwn(calls[0].options, "tools"), false)
   assert.deepEqual(report, {
@@ -208,7 +208,7 @@ test("one GPT-6-Astra high call receives only whitelisted peer facts and no tool
     analysisStatus: "complete",
     analysis: {
       source: "github-copilot-sdk",
-      model: "GPT-6-Astra",
+      model: "Claude Opus 5.5",
       reasoningEffort: "high",
       callCount: 1,
     },
@@ -469,7 +469,7 @@ test("injected step prepares the complete radar with exact facts in tmp only", a
         calls += 1
         assert.ok(prompt.includes("Независимый peer radar"))
         assert.deepEqual(JSON.parse(message), ${JSON.stringify(scan)})
-        assert.deepEqual(options, { model: "GPT-6-Astra", reasoningEffort: "high" })
+        assert.deepEqual(options, { model: "Claude Opus 5.5", reasoningEffort: "high" })
         return ${JSON.stringify(JSON.stringify(response))}
       },
     })
