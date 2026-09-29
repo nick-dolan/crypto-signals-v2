@@ -7,6 +7,7 @@ import { addReportContext } from "./steps/step13-report/add-report-context.js"
 import { buildPeerRadarHistories } from "./steps/step13-report/build-peer-radar-histories.js"
 import { buildReportData } from "./steps/step13-report/build-report-data.js"
 import { readCoinDescriptions } from "./steps/step13-report/read-coin-descriptions.js"
+import { readMarketBriefReport } from "./steps/step13-report/read-market-brief-report.js"
 import { readPeerRadarReport } from "./steps/step13-report/read-peer-radar-report.js"
 
 export async function runReportStep ({ createStore = createReportStore } = {}) {
@@ -17,9 +18,13 @@ export async function runReportStep ({ createStore = createReportStore } = {}) {
     readTmpJson("step9-twitter-enrichment.json"),
     readTmpJson("step10-context-enrichment.json"),
   ])
-  const peerRadar = await readPeerRadarReport(analysis.asOf)
+  const [peerRadar, marketBrief] = await Promise.all([
+    readPeerRadarReport(analysis.asOf),
+    readMarketBriefReport(analysis.asOf),
+  ])
   const report = {
     ...addReportContext(await buildReportData(analysis, payload, shortlist), sources, context),
+    marketBrief,
     peerRadar: {
       ...peerRadar,
       histories: peerRadar.data ? await buildPeerRadarHistories(peerRadar.data) : {},
@@ -41,6 +46,9 @@ export async function runReportStep ({ createStore = createReportStore } = {}) {
   console.log(`✓ Saved ${report.candidateCount} candidates with charts, context and peer radar as a Parquet snapshot to ${archive.directory}`)
   if (report.peerRadar.warning) {
     console.warn(`⚠ ${report.peerRadar.warning}`)
+  }
+  if (report.marketBrief.warning) {
+    console.warn(`⚠ ${report.marketBrief.warning}`)
   }
   const warnings = report.coins.filter(coin => coin.history.warning)
   if (warnings.length) {

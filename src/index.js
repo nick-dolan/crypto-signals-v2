@@ -31,6 +31,7 @@ async function runAll () {
 
     let coinDescriptionsFailed = false
     let peerRadarFailed = false
+    let marketBriefFailed = false
 
     for (const step of [
       "step1-crypto-universe.js",
@@ -47,6 +48,7 @@ async function runAll () {
       "step10-context-enrichment.js",
       "step11-peer-radar.js",
       "step12-peer-radar-analysis.js",
+      "step12.1-market-brief.js",
       "step13-report.js",
     ]) {
       if (peerRadarFailed && step === "step12-peer-radar-analysis.js") {
@@ -61,6 +63,11 @@ async function runAll () {
           console.warn("⚠ Optional coin descriptions enrichment failed (step 1.1); continuing the pipeline")
           continue
         }
+        if (step === "step12.1-market-brief.js") {
+          marketBriefFailed = true
+          console.warn("⚠ Optional market brief failed (step 12.1); continuing to the main report")
+          continue
+        }
         process.exitCode = 1
         if (["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step)) {
           peerRadarFailed = true
@@ -73,10 +80,11 @@ async function runAll () {
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
 
-    if (coinDescriptionsFailed || peerRadarFailed) {
+    if (coinDescriptionsFailed || peerRadarFailed || marketBriefFailed) {
       const failures = [
         coinDescriptionsFailed && "optional coin descriptions enrichment failed (step 1.1)",
         peerRadarFailed && "the peer radar failed",
+        marketBriefFailed && "optional market brief failed (step 12.1)",
       ].filter(Boolean).join("; ")
       console.warn(`\n⚠ Main report completed in ${duration}s, but ${failures}`)
     } else {

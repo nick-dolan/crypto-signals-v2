@@ -85,6 +85,18 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.ok(html.indexOf("id=\"alt-market-background\"") < html.indexOf("id=\"market-summary\""))
   assert.match(html, /\.alt-market-background\[data-status="up"\]/)
   assert.match(html, /\.alt-market-background\[data-status="down"\]/)
+  assert.match(html, /<\/header>\s*<section id="market-brief"[^>]*data-status="unavailable"[^>]*aria-labelledby="market-brief-heading"[^>]*hidden>/)
+  assert.match(html, /<h2 id="market-brief-heading">Главное за сутки<\/h2>/)
+  assert.match(html, /id="market-brief-status"[^>]*role="status"/)
+  assert.match(html, /id="market-brief-window"/)
+  assert.match(html, /id="market-brief-coverage"[^>]*aria-label="Покрытие источников"/)
+  assert.match(html, /id="market-brief-events"[^>]*><\/div>\s*<\/section>\s*<div id="report-tabs"/)
+  assert.match(text, /Ограниченная выборка источников, не все новости рынка/)
+  assert.match(text, /Сообщения источников не равны подтверждённым фактам\. На рейтинг монет не влияет/)
+  assert.match(html, /\.market-brief\s*\{[^}]*overflow-wrap: anywhere;/)
+  assert.match(html, /\.market-brief-event-heading\s*\{[^}]*flex-wrap: wrap;/)
+  assert.match(html, /\.market-brief\[data-status="partial"\]/)
+  assert.match(html, /\.market-brief\[data-status="unavailable"\]/)
   assert.match(html, /id="report-tabs"[^>]*role="tablist"[^>]*aria-label="Разделы отчёта"/)
   assert.match(html, /id="main-tab"[^>]*role="tab"[^>]*aria-controls="main-panel"[^>]*aria-selected="true"[^>]*tabindex="0"/)
   assert.match(html, /id="peer-radar-tab"[^>]*role="tab"[^>]*aria-controls="peer-radar"[^>]*aria-selected="false"[^>]*tabindex="-1"/)
@@ -153,6 +165,14 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
     },
     definitions: { unsafe },
     altMarketBackground: { status: "unavailable", change4hPct: null, breadth4h: null, warning: unsafe },
+    marketBrief: {
+      schemaVersion: 1, marketAsOf: null, asOf: "2026-09-15T13:20:00.000Z", from: "2026-09-14T13:20:00.000Z",
+      generatedAt: "2026-09-15T13:22:00.000Z", status: "partial", warning: unsafe,
+      coverage: [{ source: "tavily", status: "partial", fetchedCount: 1, error: unsafe }],
+      sources: [{ id: "source", channel: "tavily", url: "https://news.example/market", title: unsafe, text: unsafe, publishedAt: "2026-09-15T13:00:00.000Z", author: unsafe }],
+      events: [{ title: unsafe, summary: unsafe, whyItMatters: unsafe, verification: "unconfirmed", sourceIds: ["source"] }],
+      analysis: { model: "gemini-3.7-flash" },
+    },
     peerRadar: {
       status: "available", warning: unsafe,
       histories: { coin: { baseCurrencyId: unsafe, symbol: unsafe, marketSymbol: unsafe, points: [{ time: 1, value: 2 }, { time: 2 }], warning: unsafe } },

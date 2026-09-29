@@ -7,6 +7,8 @@ import test from "node:test"
 import { promisify } from "node:util"
 
 import { createReportStore } from "../src/reports/store.js"
+import { renderReportHtml } from "../src/reports/render-report-html.js"
+import { buildMarketBrief } from "../src/steps/step12.1-market-brief/build-market-brief.js"
 
 async function prepareInputs (t, empty = false) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step13-report-save-"))
@@ -137,6 +139,53 @@ test("rebuilding step 13 creates another immutable snapshot and preserves legacy
     assert.equal((await store.list()).length, 2)
     assert.deepEqual(await store.read(first.id), before)
     assert.equal(await fs.readFile(path.join(directory, "reports", "legacy.html"), "utf8"), "Legacy report")
+  } finally {
+    await store.close()
+  }
+})
+
+test("step 13 preserves the digest and source provenance in the immutable archive and downloadable HTML", async (t) => {
+  const directory = await prepareInputs(t)
+  const brief = await buildMarketBrief("Prompt", {
+    marketAsOf: "2026-09-26T11:00:00.000Z",
+    collectSources: async () => ({
+      from: "2026-09-25T12:00:00.000Z", asOf: "2026-09-26T12:00:00.000Z", warnings: [],
+      sources: [{
+        id: "source-1", channel: "tradingview", title: "Событие <script>",
+        text: "Сохранённая публикация </script>", url: "https://publisher.example/news",
+        publishedAt: "2026-09-26T11:55:00.000Z", author: null, publisher: "Original publisher",
+      }],
+      coverage: ["tavily", "tradingview", "twitter"].map(source => ({
+        source, status: source === "tradingview" ? "available" : "empty",
+        fetchedCount: source === "tradingview" ? 1 : 0, error: null,
+      })),
+    }),
+    callAgent: async () => JSON.stringify({
+      schemaVersion: 1, asOf: "2026-09-26T12:00:00.000Z",
+      events: [{
+        title: "Главное событие", summary: "Короткая сводка </script>", whyItMatters: "Важный контекст",
+        verification: "unconfirmed", sourceIds: ["source-1"],
+      }],
+    }),
+  })
+  await fs.writeFile(path.join(directory, "tmp", "step12.1-market-brief.json"), JSON.stringify(brief))
+  await runStep(directory)
+  const store = await createReportStore({ directory: path.join(directory, "reports") })
+  try {
+    const [metadata] = await store.list()
+    const report = await store.read(metadata.id)
+    assert.deepEqual(report.marketBrief, brief)
+    assert.equal(report.coins[0].movementProbability, 0.7)
+    assert.equal(report.asOf, brief.marketAsOf)
+    assert.notEqual(report.asOf, report.marketBrief.asOf)
+    await fs.rm(path.join(directory, "tmp"), { recursive: true })
+    assert.deepEqual((await store.read(metadata.id)).marketBrief, brief)
+    const html = await renderReportHtml(report)
+    assert.match(html, /"marketBrief":/)
+    assert.match(html, /"publisher":"Original publisher"/)
+    assert.ok(html.includes("Сохранённая публикация \\u003c/script>"))
+    assert.ok(html.includes("Короткая сводка \\u003c/script>"))
+    assert.doesNotMatch(html, /Короткая сводка <\/script>/)
   } finally {
     await store.close()
   }

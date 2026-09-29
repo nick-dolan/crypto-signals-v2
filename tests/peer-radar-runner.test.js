@@ -15,6 +15,9 @@ for (const failedSteps of [
   ["step1.1-coin-descriptions.js", "step11-peer-radar.js"],
   ["step1.1-coin-descriptions.js", "step12-peer-radar-analysis.js"],
   ["step1.1-coin-descriptions.js", "step7-agent-analysis.js"],
+  ["step12.1-market-brief.js"],
+  ["step11-peer-radar.js", "step12.1-market-brief.js"],
+  ["step1.1-coin-descriptions.js", "step12.1-market-brief.js"],
 ]) {
   test(`pipeline order and independent report when failure is ${failedSteps.join(", ") || "absent"}`, { timeout: 30_000 }, async (t) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "peer-radar-runner-"))
@@ -32,7 +35,7 @@ for (const failedSteps of [
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
       "step5-preliminary-filter.js", "step6-agent-payload.js", "step7-agent-analysis.js",
       "step8-news-enrichment.js", "step9-twitter-enrichment.js", "step10-context-enrichment.js",
-      "step11-peer-radar.js", "step12-peer-radar-analysis.js", "step13-report.js",
+      "step11-peer-radar.js", "step12-peer-radar-analysis.js", "step12.1-market-brief.js", "step13-report.js",
     ]) {
       await fs.writeFile(path.join(directory, "src", filename), `
         import fs from "node:fs/promises"
@@ -48,7 +51,7 @@ for (const failedSteps of [
     }).then(output => ({ ...output, code: 0 }), error => error)
     const finishedAt = Math.floor(Date.now() / 1_000)
     const order = (await fs.readFile(path.join(directory, "order.txt"), "utf8")).trim().split("\n")
-    assert.equal(result.code, failedSteps.some(step => step !== "step1.1-coin-descriptions.js") ? 1 : 0)
+    assert.equal(result.code, failedSteps.some(step => !["step1.1-coin-descriptions.js", "step12.1-market-brief.js"].includes(step)) ? 1 : 0)
     assert.deepEqual(order.slice(0, 9), [
       "step1-crypto-universe.js", "step1.1-coin-descriptions.js", "step2-data-bootstrap.js",
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
@@ -66,7 +69,8 @@ for (const failedSteps of [
       return
     }
 
-    assert.equal(order.length, failedSteps.includes("step11-peer-radar.js") ? 14 : 15)
+    assert.equal(order.length, failedSteps.includes("step11-peer-radar.js") ? 15 : 16)
+    assert.equal(order.at(-2), "step12.1-market-brief.js")
     assert.equal(order.at(-1), "step13-report.js")
     assert.equal(order.includes("step12-peer-radar-analysis.js"), !failedSteps.includes("step11-peer-radar.js"))
     assert.ok(order.indexOf("step11-peer-radar.js") > order.indexOf("step10-context-enrichment.js"))
@@ -76,6 +80,10 @@ for (const failedSteps of [
     }
     if (failedSteps.some(step => ["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step))) {
       assert.match(result.stderr, /Main report completed.*peer radar failed/)
+    }
+    if (failedSteps.includes("step12.1-market-brief.js")) {
+      assert.match(result.stderr, /Optional market brief failed \(step 12\.1\); continuing to the main report/)
+      assert.match(result.stderr, /Main report completed.*optional market brief failed/)
     }
     if (!failedSteps.length) {
       const completion = result.stdout.match(/✨ All steps completed successfully in \d+\.\ds! · (\d{1,2} [A-Z][a-z]+ \d{2}:\d{2}) UTC\+3/)
