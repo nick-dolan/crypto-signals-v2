@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T14:29:07.851Z",
+  "generatedAt": "2026-09-29T10:11:43.186Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-28T14:28:37.924Z"
+    "sourceGeneratedAt": "2026-09-29T10:10:50.148Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 257,
+  "coinCount": 259,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3770,6 +3770,38 @@
         {
           "url": "https://www.coingecko.com/en/coins/irys",
           "checkedAt": "2026-09-28T14:29:05.111Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMOCAV",
+      "symbol": "MOCA",
+      "name": "Moca Network",
+      "description": "Moca Network создаёт единую конфиденциальную инфраструктуру цифровой идентичности на базе доказательств с нулевым разглашением, позволяющую переносить и проверять данные доступа и репутации между платформами. MOCA служит утилитарным токеном сети для оплаты транзакций, создания, хранения и проверки данных, а также участвует в управлении через Moca DAO.",
+      "sources": [
+        {
+          "url": "https://moca.network/",
+          "checkedAt": "2026-09-29T10:11:24.744Z"
+        },
+        {
+          "url": "https://www.moca.foundation/moca-coin",
+          "checkedAt": "2026-09-29T10:11:24.974Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDUSK",
+      "symbol": "DUSK",
+      "name": "Dusk",
+      "description": "Dusk — публичный блокчейн первого уровня для выпуска, торговли и расчётов по регулируемым цифровым активам, поддерживающий конфиденциальные переводы, выборочное раскрытие данных и смарт-контракты с доказательствами с нулевым разглашением. Токен DUSK используется в стейкинге для защиты сети.",
+      "sources": [
+        {
+          "url": "https://dusk.network/",
+          "checkedAt": "2026-09-29T10:11:37.389Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/dusk-network",
+          "checkedAt": "2026-09-29T10:11:40.305Z"
         }
       ]
     }
