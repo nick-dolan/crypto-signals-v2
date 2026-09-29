@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "all": "node src/index.js",
-    "server": "node src/server/index.js"
+    "server": "node src/server/index.js",
+    "research:prove": "node src/research/prove-15m.js"
   },
   "keywords": [],
   "author": "",
