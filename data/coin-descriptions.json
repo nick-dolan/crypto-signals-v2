@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-27T08:27:05.486Z",
+  "generatedAt": "2026-09-28T14:29:07.851Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-27T08:26:33.556Z"
+    "sourceGeneratedAt": "2026-09-28T14:28:37.924Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 256,
+  "coinCount": 257,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3754,6 +3754,22 @@
         {
           "url": "https://www.coingecko.com/en/coins/cat-in-a-dogs-world",
           "checkedAt": "2026-09-27T08:27:01.643Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCIRYS",
+      "symbol": "IRYS",
+      "name": "Irys",
+      "description": "Irys — блокчейн первого уровня, объединяющий хранение данных и выполнение смарт-контрактов; сеть поддерживает временное и постоянное хранение с проверкой данных. Токен IRYS используется для оплаты хранения и выполнения операций, а также для стейкинга валидаторов.",
+      "sources": [
+        {
+          "url": "https://irys.xyz/",
+          "checkedAt": "2026-09-28T14:29:05.030Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/irys",
+          "checkedAt": "2026-09-28T14:29:05.111Z"
         }
       ]
     }
