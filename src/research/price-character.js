@@ -145,6 +145,10 @@ export function buildPriceCharacterReport (snapshot) {
     throw new Error("Price character research requires native 15m candles")
   }
   const analysisDays = snapshot.analysisDays ?? 90
+  const requestedDays = snapshot.requestedDays ?? 90
+  if (!isInt(requestedDays) || requestedDays < analysisDays || requestedDays > 90) {
+    throw new Error("Requested research days must cover the analysis and not exceed 90")
+  }
   const periods = preparePriceCharacterPeriods(snapshot.periods, snapshot.endTime, analysisDays)
   const rows = describeCandles(periods)
   const weeks = []
@@ -165,7 +169,7 @@ export function buildPriceCharacterReport (snapshot) {
     startTime: rows[0].time,
     endTime: snapshot.endTime,
     coverage: {
-      requestedDays: 90,
+      requestedDays,
       analysisDays,
       analysisBars: rows.length,
       warmupBars: 97,
@@ -173,8 +177,8 @@ export function buildPriceCharacterReport (snapshot) {
       intervalSeconds: 900,
       missingBars: 0,
     },
-    warnings: analysisDays < 90
-      ? [`Запрошено 90 дней; полученной истории хватает на ${analysisDays} полных дней анализа и прогрев. Это не 90-дневная выборка; отсутствие более ранних свечей не доказывает дату начала торгов.`]
+    warnings: analysisDays < requestedDays
+      ? [`Запрошено ${requestedDays} дней; полученной истории хватает на ${analysisDays} полных дней анализа и прогрев. Это не ${requestedDays}-дневная выборка; отсутствие более ранних свечей не доказывает дату начала торгов.`]
       : [],
     methodology: [
       "Используем только закрытые свечи с полной сеткой 15m, без заполнения пропусков. Прогрев: 96 свечей предыдущих суток и ещё одна свеча для previousClose.",
@@ -186,7 +190,7 @@ export function buildPriceCharacterReport (snapshot) {
     ],
     windows: [...new Set([7, 30, analysisDays])].map(days => summarize(
       rows.slice(-days * 96),
-      days === analysisDays && days < 90 ? `${days} дней (доступно из 90)` : `${days} дней`,
+      days === analysisDays && days < requestedDays ? `${days} дней (доступно из ${requestedDays})` : `${days} дней`,
     )),
     weeks,
     spikes: rows.filter(row => isFinite(row.rangeMultiple) && row.rangeMultiple >= 4)

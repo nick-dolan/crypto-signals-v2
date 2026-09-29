@@ -211,6 +211,11 @@ test("short source history is explicitly labelled; missing bars are not disguise
   const minimum = buildPriceCharacterReport({ ...data, analysisDays: 30 })
   assert.deepEqual(minimum.windows.map(window => window.days), [7, 30])
   assert.throws(() => buildPriceCharacterReport({ ...data, analysisDays: 29 }), /between 30 and 90/)
+  const aligned = buildPriceCharacterReport({ ...data, requestedDays: 58, analysisDays: 58 })
+  assert.equal(aligned.coverage.requestedDays, 58)
+  assert.deepEqual(aligned.warnings, [])
+  assert.equal(aligned.windows.at(-1).label, "58 дней")
+  assert.throws(() => buildPriceCharacterReport({ ...data, requestedDays: 30, analysisDays: 58 }), /Requested research days/)
 })
 
 test("runner saves a standalone report and reanalyses the unchanged cache without network calls", async (t) => {
