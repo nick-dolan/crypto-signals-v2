@@ -261,190 +261,318 @@ function createReport (symbols = ["COTI"]) {
   return report
 }
 
-function addMarketBrief (report) {
+function addMarketBrief (report, schemaVersion = 2) {
   report.marketBrief = {
-    schemaVersion: 1,
+    schemaVersion,
     marketAsOf: report.asOf,
     asOf: "2026-09-15T13:20:00.000Z",
-    from: "2026-09-14T13:20:00.000Z",
+    from: schemaVersion === 2 ? "2026-09-15T07:20:00.000Z" : "2026-09-14T13:20:00.000Z",
     generatedAt: "2026-09-15T13:22:00.000Z",
     status: "available",
     warning: null,
     coverage: [
-      { source: "tavily", status: "available", fetchedCount: 8, error: null },
       { source: "tradingview", status: "available", fetchedCount: 5, error: null },
       { source: "twitter", status: "available", fetchedCount: 3, error: null },
     ],
     sources: [
-      { id: "search", channel: "tavily", url: "https://news.example/market", title: "Рыночная новость", text: "Текст новости", publishedAt: "2026-09-15T11:10:00.000Z", author: "News desk" },
-      { id: "tv", channel: "tradingview", url: "https://www.tradingview.com/news/market/", title: "Публикация TradingView", text: "Сохранённая публикация", publishedAt: "2026-09-15T12:15:00.000Z", author: null },
+      { id: "extra", channel: "tradingview", url: "https://news.example/market", title: "Рыночная новость", text: "Текст новости", publishedAt: "2026-09-15T11:10:00.000Z", author: "News desk", publisher: "Market Journal" },
+      { id: "tv", channel: "tradingview", url: "https://www.tradingview.com/news/market/", title: "Публикация TradingView", text: "Сохранённая публикация", publishedAt: "2026-09-15T12:15:00.000Z", author: null, publisher: "CoinDesk" },
       { id: "social", channel: "twitter", url: "https://x.com/researcher/status/123", title: "Сообщение аналитика", text: "Непроверенное сообщение", publishedAt: "2026-09-15T13:05:00.000Z", author: "@researcher" },
-      { id: "unused", channel: "tavily", url: "https://news.example/unused", title: "Неиспользованная публикация", text: "Другой текст", publishedAt: "2026-09-15T13:10:00.000Z", author: null },
+      { id: "unused", channel: "tradingview", url: "https://news.example/unused", title: "Неиспользованная публикация", text: "Другой текст", publishedAt: "2026-09-15T13:10:00.000Z", author: null },
     ],
-    events: Array.from({ length: 6 }, (_, index) => ({
+    analysis: { model: "gemini-3.7-flash" },
+  }
+  if (schemaVersion === 2) {
+    report.marketBrief.paragraphs = [
+      { text: "Краткое сообщение о рынке. Возможное влияние на монеты.", sourceIds: ["social", "tv"] },
+      { text: "Ещё одно сообщение в доступной выборке.", sourceIds: ["tv", "extra"] },
+    ]
+  } else {
+    report.marketBrief.coverage.push({ source: "tavily", status: "available", fetchedCount: 8, error: null })
+    report.marketBrief.sources[0].channel = "tavily"
+    report.marketBrief.events = Array.from({ length: 5 }, (_, index) => ({
       title: `Событие ${index + 1}`,
       summary: `Краткое сообщение ${index + 1}.`,
       whyItMatters: `Возможное влияние ${index + 1}.`,
       verification: index === 0 ? "unconfirmed" : "reported",
-      sourceIds: index === 0 ? ["social", "tv", "search"] : ["tv"],
-    })),
-    analysis: { model: "gemini-3.7-flash" },
+      sourceIds: index === 0 ? ["social", "tv", "extra"] : ["tv"],
+    }))
   }
   return report.marketBrief
 }
 
-test("market brief renders at most five events, all referenced publications and only unconfirmed badges", () => {
+test("v2 market brief shows two short paragraphs with compact, globally numbered citations and no headings", () => {
   const report = createReport()
   const brief = addMarketBrief(report)
   const before = structuredClone(report)
   const { byId, updateCalls, directRequests } = runReport(report)
-  const events = byId("market-brief-events").children
+  const paragraphs = byId("market-brief-paragraphs").children
 
   assert.equal(byId("market-brief").hidden, false)
   assert.equal(byId("market-brief").dataset.status, "available")
-  assert.equal(byId("market-brief-status").textContent, "Сводка готова")
-  assert.equal(byId("market-brief-warning").hidden, true)
+  assert.equal(byId("market-brief").attributes.get("aria-label"), "Краткая сводка рынка")
+  assert.equal(byId("market-brief").attributes.has("aria-labelledby"), false)
+  assert.equal(byId("market-brief-note").hidden, true)
   assert.equal(byId("market-brief-empty").hidden, true)
-  assert.equal(events.length, 5)
-  for (const [index, article] of events.entries()) {
-    const event = brief.events[index]
-    const nodes = descendants(article)
-    const citations = nodes.find(node => node.className === "market-brief-sources").children
-    assert.equal(nodes.find(node => node.tagName === "H3").textContent, event.title)
-    assert.equal(nodes.find(node => node.className === "market-brief-summary").textContent, `${event.summary} ${event.whyItMatters}`)
-    assert.equal(nodes.filter(node => node.className === "badge market-brief-unconfirmed").length, index === 0 ? 1 : 0)
-    assert.equal(citations.length, event.sourceIds.length)
-    for (const [sourceIndex, id] of event.sourceIds.entries()) {
+  assert.equal(paragraphs.length, 2)
+  assert.ok(paragraphs.reduce((length, node) => length + node.children[0].textContent.length, 0) <= 800)
+  for (const [index, node] of paragraphs.entries()) {
+    const paragraph = brief.paragraphs[index]
+    assert.equal(node.tagName, "P")
+    assert.equal(node.children[0].textContent, paragraph.text)
+    assert.equal(node.children[1].className, "market-brief-citations")
+    assert.deepEqual(node.children[1].children.map(link => link.textContent), index === 0 ? ["[1]", "[2]"] : ["[2]", "[3]"])
+    for (const [sourceIndex, id] of paragraph.sourceIds.entries()) {
       const source = brief.sources.find(source => source.id === id)
-      const citation = citations[sourceIndex]
-      const link = citation.children[0]
+      const link = node.children[1].children[sourceIndex]
       assert.equal(link.tagName, "A")
-      assert.equal(link.textContent, source.title)
       assert.equal(link.href, source.url)
       assert.equal(link.target, "_blank")
       assert.equal(link.rel, "noopener noreferrer")
-      assert.ok(citation.textContent.includes(source.author ?? "TradingView"))
-      assert.match(citation.textContent, /Опубликовано:.*2026.*UTC/)
-      assert.ok(citation.textContent.includes(source.publishedAt.slice(11, 16)))
+      for (const detail of [source.author, source.publisher, source.title].filter(Boolean)) {
+        assert.ok(link.title.includes(detail))
+        assert.ok(!node.textContent.includes(detail))
+      }
+      assert.match(link.title, /2026.*UTC/)
+      assert.ok(link.title.includes(source.publishedAt.slice(11, 16)))
+      assert.ok(!link.title.includes(source.text))
+      assert.equal(link.attributes.get("aria-label"), `Источник ${link.textContent.slice(1, -1)}: ${link.title}`)
     }
   }
-  assert.match(events[0].textContent, /Не подтверждено/)
-  assert.match(events[0].textContent, /X \/ Twitter.*TradingView.*Tavily/)
-  assert.doesNotMatch(byId("market-brief-events").textContent, /Событие 6|Неиспользованная публикация|Подтверждено/)
-  assert.deepEqual(byId("market-brief-coverage").children.map(node => node.textContent), [
-    "Tavily: доступен · получено 8", "TradingView: доступен · получено 5", "X / Twitter: доступен · получено 3",
-  ])
+  for (const id of ["market-brief-heading", "market-brief-status", "market-brief-window", "market-brief-coverage", "market-brief-warning", "market-brief-events"]) {
+    assert.equal(byId(id), null)
+  }
+  assert.ok(descendants(byId("market-brief-paragraphs")).every(node => !["H2", "H3", "UL", "LI", "ARTICLE"].includes(node.tagName)))
+  assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Неиспользованная публикация|Сводка готова|получено/)
   assert.deepEqual(report, before)
   assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
   assert.deepEqual(updateCalls, [])
   assert.deepEqual(directRequests, [])
 })
 
-test("market brief uses its own 24-hour news cutoff, not candle or report generation times", () => {
-  for (const marketAsOf of [null, "2026-09-15T09:00:00.000Z"]) {
-    const report = createReport()
-    addMarketBrief(report).marketAsOf = marketAsOf
-    const { byId } = runReport(report)
-    assert.match(byId("market-brief-window").textContent, /24 часа: 14.*2026.*13:20 UTC — 15.*2026.*13:20 UTC/)
-    assert.match(byId("market-brief-window").textContent, /срез новостей, не свечей/)
-    assert.doesNotMatch(byId("market-brief-window").textContent, /09:00|11:37|13:22/)
-    assert.equal(byId("as-of").dateTime, report.asOf)
-  }
-})
-
-test("legacy reports hide the market brief without affecting candidates, charts or tabs", () => {
-  for (const marketBrief of [undefined, null]) {
-    const report = createReport()
-    report.marketBrief = marketBrief
-    const { byId, charts, updateCalls, directRequests } = runReport(report)
-    assert.equal(byId("market-brief").hidden, true)
-    assert.equal(byId("market-brief-events").children.length, 0)
-    assert.equal(byId("coin-detail").hidden, false)
-    assert.equal(charts.length, 1)
-    click(byId("peer-radar-tab"))
-    assert.equal(byId("market-brief").hidden, true)
-    assert.equal(byId("peer-radar").hidden, false)
-    click(byId("main-tab"))
-    assert.equal(byId("main-panel").hidden, false)
-    assert.equal(byId("explanation").textContent, report.coins[0].explanation)
-    assert.deepEqual(updateCalls, [])
-    assert.deepEqual(directRequests, [])
-  }
-})
-
-test("partial market briefs keep events and expose coverage failures, counts and warnings", () => {
-  for (const warning of [null, "Часть источников не ответила."]) {
+test("v2 bounds rendering to two paragraphs, 800 text characters and three distinct used sources without changing saved data", () => {
+  for (const lengths of [[400, 400], [400, 450], [900, 100]]) {
     const report = createReport()
     const brief = addMarketBrief(report)
+    brief.paragraphs = [
+      { text: "А".repeat(lengths[0]), sourceIds: ["missing", "social", "social", "tv"] },
+      { text: "Б".repeat(lengths[1]), sourceIds: ["tv", "extra", "unused"] },
+      { text: "Третий абзац не входит в сводку.", sourceIds: ["unused"] },
+    ]
+    brief.events = [{ summary: "Старое событие не заменяет v2", sourceIds: ["unused"] }]
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+    const paragraphs = byId("market-brief-paragraphs").children
+    const texts = paragraphs.map(node => node.children[0].textContent)
+    const links = descendants(byId("market-brief-paragraphs")).filter(node => node.tagName === "A")
+    assert.equal(paragraphs.length, lengths[0] > 800 ? 1 : 2)
+    assert.equal(texts.join("").length, 800)
+    assert.equal(texts.at(-1).endsWith("…"), lengths[0] + lengths[1] > 800)
+    assert.deepEqual(links.map(link => link.textContent), lengths[0] > 800 ? ["[1]", "[2]"] : ["[1]", "[2]", "[2]", "[3]"])
+    assert.equal(links.some(link => link.href.endsWith("/unused")), false)
+    assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Третий абзац|Старое событие/)
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  }
+})
+
+test("legacy v1 preserves full prose and inline unconfirmed prefixes without event titles or long source lists", () => {
+  const report = createReport()
+  const brief = addMarketBrief(report, 1)
+  brief.events[0].summary = "Архивное подробное сообщение. ".repeat(40)
+  brief.events[0].sourceIds.push("unused")
+  const before = structuredClone(report)
+  const { byId } = runReport(report)
+  const paragraphs = byId("market-brief-paragraphs").children
+  assert.equal(paragraphs.length, brief.events.length)
+  assert.ok(paragraphs[0].children[0].textContent.length > 800)
+  for (const [index, node] of paragraphs.entries()) {
+    const event = brief.events[index]
+    assert.equal(node.children[0].textContent, `${index === 0 ? "Не подтверждено: " : ""}${event.summary} ${event.whyItMatters}`)
+    assert.ok(!node.textContent.includes(event.title))
+    assert.deepEqual(node.children[1].children.map(link => link.textContent), index === 0 ? ["[1]", "[2]", "[3]"] : ["[2]"])
+  }
+  const nodes = descendants(byId("market-brief-paragraphs"))
+  assert.ok(nodes.every(node => !["H2", "H3", "UL", "LI", "ARTICLE"].includes(node.tagName)))
+  assert.ok(nodes.every(node => !node.className?.includes("badge")))
+  assert.equal(nodes.filter(node => node.tagName === "A" && node.href.endsWith("/unused")).length, 0)
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+})
+
+test("market brief keeps its actual news window in metadata, including legacy 24-hour windows, not candle or generation times", () => {
+  for (const schemaVersion of [1, 2]) {
+    for (const marketAsOf of [null, "2026-09-15T09:00:00.000Z"]) {
+      const report = createReport()
+      addMarketBrief(report, schemaVersion).marketAsOf = marketAsOf
+      const { byId } = runReport(report)
+      assert.match(byId("market-brief").title, schemaVersion === 2
+        ? /Окно публикаций: 15.*2026.*07:20 UTC — 15.*2026.*13:20 UTC/
+        : /Окно публикаций: 14.*2026.*13:20 UTC — 15.*2026.*13:20 UTC/)
+      assert.doesNotMatch(byId("market-brief").title, /6 час|24 час|09:00|11:37|13:22/)
+      assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Окно публикаций|UTC/)
+      assert.equal(byId("as-of").dateTime, report.asOf)
+    }
+  }
+})
+
+test("older reports with no market brief hide the panel, with or without candidates", () => {
+  for (const marketBrief of [undefined, null]) {
+    for (const symbols of [["COTI"], []]) {
+      const report = createReport(symbols)
+      report.marketBrief = marketBrief
+      const { byId, charts, updateCalls, directRequests } = runReport(report)
+      assert.equal(byId("market-brief").hidden, true)
+      assert.equal(byId("market-brief-paragraphs").children.length, 0)
+      assert.equal(byId("coin-detail").hidden, symbols.length === 0)
+      assert.equal(charts.length, symbols.length)
+      click(byId("peer-radar-tab"))
+      assert.equal(byId("market-brief").hidden, true)
+      assert.equal(byId("peer-radar").hidden, false)
+      click(byId("main-tab"))
+      assert.equal(byId("main-panel").hidden, false)
+      if (symbols.length) {
+        assert.equal(byId("explanation").textContent, report.coins[0].explanation)
+      }
+      assert.deepEqual(updateCalls, [])
+      assert.deepEqual(directRequests, [])
+    }
+  }
+})
+
+for (const schemaVersion of [1, 2]) {
+  test(`v${schemaVersion} partial bounded sampling is quiet and never displays stored technical warnings`, () => {
+    const report = createReport()
+    const brief = addMarketBrief(report, schemaVersion)
     brief.status = "partial"
-    brief.warning = warning
-    brief.coverage[1] = { source: "tradingview", status: "partial", fetchedCount: 2, error: "Лимит загрузки" }
-    brief.coverage[2] = { source: "twitter", status: "failed", fetchedCount: 0, error: "Источник недоступен" }
+    brief.warning = "RAW_WARNING: bounded source sampling; token=private"
+    brief.analysis.warning = "RAW_ANALYSIS_WARNING: model error"
+    brief.coverage.forEach((source) => {
+      source.status = "partial"
+      source.error = null
+    })
     const { byId } = runReport(report)
     assert.equal(byId("market-brief").dataset.status, "partial")
-    assert.equal(byId("market-brief-status").textContent, "Неполная сводка")
-    assert.equal(byId("market-brief-events").children.length, 5)
-    assert.equal(byId("market-brief-warning").hidden, false)
-    assert.equal(byId("market-brief-warning").textContent, warning ?? "Сводка может быть неполной: учтена лишь доступная часть данных.")
-    assert.deepEqual(byId("market-brief-coverage").children.map(node => node.dataset.status), ["available", "partial", "failed"])
-    assert.match(byId("market-brief-coverage").textContent, /TradingView: частично · получено 2 · Лимит загрузки/)
-    assert.match(byId("market-brief-coverage").textContent, /X \/ Twitter: ошибка загрузки · получено 0 · Источник недоступен/)
+    assert.equal(byId("market-brief-paragraphs").children.length, schemaVersion === 2 ? 2 : 5)
+    assert.equal(byId("market-brief-note").hidden, true)
+    assert.equal(byId("market-brief-note").textContent, "")
+    assert.equal(byId("market-brief-empty").hidden, true)
+    assert.doesNotMatch(byId("market-brief-paragraphs").textContent + byId("market-brief").title, /RAW_|private|получено|Неполная/)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), report)
+  })
+
+  test(`v${schemaVersion} actual fetch failures get only a short generic note, never raw errors`, () => {
+    for (const failure of [
+      { status: "partial", error: "RAW_FETCH_ERROR: network failed; token=private" },
+      { status: "available", error: "RAW_FETCH_ERROR: one request failed" },
+      { status: "failed", error: null },
+    ]) {
+      const report = createReport()
+      const brief = addMarketBrief(report, schemaVersion)
+      brief.status = "partial"
+      brief.warning = "RAW_WARNING: request stack trace"
+      brief.analysis.warning = "RAW_ANALYSIS_WARNING: model error"
+      Object.assign(brief.coverage[1], failure)
+      const { byId } = runReport(report)
+      assert.equal(byId("market-brief-note").hidden, false)
+      assert.equal(byId("market-brief-note").textContent, "Не все источники удалось загрузить.")
+      assert.ok(!byId("market-brief-note").attributes.get("class").includes("warning"))
+      assert.equal(byId("market-brief-empty").hidden, true)
+      assert.equal(byId("market-brief-paragraphs").children.length, schemaVersion === 2 ? 2 : 5)
+      assert.doesNotMatch(byId("market-brief-note").textContent + byId("market-brief-paragraphs").textContent + byId("market-brief").title, /RAW_|private/)
+      assert.deepEqual(JSON.parse(byId("report-data").textContent), report)
+    }
+  })
+
+  test(`v${schemaVersion} empty and unavailable briefs are honest, concise and work without candidates`, () => {
+    for (const status of ["available", "empty", "partial", "unavailable", "failed"]) {
+      const report = createReport([])
+      const brief = addMarketBrief(report, schemaVersion)
+      brief.status = status
+      brief[schemaVersion === 2 ? "paragraphs" : "events"] = []
+      brief.warning = "RAW_WARNING: internal error"
+      brief.analysis.warning = "RAW_ANALYSIS_WARNING: model failed"
+      const { byId, charts, updateCalls, directRequests } = runReport(report)
+      assert.equal(byId("market-brief").hidden, false)
+      assert.equal(byId("market-brief").dataset.status, status === "failed" ? "unavailable" : status)
+      assert.equal(byId("market-brief-empty").hidden, false)
+      assert.equal(byId("market-brief-empty").textContent, ["unavailable", "failed"].includes(status)
+        ? "Сводка недоступна."
+        : "В полученной выборке нет сообщений для сводки.")
+      assert.equal(byId("market-brief-note").hidden, status !== "failed")
+      assert.equal(byId("market-brief-paragraphs").children.length, 0)
+      assert.doesNotMatch(byId("market-brief-empty").textContent + byId("market-brief-note").textContent, /RAW_|ничего не произошло|новостей нет/i)
+      click(byId("peer-radar-tab"))
+      assert.equal(byId("market-brief").hidden, false)
+      assert.equal(charts.length, 0)
+      assert.deepEqual(updateCalls, [])
+      assert.deepEqual(directRequests, [])
+    }
+  })
+
+  test(`v${schemaVersion} nonempty brief remains available without candidates`, () => {
+    const report = createReport([])
+    addMarketBrief(report, schemaVersion)
+    const { byId, charts } = runReport(report)
+    assert.equal(byId("market-brief").hidden, false)
+    assert.equal(byId("market-brief-empty").hidden, true)
+    assert.equal(byId("market-brief-paragraphs").children.length, schemaVersion === 2 ? 2 : 5)
+    assert.equal(charts.length, 0)
+  })
+}
+
+test("a single v2 paragraph renders alone; blank paragraphs and unused citations stay hidden", () => {
+  for (const paragraphs of [[], [{ text: "", sourceIds: ["unused"] }], [{ text: "  ", sourceIds: ["unused"] }], [{ text: "Одно сообщение.", sourceIds: [] }]]) {
+    const report = createReport()
+    addMarketBrief(report).paragraphs = paragraphs
+    const { byId } = runReport(report)
+    const nonempty = paragraphs.some(paragraph => paragraph.text.trim())
+    assert.equal(byId("market-brief-paragraphs").children.length, nonempty ? 1 : 0)
+    assert.equal(byId("market-brief-empty").hidden, nonempty)
+    assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-citations"), false)
   }
 })
 
-test("market brief empty and unavailable states never claim nothing happened and work without candidates", () => {
-  for (const status of ["empty", "partial", "unavailable"]) {
-    const report = createReport([])
-    const brief = addMarketBrief(report)
-    brief.status = status
-    brief.events = []
-    brief.coverage.forEach((source) => {
-      source.status = status === "unavailable" ? "failed" : "empty"
-      source.fetchedCount = 0
-    })
-    const { byId, charts, updateCalls, directRequests } = runReport(report)
-    assert.equal(byId("market-brief").hidden, false)
-    assert.equal(byId("market-brief").dataset.status, status)
-    assert.equal(byId("market-brief-empty").hidden, false)
-    assert.equal(byId("market-brief-empty").textContent, status === "unavailable"
-      ? "Сводка недоступна. Это не означает отсутствия новостей."
-      : "В полученной выборке значимых событий не выделено")
-    assert.equal(byId("market-brief-warning").hidden, status === "empty")
-    assert.equal(byId("market-brief-events").children.length, 0)
-    assert.match(byId("market-brief-coverage").textContent, status === "unavailable" ? /ошибка загрузки/ : /пустая выборка/)
-    click(byId("peer-radar-tab"))
-    assert.equal(byId("market-brief").hidden, false)
-    assert.equal(charts.length, 0)
+for (const schemaVersion of [1, 2]) {
+  test(`v${schemaVersion} prose and citation tooltips are literal text; unsafe or missing URLs never use a citation number`, () => {
+    const report = createReport()
+    const brief = addMarketBrief(report, schemaVersion)
+    const unsafe = "</script><script>alert(1)</script><img src=x onerror=alert(1)>"
+    brief.warning = "RAW_WARNING"
+    brief.coverage[0].error = "RAW_FETCH_ERROR"
+    brief.sources = [
+      "javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "file:///tmp/private",
+      "//example.com/relative", "/relative", "not a URL", "mailto:test@example.com", null,
+      `https://safe.example/news?text=${encodeURIComponent(unsafe)}`, "http://safe.example/news",
+    ].map((url, index) => ({ ...brief.sources[0], id: String(index), url, title: unsafe, author: unsafe, publisher: unsafe, publishedAt: "bad date" }))
+    const sourceIds = ["missing", "__proto__", ...brief.sources.map(source => source.id)]
+    if (schemaVersion === 2) {
+      brief.paragraphs = [{ text: unsafe, sourceIds }]
+    } else {
+      brief.events = [{ title: "Removed event title", summary: unsafe, whyItMatters: unsafe, verification: "unconfirmed", sourceIds }]
+    }
+    const { byId, updateCalls, directRequests } = runReport(report)
+    const nodes = descendants(byId("market-brief-paragraphs"))
+    const links = nodes.filter(node => node.tagName === "A")
+    assert.equal(nodes.find(node => node.className === "market-brief-text").textContent, schemaVersion === 2 ? unsafe : `Не подтверждено: ${unsafe} ${unsafe}`)
+    assert.equal(byId("market-brief-note").textContent, "Не все источники удалось загрузить.")
+    assert.deepEqual(links.map(link => link.href), brief.sources.slice(-2).map(source => source.url))
+    assert.deepEqual(links.map(link => link.textContent), ["[1]", "[2]"])
+    assert.ok(links.every(link => link.title === `${unsafe} · Время не указано` && link.target === "_blank" && link.rel === "noopener noreferrer"))
+    assert.ok(nodes.every(node => !["IMG", "SCRIPT", "H3", "UL", "LI"].includes(node.tagName)))
+    assert.doesNotMatch(byId("market-brief-paragraphs").textContent + byId("market-brief-note").textContent, /RAW_|Removed event title/)
     assert.deepEqual(updateCalls, [])
     assert.deepEqual(directRequests, [])
-  }
-})
+  })
+}
 
-test("market brief treats agent and provider text literally and activates only absolute HTTP(S) citations", () => {
+test("unsafe-only and missing citations leave paragraph text intact with no dangling source markers", () => {
   const report = createReport()
   const brief = addMarketBrief(report)
-  const unsafe = "</script><script>alert(1)</script><img src=x onerror=alert(1)>"
-  brief.warning = unsafe
-  brief.coverage[0].error = unsafe
-  brief.sources = [
-    "javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "file:///tmp/private",
-    "//example.com/relative", "not a URL", "mailto:test@example.com",
-    `https://safe.example/news?text=${encodeURIComponent(unsafe)}`, "http://safe.example/news",
-  ].map((url, index) => ({ ...brief.sources[0], id: String(index), url, title: unsafe, author: unsafe, text: unsafe }))
-  brief.events = [{ title: unsafe, summary: unsafe, whyItMatters: unsafe, verification: "reported", sourceIds: brief.sources.map(source => source.id) }]
-  const { byId, updateCalls, directRequests } = runReport(report)
-  const nodes = descendants(byId("market-brief-events"))
-  const links = nodes.filter(node => node.tagName === "A")
-  assert.equal(nodes.find(node => node.tagName === "H3").textContent, unsafe)
-  assert.equal(nodes.find(node => node.className === "market-brief-summary").textContent, `${unsafe} ${unsafe}`)
-  assert.equal(nodes.filter(node => node.tagName === "LI").length, brief.sources.length)
-  assert.equal(byId("market-brief-warning").textContent, unsafe)
-  assert.ok(byId("market-brief-coverage").textContent.includes(unsafe))
-  assert.deepEqual(links.map(link => link.href), brief.sources.slice(-2).map(source => source.url))
-  assert.ok(links.every(link => link.textContent === unsafe && link.target === "_blank" && link.rel === "noopener noreferrer"))
-  assert.ok(nodes.every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
-  assert.deepEqual(updateCalls, [])
-  assert.deepEqual(directRequests, [])
+  brief.sources.forEach(source => source.url = "javascript:alert(1)")
+  brief.paragraphs[1].sourceIds = ["missing"]
+  const { byId } = runReport(report)
+  assert.deepEqual(byId("market-brief-paragraphs").children.map(node => node.textContent), brief.paragraphs.map(paragraph => paragraph.text))
+  assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-citations"), false)
 })
 
 test("market brief DOM, news window and ranking remain independent of tabs, selection and chart updates", async () => {
@@ -455,12 +583,14 @@ test("market brief DOM, news window and ranking remain independent of tabs, sele
   const controlled = controlledUpdater()
   const browser = runReport(report, controlled)
   const { byId } = browser
-  const nodes = ["market-brief", "market-brief-status", "market-brief-window", "market-brief-coverage", "market-brief-warning", "market-brief-empty", "market-brief-events"]
+  const nodes = ["market-brief", "market-brief-note", "market-brief-empty", "market-brief-paragraphs"]
     .flatMap(id => [byId(id), ...descendants(byId(id))])
-    .map(node => ({ node, text: node.textContent, hidden: node.hidden, status: node.dataset.status, children: [...node.children] }))
+    .map(node => ({ node, text: node.textContent, title: node.title, href: node.href, hidden: node.hidden, status: node.dataset.status, children: [...node.children] }))
   const assertUnchanged = () => {
-    for (const { node, text, hidden, status, children } of nodes) {
+    for (const { node, text, title, href, hidden, status, children } of nodes) {
       assert.equal(node.textContent, text)
+      assert.equal(node.title, title)
+      assert.equal(node.href, href)
       assert.equal(node.hidden, hidden)
       assert.equal(node.dataset.status, status)
       assert.equal(node.children.length, children.length)
@@ -3097,32 +3227,38 @@ for (const value of [22, 0, undefined]) {
 }
 
 for (const mode of ["download", "website"]) {
-  test(`${mode} executes the generated shared renderer with the original charts, controls and no startup requests`, async () => {
-    const report = createReport(["COTI", "SOL"])
-    addDescriptions(report)
-    addPeerRadar(report)
-    addPeerHistories(report)
-    addMarketBrief(report)
-    const html = mode === "download" ? await renderReportHtml(report) : null
-    const source = html
-      ? [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
-      : `${(await readWebAsset("report.js")).content}\nglobalThis.renderReport()`
-    const browser = runReport(report, { browserScript: new vm.Script(source) })
-    assert.equal(browser.byId("coin-symbol").textContent, "COTI")
-    assert.equal(browser.charts.length, 1)
-    assert.equal(browser.charts[0].series[0].type, "Candlestick")
-    assert.ok(browser.byId("coin-description").textContent.includes(report.coinDescriptions[report.coins[0].baseCurrencyId].description))
-    selectCoin(browser, "SOL")
-    assert.equal(browser.byId("coin-symbol").textContent, "SOL")
-    click(browser.days[0])
-    click(browser.tabs[1])
-    assert.equal(browser.byId("peer-radar").hidden, false)
-    assert.ok(radarCharts(browser).length > 0)
-    assert.equal(browser.byId("market-brief").hidden, false)
-    assert.equal(browser.byId("market-brief").dataset.status, "available")
-    assert.equal(browser.byId("market-brief-events").children.length, 5)
-    assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), report)
-    assert.equal(browser.directRequests.length, 0)
-    assert.equal(browser.updateCalls.length, 0)
-  })
+  for (const schemaVersion of [1, 2]) {
+    test(`${mode} executes the shared renderer with a v${schemaVersion} brief, original charts and no startup requests`, async () => {
+      const report = createReport(["COTI", "SOL"])
+      addDescriptions(report)
+      addPeerRadar(report)
+      addPeerHistories(report)
+      addMarketBrief(report, schemaVersion)
+      const html = mode === "download" ? await renderReportHtml(report) : null
+      const source = html
+        ? [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+        : `${(await readWebAsset("report.js")).content}\nglobalThis.renderReport()`
+      const browser = runReport(report, { browserScript: new vm.Script(source) })
+      assert.equal(browser.byId("coin-symbol").textContent, "COTI")
+      assert.equal(browser.charts.length, 1)
+      assert.equal(browser.charts[0].series[0].type, "Candlestick")
+      assert.ok(browser.byId("coin-description").textContent.includes(report.coinDescriptions[report.coins[0].baseCurrencyId].description))
+      selectCoin(browser, "SOL")
+      assert.equal(browser.byId("coin-symbol").textContent, "SOL")
+      click(browser.days[0])
+      click(browser.tabs[1])
+      assert.equal(browser.byId("peer-radar").hidden, false)
+      assert.ok(radarCharts(browser).length > 0)
+      assert.equal(browser.byId("market-brief").hidden, false)
+      assert.equal(browser.byId("market-brief").dataset.status, "available")
+      assert.equal(browser.byId("market-brief-paragraphs").children.length, schemaVersion === 2 ? 2 : 5)
+      assert.equal(browser.byId("market-brief-note").hidden, true)
+      assert.deepEqual(descendants(browser.byId("market-brief-paragraphs")).filter(node => node.tagName === "A").map(link => link.textContent), schemaVersion === 2
+        ? ["[1]", "[2]", "[2]", "[3]"]
+        : ["[1]", "[2]", "[3]", "[2]", "[2]", "[2]", "[2]"])
+      assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), report)
+      assert.equal(browser.directRequests.length, 0)
+      assert.equal(browser.updateCalls.length, 0)
+    })
+  }
 }

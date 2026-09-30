@@ -149,23 +149,20 @@ test("step 13 preserves the digest and source provenance in the immutable archiv
   const brief = await buildMarketBrief("Prompt", {
     marketAsOf: "2026-09-26T11:00:00.000Z",
     collectSources: async () => ({
-      from: "2026-09-25T12:00:00.000Z", asOf: "2026-09-26T12:00:00.000Z", warnings: [],
+      from: "2026-09-26T06:00:00.000Z", asOf: "2026-09-26T12:00:00.000Z", warnings: [],
       sources: [{
         id: "source-1", channel: "tradingview", title: "Событие <script>",
         text: "Сохранённая публикация </script>", url: "https://publisher.example/news",
         publishedAt: "2026-09-26T11:55:00.000Z", author: null, publisher: "Original publisher",
       }],
-      coverage: ["tavily", "tradingview", "twitter"].map(source => ({
+      coverage: ["tradingview", "twitter"].map(source => ({
         source, status: source === "tradingview" ? "available" : "empty",
         fetchedCount: source === "tradingview" ? 1 : 0, error: null,
       })),
     }),
     callAgent: async () => JSON.stringify({
-      schemaVersion: 1, asOf: "2026-09-26T12:00:00.000Z",
-      events: [{
-        title: "Главное событие", summary: "Короткая сводка </script>", whyItMatters: "Важный контекст",
-        verification: "unconfirmed", sourceIds: ["source-1"],
-      }],
+      schemaVersion: 2, asOf: "2026-09-26T12:00:00.000Z",
+      paragraphs: [{ text: "Короткая сводка </script>", sourceIds: ["source-1"] }],
     }),
   })
   await fs.writeFile(path.join(directory, "tmp", "step12.1-market-brief.json"), JSON.stringify(brief))

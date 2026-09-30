@@ -315,65 +315,73 @@
     return "Время не указано"
   }
 
-  function marketBriefProvider (channel) {
-    return { tavily: "Tavily", tradingview: "TradingView", twitter: "X / Twitter" }[channel] ?? "Источник"
+  function marketBriefParagraphs (brief) {
+    if (brief.schemaVersion !== 2) {
+      return (brief.events ?? []).map(event => ({
+        text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(Boolean).join(" ")}`,
+        sourceIds: event.sourceIds,
+      })).filter(paragraph => paragraph.text.trim())
+    }
+    let remaining = 800
+    return (brief.paragraphs ?? []).slice(0, 2).flatMap((paragraph) => {
+      if (!remaining || !paragraph.text.trim()) {
+        return []
+      }
+      const text = paragraph.text.length <= remaining ? paragraph.text : `${paragraph.text.slice(0, remaining - 1)}…`
+      remaining -= text.length
+      return [{ ...paragraph, text }]
+    })
   }
 
-  function marketBriefEvent (event, sources) {
-    const article = element("article", "market-brief-event")
-    const heading = element("div", "market-brief-event-heading")
-    heading.append(element("h3", "", event.title))
-    if (event.verification === "unconfirmed") {
-      heading.append(element("span", "badge market-brief-unconfirmed", "Не подтверждено"))
+  function marketBriefParagraph (paragraph, sources, numbers) {
+    const node = element("p", "market-brief-paragraph")
+    node.append(element("span", "market-brief-text", paragraph.text))
+    const links = [...new Set(paragraph.sourceIds ?? [])].flatMap((id) => {
+      const source = sources.get(id)
+      if (!source || (!numbers.has(id) && numbers.size >= 3)) {
+        return []
+      }
+      const link = sourceLink("", source.url)
+      if (link.tagName !== "A") {
+        return []
+      }
+      if (!numbers.has(id)) {
+        numbers.set(id, numbers.size + 1)
+      }
+      link.textContent = `[${numbers.get(id)}]`
+      link.title = [...new Set([source.author, source.publisher, source.title, publicationTime(source.publishedAt)].filter(Boolean))].join(" · ")
+      link.setAttribute("aria-label", `Источник ${numbers.get(id)}: ${link.title}`)
+      return [link]
+    })
+    if (links.length) {
+      const citations = element("span", "market-brief-citations")
+      citations.append(...links)
+      node.append(citations)
     }
-    article.append(heading, element("p", "market-brief-summary", [event.summary, event.whyItMatters].filter(Boolean).join(" ")))
-    const citations = element("ul", "market-brief-sources")
-    citations.setAttribute("aria-label", "Источники события")
-    citations.append(...[...new Set(event.sourceIds)].map(id => sources.get(id)).filter(Boolean).map((source) => {
-      const item = element("li")
-      const provider = [...new Set([source.author, source.publisher, marketBriefProvider(source.channel)].filter(Boolean))].join(" · ")
-      item.append(
-        sourceLink(source.title, source.url),
-        element("span", "", ` · ${provider} · Опубликовано: ${publicationTime(source.publishedAt)}`),
-      )
-      return item
-    }))
-    article.append(citations)
-    return article
+    return node
   }
 
   function renderMarketBrief () {
     const brief = report.marketBrief
-    byId("market-brief").hidden = !brief
+    const section = byId("market-brief")
+    section.hidden = !brief
     if (!brief) {
       return
     }
     const status = ["available", "partial", "empty"].includes(brief.status) ? brief.status : "unavailable"
-    const events = ["available", "partial"].includes(status) ? brief.events.slice(0, 5) : []
-    const sources = new Map(brief.sources.map(source => [source.id, source]))
-    byId("market-brief").dataset.status = status
-    byId("market-brief-status").textContent = {
-      available: "Сводка готова", partial: "Неполная сводка", empty: "События не выделены", unavailable: "Сводка недоступна",
-    }[status]
-    byId("market-brief-window").textContent = `Окно публикаций · 24 часа: ${publicationTime(brief.from)} — ${publicationTime(brief.asOf)}. Конец окна — срез новостей, не свечей.`
-    byId("market-brief-coverage").replaceChildren(...brief.coverage.map((source) => {
-      const state = ["available", "empty", "partial"].includes(source.status) ? source.status : "failed"
-      const label = { available: "доступен", empty: "пустая выборка", partial: "частично", failed: "ошибка загрузки" }[state]
-      const badge = element("span", "badge", `${marketBriefProvider(source.source)}: ${label} · получено ${number(source.fetchedCount, 0)}${source.error ? ` · ${source.error}` : ""}`)
-      badge.dataset.status = state
-      return badge
-    }))
-    byId("market-brief-warning").textContent = brief.warning || (
-      status === "partial" || brief.coverage.some(source => ["partial", "failed"].includes(source.status))
-        ? "Сводка может быть неполной: учтена лишь доступная часть данных."
-        : ""
-    )
-    byId("market-brief-warning").hidden = !byId("market-brief-warning").textContent
+    const paragraphs = ["available", "partial"].includes(status) ? marketBriefParagraphs(brief) : []
+    const sources = new Map((brief.sources ?? []).map(source => [source.id, source]))
+    const numbers = new Map()
+    const failed = brief.status === "failed" || (brief.coverage ?? []).some(source => source.error || source.status === "failed")
+    section.dataset.status = status
+    section.title = `Окно публикаций: ${publicationTime(brief.from)} — ${publicationTime(brief.asOf)}`
+    byId("market-brief-note").textContent = failed ? "Не все источники удалось загрузить." : ""
+    byId("market-brief-note").hidden = !failed
     byId("market-brief-empty").textContent = status === "unavailable"
-      ? "Сводка недоступна. Это не означает отсутствия новостей."
-      : "В полученной выборке значимых событий не выделено"
-    byId("market-brief-empty").hidden = events.length > 0
-    byId("market-brief-events").replaceChildren(...events.map(event => marketBriefEvent(event, sources)))
+      ? "Сводка недоступна."
+      : "В полученной выборке нет сообщений для сводки."
+    byId("market-brief-empty").hidden = paragraphs.length > 0
+    byId("market-brief-paragraphs").replaceChildren(...paragraphs.map(paragraph => marketBriefParagraph(paragraph, sources, numbers)))
   }
 
   function coinDescription (coin) {

@@ -18,7 +18,7 @@ export async function runMarketBriefStep ({ buildBrief = buildMarketBrief } = {}
     marketAsOf: getRequiredString(analysis.asOf, "Step 7 asOf"),
   })
   const outputPath = await writeTmpJson("step12.1-market-brief.json", output)
-  console.log(`✓ Market brief: ${output.events.length} events from ${output.sources.length} publications (${output.status}) in ${outputPath}`)
+  console.log(`✓ Market brief: ${output.paragraphs.length} paragraphs from ${output.sources.length} publications (${output.status}) in ${outputPath}`)
   if (output.warning) {
     console.warn(`⚠ ${output.warning}`)
   }

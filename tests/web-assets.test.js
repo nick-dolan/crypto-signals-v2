@@ -73,13 +73,30 @@ test("both website pages reference only allowlisted same-origin assets in depend
 })
 
 test("download and website share the report shell, renderer, updater, chart vendor and license", async () => {
-  const report = { asOf: "2026-09-25T12:00:00.000Z", coins: [] }
+  const report = {
+    asOf: "2026-09-25T12:00:00.000Z", coins: [],
+    marketBrief: {
+      schemaVersion: 2, asOf: "2026-09-25T13:00:00.000Z", from: "2026-09-25T07:00:00.000Z",
+      status: "partial", warning: "Stored technical warning",
+      paragraphs: [{ text: "Короткая сводка рынка.", sourceIds: ["news"] }],
+      sources: [{ id: "news", channel: "tradingview", url: "https://news.example/market", title: "Исходная публикация", publisher: "News desk", publishedAt: "2026-09-25T12:15:00.000Z" }],
+      coverage: [{ source: "tradingview", status: "partial", fetchedCount: 1, error: null }],
+      analysis: { model: "gemini-3.7-flash" },
+    },
+  }
   const [offline, online, renderer, charts, license, styles, rawScript] = await Promise.all([
     renderReportHtml(report), renderReportPage(), readWebAsset("report.js"),
     readWebAsset("lightweight-charts.js"), readWebAsset("chart-license.txt"), readWebAsset("report.css"),
     fs.readFile(new URL("../src/web/report.js", import.meta.url), "utf8"),
   ])
   assert.equal(offline.match(/<main[^>]*>([\s\S]*?)<\/main>/)[1], online.match(/<main[^>]*>([\s\S]*?)<\/main>/)[1])
+  assert.deepEqual(JSON.parse(scripts(offline)[0].content), report)
+  for (const html of [offline, online]) {
+    const brief = html.match(/<section id="market-brief"[\s\S]*?<\/section>/)[0]
+    assert.match(brief, /aria-label="Краткая сводка рынка"/)
+    assert.match(brief, /id="market-brief-paragraphs"/)
+    assert.doesNotMatch(brief, /<h[1-6]\b|aria-labelledby|market-brief-(?:events|status|coverage|window|warning)/)
+  }
   assert.ok(offline.includes(styles.content))
   assert.ok(offline.includes(license.content.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")))
   assert.equal(scripts(offline)[1].content, charts.content)

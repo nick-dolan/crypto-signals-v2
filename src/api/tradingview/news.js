@@ -1,12 +1,5 @@
 import { getRequiredString } from "../../helpers/normalization-helper.js"
-import {
-  isArray,
-  isBoolean,
-  isFinite,
-  isInt,
-  isObject,
-  isString,
-} from "../../helpers/utils.typed.js"
+import { isArray, isBoolean, isFinite, isInt, isObject, isString } from "../../helpers/utils.typed.js"
 import { requestTradingViewJson } from "./request.js"
 
 function getOptionalString (value) {
@@ -17,12 +10,12 @@ function getOptionalString (value) {
   return value.trim() || null
 }
 
-function createNewsRequestUrl ({ symbol, language, client }) {
-  const url = new URL("https://news-mediator.tradingview.com/public/view/v1/symbol")
+function createNewsRequestUrl ({ path, filter, language, client }) {
+  const url = new URL(path, "https://news-mediator.tradingview.com")
 
-  url.searchParams.append("filter", `lang:${language}`)
-  url.searchParams.append("filter", `symbol:${symbol}`)
-  url.searchParams.set("client", client)
+  url.searchParams.append("filter", `lang:${getRequiredString(language, "language")}`)
+  url.searchParams.append("filter", filter)
+  url.searchParams.set("client", getRequiredString(client, "client"))
   url.searchParams.set("streaming", "false")
 
   return url
@@ -78,7 +71,7 @@ function createTradingViewUrl (storyPath, index) {
   }
 }
 
-function normalizeNewsItem (item, requestedSymbol, index) {
+function normalizeNewsItem (item, index, matchedSymbols) {
   if (!isObject(item)) {
     throw getItemError(index, "expected an object")
   }
@@ -118,25 +111,12 @@ function normalizeNewsItem (item, requestedSymbol, index) {
     paywall: item.paywall,
     permission: getOptionalString(item.permission),
     urgency: item.urgency,
-    matchedSymbols: [requestedSymbol],
+    matchedSymbols,
     relatedSymbols: normalizeRelatedSymbols(item.relatedSymbols),
   }
 }
 
-export async function fetchTradingViewNews ({
-  symbol,
-  language = "en",
-  client = "web",
-  timeoutMs = 15_000,
-} = {}) {
-  const normalizedSymbol = getRequiredString(symbol, "symbol")
-  const normalizedLanguage = getRequiredString(language, "language")
-  const normalizedClient = getRequiredString(client, "client")
-  const url = createNewsRequestUrl({
-    symbol: normalizedSymbol,
-    language: normalizedLanguage,
-    client: normalizedClient,
-  })
+async function requestNews (url, { timeoutMs, matchedSymbols = [] }) {
   const payload = await requestTradingViewJson(url, {
     label: "TradingView news",
     timeoutMs,
@@ -148,8 +128,40 @@ export async function fetchTradingViewNews ({
 
   return {
     items: payload.items.map((item, index) => (
-      normalizeNewsItem(item, normalizedSymbol, index)
+      normalizeNewsItem(item, index, matchedSymbols)
     )),
     sections: isArray(payload.sections) ? payload.sections : [],
   }
+}
+
+export async function fetchTradingViewNews ({
+  symbol,
+  language = "en",
+  client = "web",
+  timeoutMs = 15_000,
+} = {}) {
+  const normalizedSymbol = getRequiredString(symbol, "symbol")
+  const url = createNewsRequestUrl({
+    path: "/public/view/v1/symbol",
+    filter: `symbol:${normalizedSymbol}`,
+    language,
+    client,
+  })
+
+  return requestNews(url, { timeoutMs, matchedSymbols: [normalizedSymbol] })
+}
+
+export async function fetchTradingViewCryptoNews ({
+  language = "en",
+  client = "landing",
+  timeoutMs = 15_000,
+} = {}) {
+  const url = createNewsRequestUrl({
+    path: "/public/news-flow/v2/news",
+    filter: "market:crypto",
+    language,
+    client,
+  })
+
+  return requestNews(url, { timeoutMs })
 }

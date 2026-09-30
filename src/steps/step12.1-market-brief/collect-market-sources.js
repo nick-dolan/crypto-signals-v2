@@ -1,11 +1,10 @@
 import { sleep } from "radash"
 
-import { requestTavilyJson } from "../../api/tavily/request.js"
-import { fetchTradingViewNews } from "../../api/tradingview/news.js"
+import { fetchTradingViewCryptoNews } from "../../api/tradingview/news.js"
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTweetPage } from "../../api/twitter-api.js"
 import { isArray, isError, isFinite, isFunction, isObject, isSafeInteger } from "../../helpers/utils.typed.js"
-import { normalizeSourceUrl, sourceAuthor, sourcePublishedAt, sourceString, sourceUrlKey } from "./source-normalization.js"
+import { normalizeSourceUrl, sourceAuthor, sourcePublishedAt, sourceString } from "./source-normalization.js"
 
 function createCollection (channel) {
   return { channel, sources: [], successes: 0, warnings: [], errors: [] }
@@ -34,20 +33,6 @@ function readItems (response, field) {
   return response[field]
 }
 
-async function fetchLists (collection, requests, field) {
-  const results = await Promise.allSettled(requests.map(async request => readItems(await request(), field)))
-
-  return results.flatMap((result, index) => {
-    if (result.status === "rejected") {
-      fail(collection, `request ${index + 1}`, result.reason)
-      return []
-    }
-
-    collection.successes += 1
-    return [result.value]
-  })
-}
-
 function normalizeSource (collection, item, referenceTimestamp) {
   const publishedAt = sourcePublishedAt(item.publishedAt)
 
@@ -58,7 +43,7 @@ function normalizeSource (collection, item, referenceTimestamp) {
 
   const timestamp = Date.parse(publishedAt) / 1_000
 
-  if (timestamp < referenceTimestamp - 24 * 60 * 60 || timestamp > referenceTimestamp) {
+  if (timestamp < referenceTimestamp - 6 * 60 * 60 || timestamp > referenceTimestamp) {
     return null
   }
 
@@ -77,8 +62,7 @@ function normalizeSource (collection, item, referenceTimestamp) {
     text: "",
     publishedAt,
     author: sourceAuthor(item.author),
-    publisher: sourceString(item.publisher?.name ?? item.publisher).replace(/\s+/g, " ")
-      || (collection.channel === "tavily" ? new URL(url).hostname : null),
+    publisher: sourceString(item.publisher?.name ?? item.publisher).replace(/\s+/g, " ") || null,
   }
 }
 
@@ -111,134 +95,21 @@ function compareSources (first, second) {
     || first.text.localeCompare(second.text)
 }
 
-function needsTavilyExtract ({ source, snippet }) {
-  const text = snippet.slice(0, 1200)
-  const titleWords = [...new Set(source.title.toLowerCase().match(/\p{L}{5,}/gu) ?? [])]
-  const snippetWords = new Set(text.toLowerCase().match(/\p{L}+/gu) ?? [])
-
-  // Approximate missing context in the retained snippet, not event importance or truthfulness.
-  return text.length < 300
-    || /\b(?:prediction banner|read more|next read|also read|copy link|share on|stock screeners|privacy policy|terms of (?:use|service)|all categories|market data api|add to preferred sources|crypto regulation hub|deep dives|advertisement)\b/i.test(text)
-    || (titleWords.length >= 3 && titleWords.filter(word => snippetWords.has(word)).length < titleWords.length / 3)
-}
-
-function formatTavilyText (collection, { source, snippet }, excerpt) {
-  const content = excerpt?.text || snippet || source.title
-  const limit = excerpt ? 1800 : 1200
-  const notes = [
-    excerpt || snippet ? "Snippet only" : "Headline only",
-    excerpt ? "Extract: two relevant fragments, not the full article" : "Search snippet, not the full article",
-  ]
-  if (content.length > limit) {
-    notes.push(`Truncated at ${limit} characters`)
-    warn(collection, `text capped at ${limit} characters per ${excerpt ? "extract" : "search snippet"}`)
-  }
-  return notes.map(note => `[${note}]\n`).join("") + content.slice(0, limit)
-}
-
-async function fetchTavilyExcerpts (collection, { source, key, snippet }, request) {
-  try {
-    const response = await request("/extract", {
-      urls: [source.url],
-      query: `${source.title.slice(0, 240)}. Key facts, dates, amounts and what happened.`,
-      chunks_per_source: 2,
-      extract_depth: "advanced",
-      format: "text",
-      include_images: false,
-      timeout: 30,
-    }, { timeoutMs: 45_000 })
-    const items = readItems(response, "results")
-    const failed = response.failed_results ?? []
-    const item = items.find(item => sourceUrlKey(item?.url) === key)
-    if (
-      !isArray(failed) || failed.some(item => sourceUrlKey(item?.url) === key)
-      || !item || item.error || !sourceString(item.raw_content)
-    ) {
-      fail(collection, "extraction incomplete; search snippet retained")
-      return null
-    }
-    return [key, { text: sourceString(item.raw_content), author: sourceAuthor(item.author ?? item.authors), snippet }]
-  } catch (error) {
-    fail(collection, "extraction failed; search snippet retained", error)
-    return null
-  }
-}
-
-async function collectTavily (referenceTimestamp, request) {
-  const collection = createCollection("tavily")
-  const lists = await fetchLists(collection, [
-    "crypto market Bitcoin BTC Ethereum ETH major news today",
-    "crypto macro economy Federal Reserve interest rates ETF SEC regulation today",
-    "major crypto exchange hack exploit depeg outage liquidation incident today",
-  ].map(query => () => request("/search", {
-    query,
-    topic: "news",
-    time_range: "day",
-    search_depth: "basic",
-    max_results: 5,
-    include_answer: false,
-    include_raw_content: false,
-    include_images: false,
-    auto_parameters: false,
-  })), "results")
-  const records = lists.flatMap((items) => {
-    if (items.length >= 5) {
-      warn(collection, "search capped at 5 results per query; coverage may be incomplete")
-    }
-
-    return items.slice(0, 5).flatMap((item) => {
-      const source = normalizeSource(collection, {
-        url: item?.url,
-        title: item?.title,
-        publishedAt: item?.published_date ?? item?.publishedAt,
-        author: item?.author ?? item?.authors,
-        publisher: item?.publisher,
-      }, referenceTimestamp)
-
-      return source
-        ? [{ source, key: sourceUrlKey(source.url), snippet: sourceString(item.content), score: isFinite(item.score) ? item.score : 0 }]
-        : []
-    })
-  })
-  const byUrl = new Map()
-  for (const record of [...records].sort((first, second) => second.score - first.score || compareSources(first.source, second.source))) {
-    const group = byUrl.get(record.key) ?? []
-    group.push(record)
-    byUrl.set(record.key, group)
-  }
-  const selected = [...byUrl.values()]
-    .filter(group => group.every(needsTavilyExtract))
-    .map(group => group[0])
-  if (selected.length > 2) {
-    warn(collection, "extraction capped at 2 URLs; other items retain search snippets")
-  }
-  if (records.length) {
-    warn(collection, "only search snippets and targeted extract excerpts; full articles not fetched")
-  }
-  const extracted = new Map((await Promise.all(selected.slice(0, 2)
-    .map(record => fetchTavilyExcerpts(collection, record, request)))).filter(Boolean))
-
-  collection.sources = records.map((record) => {
-    const result = extracted.get(record.key)
-    // Reuse an extraction only for identical snippets; other versions may contain corrections.
-    const excerpt = result?.snippet === record.snippet ? result : null
-    return {
-      ...record.source,
-      author: record.source.author ?? excerpt?.author ?? null,
-      text: formatTavilyText(collection, record, excerpt),
-    }
-  })
-
-  return collection
-}
-
 async function collectTradingView (referenceTimestamp, fetchNews, fetchStory) {
   const collection = createCollection("tradingview")
-  const lists = await fetchLists(collection, ["BINANCE:BTCUSDT.P", "BINANCE:ETHUSDT.P"]
-    .map(symbol => () => fetchNews({ symbol })), "items")
+  let items
+
+  try {
+    items = readItems(await fetchNews(), "items")
+    collection.successes += 1
+  } catch (error) {
+    fail(collection, "crypto feed", error)
+    return collection
+  }
+
   const recordsById = new Map()
 
-  for (const item of lists.flat()) {
+  for (const item of items) {
     const id = sourceString(item?.id)
     const storyUrl = normalizeSourceUrl(item?.tradingViewUrl)
     const source = normalizeSource(collection, {
@@ -330,7 +201,7 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
     "(crypto OR bitcoin OR ethereum)",
     "(ETF OR SEC OR Fed OR regulation OR hack OR exploit OR depeg OR outage OR liquidation)",
     "lang:en -filter:retweets -filter:replies",
-    `since_time:${referenceTimestamp - 24 * 60 * 60}`,
+    `since_time:${referenceTimestamp - 6 * 60 * 60}`,
     // The API's upper boundary is exclusive; local validation includes the reference second.
     `until_time:${referenceTimestamp + 1}`,
   ].join(" ")
@@ -385,7 +256,7 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
     }
 
     if (!nextCursor || cursors.has(nextCursor)) {
-      warn(collection, "missing or repeated pagination cursor; remaining pages unavailable")
+      fail(collection, "missing or repeated pagination cursor; remaining pages unavailable")
       break
     }
 
@@ -404,8 +275,7 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
 
 export async function collectMarketSources ({
   referenceTimestamp = Math.floor(Date.now() / 1_000),
-  requestTavily = requestTavilyJson,
-  fetchNews = fetchTradingViewNews,
+  fetchNews = fetchTradingViewCryptoNews,
   fetchStory = fetchTradingViewNewsStory,
   fetchTweets = fetchTweetPage,
   wait = sleep,
@@ -418,18 +288,17 @@ export async function collectMarketSources ({
     throw new Error("Market brief referenceTimestamp must be a positive Unix timestamp")
   }
 
-  if (![requestTavily, fetchNews, fetchStory, fetchTweets, wait].every(isFunction)) {
+  if (![fetchNews, fetchStory, fetchTweets, wait].every(isFunction)) {
     throw new Error("Market brief fetchers and wait must be functions")
   }
 
   const collections = await Promise.all([
-    collectTavily(referenceTimestamp, requestTavily),
     collectTradingView(referenceTimestamp, fetchNews, fetchStory),
     collectTwitter(referenceTimestamp, fetchTweets, wait),
   ])
 
   return {
-    from: new Date((referenceTimestamp - 24 * 60 * 60) * 1_000).toISOString(),
+    from: new Date((referenceTimestamp - 6 * 60 * 60) * 1_000).toISOString(),
     asOf: new Date(referenceTimestamp * 1_000).toISOString(),
     sources: collections.flatMap(collection => collection.sources.sort(compareSources))
       .map((source, index) => ({ id: `source-${index + 1}`, ...source })),
@@ -445,7 +314,8 @@ export async function collectMarketSources ({
     })),
     warnings: [...new Set([
       ...collections.flatMap(collection => collection.warnings),
-      "twitter: bounded Latest keyword sample, not full 24-hour coverage; absence of tweets is not absence of events",
+      "tradingview: bounded global crypto news sample (one batch, up to 30 headlines; no pagination), not full 6-hour coverage; absence of news is not absence of events",
+      "twitter: bounded Latest keyword sample, not full 6-hour coverage; absence of tweets is not absence of events",
     ])],
   }
 }

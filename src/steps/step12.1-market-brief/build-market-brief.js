@@ -44,14 +44,15 @@ export async function buildMarketBrief (systemPrompt, {
   const collection = await collectSources({ referenceTimestamp })
   const groups = deduplicateMarketSources(collection.sources)
   const incomplete = collection.coverage.some(source => ["partial", "failed"].includes(source.status))
+  const failed = collection.coverage.some(source => source.status === "failed" || source.error)
   const output = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     marketAsOf,
     ...collection,
     generatedAt: new Date().toISOString(),
     status: incomplete ? "partial" : "empty",
-    warning: incomplete ? "Часть источников недоступна или получена не полностью. Учтена только загруженная выборка." : null,
-    events: [],
+    warning: failed ? "Не все источники удалось загрузить." : null,
+    paragraphs: [],
     analysis: {
       source: "github-copilot-unofficial",
       model: "gemini-3.7-flash",
@@ -63,7 +64,7 @@ export async function buildMarketBrief (systemPrompt, {
     },
   }
   if (!groups.length) {
-    if (incomplete) {
+    if (failed) {
       output.status = "unavailable"
       output.warning = "Не получено достаточно доступных публикаций для сводки. Это не означает отсутствия важных событий."
     }
@@ -76,9 +77,9 @@ export async function buildMarketBrief (systemPrompt, {
       model: "gemini-3.7-flash",
       reasoningEffort: "medium",
     })
-    const events = parseMarketBrief(response, collection.asOf, collection.sources)
-    output.events = events
-    output.status = incomplete ? "partial" : events.length ? "available" : "empty"
+    const paragraphs = parseMarketBrief(response, collection.asOf, collection.sources)
+    output.paragraphs = paragraphs
+    output.status = incomplete ? "partial" : paragraphs.length ? "available" : "empty"
     output.analysis.status = "complete"
   } catch (error) {
     output.status = "unavailable"

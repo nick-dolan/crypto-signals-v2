@@ -1130,79 +1130,39 @@ summary {
 }
 
 .market-brief {
-    margin-bottom: 22px;
-    padding: 20px 22px;
+    margin-bottom: 18px;
+    padding: 14px 18px;
     overflow-wrap: anywhere;
 }
 
-.market-brief .section-heading {
-    flex-wrap: wrap;
-    margin-bottom: 6px;
-}
-
-.market-brief-note {
-    margin-top: 4px;
-    color: var(--muted);
-    font-size: 11px;
-}
-
-#market-brief-coverage {
-    margin-top: 10px;
-}
-
-.market-brief[data-status="partial"],
-.market-brief[data-status="unavailable"] {
-    border-color: #56462a;
-}
-
-#market-brief-coverage [data-status="partial"],
-#market-brief-coverage [data-status="failed"],
-.market-brief-unconfirmed {
-    color: #e2c18a;
-    background: #302919;
-}
-
-.market-brief .warning {
-    margin: 10px 0 0;
-}
-
+.market-brief-paragraph,
 .market-brief-empty {
-    margin-top: 12px;
-    color: var(--muted);
-}
-
-.market-brief-event {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-}
-
-.market-brief-event-heading {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 6px 10px;
-}
-
-.market-brief-event-heading h3 {
-    font-size: 14px;
-}
-
-.market-brief-summary {
-    margin-top: 6px;
     font-size: 13px;
     line-height: 1.6;
 }
 
-.market-brief-sources {
-    margin: 6px 0 0;
-    padding-left: 16px;
+.market-brief-paragraph+.market-brief-paragraph {
+    margin-top: 8px;
+}
+
+.market-brief-citations {
+    margin-left: 6px;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+.market-brief-citations a+a {
+    margin-left: 4px;
+}
+
+.market-brief-note {
+    margin-top: 6px;
     color: var(--muted);
     font-size: 11px;
 }
 
-.market-brief-sources li+li {
-    margin-top: 4px;
+.market-brief-empty {
+    color: var(--muted);
 }
 
 .report-tabs {

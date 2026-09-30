@@ -1,6 +1,6 @@
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { validateBriefEvents } from "../step12.1-market-brief/parse-market-brief.js"
+import { validateBriefEvents, validateBriefParagraphs } from "../step12.1-market-brief/parse-market-brief.js"
 import { normalizeSourceUrl } from "../step12.1-market-brief/source-normalization.js"
 
 function isTimestamp (value) {
@@ -8,15 +8,18 @@ function isTimestamp (value) {
 }
 
 function validBrief (data) {
+  if (!isObject(data) || ![1, 2].includes(data.schemaVersion)) {
+    return false
+  }
+  const channels = data.schemaVersion === 1 ? ["tavily", "tradingview", "twitter"] : ["tradingview", "twitter"]
   if (
-    !isObject(data) || data.schemaVersion !== 1
-    || !["available", "partial", "empty", "unavailable"].includes(data.status)
+    !["available", "partial", "empty", "unavailable"].includes(data.status)
     || ![data.marketAsOf, data.asOf, data.from, data.generatedAt].every(isTimestamp)
-    || Date.parse(data.asOf) - Date.parse(data.from) !== 24 * 60 * 60 * 1_000
+    || Date.parse(data.asOf) - Date.parse(data.from) !== (data.schemaVersion === 1 ? 24 : 6) * 60 * 60 * 1_000
     || Date.parse(data.asOf) < Date.parse(data.marketAsOf) + 3_600_000
     || (data.warning !== null && !isString(data.warning))
-    || !isArray(data.sources) || !isArray(data.coverage) || data.coverage.length !== 3
-    || !["tavily", "tradingview", "twitter"].every(channel => data.coverage.some(item => item?.source === channel))
+    || !isArray(data.sources) || !isArray(data.coverage) || data.coverage.length !== channels.length
+    || !channels.every(channel => data.coverage.some(item => item?.source === channel))
     || !isObject(data.analysis) || data.analysis.model !== "gemini-3.7-flash"
   ) {
     return false
@@ -25,7 +28,7 @@ function validBrief (data) {
   for (const source of data.sources) {
     if (
       !isString(source?.id) || !source.id || ids.has(source.id)
-      || !["tavily", "tradingview", "twitter"].includes(source.channel)
+      || !channels.includes(source.channel)
       || ![source.title, source.text].every(value => isString(value) && value.trim())
       || (source.author !== null && !isString(source.author))
       || !normalizeSourceUrl(source.url) || !isTimestamp(source.publishedAt)
@@ -45,19 +48,21 @@ function validBrief (data) {
   ))) {
     return false
   }
-  validateBriefEvents(data.events, data.sources)
+  const content = data.schemaVersion === 1
+    ? validateBriefEvents(data.events, data.sources)
+    : validateBriefParagraphs(data.paragraphs, data.sources)
   const incomplete = data.coverage.some(item => ["partial", "failed"].includes(item.status))
-  return (data.status !== "available" || (data.events.length > 0 && !incomplete))
-    && (data.status !== "empty" || (!data.events.length && !incomplete))
-    && (data.status !== "unavailable" || !data.events.length)
+  return (data.status !== "available" || (content.length > 0 && !incomplete))
+    && (data.status !== "empty" || (!content.length && !incomplete))
+    && (data.status !== "unavailable" || !content.length)
     && (data.status !== "partial" || incomplete)
-    && (!data.events.length || data.analysis.status === "complete")
+    && (!content.length || data.analysis.status === "complete")
 }
 
 function unavailable (marketAsOf, warning) {
   return {
-    schemaVersion: 1, marketAsOf, asOf: null, from: null, generatedAt: null,
-    status: "unavailable", warning, coverage: [], sources: [], events: [],
+    schemaVersion: 2, marketAsOf, asOf: null, from: null, generatedAt: null,
+    status: "unavailable", warning, coverage: [], sources: [], paragraphs: [],
   }
 }
 

@@ -26,19 +26,11 @@
             <span id="coverage" class="muted"></span>
         </div>
     </header>
-    <section id="market-brief" class="panel market-brief" data-status="unavailable"
-        aria-labelledby="market-brief-heading" hidden>
-        <div class="section-heading">
-            <h2 id="market-brief-heading">Главное за сутки</h2>
-            <span id="market-brief-status" class="muted" role="status"></span>
-        </div>
-        <p id="market-brief-window" class="source-meta"></p>
-        <p class="market-brief-note">Ограниченная выборка источников, не все новости рынка. Сообщения источников
-            не равны подтверждённым фактам. На рейтинг монет не влияет.</p>
-        <div id="market-brief-coverage" class="badge-list" aria-label="Покрытие источников"></div>
-        <p id="market-brief-warning" class="warning" hidden></p>
+    <section id="market-brief" class="panel market-brief" data-status="unavailable" aria-label="Краткая сводка рынка"
+        hidden>
+        <div id="market-brief-paragraphs"></div>
         <p id="market-brief-empty" class="market-brief-empty" hidden></p>
-        <div id="market-brief-events" class="market-brief-events"></div>
+        <p id="market-brief-note" class="market-brief-note" hidden></p>
     </section>
     <div id="report-tabs" class="report-tabs" role="tablist" aria-label="Разделы отчёта">
         <button id="main-tab" type="button" role="tab" data-report-tab="main-panel" aria-controls="main-panel"

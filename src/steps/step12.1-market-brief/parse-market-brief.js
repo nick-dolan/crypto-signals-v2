@@ -20,6 +20,42 @@ function readText (value, limit, field) {
   return value.trim()
 }
 
+function readSourceIds (ids, sourceIds) {
+  if (
+    !isArray(ids) || !ids.length
+    || new Set(ids).size !== ids.length
+    || ids.some(id => !sourceIds.has(id))
+  ) {
+    throw new InvalidMarketBriefError("every paragraph or event must cite unique IDs of collected sources")
+  }
+  return [...ids]
+}
+
+export function validateBriefParagraphs (paragraphs, sources) {
+  if (!isArray(paragraphs) || paragraphs.length > 2) {
+    throw new InvalidMarketBriefError("paragraphs must contain at most two items")
+  }
+  const sourceIds = new Set(sources.map(source => source.id))
+  const result = paragraphs.map((paragraph) => {
+    requireKeys(paragraph, ["text", "sourceIds"])
+    return {
+      text: readText(paragraph.text, 800, "paragraph text"),
+      sourceIds: readSourceIds(paragraph.sourceIds, sourceIds),
+    }
+  })
+  if (result.reduce((length, paragraph) => length + paragraph.text.length, 0) > 800) {
+    throw new InvalidMarketBriefError("paragraph text must total at most 800 characters")
+  }
+  if (new Set(result.flatMap(paragraph => paragraph.sourceIds)).size > 3) {
+    throw new InvalidMarketBriefError("paragraphs must cite at most three distinct sources")
+  }
+  if (new Set(result.map(paragraph => paragraph.text.toLowerCase())).size !== result.length) {
+    throw new InvalidMarketBriefError("duplicate paragraph text")
+  }
+  return result
+}
+
+// Archived v1 briefs retain their original event structure and limits.
 export function validateBriefEvents (events, sources) {
   if (!isArray(events) || events.length > 5) {
     throw new InvalidMarketBriefError("events must contain at most five items")
@@ -37,19 +73,13 @@ export function validateBriefEvents (events, sources) {
     if (!["reported", "unconfirmed"].includes(event.verification)) {
       throw new InvalidMarketBriefError("verification must be reported or unconfirmed")
     }
-    if (
-      !isArray(event.sourceIds) || !event.sourceIds.length
-      || new Set(event.sourceIds).size !== event.sourceIds.length
-      || event.sourceIds.some(id => !sourceIds.has(id))
-    ) {
-      throw new InvalidMarketBriefError("every event must cite unique IDs of collected sources")
-    }
+
     return {
       title,
       summary: readText(event.summary, 600, "summary"),
       whyItMatters: readText(event.whyItMatters, 300, "whyItMatters"),
       verification: event.verification,
-      sourceIds: [...event.sourceIds],
+      sourceIds: readSourceIds(event.sourceIds, sourceIds),
     }
   })
 }
@@ -64,9 +94,9 @@ export function parseMarketBrief (content, asOf, sources) {
   } catch {
     throw new InvalidMarketBriefError("response is not valid JSON")
   }
-  requireKeys(response, ["schemaVersion", "asOf", "events"])
-  if (response.schemaVersion !== 1 || response.asOf !== asOf) {
+  requireKeys(response, ["schemaVersion", "asOf", "paragraphs"])
+  if (response.schemaVersion !== 2 || response.asOf !== asOf) {
     throw new InvalidMarketBriefError("response version or news cutoff does not match the request")
   }
-  return validateBriefEvents(response.events, sources)
+  return validateBriefParagraphs(response.paragraphs, sources)
 }
