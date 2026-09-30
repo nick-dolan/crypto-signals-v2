@@ -149,7 +149,7 @@ export async function analyzePeerRadar (
 
   if (payload.candidates.length) {
     const content = await callAgent(systemPrompt, JSON.stringify(payload), {
-      model: "Claude Opus 5.5",
+      model: "GPT-6.1 Sol",
       reasoningEffort: "high",
     })
 
@@ -177,7 +177,7 @@ export async function analyzePeerRadar (
     analysisStatus: candidates.length ? "complete" : "skipped_no_candidates",
     analysis: {
       source: "github-copilot-sdk",
-      model: "Claude Opus 5.5",
+      model: "GPT-6.1 Sol",
       reasoningEffort: "high",
       callCount: candidates.length ? 1 : 0,
     },

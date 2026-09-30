@@ -357,7 +357,7 @@ test("malformed grouped payload is rejected before calling the agent", async () 
   }), /schema length/)
 })
 
-test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool", async () => {
+test("candidate analysis uses GPT-6.1 Sol with high reasoning and one safe tool", async () => {
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
@@ -388,7 +388,7 @@ test("candidate analysis uses GPT-6-Astra with high reasoning and one safe tool"
   }
   assert.equal(captured.systemPrompt, "system prompt")
   assert.equal(captured.userMessage, JSON.stringify(payload))
-  assert.equal(captured.options.model, "GPT-6-Astra")
+  assert.equal(captured.options.model, "GPT-6.1 Sol")
   assert.equal(captured.options.reasoningEffort, "high")
   assert.equal(captured.options.tools.length, 1)
   assert.equal(captured.options.tools[0].name, "get_coin_history")
