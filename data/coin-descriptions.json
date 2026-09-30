@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-29T10:11:43.186Z",
+  "generatedAt": "2026-09-30T17:42:06.543Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-09-29T10:10:50.148Z"
+    "sourceGeneratedAt": "2026-09-30T17:41:32.903Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 259,
+  "coinCount": 261,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3802,6 +3802,34 @@
         {
           "url": "https://www.coingecko.com/en/coins/dusk-network",
           "checkedAt": "2026-09-29T10:11:40.305Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCUS",
+      "symbol": "US",
+      "name": "Talus",
+      "description": "Talus Network — децентрализованная платформа на базе Sui Move для создания и координации автономных систем и проверяемых AI-воркфлоу, объединяющих ончейн- и офчейн-вычисления. Токен US используется по правилам протокола для ценообразования и расчётов за сервисы, стейкинга участников сети и функций управления сообществом.",
+      "sources": [
+        {
+          "url": "https://talus.network/litepaper.pdf",
+          "checkedAt": "2026-09-30T17:41:48.841Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCFOLKS",
+      "symbol": "FOLKS",
+      "name": "Folks Finance",
+      "description": "Folks Finance — кроссчейн-протокол DeFi для кредитования, заимствования и торговли цифровыми активами через единый аккаунт. FOLKS является нативным активом протокола и выпускается как единый токен в нескольких блокчейнах без обёрнутых или синтетических копий.",
+      "sources": [
+        {
+          "url": "https://folks.finance/",
+          "checkedAt": "2026-09-30T17:42:03.862Z"
+        },
+        {
+          "url": "https://docs.folks.finance/folks-token/folks",
+          "checkedAt": "2026-09-30T17:42:04.197Z"
         }
       ]
     }
