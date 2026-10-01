@@ -33,9 +33,7 @@ export async function runTelegramStep ({
   console.log(`✓ Candidates: ${result.candidateCount}/10 · Messages: ${result.messageCount} · Omitted: ${result.omittedCount}`)
   console.log(`  Release: ${result.directory}\n  Preview: ${result.previewPath}\n  Manifest: ${result.manifestPath}`)
   const delivery = await sendRelease(result, { reportId: saved.id })
-  console.log(delivery.status === "already_sent"
-    ? `Step 14: Telegram post already sent (message ID: ${delivery.messageId}). No duplicate was sent.`
-    : `Step 14: Telegram post sent (message ID: ${delivery.messageId}).`)
+  console.log(`Step 14: Telegram post sent (message ID: ${delivery.messageId}).`)
   return { ...result, delivery }
 }
 

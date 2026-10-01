@@ -133,17 +133,23 @@ test("preview failures propagate after the store has closed", async () => {
   assert.equal(closed, 1)
 })
 
-test("step 14 reports an already-sent post without claiming a new send", async (t) => {
+test("each step 14 run sends the same saved report again", async (t) => {
   const log = t.mock.method(console, "log", () => {})
-  const delivery = { status: "already_sent", messageId: 77 }
-  const result = await runTelegramStep({
+  let nextMessageId = 77
+  const sendRelease = t.mock.fn(async () => ({ status: "sent", messageId: nextMessageId++ }))
+  const options = {
     readJson: async () => ({ id: "saved-report" }),
     createStore: async () => ({ read: async () => ({ coins: [] }), close: async () => {} }),
     createPreview: async () => previewResult(),
-    sendRelease: async () => delivery,
-  })
-  assert.equal(result.delivery, delivery)
-  assert.match(log.mock.calls.at(-1).arguments[0], /already sent.*No duplicate was sent/)
+    sendRelease,
+  }
+  for (const messageId of [77, 78]) {
+    const result = await runTelegramStep(options)
+    assert.deepEqual(result.delivery, { status: "sent", messageId })
+    assert.equal(log.mock.calls.at(-1).arguments[0], `Step 14: Telegram post sent (message ID: ${messageId}).`)
+  }
+  assert.equal(sendRelease.mock.callCount(), 2)
+  assert.ok(sendRelease.mock.calls.every(call => call.arguments[1].reportId === "saved-report"))
 })
 
 test("delivery failures propagate without a misleading success log", async (t) => {

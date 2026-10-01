@@ -303,10 +303,11 @@ for (const empty of [false, true]) {
     assert.equal(delivered.reportId, receipt.id)
     assert.equal(delivered.messageId, 77)
     const rerun = await runStep(directory, "step14-telegram.js", env)
-    assert.match(rerun.stdout, /already sent.*No duplicate was sent/)
+    assert.match(rerun.stdout, /Step 14: Telegram post sent \(message ID: 77\)\./)
+    assert.doesNotMatch(rerun.stdout, /already sent|No duplicate/)
     const requests = (await fs.readFile(path.join(directory, "telegram-requests.jsonl"), "utf8")).trim().split("\n")
-    assert.equal(requests.length, 1)
-    assert.deepEqual(JSON.parse(requests[0]), manifest.richMessage)
+    assert.equal(requests.length, 2)
+    assert.deepEqual(requests.map(request => JSON.parse(request)), [manifest.richMessage, manifest.richMessage])
   })
 }
 

@@ -2,23 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 import { createTelegramClient } from "../../api/telegram-api.js"
-import { isArray, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-
-async function existingDelivery (receiptPath, reportId, chatId) {
-  let saved
-  try {
-    saved = JSON.parse(await fs.readFile(receiptPath, "utf8"))
-  } catch {
-    throw new Error(`Cannot read Telegram delivery record ${receiptPath}. Check the chat before changing this record.`)
-  }
-  if (saved?.reportId !== reportId || saved.chatId !== chatId) {
-    throw new Error(`Telegram delivery record ${receiptPath} belongs to another report or chat. Nothing was sent.`)
-  }
-  if (saved.status !== "sent" || !isSafeInteger(saved.messageId) || saved.messageId <= 0) {
-    throw new Error(`Telegram delivery is pending or uncertain. Check the chat and ${receiptPath} before retrying; automatic resend is blocked.`)
-  }
-  return { status: "already_sent", messageId: saved.messageId, receiptPath }
-}
+import { isArray, isObject, isString } from "../../helpers/utils.typed.js"
 
 export async function sendTelegramRelease (release, {
   reportId,
@@ -50,47 +34,20 @@ export async function sendTelegramRelease (release, {
 
   await fs.mkdir(directory, { recursive: true })
   const receiptPath = path.resolve(directory, `${reportId}.json`)
-  let handle
-  try {
-    // The exclusive claim also blocks concurrent runs and retries after an ambiguous timeout.
-    handle = await fs.open(receiptPath, "wx")
-  } catch (error) {
-    if (error.code === "EEXIST") {
-      return existingDelivery(receiptPath, reportId, client.chatId)
-    }
-    throw error
-  }
-  const receipt = {
-    reportId, chatId: client.chatId, status: "sending",
-    releaseDirectory: path.dirname(release.manifestPath), startedAt: new Date().toISOString(),
-  }
-  try {
-    await handle.writeFile(JSON.stringify(receipt, null, 2), "utf8")
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-  // Persist the directory entry too, so a host crash cannot discard the pre-send claim.
-  const folder = await fs.open(directory, "r")
-  try {
-    await folder.sync()
-  } finally {
-    await folder.close()
-  }
-
+  const startedAt = new Date().toISOString()
   let message
   try {
     message = await client.sendRichMessage(manifest.richMessage, files)
   } catch (error) {
     if (error.deliveryUnknown === false) {
-      await fs.rm(receiptPath)
       throw error
     }
-    throw new Error(`Telegram delivery was not confirmed. Automatic resend is blocked; check the chat and ${receiptPath}.`, { cause: error })
+    throw new Error("Telegram delivery was not confirmed. Check the chat before retrying: another run will send a new post.", { cause: error })
   }
   try {
     await fs.writeFile(receiptPath, JSON.stringify({
-      ...receipt, status: "sent", messageId: message.message_id, sentAt: new Date().toISOString(),
+      reportId, chatId: client.chatId, status: "sent", messageId: message.message_id,
+      releaseDirectory: path.dirname(release.manifestPath), startedAt, sentAt: new Date().toISOString(),
     }, null, 2), "utf8")
   } catch {
     throw new Error(`Telegram sent message ${message.message_id}, but its delivery record could not be saved. Check ${receiptPath}; do not resend blindly.`)
