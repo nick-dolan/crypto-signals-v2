@@ -74,9 +74,9 @@ async function prepareInputs (t, empty = false) {
   return directory
 }
 
-function runStep (directory) {
+function runStep (directory, filename = "step13-report.js") {
   return promisify(execFile)(process.execPath, [
-    new URL("../src/step13-report.js", import.meta.url).pathname,
+    new URL(`../src/${filename}`, import.meta.url).pathname,
   ], { cwd: directory, timeout: 20_000 })
 }
 
@@ -86,6 +86,10 @@ function runInjected (directory, code) {
     import { runReportStep } from ${JSON.stringify(new URL("../src/step13-report.js", import.meta.url).href)}
     ${code}
   `], { cwd: directory, timeout: 20_000 })
+}
+
+async function readReceipt (directory) {
+  return JSON.parse(await fs.readFile(path.join(directory, "tmp", "step13-report.json"), "utf8"))
 }
 
 for (const empty of [false, true]) {
@@ -105,6 +109,7 @@ for (const empty of [false, true]) {
         "coins.parquet", "history.parquet", "peer-radar.parquet", "report.parquet",
       ])
       const report = await store.read(metadata.id)
+      assert.deepEqual(await readReceipt(directory), { id: metadata.id, asOf: report.asOf })
       assert.equal(report.peerRadar.status, "unavailable")
       assert.deepEqual(report.peerRadar.histories, {})
       if (!empty) {
@@ -126,7 +131,7 @@ for (const empty of [false, true]) {
   })
 }
 
-test("rebuilding step 13 creates another immutable snapshot and preserves legacy files", { timeout: 30_000 }, async (t) => {
+test("rebuilding step 13 updates the receipt without changing the previous snapshot or legacy files", { timeout: 30_000 }, async (t) => {
   const directory = await prepareInputs(t)
   await fs.mkdir(path.join(directory, "reports"))
   await fs.writeFile(path.join(directory, "reports", "legacy.html"), "Legacy report")
@@ -135,8 +140,13 @@ test("rebuilding step 13 creates another immutable snapshot and preserves legacy
   try {
     const [first] = await store.list()
     const before = await store.read(first.id)
+    assert.deepEqual(await readReceipt(directory), { id: first.id, asOf: before.asOf })
     await runStep(directory)
-    assert.equal((await store.list()).length, 2)
+    const snapshots = await store.list()
+    assert.equal(snapshots.length, 2)
+    const second = snapshots.find(snapshot => snapshot.id !== first.id)
+    assert.ok(second)
+    assert.deepEqual(await readReceipt(directory), { id: second.id, asOf: (await store.read(second.id)).asOf })
     assert.deepEqual(await store.read(first.id), before)
     assert.equal(await fs.readFile(path.join(directory, "reports", "legacy.html"), "utf8"), "Legacy report")
   } finally {
@@ -188,8 +198,10 @@ test("step 13 preserves the digest and source provenance in the immutable archiv
   }
 })
 
-test("a failed archive save closes its store and propagates the error", async (t) => {
+test("a failed archive save clears the previous receipt, closes its store and propagates the error", async (t) => {
   const directory = await prepareInputs(t, true)
+  await runStep(directory)
+  const previous = await readReceipt(directory)
   await runInjected(directory, `
     let closed = 0
     await assert.rejects(runReportStep({
@@ -200,15 +212,62 @@ test("a failed archive save closes its store and propagates the error", async (t
     }), /Disk full/)
     assert.equal(closed, 1)
   `)
-  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
+  await assert.rejects(fs.access(path.join(directory, "tmp", "step13-report.json")), { code: "ENOENT" })
+  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), [previous.id])
 })
 
-test("inconsistent inputs fail before creating an archive", async (t) => {
+test("inconsistent inputs clear the previous receipt before creating another archive", async (t) => {
   const directory = await prepareInputs(t, true)
+  await runStep(directory)
+  const previous = await readReceipt(directory)
   const filename = path.join(directory, "tmp", "step6-agent-payload.json")
   const payload = JSON.parse(await fs.readFile(filename, "utf8"))
   payload.asOf = "2026-09-26T10:00:00.000Z"
   await fs.writeFile(filename, JSON.stringify(payload))
   await assert.rejects(runStep(directory), error => error.code === 1 && /same closed hourly snapshot/.test(error.stderr))
-  await assert.rejects(fs.access(path.join(directory, "reports")), { code: "ENOENT" })
+  await assert.rejects(fs.access(path.join(directory, "tmp", "step13-report.json")), { code: "ENOENT" })
+  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), [previous.id])
 })
+
+for (const empty of [false, true]) {
+  test(`step 13 -> 14 CLI previews the saved ${empty ? "empty" : "COTI"} snapshot instead of a newer archive`, { timeout: 30_000 }, async (t) => {
+    const directory = await prepareInputs(t, empty)
+    await runStep(directory)
+    const receipt = await readReceipt(directory)
+    const store = await createReportStore({ directory: path.join(directory, "reports") })
+    try {
+      const report = await store.read(receipt.id)
+      const newer = await store.save({
+        ...report,
+        reportCreatedAt: "2030-01-01T00:00:00.000Z",
+        coins: report.coins.map(coin => ({ ...coin, symbol: "NEWER" })),
+      })
+      assert.notEqual(newer.id, receipt.id)
+      assert.equal((await store.list())[0].id, newer.id)
+    } finally {
+      await store.close()
+    }
+
+    const { stdout } = await runStep(directory, "step14-telegram.js")
+    assert.match(stdout, new RegExp(`Candidates: ${empty ? 0 : 1}/10 · Messages: \\d+ · Omitted: 0`))
+    assert.match(stdout, /Release: .*\n {2}Preview: .*\n {2}Manifest: /)
+    assert.match(stdout, /Step 14: release prepared locally\. Nothing was sent to Telegram\./)
+    assert.doesNotMatch(stdout, /[а-яё]/i)
+    const output = path.join(directory, "output", "telegram-preview")
+    const releases = await fs.readdir(output)
+    assert.equal(releases.length, 1)
+    assert.match(releases[0], /^release-/)
+    const release = path.join(output, releases[0])
+    const manifest = JSON.parse(await fs.readFile(path.join(release, "release.json"), "utf8"))
+    assert.equal(manifest.source, `reports/${receipt.id}`)
+    assert.equal(manifest.asOf, receipt.asOf)
+    assert.equal(manifest.demo, false)
+    assert.deepEqual(manifest.candidates.map(candidate => candidate.symbol), empty ? [] : ["COTI"])
+    assert.ok(manifest.candidates.length <= 10)
+    assert.deepEqual((await fs.readdir(path.join(release, "cards"))).sort(), manifest.candidates.flatMap(({ image }) => [
+      path.basename(image), path.basename(image.replace(/\.png$/, ".svg")),
+    ]).sort())
+    await fs.access(path.join(release, "index.html"))
+    assert.deepEqual(await readReceipt(directory), receipt)
+  })
+}

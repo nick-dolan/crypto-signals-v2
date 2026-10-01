@@ -50,6 +50,7 @@ async function runAll () {
       "step12-peer-radar-analysis.js",
       "step12.1-market-brief.js",
       "step13-report.js",
+      "step14-telegram.js",
     ]) {
       if (peerRadarFailed && step === "step12-peer-radar-analysis.js") {
         continue

@@ -18,8 +18,12 @@ for (const failedSteps of [
   ["step12.1-market-brief.js"],
   ["step11-peer-radar.js", "step12.1-market-brief.js"],
   ["step1.1-coin-descriptions.js", "step12.1-market-brief.js"],
+  ["step13-report.js"],
+  ["step14-telegram.js"],
+  ["step11-peer-radar.js", "step13-report.js"],
+  ["step12.1-market-brief.js", "step14-telegram.js"],
 ]) {
-  test(`pipeline order and independent report when failure is ${failedSteps.join(", ") || "absent"}`, { timeout: 30_000 }, async (t) => {
+  test(`pipeline order and independent report/preview when failure is ${failedSteps.join(", ") || "absent"}`, { timeout: 30_000 }, async (t) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "peer-radar-runner-"))
     t.after(() => fs.rm(directory, { recursive: true, force: true }))
     await fs.mkdir(path.join(directory, "src", "helpers"), { recursive: true })
@@ -36,11 +40,13 @@ for (const failedSteps of [
       "step5-preliminary-filter.js", "step6-agent-payload.js", "step7-agent-analysis.js",
       "step8-news-enrichment.js", "step9-twitter-enrichment.js", "step10-context-enrichment.js",
       "step11-peer-radar.js", "step12-peer-radar-analysis.js", "step12.1-market-brief.js", "step13-report.js",
+      "step14-telegram.js",
     ]) {
       await fs.writeFile(path.join(directory, "src", filename), `
         import fs from "node:fs/promises"
         await fs.appendFile("order.txt", ${JSON.stringify(filename + "\n")})
-        ${filename === "step13-report.js" ? "await fs.writeFile(\"reports/main.parquet\", \"Saved report data\")" : ""}
+        ${filename === "step13-report.js" && !failedSteps.includes(filename) ? "await fs.writeFile(\"reports/main.parquet\", \"Saved report data\")" : ""}
+        ${filename === "step14-telegram.js" ? "await fs.readFile(\"reports/main.parquet\")" : ""}
         process.exitCode = ${failedSteps.includes(filename) ? 1 : 0}
       `)
     }
@@ -69,12 +75,26 @@ for (const failedSteps of [
       return
     }
 
-    assert.equal(order.length, failedSteps.includes("step11-peer-radar.js") ? 15 : 16)
-    assert.equal(order.at(-2), "step12.1-market-brief.js")
-    assert.equal(order.at(-1), "step13-report.js")
-    assert.equal(order.includes("step12-peer-radar-analysis.js"), !failedSteps.includes("step11-peer-radar.js"))
-    assert.ok(order.indexOf("step11-peer-radar.js") > order.indexOf("step10-context-enrichment.js"))
+    assert.deepEqual(order.slice(9), [
+      "step8-news-enrichment.js", "step9-twitter-enrichment.js", "step10-context-enrichment.js",
+      "step11-peer-radar.js",
+      ...(failedSteps.includes("step11-peer-radar.js") ? [] : ["step12-peer-radar-analysis.js"]),
+      "step12.1-market-brief.js", "step13-report.js",
+      ...(failedSteps.includes("step13-report.js") ? [] : ["step14-telegram.js"]),
+    ])
+    if (failedSteps.includes("step13-report.js")) {
+      assert.equal(order.length, failedSteps.includes("step11-peer-radar.js") ? 15 : 16)
+      assert.equal(order.includes("step14-telegram.js"), false)
+      assert.doesNotMatch(result.stderr, /Main report completed/)
+      await assert.rejects(fs.access(path.join(directory, "reports", "main.parquet")), { code: "ENOENT" })
+      return
+    }
+
+    assert.equal(order.length, failedSteps.includes("step11-peer-radar.js") ? 16 : 17)
     assert.equal(await fs.readFile(path.join(directory, "reports", "main.parquet"), "utf8"), "Saved report data")
+    if (failedSteps.includes("step14-telegram.js")) {
+      return
+    }
     if (failedSteps.includes("step1.1-coin-descriptions.js")) {
       assert.match(result.stderr, /Main report completed.*optional coin descriptions enrichment failed \(step 1\.1\)/)
     }
