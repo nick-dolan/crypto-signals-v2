@@ -4,6 +4,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { pathToFileURL } from "node:url"
 import { promisify } from "node:util"
 
 import { createReportStore } from "../src/reports/store.js"
@@ -74,10 +75,10 @@ async function prepareInputs (t, empty = false) {
   return directory
 }
 
-function runStep (directory, filename = "step13-report.js") {
+function runStep (directory, filename = "step13-report.js", env = {}) {
   return promisify(execFile)(process.execPath, [
     new URL(`../src/${filename}`, import.meta.url).pathname,
-  ], { cwd: directory, timeout: 20_000 })
+  ], { cwd: directory, timeout: 20_000, env: { ...process.env, ...env } })
 }
 
 function runInjected (directory, code) {
@@ -230,7 +231,7 @@ test("inconsistent inputs clear the previous receipt before creating another arc
 })
 
 for (const empty of [false, true]) {
-  test(`step 13 -> 14 CLI previews the saved ${empty ? "empty" : "COTI"} snapshot instead of a newer archive`, { timeout: 30_000 }, async (t) => {
+  test(`step 13 -> 14 CLI sends the saved ${empty ? "empty" : "COTI"} snapshot as one post instead of a newer archive`, { timeout: 30_000 }, async (t) => {
     const directory = await prepareInputs(t, empty)
     await runStep(directory)
     const receipt = await readReceipt(directory)
@@ -248,10 +249,38 @@ for (const empty of [false, true]) {
       await store.close()
     }
 
-    const { stdout } = await runStep(directory, "step14-telegram.js")
-    assert.match(stdout, new RegExp(`Candidates: ${empty ? 0 : 1}/10 · Messages: \\d+ · Omitted: 0`))
+    const preload = path.join(directory, "telegram-request-fixture.mjs")
+    await fs.writeFile(preload, `
+      import assert from "node:assert/strict"
+      import fs from "node:fs/promises"
+      globalThis.fetch = async (url, options) => {
+        assert.equal(url, "https://api.telegram.org/bot123456:test-token/sendRichMessage")
+        assert.equal(options.method, "POST")
+        assert.equal(options.body.get("chat_id"), "-100123")
+        const rich = JSON.parse(options.body.get("rich_message"))
+        assert.equal(rich.media.length, ${empty ? 0 : 1})
+        assert.ok(!rich.html.includes("NEWER"))
+        for (const item of rich.media) {
+          const file = options.body.get(item.id)
+          assert.equal(file.type, "image/png")
+          const png = Buffer.from(await file.arrayBuffer())
+          assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+          assert.equal(png.readUInt32BE(16), 1200)
+          assert.equal(png.readUInt32BE(20), 1280)
+          assert.ok(rich.html.indexOf("<img") < rich.html.indexOf("Новостная сводка"))
+        }
+        await fs.appendFile("telegram-requests.jsonl", JSON.stringify(rich) + "\\n")
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 77, chat: { id: -100123 } } }))
+      }
+    `)
+    const env = {
+      TELEGRAM_BOT_TOKEN: "123456:test-token", TELEGRAM_CHAT_ID: "-100123",
+      NODE_OPTIONS: `--import ${pathToFileURL(preload).href}`,
+    }
+    const { stdout } = await runStep(directory, "step14-telegram.js", env)
+    assert.match(stdout, new RegExp(`Candidates: ${empty ? 0 : 1}/10 · Messages: 1 · Omitted: 0`))
     assert.match(stdout, /Release: .*\n {2}Preview: .*\n {2}Manifest: /)
-    assert.match(stdout, /Step 14: release prepared locally\. Nothing was sent to Telegram\./)
+    assert.match(stdout, /Step 14: Telegram post sent \(message ID: 77\)\./)
     assert.doesNotMatch(stdout, /[а-яё]/i)
     const output = path.join(directory, "output", "telegram-preview")
     const releases = await fs.readdir(output)
@@ -269,5 +298,33 @@ for (const empty of [false, true]) {
     ]).sort())
     await fs.access(path.join(release, "index.html"))
     assert.deepEqual(await readReceipt(directory), receipt)
+    const delivered = JSON.parse(await fs.readFile(path.join(directory, "output", "telegram-delivery", `${receipt.id}.json`), "utf8"))
+    assert.equal(delivered.status, "sent")
+    assert.equal(delivered.reportId, receipt.id)
+    assert.equal(delivered.messageId, 77)
+    const rerun = await runStep(directory, "step14-telegram.js", env)
+    assert.match(rerun.stdout, /already sent.*No duplicate was sent/)
+    const requests = (await fs.readFile(path.join(directory, "telegram-requests.jsonl"), "utf8")).trim().split("\n")
+    assert.equal(requests.length, 1)
+    assert.deepEqual(JSON.parse(requests[0]), manifest.richMessage)
   })
 }
+
+test("missing Telegram configuration fails step 14 but preserves its local preview and step 13 archive", async (t) => {
+  const directory = await prepareInputs(t, true)
+  await runStep(directory)
+  const receipt = await readReceipt(directory)
+  await assert.rejects(runStep(directory, "step14-telegram.js", { TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "" }), (error) => {
+    assert.equal(error.code, 1)
+    assert.match(error.stderr, /Telegram bot token is required/)
+    assert.doesNotMatch(error.stdout, /Telegram post sent/)
+    return true
+  })
+  assert.deepEqual(await readReceipt(directory), receipt)
+  assert.deepEqual(await fs.readdir(path.join(directory, "reports")), [receipt.id])
+  const output = path.join(directory, "output", "telegram-preview")
+  const [folder] = await fs.readdir(output)
+  await fs.access(path.join(output, folder, "index.html"))
+  await fs.access(path.join(output, folder, "release.json"))
+  await assert.rejects(fs.access(path.join(directory, "output", "telegram-delivery")), { code: "ENOENT" })
+})

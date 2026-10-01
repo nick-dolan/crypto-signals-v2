@@ -35,7 +35,7 @@ export async function writeTelegramPreview (report, { directory = "output/telegr
   }
   return {
     directory: folder, previewPath, manifestPath,
-    candidateCount: manifest.candidates.length, messageCount: manifest.messages.length,
+    candidateCount: manifest.candidates.length, messageCount: 1,
     demo: manifest.demo, asOf: manifest.asOf, omittedCount: manifest.omittedCount,
   }
 }

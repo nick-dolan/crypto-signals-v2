@@ -43,24 +43,19 @@ export function signalText (signal) {
   return separator > 0 && signal.slice(0, separator).includes("=") ? signal.slice(separator + 2) : signal
 }
 
-export function telegramMessages (heading, blocks) {
-  if (heading.length > 4_096) {
-    throw new Error("Заголовок Telegram-выпуска превышает лимит сообщения")
+export function telegramSection (heading, blocks) {
+  return [heading, ...blocks].filter(Boolean).map(block => `<p>${block.replace(/\n/g, "<br>")}</p>`).join("\n")
+}
+
+export function telegramRichMessage (html, media) {
+  // Only trusted builder HTML: decode text once, excluding tags and link attributes.
+  const text = html.replace(/<[^>]*>/gu, "")
+    .replace(/&(amp|lt|gt|quot);/gu, (_, name) => ({ amp: "&", lt: "<", gt: ">", quot: "\"" })[name])
+  const length = [...text].length
+  if (length > 32_768) {
+    throw new Error(`Текст rich-поста Telegram превышает лимит 32768 символов: ${length}`)
   }
-  const messages = []
-  let text = heading
-  for (const block of blocks.filter(Boolean)) {
-    if (heading.length + block.length + 2 > 4_096) {
-      throw new Error("Один блок Telegram-выпуска превышает лимит сообщения")
-    }
-    if (text.length + block.length + 2 > 4_096) {
-      messages.push({ text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })
-      text = heading
-    }
-    text += `\n\n${block}`
-  }
-  messages.push({ text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })
-  return messages
+  return { html, media }
 }
 
 export function reportTime (value) {

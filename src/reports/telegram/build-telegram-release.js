@@ -1,5 +1,5 @@
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { reportTime, signalText, telegramLink, telegramMessages, telegramText } from "./telegram-format.js"
+import { reportTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
 
 function probability (coin) {
   return isFinite(coin.movementProbability) && coin.movementProbability >= 0 && coin.movementProbability <= 1
@@ -153,35 +153,34 @@ function briefBlocks (report) {
   return blocks
 }
 
-function caption (item, number, report, closedAt) {
-  const { coin, section } = item
-  return [
-    report.demo === true ? "<b>ДЕМО · синтетические данные</b>" : null,
-    `<b>${telegramText(`${String(number).padStart(2, "0")} · ${coin.symbol}`, 90)}</b> · ${{
-      top: "Топ агента", positive: "Позитивный инфоповод", coingecko: "CoinGecko Trending",
-    }[section]}`,
-    estimate(coin),
-    `Срез закрыт: ${reportTime(closedAt)} МСК · 4–12ч`,
-    "Сильное движение в любую сторону; оценка не откалибрована.",
-    coin.features?.coingeckoTrending === true && section !== "coingecko" ? "Также в CoinGecko Trending." : null,
-    section !== "positive" ? socialLabel(coin) : null,
-  ].filter(Boolean).join("\n")
-}
-
 export function buildTelegramRelease (report) {
   const asOf = isString(report?.asOf) ? Date.parse(report.asOf) : NaN
   if (report?.timeframe !== "1h" || !isSafeInteger(asOf) || asOf % 3_600_000 !== 0) {
     throw new Error("Telegram-выпуск требует сохранённый часовой отчёт (asOf, 1h)")
   }
   const selection = selectTelegramCandidates(report)
+  const candidates = selection.candidates.map((item, index) => ({
+    symbol: item.coin.symbol,
+    section: item.section,
+    coinIndex: item.coinIndex,
+    number: index + 1,
+    image: `cards/${String(index + 1).padStart(2, "0")}-${item.coin.symbol.replace(/[^a-z\d_-]+/gi, "_").slice(0, 40)}.png`,
+    mediaId: `card_${index + 1}`,
+  }))
+  const photos = candidates.map(item => `<img src="tg://photo?id=${item.mediaId}"/>`).join("")
   const closedAt = new Date(asOf + 3_600_000).toISOString()
   const introductory = [
     report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
     `<b>Крипто-сигналы · ${reportTime(closedAt)} МСК</b>`,
     `Кандидатов: ${selection.candidates.length}/10. Срез по закрытым свечам.`,
     selection.omittedCount ? `Ещё ${selection.omittedCount} кандидатов не вошли в общий лимит 10.` : null,
+    "P — оценка сильного движения в любую сторону за 4–12ч, без статистической калибровки.",
   ].filter(Boolean).join("\n")
-  const messages = telegramMessages(`${introductory}\n\n<b>📰 Новостная сводка</b>`, briefBlocks(report))
+  const sections = [
+    candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
+    telegramSection(introductory, []),
+    telegramSection("<b>📰 Новостная сводка</b>", briefBlocks(report)),
+  ]
   for (const [section, title, description, empty] of [
     ["top", "⭐ Топ агента", "Ранние кандидаты в исходном порядке агента.", "Агент не выделил убедительных ранних кандидатов."],
     ["positive", "🟢 Позитивные инфоповоды", "Дополнительные монеты вне топа. Позитивная новость — не технический сигнал. Фон проверен у топа и CoinGecko-монет, не у всего рынка.", "В выпуске нет дополнительных монет с позитивным значимым инфоповодом."],
@@ -190,29 +189,18 @@ export function buildTelegramRelease (report) {
     const blocks = selection.candidates.flatMap((item, index) => item.section === section
       ? [candidateBlock(item, index + 1, report.demo === true)]
       : [])
-    messages.push(...telegramMessages([
-      report.demo === true ? "<b>ДЕМО · синтетические данные</b>" : null,
-      `<b>${title}</b>`,
-      description,
-      "P — оценка сильного движения в любую сторону за 4–12ч, без статистической калибровки.",
-    ].filter(Boolean).join("\n"), blocks.length ? blocks : [empty]))
+    sections.push(telegramSection(`<b>${title}</b>\n${description}`, blocks.length ? blocks : [empty]))
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     asOf: report.asOf,
     closedAt,
     demo: report.demo === true,
     eligibleCount: selection.eligibleCount,
     omittedCount: selection.omittedCount,
-    messages,
-    candidates: selection.candidates.map((item, index) => ({
-      symbol: item.coin.symbol,
-      section: item.section,
-      coinIndex: item.coinIndex,
-      number: index + 1,
-      image: `cards/${String(index + 1).padStart(2, "0")}-${item.coin.symbol.replace(/[^a-z\d_-]+/gi, "_").slice(0, 40)}.png`,
-      caption: caption(item, index + 1, report, closedAt),
-      parse_mode: "HTML",
-    })),
+    candidates,
+    richMessage: telegramRichMessage(sections.filter(Boolean).join("\n"), candidates.map(item => ({
+      id: item.mediaId, media: { type: "photo", media: `attach://${item.mediaId}` },
+    }))),
   }
 }

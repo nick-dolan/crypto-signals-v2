@@ -1,13 +1,44 @@
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
+import http from "node:http"
+import https from "node:https"
 import os from "node:os"
 import path from "node:path"
-import test from "node:test"
+import test, { beforeEach } from "node:test"
 
 import { createDemoReport } from "../src/reports/coin-card/create-demo-report.js"
 import { buildTelegramRelease } from "../src/reports/telegram/build-telegram-release.js"
 import { writeTelegramPreview } from "../src/reports/telegram/preview.js"
 import { renderTelegramPreview } from "../src/reports/telegram/render-telegram-preview.js"
+
+beforeEach((t) => {
+  const requests = [[globalThis, "fetch"], [http, "request"], [http, "get"], [https, "request"], [https, "get"]]
+    .map(([target, method]) => t.mock.method(target, method, () => assert.fail("Unexpected network request")))
+  t.after(() => requests.forEach(request => assert.equal(request.mock.callCount(), 0)))
+})
+
+function assertPreviewPost (html, manifest) {
+  assert.equal([...html.matchAll(/<article\b/gu)].length, 1)
+  const match = html.match(/<article class="bubble" aria-label="Один пост">\s*<div class="telegram-html">([\s\S]*?)<\/div>\s*<\/article>/u)
+  assert.ok(match, "One rich post must be displayed in a single bubble")
+  const post = match[1]
+  assert.deepEqual([...post.matchAll(/<img src="([^"]+)"/gu)].map(([, image]) => image), manifest.candidates.map(item => item.image))
+  if (manifest.candidates.length > 1) {
+    assert.ok(post.startsWith("<div class=\"photo-grid\"><img "))
+    assert.equal([...post.matchAll(/class="photo-grid"/gu)].length, 1)
+    assert.ok(post.indexOf("</div>") < post.indexOf("<p>"))
+  } else {
+    assert.ok(post.startsWith(manifest.candidates.length ? "<img " : "<p>"))
+    assert.doesNotMatch(post, /class="photo-grid"/u)
+  }
+  const body = post.slice(post.indexOf("<p>"))
+  assert.equal(body, manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p>")), "Preview must preserve all trusted text HTML exactly")
+  assert.doesNotMatch(body, /<img\b/u, "Every photo must precede the explanatory text")
+  assert.doesNotMatch(post, /tg-collage|tg:\/\/photo|attach:\/\//u)
+  assert.doesNotMatch(html, /<script\b|@import|url\(|<(?:iframe|object|embed|audio|video|source)\b/iu)
+  assert.doesNotMatch(html, /<(?:img|link)\b[^>]*(?:src|href)="(?:https?:)?\/\//iu)
+  assert.match(html, /default-src 'none'; img-src 'self'/u)
+}
 
 async function temporaryDirectory (t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "telegram-preview-"))
@@ -69,7 +100,12 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.deepEqual(manifest, { ...buildTelegramRelease(original), source: "Синтетический отчёт" })
   assert.equal(result.candidateCount, 10)
-  assert.equal(result.messageCount, manifest.messages.length)
+  assert.equal(result.messageCount, 1)
+  assert.equal(manifest.schemaVersion, 2)
+  assert.equal(manifest.richMessage.media.length, 10)
+  assert.equal(Object.hasOwn(manifest, "messages"), false)
+  assert.equal(result.asOf, original.asOf)
+  assert.equal(result.omittedCount, manifest.omittedCount)
   assert.equal(result.demo, true)
   assert.ok(manifest.eligibleCount > 10)
   assert.equal(manifest.omittedCount, manifest.eligibleCount - 10)
@@ -82,14 +118,16 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
   assert.equal(result.manifestPath, path.join(result.directory, "release.json"))
   assert.deepEqual((await fs.readdir(result.directory)).sort(), ["cards", "index.html", "release.json"])
   assert.doesNotMatch(json, /"(?:coins|history|candles)"\s*:/)
-  assert.match(html, /Локальное превью · Не отправлено/)
+  assert.match(html, /Локальное превью · Один пост/)
+  assert.match(html, /Сообщения: 1/)
+  assert.doesNotMatch(html, /Не отправлено|Подпись к фото|Фото и подписи/u)
   assert.match(html, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
   assert.match(html, /Кандидаты: 10 \/ 10/)
   assert.ok(html.includes(`Не включено: ${manifest.omittedCount}`))
-  assert.match(html, /не точная попиксельная имитация альбома Telegram/)
-  assert.match(html, /Топ-кандидаты/)
-  assert.match(html, /Позитивный инфоповод/)
-  assert.match(html, /В тренде CoinGecko/)
+  assert.match(html, /Точное отображение в клиентах Telegram не гарантируется/)
+  assert.match(html, /⭐ Топ агента/)
+  assert.match(html, /🟢 Позитивные инфоповоды/)
+  assert.match(html, /🦎 CoinGecko Trending/)
   assert.match(html, /max-width: 720px/)
   assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
   assert.match(html, /@media[\s\S]*grid-template-columns: 1fr/)
@@ -100,11 +138,12 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
     assert.equal(item.number, index + 1)
     assert.match(item.image, /^cards\/\d{2}-[a-z\d_-]+\.png$/i)
     assert.ok(item.image.startsWith(`cards/${String(index + 1).padStart(2, "0")}-`))
-    assert.ok(item.caption.length <= 1024)
-    assert.equal(item.parse_mode, "HTML")
-    assert.ok(html.includes(`<h3>#${item.number} · ${item.symbol}</h3>`))
+    assert.equal(item.mediaId, `card_${index + 1}`)
+    assert.deepEqual(manifest.richMessage.media[index], { id: item.mediaId, media: { type: "photo", media: `attach://${item.mediaId}` } })
+    assert.equal(Object.hasOwn(item, "caption"), false)
+    assert.equal(Object.hasOwn(item, "parse_mode"), false)
+    assert.ok(html.includes(`alt="Карточка #${item.number} · ${item.symbol}"`))
     assert.ok(html.includes(`src="${item.image}"`))
-    assert.ok(html.includes(`<div class="telegram-html">${item.caption}</div>`))
     const png = await fs.readFile(path.join(result.directory, item.image))
     assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     assert.equal(png.readUInt32BE(16), 1200)
@@ -114,17 +153,15 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
     assert.ok(svg.includes(item.symbol))
     assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
   }
-  for (const message of manifest.messages) {
-    assert.ok(message.text.length <= 4096)
-    assert.equal(message.parse_mode, "HTML")
-    assert.deepEqual(message.link_preview_options, { is_disabled: true })
-    assert.ok(html.includes(`<div class="telegram-html">${message.text}</div>`))
-  }
+  assertPreviewPost(html, manifest)
+  assert.ok(manifest.richMessage.html.length > 4_096)
   const report = reportWithCoins(1)
   const before = structuredClone(report)
   const next = await writeTelegramPreview(report, { directory, source: "local example" })
   const nextManifest = JSON.parse(await fs.readFile(next.manifestPath, "utf8"))
   assert.equal(next.candidateCount, 1)
+  assert.equal(next.messageCount, 1)
+  assertPreviewPost(await fs.readFile(next.previewPath, "utf8"), nextManifest)
   assert.notEqual(next.directory, result.directory)
   assert.deepEqual(report, before)
   assert.equal(nextManifest.source, "local example")
@@ -140,33 +177,84 @@ test("zero candidates produces an explicit empty preview without invented photos
   const result = await writeTelegramPreview(reportWithCoins(0), { directory: await temporaryDirectory(t) })
   const manifest = JSON.parse(await fs.readFile(result.manifestPath, "utf8"))
   assert.equal(result.candidateCount, 0)
+  assert.equal(result.messageCount, 1)
   assert.deepEqual(manifest.candidates, [])
+  assert.deepEqual(manifest.richMessage.media, [])
   assert.equal(manifest.source, null)
   assert.deepEqual(await fs.readdir(path.join(result.directory, "cards")), [])
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.match(html, /Кандидаты: 0 \/ 10/)
-  assert.match(html, /Подходящих кандидатов нет/)
+  assert.match(html, /Агент не выделил убедительных ранних кандидатов/)
   assert.doesNotMatch(html, /<img\b/)
+  assertPreviewPost(html, manifest)
 })
 
-test("renderer escapes all metadata while preserving trusted message and caption HTML", () => {
+test("renderer escapes all metadata while preserving trusted rich text HTML without mutation", () => {
   const unsafe = "<img src=x onerror=alert(1)> & \"'"
+  const text = "<p><b>Сводка</b><br><i>Пример</i> <a href=\"https://example.com\">Источник</a></p>"
   const manifest = {
-    schemaVersion: 1, asOf: unsafe, closedAt: unsafe, demo: false,
+    schemaVersion: 2, asOf: unsafe, closedAt: unsafe, demo: false,
     eligibleCount: unsafe, omittedCount: unsafe, source: `javascript:alert(1) ${unsafe}`,
     candidates: [{
-      symbol: unsafe, section: unsafe, coinIndex: 0, number: unsafe, image: "cards/01-DEMO.png",
-      caption: "<b>Подпись</b>\n<i>Оговорка</i> <a href=\"https://example.com\">Пример</a>", parse_mode: "HTML",
+      symbol: unsafe, section: unsafe, coinIndex: 0, number: unsafe, image: "cards/01-DEMO.png", mediaId: "card_1",
     }],
-    messages: [{ text: "<b>Сводка</b>\n<i>Пример</i> <a href=\"https://example.com\">Источник</a>", parse_mode: "HTML", link_preview_options: { is_disabled: true } }],
+    richMessage: {
+      html: `<img src="tg://photo?id=card_1"/>${text}`,
+      media: [{ id: "card_1", media: { type: "photo", media: "attach://card_1" } }],
+    },
   }
+  const before = structuredClone(manifest)
   const html = renderTelegramPreview(manifest)
+  assert.deepEqual(manifest, before)
   assert.ok(!html.includes(unsafe))
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt; &amp; &quot;&#39;/)
   assert.match(html, /Источник: <span>javascript:alert\(1\) &lt;img/)
-  assert.ok(html.includes(manifest.messages[0].text))
-  assert.ok(html.includes(manifest.candidates[0].caption))
+  assert.match(html, /alt="Карточка #&lt;img src=x onerror=alert\(1\)&gt;/u)
+  assert.ok(html.includes(text))
   assert.doesNotMatch(html, /<script\b|<img src=x|href="javascript:/)
+  assertPreviewPost(html, manifest)
+})
+
+test("preview resolves images by rich media ID and preserves the HTML photo order", () => {
+  const manifest = buildTelegramRelease(reportWithCoins(2))
+  const images = manifest.candidates.map(item => item.image)
+  manifest.candidates.reverse()
+  const before = structuredClone(manifest)
+  const html = renderTelegramPreview(manifest)
+  assert.deepEqual([...html.matchAll(/<img src="([^"]+)"/gu)].map(([, image]) => image), images)
+  assert.deepEqual(manifest, before)
+})
+
+test("preview refuses missing photo mappings and non-local card paths", () => {
+  for (const image of ["https://remote.example/card.png", "//remote.example/card.png", "file:///tmp/card.png", "/tmp/card.png", "cards/../../card.png", "cards/x.png\" onerror=\"alert(1)"]) {
+    const manifest = buildTelegramRelease(reportWithCoins(1))
+    manifest.candidates[0].image = image
+    assert.throws(() => renderTelegramPreview(manifest), /Нет локальной карточки/u)
+  }
+  const manifest = buildTelegramRelease(reportWithCoins(1))
+  manifest.candidates[0].mediaId = "card_2"
+  assert.throws(() => renderTelegramPreview(manifest), /Нет локальной карточки.*card_1/u)
+})
+
+test("one-photo preview keeps a valid rich post above 1024 and 4096 characters without caption truncation", async (t) => {
+  const report = reportWithCoins(1)
+  const long = "Наблюдение за активностью без обещания направления. ".repeat(100)
+  Object.assign(report.coins[0], {
+    explanation: long, socialReason: long, counterSignals: [long, long],
+    features: { ...report.coins[0].features, coingeckoTrendingCategories: [long] },
+  })
+  report.marketBrief.paragraphs = [{ text: long, sourceIds: [] }, { text: long, sourceIds: [] }]
+  const before = structuredClone(report)
+  const result = await writeTelegramPreview(report, { directory: await temporaryDirectory(t) })
+  const manifest = JSON.parse(await fs.readFile(result.manifestPath, "utf8"))
+  const html = await fs.readFile(result.previewPath, "utf8")
+  const visible = manifest.richMessage.html.replace(/<[^>]*>/gu, "")
+  assert.ok([...visible].length > 4_096)
+  assert.ok([...visible].length <= 32_768)
+  assert.equal(result.messageCount, 1)
+  assert.equal(result.candidateCount, 1)
+  assertPreviewPost(html, manifest)
+  assert.deepEqual(report, before)
 })
 
 test("invalid reports and builder errors do not create a release directory", async (t) => {

@@ -10,16 +10,17 @@ import { runTelegramStep } from "../src/step14-telegram.js"
 
 function previewResult () {
   return {
-    candidateCount: 0, messageCount: 4, omittedCount: 0,
+    candidateCount: 0, messageCount: 1, omittedCount: 0,
     directory: "output/example", previewPath: "output/example/index.html", manifestPath: "output/example/release.json",
   }
 }
 
-test("step 14 reads exactly the step 13 report and closes the archive before building its release", async (t) => {
-  t.mock.method(console, "log", () => {})
+test("step 14 reads exactly the step 13 report, closes its archive and prepares before sending", async (t) => {
+  const log = t.mock.method(console, "log", () => {})
   const calls = []
   const report = { asOf: "2026-10-01T09:00:00Z", coins: [] }
   const expected = previewResult()
+  const delivery = { status: "sent", messageId: 77 }
   const result = await runTelegramStep({
     readJson: async (name) => {
       calls.push(["receipt", name])
@@ -44,14 +45,23 @@ test("step 14 reads exactly the step 13 report and closes the archive before bui
       calls.push(["preview", options])
       return expected
     },
+    sendRelease: async (release, options) => {
+      assert.equal(release, expected)
+      calls.push(["send", options])
+      return delivery
+    },
   })
-  assert.equal(result, expected)
+  assert.deepEqual(result, { ...expected, delivery })
+  const output = log.mock.calls.map(call => call.arguments.join(" ")).join("\n")
+  assert.match(output, /Telegram post sent \(message ID: 77\)/)
+  assert.doesNotMatch(output, /[а-яё]/i)
   assert.deepEqual(calls, [
     ["receipt", "step13-report.json"],
     ["open"],
     ["read", "step-13-report-id"],
     ["close"],
     ["preview", { source: "reports/step-13-report-id" }],
+    ["send", { reportId: "step-13-report-id" }],
   ])
 })
 
@@ -121,6 +131,33 @@ test("preview failures propagate after the store has closed", async () => {
     },
   }), error => error === failure)
   assert.equal(closed, 1)
+})
+
+test("step 14 reports an already-sent post without claiming a new send", async (t) => {
+  const log = t.mock.method(console, "log", () => {})
+  const delivery = { status: "already_sent", messageId: 77 }
+  const result = await runTelegramStep({
+    readJson: async () => ({ id: "saved-report" }),
+    createStore: async () => ({ read: async () => ({ coins: [] }), close: async () => {} }),
+    createPreview: async () => previewResult(),
+    sendRelease: async () => delivery,
+  })
+  assert.equal(result.delivery, delivery)
+  assert.match(log.mock.calls.at(-1).arguments[0], /already sent.*No duplicate was sent/)
+})
+
+test("delivery failures propagate without a misleading success log", async (t) => {
+  const log = t.mock.method(console, "log", () => {})
+  const failure = new Error("Telegram delivery was not confirmed")
+  await assert.rejects(runTelegramStep({
+    readJson: async () => ({ id: "saved-report" }),
+    createStore: async () => ({ read: async () => ({ coins: [] }), close: async () => {} }),
+    createPreview: async () => previewResult(),
+    sendRelease: async () => {
+      throw failure
+    },
+  }), error => error === failure)
+  assert.doesNotMatch(log.mock.calls.flatMap(call => call.arguments).join("\n"), /post sent|already sent|Nothing was sent/)
 })
 
 test("the numbered CLI fails without step 13 input and creates no files", async (t) => {
