@@ -177,14 +177,14 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
     return [...byTime.values()].sort((first, second) => first.time - second.time)
   }
 
-  function mergeSeries (original, cached, asOf) {
+  function mergeSeries (original, cached, asOf, to) {
     if (!isArray(original) || !isArray(cached)) {
       throw new Error("Некорректная исходная или сохранённая история графика")
     }
 
     return new Map([
       ...original.filter(point => point.time <= asOf),
-      ...cached.filter(point => point.time > asOf),
+      ...cached.filter(point => point.time > asOf && point.time <= to),
     ].map(point => [point.time, { ...point }]))
   }
 
@@ -203,12 +203,16 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
       throw new Error("Некорректный asOf: требуется время открытия закрытой часовой свечи")
     }
 
-    const candles = mergeSeries(coin.history?.candles, previous?.history?.candles ?? [], asOfTime)
-    const volume = mergeSeries(coin.history?.volume, previous?.history?.volume ?? [], asOfTime)
-    const openInterest = mergeSeries(coin.history?.openInterest, previous?.history?.openInterest ?? [], asOfTime)
+    // asOf is the last saved candle's open: the next 168 hourly candles are allowed.
+    const limitHour = asOfTime + 7 * 24 * 3_600
+    const candles = mergeSeries(coin.history?.candles, previous?.history?.candles ?? [], asOfTime, limitHour)
+    const volume = mergeSeries(coin.history?.volume, previous?.history?.volume ?? [], asOfTime, limitHour)
+    const openInterest = mergeSeries(coin.history?.openInterest, previous?.history?.openInterest ?? [], asOfTime, limitHour)
     const warnings = new Set(isString(coin.history.warning) && coin.history.warning.trim() ? [coin.history.warning] : [])
     const serverTime = readTimestamp((await request("/fapi/v1/time"))?.serverTime, "время сервера")
     const serverHour = Math.floor(serverTime / 3_600_000) * 3_600
+    const toHour = Math.min(serverHour, limitHour)
+    const limitReached = serverHour > limitHour
 
     if (asOfTime >= serverHour) {
       throw new Error("asOf ещё не является закрытым часом по времени Binance")
@@ -220,13 +224,14 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
     }
 
     let candleFrom = asOfTime + 3_600
-    while (candleFrom < serverHour && candles.has(candleFrom) && candleFrom !== previous?.formingTime) {
+    while (candleFrom <= toHour && candleFrom < serverHour
+      && candles.has(candleFrom) && candleFrom !== previous?.formingTime) {
       candleFrom += 3_600
     }
 
     const newCandles = await requestHours(
       "/fapi/v1/klines", { symbol: market[1], interval: "1h", limit: 1_000 },
-      candleFrom * 1_000, serverTime, readCandle, warnings,
+      candleFrom * 1_000, Math.min(serverTime, (limitHour + 3_600) * 1_000 - 1), readCandle, warnings,
     )
     for (const { volume: value, ...candle } of newCandles) {
       candles.set(candle.time, candle)
@@ -239,34 +244,36 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
       throw new Error("Binance не вернул ни одной свечи после asOf. Исходный график не изменён")
     }
 
-    if (previous?.formingTime != null && previous.formingTime < serverHour
+    if (previous?.formingTime != null && previous.formingTime <= limitHour && previous.formingTime < serverHour
       && !newCandles.some(point => point.time === previous.formingTime)) {
       throw new Error("Binance не подтвердил закрытие прежней формирующейся свечи. Повторите обновление позже")
     }
 
     const retentionHour = Math.ceil((serverTime - 30 * 24 * 3_600_000) / 3_600_000) * 3_600
     let oiFrom = Math.max(asOfTime + 3_600, retentionHour - 3_600)
-    while (oiFrom < serverHour && isFinite(openInterest.get(oiFrom)?.value)) {
+    while (oiFrom <= toHour && oiFrom < serverHour && isFinite(openInterest.get(oiFrom)?.value)) {
       oiFrom += 3_600
     }
 
     const newOi = await requestHours(
       "/futures/data/openInterestHist", { symbol: market[1], period: "1h", limit: 500 },
-      (oiFrom + 3_600) * 1_000, serverHour * 1_000, row => readOi(row, market[1]), warnings,
+      (oiFrom + 3_600) * 1_000, Math.min(serverHour, limitHour + 3_600) * 1_000, row => readOi(row, market[1]), warnings,
     )
     for (const point of newOi) {
       openInterest.set(point.time - 3_600, { time: point.time - 3_600, value: point.value })
     }
 
-    const current = readCurrentOi(
-      await request("/fapi/v1/openInterest", { symbol: market[1] }), market[1], serverTime, warnings,
-    )
+    const current = limitReached
+      ? null
+      : readCurrentOi(
+          await request("/fapi/v1/openInterest", { symbol: market[1] }), market[1], serverTime, warnings,
+        )
     if (current) {
       openInterest.set(current.time, { time: current.time, value: current.value })
     }
 
     const liveTimes = Array.from(
-      { length: (serverHour - asOfTime) / 3_600 }, (_, index) => asOfTime + (index + 1) * 3_600,
+      { length: (toHour - asOfTime) / 3_600 }, (_, index) => asOfTime + (index + 1) * 3_600,
     )
     const missingClosedOi = liveTimes.filter(time => time < serverHour && !isFinite(openInterest.get(time)?.value))
 
@@ -285,7 +292,7 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
     if (liveTimes.some(time => time < serverHour && !candles.has(time))) {
       warnings.add("Свечи Binance: есть пропущенные закрытые часы; данные не выдумывались")
     }
-    if (!newCandles.some(point => point.time === serverHour)) {
+    if (!limitReached && !newCandles.some(point => point.time === serverHour)) {
       warnings.add("Текущая свеча Binance не получена; ранее загруженные свечи сохранены")
     }
 
@@ -295,7 +302,7 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
     if (missingClosedOi.length) {
       warnings.add("OI: пропущенные закрытые часы оставлены без значений")
     }
-    if (missingClosedOi.includes(serverHour - 3_600)) {
+    if (missingClosedOi.includes(Math.min(serverHour - 3_600, limitHour))) {
       warnings.add("OI: нет снимка для последнего закрытого часа")
     }
 
@@ -307,11 +314,13 @@ export function createChartUpdater ({ isArray, isFinite, isSafeInteger, isString
         warning: [...warnings].join(". ") || null,
       },
       updatedAt: new Date(serverTime).toISOString(),
-      formingTime: candles.has(serverHour) ? serverHour : null,
+      limitReached,
+      formingTime: !limitReached && candles.has(serverHour) ? serverHour : null,
       currentOiAt: current?.at ?? null,
       sourceFrom,
       oiSourceFrom: [previous?.oiSourceFrom, newOi[0]?.time - 3_600, current?.time]
-        .filter(isSafeInteger).sort((first, second) => first - second)[0] ?? null,
+        .filter(time => isSafeInteger(time) && time > asOfTime && time <= limitHour)
+        .sort((first, second) => first - second)[0] ?? null,
     }
   }
 }

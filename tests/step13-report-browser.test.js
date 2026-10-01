@@ -1979,6 +1979,7 @@ function createUpdate (report, coin = report.coins[0], hours = 5) {
     currentOiAt: new Date(chartTime(report, hours) * 1_000 + 1_799_000).toISOString(),
     sourceFrom: chartTime(report, 1),
     oiSourceFrom: chartTime(report, 1),
+    limitReached: false,
   }
 }
 
@@ -2708,6 +2709,9 @@ test("startup, coin selection, periods, search and sorting never call the update
   assert.equal(browser.byId("update-chart").disabled, false)
   assert.equal(browser.byId("update-chart").attributes.get("aria-busy"), "false")
   assert.match(browser.byId("chart-update-status").textContent, /Сохранённый срез/)
+  assert.match(browser.byId("chart-update-status").textContent, /Максимум 7 дней \(168 часовых свечей\) после среза отчёта/)
+  assert.match(browser.byId("update-chart").attributes.get("title"), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта/)
+  assert.match(template.match(/<footer class="page-footer">([\s\S]*?)<\/footer>/)[1].replace(/\s+/g, " "), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта; повторные нажатия не продлевают окно/)
   assert.match(browser.byId("chart-source").textContent, /сохранённые данные TradingView/)
 })
 
@@ -2783,28 +2787,172 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   assert.deepEqual(report, before)
 })
 
-test("the hourly grid extends beyond 168 hours and every selected range follows the updated end", async () => {
-  const report = createReport()
-  const result = createUpdate(report, report.coins[0], 200)
-  const browser = runReport(report, { updateChartHistory: async () => result })
-  await click(browser.byId("update-chart"))
-  const chart = browser.charts.at(-1)
+test("the limit status allows gap recovery and stays coin-local without claiming live candle or OI failures", async () => {
+  const report = createReport(["COTI", "SOL"])
+  const result = {
+    ...createUpdate(report, report.coins[0], 168),
+    updatedAt: new Date(chartTime(report, 336) * 1_000).toISOString(),
+    formingTime: null, currentOiAt: null, limitReached: true,
+  }
+  const complete = structuredClone(result)
+  result.history.candles = result.history.candles.filter(point => point.time !== chartTime(report, 40))
+  for (const key of ["volume", "openInterest"]) {
+    result.history[key] = result.history[key].map(point => point.time === chartTime(report, 40) ? { time: point.time } : point)
+  }
+  result.history.warning = "Свечи Binance: есть пропущенные закрытые часы; данные не выдумывались"
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const { byId } = browser
+  const pending = click(byId("update-chart"))
+  controlled.requests[0].resolve(result)
+  await pending
+  const status = byId("chart-update-status").textContent
+  assert.match(status, /Достигнут лимит: 7 дней после среза отчёта/)
+  assert.match(status, /Пропуски возможны.*можно повторить/)
+  assert.doesNotMatch(status, /Текущая свеча недоступна|Текущий OI|формируются/)
+  assert.match(byId("last-price-label").textContent, /последняя закрытая свеча/)
+  assert.equal(byId("history-warning").hidden, false)
+  assert.equal(byId("update-chart").disabled, false)
+  assert.equal(byId("update-chart").attributes.get("aria-busy"), "false")
+  assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data.find(point => point.time === chartTime(report, 40)), { time: chartTime(report, 40) })
 
-  for (const type of ["Candlestick", "Histogram"]) {
-    const points = chartSeries(chart, type).data
-    assert.equal(points.length, 368)
-    assert.equal(points[0].time, chartTime(report, -167))
-    assert.equal(points.at(-1).time, chartTime(report, 200))
-  }
-  assert.deepEqual(chart.ranges.at(-1), { from: chartTime(report, 200 - 167), to: chartTime(report, 200) })
-  for (const day of browser.days) {
-    click(day)
-    assert.deepEqual(chart.ranges.at(-1), {
-      from: chartTime(report, 200 - (Number(day.dataset.days) * 24 - 1)), to: chartTime(report, 200),
-    })
-  }
-  assert.equal(browser.charts.length, 2)
+  selectCoin(browser, "SOL")
+  assert.match(byId("chart-update-status").textContent, /Сохранённый срез.*Максимум 7 дней/)
+  assert.doesNotMatch(byId("chart-update-status").textContent, /Достигнут лимит/)
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).time, chartTime(report))
+  selectCoin(browser, "COTI")
+  assert.equal(byId("chart-update-status").textContent, status)
   assert.equal(browser.updateCalls.length, 1)
+
+  const failed = click(byId("update-chart"))
+  assert.equal(byId("update-chart").disabled, true)
+  assert.equal(browser.updateCalls.at(-1).previous, result)
+  controlled.requests.at(-1).reject(new Error("Network failed"))
+  await failed
+  assert.equal(byId("chart-update-status").textContent, status)
+  assert.equal(byId("chart-update-error").hidden, false)
+  assert.equal(byId("update-chart").disabled, false)
+
+  const retry = click(byId("update-chart"))
+  assert.equal(browser.updateCalls.at(-1).previous, result)
+  controlled.requests.at(-1).resolve(complete)
+  await retry
+  assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, complete.history.candles)
+  assert.equal(byId("chart-update-status").textContent, status)
+  assert.equal(byId("history-warning").hidden, true)
+  assert.equal(byId("chart-update-error").hidden, true)
+  assert.equal(byId("update-chart").disabled, false)
+  assert.equal(browser.updateCalls.length, 3)
+  assert.ok(browser.updateCalls.every(call => call.asOf === report.asOf && call.coin.symbol === "COTI"))
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), report)
+})
+
+test("real updater keeps an old report at asOf + 168h across retries, coin switches and visible ranges, not at the current time", async () => {
+  const report = createReport(["COTI", "SOL"])
+  const before = structuredClone(report)
+  const api = createBinanceApi(report)
+  api.state.now = chartTime(report, 336) * 1_000 + 1_200_000
+  const browser = runReport(report, {
+    updateChartHistory: createChartUpdater({ isArray, isFinite, isSafeInteger, isString, fetch: api.fetch }),
+  })
+
+  for (const symbol of ["COTI", "COTI", "SOL", "COTI", "SOL"]) {
+    selectCoin(browser, symbol)
+    await click(browser.byId("update-chart"))
+    const chart = browser.charts.at(-1)
+    const coin = report.coins.find(coin => coin.symbol === symbol)
+    for (const type of ["Candlestick", "Histogram", "Line"]) {
+      const points = chart.series.filter(series => series.type === type).flatMap(series => series.data)
+      assert.equal(points.length, 336)
+      assert.equal(new Set(points.map(point => point.time)).size, 336)
+      assert.equal(points[0].time, chartTime(report, -167))
+      assert.equal(points.at(-1).time, chartTime(report, 168))
+      assert.ok(points.every(point => point.time <= chartTime(report, 168)))
+    }
+    assert.deepEqual(chartSeries(chart, "Candlestick").data.slice(0, 168), coin.history.candles)
+    assert.deepEqual(chartSeries(chart, "Histogram").data.slice(0, 168).map(({ time, value }) => ({ time, value })), coin.history.volume)
+    assert.deepEqual(chartSeries(chart, "Line").data.slice(0, 168), coin.history.openInterest)
+    assert.equal(chartMarkers(browser)[0].time, chartTime(report))
+    assert.match(browser.byId("chart-update-status").textContent, /Достигнут лимит: 7 дней после среза отчёта/)
+    assert.doesNotMatch(browser.byId("chart-update-status").textContent, /Текущая свеча недоступна|Текущий OI|формируются/)
+    assert.equal(browser.byId("history-warning").hidden, true)
+    assert.equal(browser.byId("chart-update-error").hidden, true)
+    assert.equal(browser.byId("update-chart").disabled, false)
+    for (const day of browser.days) {
+      click(day)
+      assert.deepEqual(chart.ranges.at(-1), {
+        from: chartTime(report, 168 - (Number(day.dataset.days) * 24 - 1)), to: chartTime(report, 168),
+      })
+    }
+    api.state.now += 24 * 3_600_000
+  }
+
+  assert.deepEqual(browser.updateCalls.map(call => call.coin.symbol), ["COTI", "COTI", "SOL", "COTI", "SOL"])
+  assert.ok(browser.updateCalls.every(call => call.asOf === report.asOf))
+  assert.deepEqual(browser.updateCalls.map(call => call.previous?.limitReached ?? null), [null, true, null, true, true])
+  assert.equal(api.requests.some(call => call.url.pathname === "/fapi/v1/openInterest"), false)
+  for (const { url } of api.requests.filter(call => call.url.searchParams.has("endTime"))) {
+    assert.ok(Number(url.searchParams.get("startTime")) >= chartTime(report, 1) * 1_000)
+    assert.ok(Number(url.searchParams.get("endTime")) <= chartTime(report, 169) * 1_000)
+    if (url.pathname === "/fapi/v1/klines") {
+      assert.ok(Number(url.searchParams.get("endTime")) < chartTime(report, 169) * 1_000)
+    }
+  }
+  assert.equal(browser.directRequests.length, 0)
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+})
+
+test("real updater keeps the 168th candle forming until it closes, then replaces live OI without adding a 169th hour", async () => {
+  const report = createReport()
+  const api = createBinanceApi(report)
+  api.state.now = chartTime(report, 169) * 1_000 - 1
+  const browser = runReport(report, {
+    updateChartHistory: createChartUpdater({ isArray, isFinite, isSafeInteger, isString, fetch: api.fetch }),
+  })
+  const { byId } = browser
+  await click(byId("update-chart"))
+  const forming = browser.charts.at(-1)
+  assert.equal(chartSeries(forming, "Candlestick").data.at(-1).time, chartTime(report, 168))
+  assert.equal(chartSeries(forming, "Candlestick").data.at(-1).close, 400)
+  assert.equal(chartSeries(forming, "Histogram").data.at(-1).value, 2_500)
+  assert.equal(chartSeries(forming, "Line").data.at(-1).value, 6_000)
+  assert.match(byId("chart-update-status").textContent, /формируются.*Текущий OI: снимок/)
+  assert.doesNotMatch(byId("chart-update-status").textContent, /Достигнут лимит|недоступ/)
+  assert.match(byId("last-price-label").textContent, /незакрытая свеча/)
+  assert.equal(api.requests.filter(call => call.url.pathname === "/fapi/v1/openInterest").length, 1)
+
+  api.state.now += 1
+  const requestCount = api.requests.length
+  await click(byId("update-chart"))
+  const previous = browser.updateCalls.at(-1).previous
+  assert.equal(previous.limitReached, false)
+  assert.equal(previous.formingTime, chartTime(report, 168))
+  assert.equal(previous.currentOiAt, new Date(api.state.now - 1_001).toISOString())
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).close, 468)
+  assert.equal(chartSeries(browser.charts.at(-1), "Histogram").data.at(-1).value, 2_167)
+  assert.equal(chartSeries(browser.charts.at(-1), "Line").data.at(-1).value, 10_169)
+  assert.equal(api.requests.slice(requestCount).some(call => call.url.pathname === "/fapi/v1/openInterest"), false)
+  assert.match(byId("chart-update-status").textContent, /Достигнут лимит: 7 дней после среза отчёта/)
+  assert.doesNotMatch(byId("chart-update-status").textContent, /Текущая свеча недоступна|Текущий OI|формируются/)
+  assert.match(byId("last-price-label").textContent, /последняя закрытая свеча/)
+  assert.equal(byId("history-warning").hidden, true)
+
+  api.state.now += 48 * 3_600_000
+  await click(byId("update-chart"))
+  assert.equal(browser.updateCalls.at(-1).previous.limitReached, true)
+  assert.equal(browser.updateCalls.at(-1).previous.formingTime, null)
+  assert.equal(browser.updateCalls.at(-1).previous.currentOiAt, null)
+  assert.equal(byId("update-chart").disabled, false)
+  assert.equal(byId("chart-update-error").hidden, true)
+  assert.equal(api.requests.filter(call => call.url.pathname === "/fapi/v1/openInterest").length, 1)
+  for (const chart of browser.charts.slice(1)) {
+    for (const series of chart.series) {
+      assert.equal(series.data.length, 336)
+      assert.ok(series.data.every(point => point.time <= chartTime(report, 168)))
+    }
+    assert.equal(chart.ranges.at(-1).to, chartTime(report, 168))
+  }
 })
 
 test("the report marker stays at the saved asOf, never at HTML creation or either update time", async () => {

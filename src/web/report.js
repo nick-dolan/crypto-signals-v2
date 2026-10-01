@@ -898,8 +898,13 @@
     byId("chart-update-status").textContent = state.pending
       ? "Загружаем свечи, объём и OI выбранной монеты с Binance…"
       : state.data
-        ? `Обновлено ${time(state.data.updatedAt, true)} UTC. ${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC, не закрытие часа.` : "Текущий OI недоступен."}`
-        : "Сохранённый срез. Обновление — только по кнопке, без пересчёта анализа."
+        ? [
+            `Обновлено ${time(state.data.updatedAt, true)} UTC.`,
+            state.data.limitReached
+              ? "Достигнут лимит: 7 дней после среза отчёта. Пропуски возможны — обновление можно повторить."
+              : `${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC, не закрытие часа.` : "Текущий OI недоступен."}`,
+          ].join(" ")
+        : "Сохранённый срез. Максимум 7 дней (168 часовых свечей) после среза отчёта. Обновление — только по кнопке, без пересчёта анализа."
     byId("chart-source").textContent = state.data
       ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC.`} OI в базовом активе; небольшие различия источников возможны.`
       : "Источник графика: сохранённые данные TradingView."

@@ -146,10 +146,11 @@ test("requests anonymous trade klines for the market alias and merges candles, v
   const result = await createUpdater(api)(coin, asOf)
 
   assert.deepEqual(Object.keys(result).sort(), [
-    "currentOiAt", "formingTime", "history", "oiSourceFrom", "sourceFrom", "updatedAt",
+    "currentOiAt", "formingTime", "history", "limitReached", "oiSourceFrom", "sourceFrom", "updatedAt",
   ])
   assert.equal(result.updatedAt, new Date(api.state.now).toISOString())
   assert.equal(result.formingTime, time(3))
+  assert.equal(result.limitReached, false)
   assert.equal(result.currentOiAt, new Date(api.state.current.time).toISOString())
   assert.equal(result.sourceFrom, time(1))
   assert.equal(result.oiSourceFrom, time(1))
@@ -208,7 +209,7 @@ test("preserves 1000-prefixed symbols and uses neither the coin ticker nor notio
     .every(call => call.url.searchParams.get("symbol") === "1000SHIBUSDT"))
 })
 
-test("paginates more than 1000 candles and 500 OI snapshots on contiguous, bounded hour windows", async () => {
+test("old reports request only the first 168 continuation candles and skip expired and current OI", async () => {
   const { coin, asOf } = createInput()
   const api = createApi({
     now: time(1_003) * 1_000 + 30_000,
@@ -217,39 +218,177 @@ test("paginates more than 1000 candles and 500 OI snapshots on contiguous, bound
   })
   const result = await createUpdater(api)(coin, asOf)
 
-  assert.equal(result.history.candles.length, 1_005)
-  assert.equal(pointAt(result.history.volume, 1_001).value, 1_000)
-  assert.equal(pointAt(result.history.openInterest, 783).value, 10_784)
-  assert.equal(result.sourceFrom, time(1))
-  assert.equal(result.oiSourceFrom, time(283))
-
-  for (const [endpoint, limit, startHour, nextHour] of [
-    ["/fapi/v1/klines", 1_000, 1, 1_001],
-    ["/futures/data/openInterestHist", 500, 284, 784],
-  ]) {
-    const pages = api.calls.filter(call => call.url.pathname === endpoint).map(call => call.url)
-    assert.equal(pages.length, 2)
-    assert.equal(Number(pages[0].searchParams.get("limit")), limit)
-    assert.equal(Number(pages[0].searchParams.get("startTime")), time(startHour) * 1_000)
-    assert.equal(Number(pages[0].searchParams.get("endTime")), time(nextHour - 1) * 1_000)
-    assert.equal(Number(pages[1].searchParams.get("startTime")), time(nextHour) * 1_000)
-    assert.ok(Number(pages[1].searchParams.get("endTime")) <= api.state.now)
+  assert.deepEqual(api.calls.map(call => call.url.pathname), ["/fapi/v1/time", "/fapi/v1/klines"])
+  const request = api.calls[1].url
+  assert.equal(Number(request.searchParams.get("startTime")), time(1) * 1_000)
+  assert.equal(Number(request.searchParams.get("endTime")), time(169) * 1_000 - 1)
+  for (const key of ["candles", "volume", "openInterest"]) {
+    assert.equal(result.history[key].length, 170)
+    assert.equal(result.history[key].at(-1).time, time(168))
+    assert.deepEqual(result.history[key].filter(point => point.time <= time()), coin.history[key])
   }
+  assert.equal(pointAt(result.history.volume, 168).value, 167)
+  assert.deepEqual(pointAt(result.history.openInterest, 168), { time: time(168) })
+  assert.equal(result.sourceFrom, time(1))
+  assert.equal(result.oiSourceFrom, null)
+  assert.equal(result.limitReached, true)
+  assert.equal(result.formingTime, null)
+  assert.equal(result.currentOiAt, null)
   assert.match(result.history.warning, /30 дней/)
+  assert.doesNotMatch(result.history.warning, /Текущая свеча|Текущий OI/)
 })
 
-test("continues pagination after an empty page and leaves real candle and volume gaps", async () => {
+test("partial bounded history leaves real gaps instead of looking for newer candles beyond the limit", async () => {
   const { coin, asOf } = createInput()
-  const api = createApi({ now: time(1_003) * 1_000 + 30_000, candles: [kline(1_001), kline(1_003)], oi: [] })
+  const api = createApi({ now: time(1_003) * 1_000 + 30_000, candles: [kline(166), kline(168), kline(1_003)], oi: [] })
   const result = await createUpdater(api)(coin, asOf)
 
-  assert.equal(api.calls.filter(call => call.url.pathname === "/fapi/v1/klines").length, 2)
+  assert.equal(api.calls.filter(call => call.url.pathname === "/fapi/v1/klines").length, 1)
   assert.deepEqual(result.history.candles.filter(point => point.time > time()).map(point => point.time), [
-    time(1_001), time(1_003),
+    time(166), time(168),
   ])
-  assert.deepEqual(pointAt(result.history.volume, 1_002), { time: time(1_002) })
-  assert.equal(result.sourceFrom, time(1_001))
+  assert.deepEqual(pointAt(result.history.volume, 167), { time: time(167) })
+  assert.equal(result.sourceFrom, time(166))
+  assert.equal(result.limitReached, true)
   assert.match(result.history.warning, /Свечи Binance: есть пропущенные/)
+})
+
+test("bounded OI includes the last candle's close and repeated clicks cannot advance the seven-day window", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({
+    now: time(240) * 1_000 + 30_000,
+    candles: Array.from({ length: 240 }, (_, index) => kline(index + 1)),
+    oi: Array.from({ length: 240 }, (_, index) => oi(index + 2)),
+  })
+  const update = createUpdater(api)
+  const first = await update(coin, asOf)
+  const request = api.calls.find(call => call.url.pathname === "/futures/data/openInterestHist").url
+
+  assert.equal(Number(request.searchParams.get("startTime")), time(2) * 1_000)
+  assert.equal(Number(request.searchParams.get("endTime")), time(169) * 1_000)
+  assert.equal(pointAt(first.history.openInterest, 168).value, 10_169)
+  assert.equal(first.history.warning, coin.history.warning)
+  assert.equal(api.calls.some(call => call.url.pathname === "/fapi/v1/openInterest"), false)
+
+  api.state.now = time(480) * 1_000
+  api.calls.length = 0
+  const second = await update(coin, asOf, first)
+  assert.deepEqual(api.calls.map(call => call.url.pathname), ["/fapi/v1/time"])
+  assert.deepEqual(second.history, first.history)
+  assert.equal(second.limitReached, true)
+  assert.equal(second.formingTime, null)
+  assert.equal(second.currentOiAt, null)
+})
+
+test("the 168th candle remains refreshable until closed without adding a 169th candle or live OI", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({
+    now: time(168) * 1_000 + 30_000,
+    candles: Array.from({ length: 168 }, (_, index) => kline(index + 1)),
+    oi: Array.from({ length: 167 }, (_, index) => oi(index + 2)),
+  })
+  const update = createUpdater(api)
+  const first = await update(coin, asOf)
+  assert.equal(first.limitReached, false)
+  assert.equal(first.formingTime, time(168))
+  assert.equal(pointAt(first.history.openInterest, 168).value, 3_000)
+
+  api.state.now = time(169) * 1_000
+  api.state.candles = [kline(168, 222, 2_222), kline(169)]
+  api.state.oi = [oi(169, 4_321), oi(170)]
+  api.calls.length = 0
+  const second = await update(coin, asOf, first)
+
+  assert.deepEqual(api.calls.map(call => call.url.pathname), [
+    "/fapi/v1/time", "/fapi/v1/klines", "/futures/data/openInterestHist",
+  ])
+  assert.equal(second.limitReached, true)
+  assert.equal(second.formingTime, null)
+  assert.equal(second.currentOiAt, null)
+  assert.equal(pointAt(second.history.candles, 168).close, 222)
+  assert.equal(pointAt(second.history.volume, 168).value, 2_222)
+  assert.equal(pointAt(second.history.openInterest, 168).value, 4_321)
+  for (const key of ["candles", "volume", "openInterest"]) {
+    assert.equal(second.history[key].length, 170)
+    assert.equal(second.history[key].at(-1).time, time(168))
+  }
+  assert.equal(second.history.warning, coin.history.warning)
+  assert.equal(pointAt(first.history.openInterest, 168).value, 3_000)
+})
+
+test("a missing final close rejects atomically and does not freeze the provisional candle as closed", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({ now: time(168) * 1_000 + 30_000, candles: [kline(168)] })
+  const update = createUpdater(api)
+  const first = await update(coin, asOf)
+  const before = structuredClone(first)
+  api.state.now = time(169) * 1_000
+  api.state.candles = [kline(169)]
+
+  await assert.rejects(update(coin, asOf, first), /не подтвердил закрытие прежней формирующейся свечи/)
+  assert.deepEqual(first, before)
+})
+
+test("gaps inside the fixed window can still heal after its limit is reached", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({
+    now: time(240) * 1_000,
+    candles: Array.from({ length: 168 }, (_, index) => kline(index + 1)).filter(row => row[0] !== time(99) * 1_000),
+    oi: Array.from({ length: 168 }, (_, index) => oi(index + 2)).filter(row => row.timestamp !== time(100) * 1_000),
+  })
+  const update = createUpdater(api)
+  const first = await update(coin, asOf)
+  assert.equal(first.limitReached, true)
+  assert.match(first.history.warning, /пропущенные закрытые часы/)
+
+  api.state.candles = [kline(99)]
+  api.state.oi = [oi(100)]
+  api.calls.length = 0
+  const second = await update(coin, asOf, first)
+  assert.equal(second.history.warning, coin.history.warning)
+  assert.equal(second.limitReached, true)
+  assert.equal(pointAt(second.history.candles, 99).close, 101)
+  assert.equal(pointAt(second.history.openInterest, 99).value, 10_100)
+  assert.equal(Number(api.calls[1].url.searchParams.get("startTime")), time(99) * 1_000)
+  assert.equal(Number(api.calls[1].url.searchParams.get("endTime")), time(169) * 1_000 - 1)
+  assert.equal(Number(api.calls[2].url.searchParams.get("startTime")), time(100) * 1_000)
+  assert.equal(Number(api.calls[2].url.searchParams.get("endTime")), time(169) * 1_000)
+})
+
+test("out-of-window API and cached points cannot extend any series or its provenance", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({ now: time(240) * 1_000 })
+  api.state.responses["/fapi/v1/klines"] = () => json([kline(1), kline(168), kline(169), kline(240)])
+  api.state.responses["/futures/data/openInterestHist"] = () => json([oi(2), oi(169), oi(170), oi(240)])
+  const previous = {
+    history: {
+      candles: [{ time: time(240), open: 1, high: 3, low: 1, close: 2 }],
+      volume: [{ time: time(240), value: 1_000 }],
+      openInterest: [{ time: time(240), value: 3_000 }],
+    },
+    formingTime: time(240),
+    currentOiAt: iso(240),
+    oiSourceFrom: time(240),
+  }
+  const before = structuredClone(previous)
+  const result = await createUpdater(api)(coin, asOf, previous)
+
+  for (const key of ["candles", "volume", "openInterest"]) {
+    assert.equal(result.history[key].at(-1).time, time(168))
+  }
+  assert.equal(result.sourceFrom, time(1))
+  assert.equal(result.oiSourceFrom, time(1))
+  assert.equal(result.formingTime, null)
+  assert.equal(result.currentOiAt, null)
+  assert.deepEqual(previous, before)
+})
+
+test("no candles inside the allowed window rejects instead of fetching a newer week", async () => {
+  const { coin, asOf } = createInput()
+  const api = createApi({ now: time(240) * 1_000, candles: [kline(169), kline(240)] })
+  await assert.rejects(createUpdater(api)(coin, asOf), /не вернул ни одной свечи/)
+  assert.deepEqual(api.calls.map(call => call.url.pathname), ["/fapi/v1/time", "/fapi/v1/klines"])
+  assert.equal(Number(api.calls[1].url.searchParams.get("endTime")), time(169) * 1_000 - 1)
 })
 
 test("sorts and deduplicates API hours with last response entry winning, without rewriting TV", async () => {
@@ -372,9 +511,10 @@ test("does not keep the cached same-hour OI when the new current observation is 
   assert.equal(pointAt(first.history.openInterest, 3).value, 3_000)
 })
 
-test("31-day report requests only retained OI, uses ceil of server cutoff, and leaves older hours empty", async () => {
+test("31-day report requests only retained OI inside its seven-day window and leaves older hours empty", async () => {
   const { coin, asOf } = createInput(-31 * 24)
   const api = createApi({
+    candles: Array.from({ length: 168 }, (_, index) => kline(index - 743)),
     oi: Array.from({ length: 750 }, (_, index) => oi(index - 746)),
   })
   const result = await createUpdater(api)(coin, asOf)
@@ -382,6 +522,8 @@ test("31-day report requests only retained OI, uses ceil of server cutoff, and l
   const cutoff = Math.ceil((api.state.now - 30 * 24 * 3_600_000) / 3_600_000) * 3_600_000
 
   assert.equal(Number(firstRequest.searchParams.get("startTime")), cutoff)
+  assert.equal(Number(firstRequest.searchParams.get("endTime")), time(-575) * 1_000)
+  assert.equal(result.history.openInterest.at(-1).time, time(-576))
   assert.deepEqual(pointAt(result.history.openInterest, -31 * 24 + 1), { time: time(-31 * 24 + 1) })
   assert.deepEqual(pointAt(result.history.openInterest, -718), { time: time(-718) })
   assert.equal(pointAt(result.history.openInterest, -717).value, 10_000 - 716)
