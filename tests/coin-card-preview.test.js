@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 
+import { buildCoinCardData } from "../src/reports/coin-card/build-coin-card-data.js"
 import { createDemoReport } from "../src/reports/coin-card/create-demo-report.js"
 import { runCoinCardPreview, writeCoinCardPreview } from "../src/reports/coin-card/preview.js"
 import { createReportStore } from "../src/reports/store.js"
@@ -14,31 +15,65 @@ async function temporaryDirectory (t) {
   return directory
 }
 
-test("renders the latest saved Parquet report without changing the snapshot", async (t) => {
-  const directory = await temporaryDirectory(t)
-  const archive = path.join(directory, "reports")
-  const store = await createReportStore({ directory: archive })
-  const report = { ...createDemoReport(), demo: false, reportCreatedAt: "2026-10-01T10:30:00Z", candidateCount: 1, universeCoinCount: 1 }
-  const saved = await store.save(report)
-  await store.save({ ...report, reportCreatedAt: "2026-10-01T09:30:00Z", coins: [{ ...report.coins[0], symbol: "OLDER" }] })
-  await store.close()
-
-  const result = await runCoinCardPreview({
-    directory: path.join(directory, "images"),
-    createStore: () => createReportStore({ directory: archive }),
-  })
-  assert.equal(result.symbol, "DEMO")
-  assert.equal(result.demo, false)
-  assert.match(await fs.readFile(result.files.svg, "utf8"), /CRYPTO SIGNALS/)
-  assert.deepEqual((await fs.readFile(result.files.png)).subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  const reopened = await createReportStore({ directory: archive })
-  try {
-    assert.deepEqual(await reopened.read(saved.id), report)
-    assert.equal((await reopened.list()).length, 2)
-  } finally {
-    await reopened.close()
+function assertPreviewSvg (svg, asOf, hours) {
+  assert.match(svg, /^<svg\b[^>]*width="1200"[^>]*height="1280"[^>]*viewBox="0 0 1200 1280"/)
+  assert.deepEqual([...svg.matchAll(/<g class="candle" data-time="(\d+)"[^>]*>[\s\S]*?<rect\b/g)].map(([, time]) => Number(time)),
+    Array.from({ length: hours }, (_, index) => Date.parse(asOf) / 1_000 - (hours - 1 - index) * 3_600))
+  assert.equal([...svg.matchAll(/<rect class="volume-bar"/g)].length, hours)
+  assert.equal([...svg.matchAll(/<circle\b/g)].length, hours)
+  assert.equal([...svg.matchAll(new RegExp(`>${hours}/168 ч</text>`, "g"))].length, 3)
+  assert.match(svg, /Окно: 7 дней · начало свечей на оси/)
+  if (hours === 168) {
+    assert.match(svg, /<desc>Цена, объём и Open Interest за 7 дней из сохранённого отчёта\.<\/desc>/)
   }
-})
+}
+
+async function snapshotFiles (directory) {
+  return Promise.all((await fs.readdir(directory)).sort().map(async filename => [filename, await fs.readFile(path.join(directory, filename))]))
+}
+
+for (const hours of [168, 72]) {
+  test(`renders the latest saved ${hours}-hour Parquet report without changing the snapshots`, async (t) => {
+    const directory = await temporaryDirectory(t)
+    const archive = path.join(directory, "reports")
+    const store = await createReportStore({ directory: archive })
+    const report = { ...createDemoReport(), demo: false, reportCreatedAt: "2026-10-01T10:30:00Z", candidateCount: 1, universeCoinCount: 1 }
+    for (const key of ["candles", "volume", "openInterest"]) {
+      report.coins[0].history[key] = report.coins[0].history[key].slice(-hours)
+    }
+    const before = structuredClone(report)
+    const olderReport = { ...report, reportCreatedAt: "2026-10-01T09:30:00Z", coins: [{ ...report.coins[0], symbol: "OLDER" }] }
+    const saved = await store.save(report)
+    const older = await store.save(olderReport)
+    await store.close()
+    const snapshots = await Promise.all([saved, older].map(({ directory }) => snapshotFiles(directory)))
+
+    const result = await runCoinCardPreview({
+      directory: path.join(directory, "images"),
+      createStore: () => createReportStore({ directory: archive }),
+    })
+    assert.equal(result.symbol, "DEMO")
+    assert.equal(result.demo, false)
+    const svg = await fs.readFile(result.files.svg, "utf8")
+    assert.match(svg, /CRYPTO SIGNALS/)
+    assertPreviewSvg(svg, report.asOf, hours)
+    const png = await fs.readFile(result.files.png)
+    assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    assert.equal(png.readUInt32BE(16), 1200)
+    assert.equal(png.readUInt32BE(20), 1280)
+    assert.deepEqual(report, before)
+    assert.deepEqual((await fs.readdir(archive)).sort(), [saved.id, older.id].sort())
+    assert.deepEqual(await Promise.all([saved, older].map(({ directory }) => snapshotFiles(directory))), snapshots)
+    const reopened = await createReportStore({ directory: archive })
+    try {
+      assert.deepEqual(await reopened.read(saved.id), before)
+      assert.deepEqual(await reopened.read(older.id), olderReport)
+      assert.equal((await reopened.list()).length, 2)
+    } finally {
+      await reopened.close()
+    }
+  })
+}
 
 test("an empty archive is an error, not a silent demo fallback", async () => {
   let closed = false
@@ -99,13 +134,37 @@ test("the default candidate follows topRank, not array order or an assessment's 
   assert.deepEqual(report, before)
 })
 
-test("explicit demo mode is labelled and never opens the archive", async (t) => {
+test("demo supplies exactly seven days of closed hourly price, volume and OI data", () => {
+  const report = createDemoReport()
+  const before = structuredClone(report)
+  const asOf = Date.parse(report.asOf) / 1_000
+  const times = Array.from({ length: 168 }, (_, index) => asOf - (167 - index) * 3_600)
+  for (const key of ["candles", "volume", "openInterest"]) {
+    assert.equal(report.coins[0].history[key].length, 168)
+    assert.deepEqual(report.coins[0].history[key].map(point => point.time), times)
+  }
+  const data = buildCoinCardData(report, report.coins[0])
+  assert.equal(data.points.length, 168)
+  assert.deepEqual(data.points.map(point => point.time), times)
+  assert.deepEqual(data.coverage, { candles: 168, volume: 168, openInterest: 168 })
+  assert.deepEqual(data.warnings, [])
+  assert.equal(data.price, report.coins[0].history.candles.at(-1).close)
+  assert.deepEqual(report, before)
+})
+
+test("explicit demo mode renders 168 candles, is labelled and never opens the archive", async (t) => {
   const result = await runCoinCardPreview({
     demo: true, directory: await temporaryDirectory(t),
     createStore: async () => assert.fail("demo must not read the archive"),
   })
   assert.equal(result.demo, true)
-  assert.match(await fs.readFile(result.files.svg, "utf8"), /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
+  const svg = await fs.readFile(result.files.svg, "utf8")
+  assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
+  assertPreviewSvg(svg, result.asOf, 168)
+  const png = await fs.readFile(result.files.png)
+  assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  assert.equal(png.readUInt32BE(16), 1200)
+  assert.equal(png.readUInt32BE(20), 1280)
 })
 
 test("demo cannot silently override a requested report or coin", async () => {

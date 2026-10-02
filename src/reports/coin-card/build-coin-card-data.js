@@ -30,8 +30,8 @@ export function buildCoinCardData (report, coin) {
   const volumes = indexHours(coin.history?.volume, asOf)
   const interests = indexHours(coin.history?.openInterest, asOf)
   // A complete hourly grid preserves gaps in both geometry and d3-shape paths.
-  const points = Array.from({ length: 72 }, (_, index) => {
-    const time = asOf - (71 - index) * 3_600
+  const points = Array.from({ length: 168 }, (_, index) => {
+    const time = asOf - (167 - index) * 3_600
     const candle = candles.get(time)
     return {
       time,
@@ -48,7 +48,7 @@ export function buildCoinCardData (report, coin) {
     openInterest: points.filter(point => point.openInterest !== null).length,
   }
   const warnings = []
-  if (Object.values(coverage).some(count => count < 72)) {
+  if (Object.values(coverage).some(count => count < points.length)) {
     warnings.push("Есть пропуски; недостающие значения не восстановлены.")
   }
   if (price === null) {

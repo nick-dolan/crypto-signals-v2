@@ -55,6 +55,8 @@ test("step 14 reads exactly the step 13 report, closes its archive and prepares 
   const output = log.mock.calls.map(call => call.arguments.join(" ")).join("\n")
   assert.match(output, /Telegram post sent \(message ID: 77\)/)
   assert.doesNotMatch(output, /[а-яё]/i)
+  assert.doesNotMatch(output, /Release:|Preview:|Manifest:|output\/example/)
+  assert.equal(log.mock.callCount(), 2)
   assert.deepEqual(calls, [
     ["receipt", "step13-report.json"],
     ["open"],

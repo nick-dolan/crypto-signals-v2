@@ -72,7 +72,7 @@ function panel (id, top, height, title, coverage, content) {
   return `<g id="${id}">
     <rect x="48" y="${top}" width="1104" height="${height}" rx="18" fill="#111c2e"/>
     ${text(72, top + 34, title, { size: 20, weight: 700 })}
-    ${text(1128, top + 34, `${coverage}/72 ч`, { size: 18, color: coverage < 72 ? "#f0bd71" : "#92a3bc", anchor: "end" })}
+    ${text(1128, top + 34, `${coverage}/168 ч`, { size: 18, color: coverage < 168 ? "#f0bd71" : "#92a3bc", anchor: "end" })}
     ${content}
   </g>`
 }
@@ -87,12 +87,13 @@ function renderPrice (data, x) {
     return panel("price-panel", 402, 330, "ЦЕНА · USDT · 1ч", 0, emptyPanel(588))
   }
   const y = valueScale(candles.flatMap(candle => [candle.low, candle.high]), 462, 708)
+  const width = (x.range()[1] - x.range()[0]) / data.points.length * 0.6
   const bars = candles.map((candle) => {
     const center = x(candle.time * 1_000)
     const color = directionColor(candle.close - candle.open)
     return `<g class="candle" data-time="${candle.time}" fill="${color}" stroke="${color}">
       <line x1="${center}" x2="${center}" y1="${y(candle.high)}" y2="${y(candle.low)}" stroke-width="1.5"/>
-      <rect x="${center - 4}" y="${Math.min(y(candle.open), y(candle.close))}" width="8" height="${Math.max(1.5, Math.abs(y(candle.open) - y(candle.close)))}" stroke="none" rx="1"/>
+      <rect x="${center - width / 2}" y="${Math.min(y(candle.open), y(candle.close))}" width="${width}" height="${Math.max(1.5, Math.abs(y(candle.open) - y(candle.close)))}" stroke="none" rx="1"/>
     </g>`
   }).join("")
   const lastPrice = data.price === null ? "" : `<line x1="76" x2="1012" y1="${y(data.price)}" y2="${y(data.price)}" stroke="#8bb7ff" stroke-dasharray="5 6" opacity="0.65"/>`
@@ -105,9 +106,10 @@ function renderVolume (data, x) {
     return panel("volume-panel", 748, 146, `ОБЪЁМ · ${shorten(data.coin.symbol, 16)}`, 0, emptyPanel(842))
   }
   const y = valueScale(values, 802, 876, true)
+  const width = (x.range()[1] - x.range()[0]) / data.points.length * 0.6
   const bars = data.points.filter(point => point.volume !== null).map((point) => {
     const color = point.candle ? directionColor(point.candle.close - point.candle.open) : "#92a3bc"
-    return `<rect class="volume-bar" x="${x(point.time * 1_000) - 4}" y="${y(point.volume)}" width="8" height="${876 - y(point.volume)}" fill="${color}" opacity="0.7"/>`
+    return `<rect class="volume-bar" x="${x(point.time * 1_000) - width / 2}" y="${y(point.volume)}" width="${width}" height="${876 - y(point.volume)}" fill="${color}" opacity="0.7"/>`
   }).join("")
   return panel("volume-panel", 748, 146, `ОБЪЁМ · ${shorten(data.coin.symbol, 16)}`, data.coverage.volume, `${grid(x, y, compact, 2)}${bars}`)
 }
@@ -179,7 +181,7 @@ export function buildCoinCardSvg (report, coin) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" font-family="Noto Sans">
     <title>${escapeXml(`${data.demo ? "ДЕМО · " : ""}${coin.symbol} · срез ${timestamp(data.closedAt, true)} МСК`)}</title>
-    <desc>${escapeXml(data.warnings.join(" ") || "Цена, объём и Open Interest за 72 часа из сохранённого отчёта.")}</desc>
+    <desc>${escapeXml(data.warnings.join(" ") || "Цена, объём и Open Interest за 7 дней из сохранённого отчёта.")}</desc>
     <rect width="1200" height="1280" fill="#0b1120"/>
     ${renderHeader(data)}
     ${renderPrice(data, x)}
@@ -192,9 +194,9 @@ export function buildCoinCardSvg (report, coin) {
     ${text(48, 1207, "Норма: медиана за предыдущие 30 дней", { size: 17, color: "#92a3bc" })}
     ${text(682, 1140, "Изменение Open Interest · 4ч", { size: 21, color: "#92a3bc" })}
     ${text(682, 1180, percent(data.oiChange4hPct), { size: 34, weight: 700 })}
-    ${text(682, 1207, "Окно графика: 72ч · начало свечей на оси", { size: 17, color: "#92a3bc" })}
+    ${text(682, 1207, "Окно: 7 дней · начало свечей на оси", { size: 17, color: "#92a3bc" })}
     ${text(48, 1241, warning, { size: 18, color: data.warnings.length ? "#f0bd71" : "#92a3bc" })}
-    ${text(48, 1268, "Экспертная оценка вероятности; статистическая калибровка не проводилась.", { size: 17, color: "#92a3bc" })}
+
   </svg>`
 }
 

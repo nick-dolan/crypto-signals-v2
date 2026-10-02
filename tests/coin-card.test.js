@@ -14,9 +14,9 @@ function fixture () {
     reportCreatedAt: "2026-10-01T06:15:00.000Z",
   }
   const asOf = Date.parse(report.asOf) / 1_000
-  const candles = Array.from({ length: 72 }, (_, index) => {
-    const close = ({ 47: 200, 67: 120, 71: 150 })[index] ?? 100 + index
-    return { time: asOf - (71 - index) * 3_600, open: close - 1, high: close + 2, low: close - 2, close }
+  const candles = Array.from({ length: 168 }, (_, index) => {
+    const close = ({ 143: 200, 163: 120, 167: 150 })[index] ?? 100 + index
+    return { time: asOf - (167 - index) * 3_600, open: close - 1, high: close + 2, low: close - 2, close }
   })
   const coin = {
     symbol: "ТЕСТ", name: "Синтетическая монета", marketSymbol: "SYNTH:TESTUSDT",
@@ -25,7 +25,7 @@ function fixture () {
     history: {
       candles,
       volume: candles.map(({ time }, index) => ({ time, value: 1_000 + index })),
-      openInterest: candles.map(({ time }, index) => ({ time, value: ({ 67: 1_000, 71: 750 })[index] ?? 500 + index })),
+      openInterest: candles.map(({ time }, index) => ({ time, value: ({ 163: 1_000, 167: 750 })[index] ?? 500 + index })),
     },
   }
   return { report, coin }
@@ -47,6 +47,37 @@ function assertSvg (svg) {
   assert.doesNotMatch(svg, /NaN|Infinity/)
   for (const [, name, value] of svg.matchAll(/\b(x|y|x1|x2|y1|y2|cx|cy|r|rx|width|height|stroke-width|font-size|opacity)="([^"]*)"/g)) {
     assert.ok(value !== "" && isFinite(Number(value)), `Non-finite ${name}=${value}`)
+  }
+}
+
+function assertHourlyBars (svg, data) {
+  const candles = [...svg.matchAll(/<g class="candle" data-time="(\d+)"[^>]*>\s*<line x1="([^"]+)" x2="([^"]+)"[^>]*\/>\s*<rect x="([^"]+)"[^>]*width="([^"]+)"/g)]
+    .map(([, time, x1, x2, x, width]) => {
+      assert.equal(Number(x1), Number(x2), "Candle wicks must be vertical")
+      return { time: Number(time), center: Number(x1), x: Number(x), width: Number(width) }
+    })
+  const volume = [...svg.matchAll(/<rect class="volume-bar" x="([^"]+)"[^>]*width="([^"]+)"/g)]
+    .map(([, x, width]) => ({ x: Number(x), width: Number(width) }))
+  const candlePoints = data.points.filter(point => point.candle)
+  assert.deepEqual(candles.map(candle => candle.time), candlePoints.map(point => point.time))
+
+  for (const [rectangles, points] of [
+    [candles, candlePoints],
+    [volume, data.points.filter(point => point.volume !== null)],
+  ]) {
+    assert.equal(rectangles.length, points.length)
+    for (const [index, rectangle] of rectangles.entries()) {
+      const center = 76 + ((points[index].time - data.points[0].time) / 3_600 + 0.5) * 936 / 168
+      assert.ok(Math.abs(rectangle.width - 936 / 168 * 0.6) < 1e-9, "Bar width must follow the full hourly grid")
+      assert.ok(rectangle.width > 0 && rectangle.width < 936 / 168, "Bars must be narrower than one hour")
+      assert.ok(Math.abs(rectangle.x + rectangle.width / 2 - center) < 1e-9, "Bars must stay centered on their hour")
+      if (index > 0) {
+        assert.ok(rectangles[index - 1].x + rectangles[index - 1].width < rectangle.x, "Adjacent bars must not overlap")
+      }
+    }
+  }
+  for (const candle of candles) {
+    assert.ok(Math.abs(candle.center - candle.x - candle.width / 2) < 1e-9, "Candle bodies must be centered on their wicks")
   }
 }
 
@@ -86,7 +117,7 @@ function deepFreeze (value) {
   return value
 }
 
-test("coin card uses exact hourly endpoints and labels the close, not asOf or report creation", () => {
+test("the seven-day coin card uses exact hourly endpoints and labels the close, not asOf or report creation", () => {
   const { report, coin } = fixture()
   const data = buildCoinCardData(report, coin)
 
@@ -94,11 +125,16 @@ test("coin card uses exact hourly endpoints and labels the close, not asOf or re
   assert.equal(data.closedAt, Date.parse("2026-10-01T00:00:00.000Z") / 1_000)
   assert.equal(data.closedAt - data.asOf, 3_600)
   assert.equal(data.demo, true)
+  assert.equal(data.points.length, 168)
+  assert.equal(data.points[0].time, data.asOf - 167 * 3_600)
+  assert.equal(data.points[0].time, Date.parse("2026-09-24T00:00:00.000Z") / 1_000)
+  assert.equal(data.points.at(-1).time, data.asOf)
+  assert.equal(data.closedAt - data.points[0].time, 7 * 24 * 3_600)
   assert.deepEqual(data.points, coin.history.candles.map((candle, index) => ({
     time: candle.time, candle, volume: 1_000 + index,
-    openInterest: ({ 67: 1_000, 71: 750 })[index] ?? 500 + index,
+    openInterest: ({ 163: 1_000, 167: 750 })[index] ?? 500 + index,
   })))
-  assert.deepEqual(data.coverage, { candles: 72, volume: 72, openInterest: 72 })
+  assert.deepEqual(data.coverage, { candles: 168, volume: 168, openInterest: 168 })
   assert.equal(data.price, 150)
   assert.equal(data.change4hPct, 25)
   assert.equal(data.change24hPct, -25)
@@ -114,16 +150,24 @@ test("coin card uses exact hourly endpoints and labels the close, not asOf or re
   assert.equal(textAt(svg, 914, 274), "-25%")
   assert.equal(textAt(svg, 682, 1180), "-25%")
   assert.equal(textAt(svg, 48, 1180), "2,5×")
+  for (const y of [436, 782, 944]) {
+    assert.equal(textAt(svg, 1128, y), "168/168 ч")
+  }
+  assert.equal([...svg.matchAll(/<text x="1128"[^>]*fill="#92a3bc"[^>]*>168\/168 ч<\/text>/g)].length, 3)
+  assert.equal(svg.match(/<desc>([\s\S]*?)<\/desc>/)?.[1], "Цена, объём и Open Interest за 7 дней из сохранённого отчёта.")
+  assert.equal(textAt(svg, 682, 1207), "Окно: 7 дней · начало свечей на оси")
+  assert.doesNotMatch(svg, /Экспертная оценка вероятности|статистическая калибровка/u)
+  assertHourlyBars(svg, data)
   assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
 })
 
-test("future candles and indicators, including the candle opening at closedAt, never affect data or SVG", () => {
+test("candles and indicators outside the seven-day window, including the candle opening at closedAt, never affect data or SVG", () => {
   const { report, coin } = fixture()
   const expected = buildCoinCardData(report, coin)
   const expectedSvg = buildCoinCardSvg(report, coin)
   const extended = structuredClone(coin)
 
-  for (const time of [expected.asOf - 72 * 3_600, expected.asOf + 3_600, expected.asOf + 7_200]) {
+  for (const time of [expected.asOf - 168 * 3_600, expected.asOf + 3_600, expected.asOf + 7_200]) {
     extended.history.candles.push({ time, open: 900_000, high: 999_999, low: 800_000, close: 950_000 })
     extended.history.volume.push({ time, value: 999_999_999 })
     extended.history.openInterest.push({ time, value: 999_999_999 })
@@ -136,7 +180,71 @@ test("future candles and indicators, including the candle opening at closedAt, n
   assert.equal(buildCoinCardSvg(report, extended), expectedSvg)
 })
 
-test("the 72-hour grid preserves absent hours and normalizes invalid timestamps, OHLC and indicator values", () => {
+test("a saved 72-hour history retains all observations and leaves 96 earlier gaps in the seven-day grid", () => {
+  const { report, coin } = fixture()
+  for (const key of ["candles", "volume", "openInterest"]) {
+    coin.history[key] = coin.history[key].slice(-72)
+  }
+  const before = structuredClone({ report, coin })
+  const data = buildCoinCardData(report, coin)
+  assert.equal(data.points.length, 168)
+  assert.deepEqual(data.points.slice(0, 96), Array.from({ length: 96 }, (_, index) => ({
+    time: data.asOf - (167 - index) * 3_600, candle: null, volume: null, openInterest: null,
+  })))
+  assert.deepEqual(data.points.slice(96), coin.history.candles.map((candle, index) => ({
+    time: candle.time, candle,
+    volume: coin.history.volume[index].value,
+    openInterest: coin.history.openInterest[index].value,
+  })))
+  assert.deepEqual(data.coverage, { candles: 72, volume: 72, openInterest: 72 })
+  for (const [key, value] of Object.entries({ price: 150, change4hPct: 25, change24hPct: -25, oiChange4hPct: -25 })) {
+    assert.equal(data[key], value, key)
+  }
+  assert.ok(data.warnings.includes("Есть пропуски; недостающие значения не восстановлены."))
+  const svg = buildCoinCardSvg(report, coin)
+  assertSvg(svg)
+  for (const y of [436, 782, 944]) {
+    assert.equal(textAt(svg, 1128, y), "72/168 ч")
+  }
+  assert.equal([...svg.matchAll(/class="candle"/g)].length, 72)
+  assert.equal([...svg.matchAll(/class="volume-bar"/g)].length, 72)
+  assert.equal([...svg.matchAll(/<circle\b/g)].length, 72)
+  assertHourlyBars(svg, data)
+  assert.deepEqual({ report, coin }, before)
+})
+
+test("a single missing hour marks coverage as incomplete against all 168 hours", () => {
+  const { report, coin } = fixture()
+  for (const key of ["candles", "volume", "openInterest"]) {
+    coin.history[key].shift()
+  }
+  const data = buildCoinCardData(report, coin)
+  assert.deepEqual(data.coverage, { candles: 167, volume: 167, openInterest: 167 })
+  assert.ok(data.warnings.includes("Есть пропуски; недостающие значения не восстановлены."))
+  const svg = buildCoinCardSvg(report, coin)
+  assertSvg(svg)
+  for (const y of [436, 782, 944]) {
+    assert.equal(textAt(svg, 1128, y), "167/168 ч")
+  }
+  assert.equal([...svg.matchAll(/<text x="1128"[^>]*fill="#f0bd71"[^>]*>167\/168 ч<\/text>/g)].length, 3)
+})
+
+test("candle and volume bars keep seven-day hourly widths and centers across independent gaps", () => {
+  const { report, coin } = fixture()
+  for (const [key, missing] of [
+    ["candles", [1, 2, 80, 81, 166]],
+    ["volume", [3, 4, 90, 91, 160]],
+  ]) {
+    coin.history[key] = coin.history[key].filter((_, index) => !missing.includes(index))
+  }
+  const data = buildCoinCardData(report, coin)
+  assert.deepEqual(data.coverage, { candles: 163, volume: 163, openInterest: 168 })
+  const svg = buildCoinCardSvg(report, coin)
+  assertSvg(svg)
+  assertHourlyBars(svg, data)
+})
+
+test("the 168-hour grid preserves absent hours and normalizes invalid timestamps, OHLC and indicator values", () => {
   const { report, coin } = fixture()
   const before = structuredClone(coin.history)
 
@@ -163,23 +271,27 @@ test("the 72-hour grid preserves absent hours and normalizes invalid timestamps,
   }
 
   const data = buildCoinCardData(report, coin)
-  assert.equal(data.points.length, 72)
+  assert.equal(data.points.length, 168)
   assert.deepEqual(data.points, before.candles.map((candle, index) => ({
     time: candle.time,
     candle: (index >= 10 && index <= 17) || (index >= 20 && index <= 25) ? null : candle,
     volume: index >= 10 && index <= 17 ? null : before.volume[index].value,
     openInterest: index >= 10 && index <= 17 ? null : before.openInterest[index].value,
   })))
-  assert.deepEqual(data.coverage, { candles: 58, volume: 64, openInterest: 64 })
+  assert.deepEqual(data.coverage, { candles: 154, volume: 160, openInterest: 160 })
   assert.ok(data.warnings.some(warning => warning.includes("пропуски")))
-  assertSvg(buildCoinCardSvg(report, coin))
+  const svg = buildCoinCardSvg(report, coin)
+  assertSvg(svg)
+  assert.equal(textAt(svg, 1128, 436), "154/168 ч")
+  assert.equal(textAt(svg, 1128, 782), "160/168 ч")
+  assert.equal(textAt(svg, 1128, 944), "160/168 ч")
 })
 
 for (const [series, index, metric] of [
-  ["candles", 67, "change4hPct"],
-  ["candles", 47, "change24hPct"],
-  ["openInterest", 67, "oiChange4hPct"],
-  ["openInterest", 71, "oiChange4hPct"],
+  ["candles", 163, "change4hPct"],
+  ["candles", 143, "change24hPct"],
+  ["openInterest", 163, "oiChange4hPct"],
+  ["openInterest", 167, "oiChange4hPct"],
 ]) {
   test(`${metric} is unavailable when its exact ${series} endpoint at hour ${index} is absent`, () => {
     const { report, coin } = fixture()
@@ -202,13 +314,13 @@ for (const lastCandle of ["missing", "invalid"]) {
       coin.history.candles.at(-1).close = NaN
     }
     const data = buildCoinCardData(report, coin)
-    assert.equal(data.points.at(-2).candle.close, 170)
+    assert.equal(data.points.at(-2).candle.close, 266)
     assert.equal(data.points.at(-1).candle, null)
     assert.equal(data.price, null)
     assert.equal(data.change4hPct, null)
     assert.equal(data.change24hPct, null)
     assert.equal(data.oiChange4hPct, -25)
-    assert.equal(data.coverage.candles, 71)
+    assert.equal(data.coverage.candles, 167)
     assert.ok(data.warnings.includes("Цена на срезе недоступна."))
 
     const svg = buildCoinCardSvg(report, coin)
@@ -217,27 +329,28 @@ for (const lastCandle of ["missing", "invalid"]) {
     assert.equal(textAt(svg, 625, 274), "Нет данных")
     assert.equal(textAt(svg, 914, 274), "Нет данных")
     assert.doesNotMatch(svg, /stroke-dasharray=/)
-    assert.equal([...svg.matchAll(/class="candle"/g)].length, 71)
+    assert.equal([...svg.matchAll(/class="candle"/g)].length, 167)
   })
 }
 
 test("sparse history still computes returns from available exact endpoints without filling intermediate hours", () => {
   const { report, coin } = fixture()
   for (const key of ["candles", "volume", "openInterest"]) {
-    coin.history[key] = coin.history[key].filter((_, index) => [47, 67, 71].includes(index))
+    coin.history[key] = coin.history[key].filter((_, index) => [143, 163, 167].includes(index))
   }
   const data = buildCoinCardData(report, coin)
-  assert.equal(data.points.length, 72)
+  assert.equal(data.points.length, 168)
   assert.deepEqual(data.coverage, { candles: 3, volume: 3, openInterest: 3 })
   assert.equal(data.price, 150)
   assert.equal(data.change4hPct, 25)
   assert.equal(data.change24hPct, -25)
   assert.equal(data.oiChange4hPct, -25)
-  assert.deepEqual(data.points[70], { time: data.asOf - 3_600, candle: null, volume: null, openInterest: null })
+  assert.deepEqual(data.points[166], { time: data.asOf - 3_600, candle: null, volume: null, openInterest: null })
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
   assert.equal([...svg.matchAll(/class="candle"/g)].length, 3)
   assert.equal([...svg.matchAll(/class="volume-bar"/g)].length, 3)
+  assertHourlyBars(svg, data)
 })
 
 test("zero volume and OI are covered observations but a zero change denominator is unavailable", () => {
@@ -249,7 +362,7 @@ test("zero volume and OI are covered observations but a zero change denominator 
     })
   }
   const data = buildCoinCardData(report, coin)
-  assert.deepEqual(data.coverage, { candles: 72, volume: 72, openInterest: 72 })
+  assert.deepEqual(data.coverage, { candles: 168, volume: 168, openInterest: 168 })
   assert.ok(data.points.every(point => point.volume === 0 && point.openInterest === 0))
   assert.equal(data.oiChange4hPct, null)
   assert.equal(data.relativeVolume, 0)
@@ -260,10 +373,10 @@ test("zero volume and OI are covered observations but a zero change denominator 
   assert.equal(textAt(svg, 48, 1180), "0×")
   assert.equal(textAt(svg, 682, 1180), "Нет данных")
   const bars = [...svg.matchAll(/<rect class="volume-bar"[^>]*height="([^"]+)"/g)]
-  assert.equal(bars.length, 72)
+  assert.equal(bars.length, 168)
   assert.ok(bars.every(([, height]) => Number(height) === 0))
   assert.match(svg, /id="oi-line" d="M/)
-  assert.equal([...svg.matchAll(/<circle\b/g)].length, 72)
+  assert.equal([...svg.matchAll(/<circle\b/g)].length, 168)
 })
 
 test("a zero current OI with a positive baseline is a real -100% change", () => {
@@ -278,7 +391,7 @@ test("a zero current OI with a positive baseline is a real -100% change", () => 
 test("OI paths break at absent and invalid hours, retain isolated zero observations and keep hourly x positions", () => {
   const { report, coin } = fixture()
   const original = coin.history.openInterest
-  coin.history.openInterest = [0, 1, 4, 5, 9, 70, 71].map(index => ({ ...original[index], value: index === 9 ? 0 : original[index].value }))
+  coin.history.openInterest = [0, 1, 4, 5, 9, 166, 167].map(index => ({ ...original[index], value: index === 9 ? 0 : original[index].value }))
   coin.history.openInterest.push(...[null, NaN, -1].map((value, index) => ({ time: original[6 + index].time, value })))
   const data = buildCoinCardData(report, coin)
   assert.equal(data.coverage.openInterest, 7)
@@ -286,7 +399,7 @@ test("OI paths break at absent and invalid hours, retain isolated zero observati
   assertSvg(svg)
   const centers = new Map([...svg.matchAll(/<g class="candle" data-time="(\d+)"[^>]*>\s*<line x1="([^"]+)"/g)]
     .map(([, time, x]) => [Number(time), Number(x)]))
-  assert.equal(centers.size, 72)
+  assert.equal(centers.size, 168)
   const path = svg.match(/<path id="oi-line" d="([^"]+)"/)?.[1]
   assert.ok(path, "Expected an OI line")
   const segments = [...path.matchAll(/M[^M]*/g)].map(([segment]) =>
@@ -294,7 +407,7 @@ test("OI paths break at absent and invalid hours, retain isolated zero observati
   )
   assert.equal(segments.length, 4)
   // D3 serializes path coordinates to three decimals, unlike SVG attributes.
-  assert.deepEqual(segments, [[0, 1], [4, 5], [9], [70, 71]]
+  assert.deepEqual(segments, [[0, 1], [4, 5], [9], [166, 167]]
     .map(indices => indices.map(index => Number(centers.get(original[index].time).toFixed(3)))))
   assert.deepEqual([...svg.matchAll(/<circle cx="([^"]+)"/g)].map(([, x]) => Number(Number(x).toFixed(3))), segments.flat())
 })
@@ -332,13 +445,13 @@ for (const [label, history] of [
   ["empty", { candles: [], volume: [], openInterest: [] }],
   ["non-array", { candles: {}, volume: null, openInterest: "missing" }],
 ]) {
-  test(`${label} history produces an explicit empty 72-hour SVG without non-finite values`, () => {
+  test(`${label} history produces an explicit empty 168-hour SVG without non-finite values`, () => {
     const { report, coin } = fixture()
     coin.history = history
     coin.features.relVolume = Infinity
     coin.movementProbability = NaN
     const data = buildCoinCardData(report, coin)
-    assert.equal(data.points.length, 72)
+    assert.equal(data.points.length, 168)
     assert.deepEqual(data.coverage, { candles: 0, volume: 0, openInterest: 0 })
     assert.ok(data.points.every(point => point.candle === null && point.volume === null && point.openInterest === null))
     for (const key of ["price", "change4hPct", "change24hPct", "oiChange4hPct", "relativeVolume"]) {
@@ -347,7 +460,7 @@ for (const [label, history] of [
     const svg = buildCoinCardSvg(report, coin)
     assertSvg(svg)
     assert.equal([...svg.matchAll(/Нет данных на этом интервале/g)].length, 3)
-    assert.equal([...svg.matchAll(/0\/72 ч/g)].length, 3)
+    assert.equal([...svg.matchAll(/0\/168 ч/g)].length, 3)
     assert.doesNotMatch(svg, /class="(?:candle|volume-bar)"|id="oi-line"/)
     assert.equal(textAt(svg, 48, 274), "Нет данных")
     assert.equal(textAt(svg, 72, 352), "Нет данных")
@@ -386,7 +499,7 @@ for (const [close, label] of [[100, "100"], [0.0000123456, "0,0000123456"], [0.0
     assertSvg(svg)
     assert.equal(textAt(svg, 48, 274), label)
     const bodies = [...svg.matchAll(/<g class="candle"[^>]*>[\s\S]*?<rect[^>]*y="([^"]+)"[^>]*height="([^"]+)"/g)]
-    assert.equal(bodies.length, 72)
+    assert.equal(bodies.length, 168)
     for (const [, y, height] of bodies) {
       assert.ok(Number(y) >= 462 && Number(y) + Number(height) <= 708)
       assert.ok(Number(height) > 0)

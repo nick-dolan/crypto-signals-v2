@@ -279,7 +279,8 @@ for (const empty of [false, true]) {
     }
     const { stdout } = await runStep(directory, "step14-telegram.js", env)
     assert.match(stdout, new RegExp(`Candidates: ${empty ? 0 : 1}/10 · Messages: 1 · Omitted: 0`))
-    assert.match(stdout, /Release: .*\n {2}Preview: .*\n {2}Manifest: /)
+    assert.doesNotMatch(stdout, /Release:|Preview:|Manifest:/)
+    assert.ok(!stdout.includes(directory))
     assert.match(stdout, /Step 14: Telegram post sent \(message ID: 77\)\./)
     assert.doesNotMatch(stdout, /[а-яё]/i)
     const output = path.join(directory, "output", "telegram-preview")
