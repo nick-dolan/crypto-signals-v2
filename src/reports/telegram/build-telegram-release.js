@@ -1,5 +1,5 @@
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { reportTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
+import { reportTime, reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
 
 function probability (coin) {
   return isFinite(coin.movementProbability) && coin.movementProbability >= 0 && coin.movementProbability <= 1
@@ -144,14 +144,11 @@ function briefBlocks (report) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      const emoji = brief.schemaVersion !== 4
-        ? ""
-        : paragraph.sentiment === "bullish"
-          ? "🟢 "
-          : paragraph.sentiment === "neutral"
-            ? "⚪ "
-            : paragraph.sentiment === "bearish" ? "🔴 " : ""
-      return [`${[3, 4].includes(brief.schemaVersion) ? "• " : ""}${emoji}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      const marker = brief.schemaVersion === 4
+        ? [["bullish", "<b>⊕</b> "], ["neutral", "<b>○</b> "], ["bearish", "<b>⊖</b> "]]
+            .find(([sentiment]) => sentiment === paragraph.sentiment)?.[1] ?? ""
+        : brief.schemaVersion === 3 ? "• " : ""
+      return [`${marker}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
       ? content
@@ -159,9 +156,7 @@ function briefBlocks (report) {
           ? "В полученной выборке нет сообщений для сводки."
           : "Содержательная сводка не подготовлена; доступных данных недостаточно."]))
   }
-  if (brief.status === "partial" || (brief.coverage ?? []).some(source => ["partial", "failed"].includes(source.status))) {
-    blocks.push("⚠ Покрытие новостных источников неполное.")
-  }
+
   if (brief.warning) {
     blocks.push(`⚠ ${telegramText(brief.warning, 300)}`)
   }
@@ -184,17 +179,20 @@ export function buildTelegramRelease (report) {
   }))
   const photos = candidates.map(item => `<img src="tg://photo?id=${item.mediaId}"/>`).join("")
   const closedAt = new Date(asOf + 3_600_000).toISOString()
+  const createdAt = isString(report.reportCreatedAt) && isFinite(Date.parse(report.reportCreatedAt))
+    ? report.reportCreatedAt
+    : closedAt
   const introductory = [
     report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
-    `<b>Крипто-сигналы · ${reportTime(closedAt)} МСК</b>`,
-    `Кандидатов: ${selection.candidates.length}/10. Срез по закрытым свечам.`,
+    `<b>📊 Крипто-пульс | ${reportTitleTime(createdAt)} МСК</b>`,
     selection.omittedCount ? `Ещё ${selection.omittedCount} кандидатов не вошли в общий лимит 10.` : null,
-    "P — оценка сильного движения в любую сторону за 4–12ч, без статистической калибровки.",
   ].filter(Boolean).join("\n")
   const sections = [
     candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
     telegramSection(introductory, []),
+    "<p><br></p>",
     telegramSection("<b>📰 Новостная сводка</b>", briefBlocks(report)),
+    "<p><br></p>",
   ]
   for (const [section, title, description, empty] of [
     ["top", "⭐ Топ агента", "Ранние кандидаты в исходном порядке агента.", "Агент не выделил убедительных ранних кандидатов."],

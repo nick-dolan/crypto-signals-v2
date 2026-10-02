@@ -523,7 +523,7 @@ test("prompt enforces concise news items, six-hour freshness, grounding, attribu
   assert.equal(example.schemaVersion, 4)
   assert.deepEqual(Object.keys(example), ["schemaVersion", "asOf", "items"])
   assert.equal(example.items[0].sentiment, "neutral")
-  for (const text of ["bullish", "neutral", "bearish", "При сомнениях выбирай `neutral`", "не настроение всего рынка", "не прогноз цены", "Не вставляй эмодзи", "без учёта эмодзи и ссылок"]) {
+  for (const text of ["bullish", "neutral", "bearish", "При сомнениях выбирай `neutral`", "не настроение всего рынка", "не прогноз цены", "Не вставляй эмодзи", "без учёта маркеров и ссылок"]) {
     assert.ok(prompt.includes(text), text)
   }
 })

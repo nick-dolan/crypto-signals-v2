@@ -58,6 +58,14 @@ export function telegramRichMessage (html, media) {
   return { html, media }
 }
 
+export function reportTitleTime (value) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow", day: "numeric", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(value)).map(({ type, value }) => [type, value]))
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute}`
+}
+
 export function reportTime (value) {
   return new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric",
