@@ -157,6 +157,7 @@ test("the seven-day coin card uses exact hourly endpoints and labels the close, 
   assert.equal(svg.match(/<desc>([\s\S]*?)<\/desc>/)?.[1], "Цена, объём и Open Interest за 7 дней из сохранённого отчёта.")
   assert.equal(textAt(svg, 682, 1207), "Окно: 7 дней · начало свечей на оси")
   assert.doesNotMatch(svg, /Экспертная оценка вероятности|статистическая калибровка/u)
+  assert.doesNotMatch(svg, /Только закрытые свечи|в базовом активе|<text x="48" y="1241"/u)
   assertHourlyBars(svg, data)
   assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
 })
@@ -227,6 +228,7 @@ test("a single missing hour marks coverage as incomplete against all 168 hours",
     assert.equal(textAt(svg, 1128, y), "167/168 ч")
   }
   assert.equal([...svg.matchAll(/<text x="1128"[^>]*fill="#f0bd71"[^>]*>167\/168 ч<\/text>/g)].length, 3)
+  assert.equal(textAt(svg, 48, 1241), "Данные неполные или с оговорками. Пропуски не заполнены.")
 })
 
 test("candle and volume bars keep seven-day hourly widths and centers across independent gaps", () => {
@@ -328,6 +330,7 @@ for (const lastCandle of ["missing", "invalid"]) {
     assert.equal(textAt(svg, 48, 274), "Нет данных")
     assert.equal(textAt(svg, 625, 274), "Нет данных")
     assert.equal(textAt(svg, 914, 274), "Нет данных")
+    assert.equal(textAt(svg, 48, 1241), "Цена на срезе недоступна. Пропуски не заполнены.")
     assert.doesNotMatch(svg, /stroke-dasharray=/)
     assert.equal([...svg.matchAll(/class="candle"/g)].length, 167)
   })

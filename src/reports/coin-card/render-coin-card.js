@@ -177,7 +177,7 @@ export function buildCoinCardSvg (report, coin) {
   })).join("")
   const warning = data.warnings.length
     ? data.price === null ? "Цена на срезе недоступна. Пропуски не заполнены." : "Данные неполные или с оговорками. Пропуски не заполнены."
-    : "Только закрытые свечи · Объём и OI — в базовом активе"
+    : ""
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" font-family="Noto Sans">
     <title>${escapeXml(`${data.demo ? "ДЕМО · " : ""}${coin.symbol} · срез ${timestamp(data.closedAt, true)} МСК`)}</title>
@@ -195,7 +195,7 @@ export function buildCoinCardSvg (report, coin) {
     ${text(682, 1140, "Изменение Open Interest · 4ч", { size: 21, color: "#92a3bc" })}
     ${text(682, 1180, percent(data.oiChange4hPct), { size: 34, weight: 700 })}
     ${text(682, 1207, "Окно: 7 дней · начало свечей на оси", { size: 17, color: "#92a3bc" })}
-    ${text(48, 1241, warning, { size: 18, color: data.warnings.length ? "#f0bd71" : "#92a3bc" })}
+    ${warning ? text(48, 1241, warning, { size: 18, color: "#f0bd71" }) : ""}
 
   </svg>`
 }
