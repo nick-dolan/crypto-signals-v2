@@ -95,6 +95,9 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.equal(brief.replace(/<[^>]+>/g, "").trim(), "")
   assert.match(html, /id="market-brief-note"[^>]*><\/p>\s*<\/section>\s*<div id="report-tabs"/)
   assert.match(html, /\.market-brief\s*\{[^}]*overflow-wrap: anywhere;/)
+  assert.match(html, /\.market-brief-list\s*\{[^}]*margin: 0;[^}]*padding-left: 20px;[^}]*list-style: disc;/)
+  assert.match(html, /\.market-brief-paragraph,\s*\.market-brief-item,\s*\.market-brief-empty\s*\{[^}]*line-height: 1\.6;/)
+  assert.match(html, /\.market-brief-item\+\.market-brief-item\s*\{[^}]*margin-top: 8px;/)
   assert.match(html, /\.market-brief-citations\s*\{[^}]*white-space: nowrap;/)
   assert.doesNotMatch(html, /\.market-brief\[data-status=/)
   assert.match(html, /id="report-tabs"[^>]*role="tablist"[^>]*aria-label="Разделы отчёта"/)
@@ -146,6 +149,40 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   for (const { content } of embedded.slice(1)) {
     assert.doesNotThrow(() => new vm.Script(content))
   }
+})
+
+test("v3 embeds five items and ten sources losslessly while escaping text, tooltips and publication metadata", async () => {
+  const unsafe = "</ScRiPt><script>globalThis.injected = true</script><img src=x onerror=alert(1)><!-- & \" {{charts}} $& $' $` \u2028\u2029"
+  const report = {
+    asOf: "2026-09-15T09:00:00.000Z",
+    coins: [],
+    marketBrief: {
+      schemaVersion: 3,
+      status: "partial",
+      marketAsOf: "2026-09-15T09:00:00.000Z",
+      from: "2026-09-15T08:47:00.000Z",
+      asOf: "2026-09-15T14:31:00.000Z",
+      generatedAt: "2026-09-15T14:32:00.000Z",
+      warning: unsafe,
+      coverage: [{ source: "tradingview", status: "partial", fetchedCount: 10, error: unsafe }],
+      items: Array.from({ length: 5 }, (_, index) => ({ text: unsafe, sourceIds: [`source-${index * 2}`, `source-${index * 2 + 1}`] })),
+      sources: Array.from({ length: 10 }, (_, index) => ({
+        id: `source-${index}`, channel: "tradingview", url: `https://news.example/${index}`,
+        title: unsafe, text: unsafe, author: unsafe, publisher: unsafe, publishedAt: unsafe,
+      })),
+      analysis: { model: "gemini-3.7-flash", warning: unsafe },
+    },
+  }
+  const before = structuredClone(report)
+  const html = await renderReportHtml(report)
+  const embedded = scripts(html)
+  assert.equal(embedded.length, 3)
+  assert.doesNotMatch(embedded[0].content, /<|\u2028|\u2029/)
+  assert.deepEqual(JSON.parse(embedded[0].content), before)
+  assert.deepEqual(report, before)
+  assert.doesNotMatch(html, /<img src=x|<script>globalThis\.injected/)
+  assert.doesNotMatch(embedded[2].content, /\.(?:innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write\(/)
+  assert.doesNotThrow(() => new vm.Script(embedded[2].content))
 })
 
 test("agent text cannot escape embedded JSON, become executable HTML, or replace template slots", async () => {

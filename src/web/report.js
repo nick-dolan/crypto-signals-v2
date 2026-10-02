@@ -315,7 +315,13 @@
     return "Время не указано"
   }
 
-  function marketBriefParagraphs (brief) {
+  function marketBriefEntries (brief) {
+    if (brief.schemaVersion === 3) {
+      return (brief.items ?? []).slice(0, 5).filter(item => item.text.trim()).map(item => ({
+        ...item,
+        text: item.text.length <= 250 ? item.text : `${item.text.slice(0, 249)}…`,
+      }))
+    }
     if (brief.schemaVersion !== 2) {
       return (brief.events ?? []).map(event => ({
         text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(Boolean).join(" ")}`,
@@ -333,17 +339,17 @@
     })
   }
 
-  function marketBriefParagraph (paragraph, sources, numbers) {
-    const node = element("p", "market-brief-paragraph")
-    node.append(element("span", "market-brief-text", paragraph.text))
-    const links = [...new Set(paragraph.sourceIds ?? [])].flatMap((id) => {
+  function marketBriefEntry (entry, sources, numbers, listItem) {
+    const node = element(listItem ? "li" : "p", listItem ? "market-brief-item" : "market-brief-paragraph")
+    node.append(element("span", "market-brief-text", entry.text))
+    const links = [...new Set(entry.sourceIds ?? [])].reduce((links, id) => {
       const source = sources.get(id)
-      if (!source || (!numbers.has(id) && numbers.size >= 3)) {
-        return []
+      if (!source || (listItem ? links.length >= 2 : !numbers.has(id) && numbers.size >= 3)) {
+        return links
       }
       const link = sourceLink("", source.url)
       if (link.tagName !== "A") {
-        return []
+        return links
       }
       if (!numbers.has(id)) {
         numbers.set(id, numbers.size + 1)
@@ -351,8 +357,8 @@
       link.textContent = `[${numbers.get(id)}]`
       link.title = [...new Set([source.author, source.publisher, source.title, publicationTime(source.publishedAt)].filter(Boolean))].join(" · ")
       link.setAttribute("aria-label", `Источник ${numbers.get(id)}: ${link.title}`)
-      return [link]
-    })
+      return [...links, link]
+    }, [])
     if (links.length) {
       const citations = element("span", "market-brief-citations")
       citations.append(...links)
@@ -369,7 +375,7 @@
       return
     }
     const status = ["available", "partial", "empty"].includes(brief.status) ? brief.status : "unavailable"
-    const paragraphs = ["available", "partial"].includes(status) ? marketBriefParagraphs(brief) : []
+    const entries = ["available", "partial"].includes(status) ? marketBriefEntries(brief) : []
     const sources = new Map((brief.sources ?? []).map(source => [source.id, source]))
     const numbers = new Map()
     const failed = brief.status === "failed" || (brief.coverage ?? []).some(source => source.error || source.status === "failed")
@@ -380,8 +386,15 @@
     byId("market-brief-empty").textContent = status === "unavailable"
       ? "Сводка недоступна."
       : "В полученной выборке нет сообщений для сводки."
-    byId("market-brief-empty").hidden = paragraphs.length > 0
-    byId("market-brief-paragraphs").replaceChildren(...paragraphs.map(paragraph => marketBriefParagraph(paragraph, sources, numbers)))
+    byId("market-brief-empty").hidden = entries.length > 0
+    const content = entries.map(entry => marketBriefEntry(entry, sources, numbers, brief.schemaVersion === 3))
+    if (brief.schemaVersion === 3 && content.length) {
+      const list = element("ul", "market-brief-list")
+      list.append(...content)
+      byId("market-brief-paragraphs").replaceChildren(list)
+    } else {
+      byId("market-brief-paragraphs").replaceChildren(...content)
+    }
   }
 
   function coinDescription (coin) {

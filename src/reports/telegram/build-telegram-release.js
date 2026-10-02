@@ -100,9 +100,15 @@ function candidateBlock (item, number, demo) {
   ].filter(Boolean).join("\n")
 }
 
+function briefItemText (value) {
+  const text = isString(value) ? value.replace(/\s+/gu, " ").replace(/\p{Cc}/gu, "").trim() : ""
+  // Count text before HTML escaping, without splitting a surrogate pair at the limit.
+  return telegramText(text.length <= 250 ? text : `${text.slice(0, 249).replace(/[\uD800-\uDBFF]$/u, "")}…`, Infinity)
+}
+
 function briefBlocks (report) {
   const brief = report.marketBrief
-  if (!brief || brief.marketAsOf !== report.asOf || ![1, 2].includes(brief.schemaVersion)) {
+  if (!brief || brief.marketAsOf !== report.asOf || ![1, 2, 3].includes(brief.schemaVersion)) {
     return ["Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий."]
   }
   const blocks = []
@@ -115,16 +121,18 @@ function briefBlocks (report) {
   } else {
     const paragraphs = brief.status === "empty"
       ? []
-      : brief.schemaVersion === 2
-        ? (isArray(brief.paragraphs) ? brief.paragraphs : []).slice(0, 2)
-        : (isArray(brief.events) ? brief.events : []).slice(0, 5).map(event => ({
-            text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(isString).join(" ")}`,
-            sourceIds: event.sourceIds,
-          }))
+      : brief.schemaVersion === 3
+        ? (isArray(brief.items) ? brief.items : []).slice(0, 5)
+        : brief.schemaVersion === 2
+          ? (isArray(brief.paragraphs) ? brief.paragraphs : []).slice(0, 2)
+          : (isArray(brief.events) ? brief.events : []).slice(0, 5).map(event => ({
+              text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(isString).join(" ")}`,
+              sourceIds: event.sourceIds,
+            }))
     const sources = new Map((isArray(brief.sources) ? brief.sources : []).map(source => [source.id, source]))
     const numbers = new Map()
     const content = paragraphs.flatMap((paragraph) => {
-      const text = telegramText(paragraph.text, 1_200)
+      const text = brief.schemaVersion === 3 ? briefItemText(paragraph.text) : telegramText(paragraph.text, 1_200)
       if (!text) {
         return []
       }
@@ -136,7 +144,7 @@ function briefBlocks (report) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      return [`${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      return [`${brief.schemaVersion === 3 ? "• " : ""}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
       ? content

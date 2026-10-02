@@ -155,27 +155,32 @@ test("rebuilding step 13 updates the receipt without changing the previous snaps
   }
 })
 
-test("step 13 preserves the digest and source provenance in the immutable archive and downloadable HTML", async (t) => {
+test("step 13 preserves all five news items and their sources in the immutable archive and downloadable HTML", async (t) => {
   const directory = await prepareInputs(t)
   const brief = await buildMarketBrief("Prompt", {
     marketAsOf: "2026-09-26T11:00:00.000Z",
     collectSources: async () => ({
       from: "2026-09-26T06:00:00.000Z", asOf: "2026-09-26T12:00:00.000Z", warnings: [],
-      sources: [{
-        id: "source-1", channel: "tradingview", title: "Событие <script>",
-        text: "Сохранённая публикация </script>", url: "https://publisher.example/news",
+      sources: Array.from({ length: 5 }, (_, index) => ({
+        id: `source-${index + 1}`, channel: "tradingview", title: `Событие ${index + 1} <script>`,
+        text: "Сохранённая публикация </script>", url: `https://publisher.example/news/${index + 1}`,
         publishedAt: "2026-09-26T11:55:00.000Z", author: null, publisher: "Original publisher",
-      }],
+      })),
       coverage: ["tradingview", "twitter"].map(source => ({
         source, status: source === "tradingview" ? "available" : "empty",
-        fetchedCount: source === "tradingview" ? 1 : 0, error: null,
+        fetchedCount: source === "tradingview" ? 5 : 0, error: null,
       })),
     }),
     callAgent: async () => JSON.stringify({
-      schemaVersion: 2, asOf: "2026-09-26T12:00:00.000Z",
-      paragraphs: [{ text: "Короткая сводка </script>", sourceIds: ["source-1"] }],
+      schemaVersion: 3, asOf: "2026-09-26T12:00:00.000Z",
+      items: Array.from({ length: 5 }, (_, index) => ({
+        text: `Короткая сводка </script> ${index + 1}`, sourceIds: [`source-${index + 1}`],
+      })),
     }),
   })
+  assert.equal(brief.status, "available")
+  assert.equal(brief.schemaVersion, 3)
+  assert.equal(brief.items.length, 5)
   await fs.writeFile(path.join(directory, "tmp", "step12.1-market-brief.json"), JSON.stringify(brief))
   await runStep(directory)
   const store = await createReportStore({ directory: path.join(directory, "reports") })

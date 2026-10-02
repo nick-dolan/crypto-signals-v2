@@ -26,11 +26,34 @@ function readSourceIds (ids, sourceIds) {
     || new Set(ids).size !== ids.length
     || ids.some(id => !sourceIds.has(id))
   ) {
-    throw new InvalidMarketBriefError("every paragraph or event must cite unique IDs of collected sources")
+    throw new InvalidMarketBriefError("every item, paragraph or event must cite unique IDs of collected sources")
   }
   return [...ids]
 }
 
+export function validateBriefItems (items, sources) {
+  if (!isArray(items) || items.length > 5) {
+    throw new InvalidMarketBriefError("items must contain at most five news items")
+  }
+  const sourceIds = new Set(sources.map(source => source.id))
+  const result = items.map((item) => {
+    requireKeys(item, ["text", "sourceIds"])
+    const ids = readSourceIds(item.sourceIds, sourceIds)
+    if (ids.length > 2) {
+      throw new InvalidMarketBriefError("each news item must cite at most two sources")
+    }
+    return {
+      text: readText(item.text, 250, "item text"),
+      sourceIds: ids,
+    }
+  })
+  if (new Set(result.map(item => item.text.toLowerCase())).size !== result.length) {
+    throw new InvalidMarketBriefError("duplicate item text")
+  }
+  return result
+}
+
+// Archived v2 briefs retain their original paragraph structure and limits.
 export function validateBriefParagraphs (paragraphs, sources) {
   if (!isArray(paragraphs) || paragraphs.length > 2) {
     throw new InvalidMarketBriefError("paragraphs must contain at most two items")
@@ -94,9 +117,9 @@ export function parseMarketBrief (content, asOf, sources) {
   } catch {
     throw new InvalidMarketBriefError("response is not valid JSON")
   }
-  requireKeys(response, ["schemaVersion", "asOf", "paragraphs"])
-  if (response.schemaVersion !== 2 || response.asOf !== asOf) {
+  requireKeys(response, ["schemaVersion", "asOf", "items"])
+  if (response.schemaVersion !== 3 || response.asOf !== asOf) {
     throw new InvalidMarketBriefError("response version or news cutoff does not match the request")
   }
-  return validateBriefParagraphs(response.paragraphs, sources)
+  return validateBriefItems(response.items, sources)
 }

@@ -1135,13 +1135,21 @@ summary {
     overflow-wrap: anywhere;
 }
 
+.market-brief-list {
+    margin: 0;
+    padding-left: 20px;
+    list-style: disc;
+}
+
 .market-brief-paragraph,
+.market-brief-item,
 .market-brief-empty {
     font-size: 14px;
     line-height: 1.6;
 }
 
-.market-brief-paragraph+.market-brief-paragraph {
+.market-brief-paragraph+.market-brief-paragraph,
+.market-brief-item+.market-brief-item {
     margin-top: 8px;
 }
 

@@ -38,8 +38,8 @@ function paragraph (overrides = {}) {
   }
 }
 
-function response (paragraphs = [paragraph()]) {
-  return { schemaVersion: 2, asOf: collection().asOf, paragraphs }
+function response (items = [paragraph()]) {
+  return { schemaVersion: 3, asOf: collection().asOf, items }
 }
 
 function build (overrides = {}) {
@@ -79,12 +79,13 @@ test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup an
     },
   })
   assert.equal(calls, 1)
-  assert.equal(result.schemaVersion, 2)
+  assert.equal(result.schemaVersion, 3)
   assert.equal(result.status, "available")
   assert.equal(result.marketAsOf, "2026-09-29T11:00:00.000Z")
   assert.notEqual(result.asOf, result.marketAsOf)
-  assert.deepEqual(result.paragraphs, [paragraph()])
+  assert.deepEqual(result.items, [paragraph()])
   assert.equal(Object.hasOwn(result, "events"), false)
+  assert.equal(Object.hasOwn(result, "paragraphs"), false)
   assert.deepEqual(result.sources, original.sources)
   assert.deepEqual(original, collection())
   assert.equal(result.analysis.callCount, 1)
@@ -103,7 +104,7 @@ test("a correction does not acquire contradictory earlier versions as supporting
       text: "По исправленному сообщению, вывод средств не приостанавливался.", sourceIds: ["source-2"],
     })])),
   })
-  assert.deepEqual(result.paragraphs[0].sourceIds, ["source-2"])
+  assert.deepEqual(result.items[0].sourceIds, ["source-2"])
   assert.deepEqual(result.sources, input.sources)
   assert.equal(result.analysis.groupCount, 2)
 })
@@ -114,7 +115,7 @@ test("handles source failures without throwing away usable evidence or exposing 
   input.coverage[1] = { source: "twitter", status: "failed", fetchedCount: 0, error: "HTTP 429" }
   const result = await build({ collectSources: async () => input })
   assert.equal(result.status, "partial")
-  assert.equal(result.paragraphs.length, 1)
+  assert.equal(result.items.length, 1)
   assert.equal(result.warning, "Не все источники удалось загрузить.")
   assert.equal(result.coverage[1].error, "HTTP 429")
   assert.equal(result.analysis.status, "complete")
@@ -168,12 +169,12 @@ for (const failed of [false, true]) {
     })
     assert.equal(result.status, failed ? "unavailable" : "empty")
     assert.equal(result.analysis.callCount, 0)
-    assert.deepEqual(result.paragraphs, [])
+    assert.deepEqual(result.items, [])
     assert.ok(!failed || result.warning.includes("не означает"))
   })
 }
 
-test("Gemini may return no paragraphs without filling a quota; partial coverage remains partial", async () => {
+test("Gemini may return no items without filling a quota; partial coverage remains partial", async () => {
   const result = await build({ callAgent: async () => JSON.stringify(response([])) })
   assert.equal(result.status, "empty")
   assert.equal(result.analysis.status, "complete")
@@ -190,59 +191,87 @@ test("accepts fenced JSON and preserves attribution and uncertainty in prose", (
   assert.deepEqual(output, [item])
 })
 
-test("accepts exactly 800 characters and at most three distinct citations shared between paragraphs", () => {
-  const data = response([
-    paragraph({ text: "x".repeat(400), sourceIds: ["source-1", "source-2"] }),
-    paragraph({ text: "y".repeat(400), sourceIds: ["source-2", "source-3"] }),
-  ])
-  assert.deepEqual(parseMarketBrief(JSON.stringify(data), collection().asOf, collection().sources), data.paragraphs)
-  const sources = [...collection().sources, { ...collection().sources[0], id: "source-4" }]
-  data.paragraphs[1].sourceIds.push("source-4")
-  assert.throws(() => parseMarketBrief(JSON.stringify(data), collection().asOf, sources), /at most three distinct sources/)
+test("accepts up to five 250-character items and ten distinct citations without a minimum quota", async () => {
+  const input = collection()
+  input.sources = Array.from({ length: 10 }, (_, index) => ({
+    ...input.sources[0], id: `source-${index + 1}`, url: `https://publisher.example/${index + 1}`,
+  }))
+  input.coverage = [
+    { source: "tradingview", status: "available", fetchedCount: 10, error: null },
+    { source: "twitter", status: "empty", fetchedCount: 0, error: null },
+  ]
+  const items = Array.from({ length: 5 }, (_, index) => paragraph({
+    text: `${index} ${"x".repeat(248)}`,
+    sourceIds: [`source-${index * 2 + 1}`, `source-${index * 2 + 2}`],
+  }))
+  for (const count of [0, 1, 2, 3, 4, 5]) {
+    const data = response(items.slice(0, count))
+    assert.deepEqual(parseMarketBrief(JSON.stringify(data), input.asOf, input.sources), data.items)
+    const result = await build({ collectSources: async () => input, callAgent: async () => JSON.stringify(data) })
+    assert.equal(result.status, count ? "available" : "empty")
+    assert.deepEqual(result.items, data.items)
+    assert.deepEqual(await readMarketBriefReport(result.marketAsOf, { readJson: async () => result }), result)
+  }
+})
+
+test("allows shared citations and trims text without changing news order or attribution", () => {
+  const items = [
+    paragraph({ text: "  По сообщению биржи, вывод приостановлен.  ", sourceIds: ["source-1", "source-2"] }),
+    paragraph({ text: "По сообщению биржи, расследование продолжается.", sourceIds: ["source-2", "source-3"] }),
+  ]
+  const result = parseMarketBrief(JSON.stringify(response(items)), collection().asOf, collection().sources)
+  assert.deepEqual(result, items.map(item => ({ ...item, text: item.text.trim() })))
 })
 
 for (const [label, mutate] of [
-  ["more than two paragraphs", (data) => {
-    data.paragraphs = Array.from({ length: 3 }, (_, index) => paragraph({ text: `Paragraph ${index}` }))
+  ["more than five items", (data) => {
+    data.items = Array.from({ length: 6 }, (_, index) => paragraph({ text: `News ${index}` }))
   }],
   ["unknown source", (data) => {
-    data.paragraphs[0].sourceIds = ["invented"]
+    data.items[0].sourceIds = ["invented"]
   }],
   ["missing sources", (data) => {
-    data.paragraphs[0].sourceIds = []
+    data.items[0].sourceIds = []
   }],
   ["duplicate source", (data) => {
-    data.paragraphs[0].sourceIds = ["source-1", "source-1"]
+    data.items[0].sourceIds = ["source-1", "source-1"]
+  }],
+  ["more than two sources per item", (data) => {
+    data.items[0].sourceIds = ["source-1", "source-2", "source-3"]
   }],
   ["invented URL field", (data) => {
-    data.paragraphs[0].url = "https://fake.example"
+    data.items[0].url = "https://fake.example"
   }],
   ["unexpected heading", (data) => {
-    data.paragraphs[0].title = "Heading"
+    data.items[0].title = "Heading"
   }],
   ["wrong snapshot", (data) => {
     data.asOf = "2026-09-29T11:00:00.000Z"
   }],
   ["wrong version", (data) => {
-    data.schemaVersion = 1
+    data.schemaVersion = 2
+  }],
+  ["legacy response shape", (data) => {
+    data.paragraphs = data.items
+    delete data.items
   }],
   ["empty text", (data) => {
-    data.paragraphs[0].text = " "
+    data.items[0].text = " "
   }],
-  ["long paragraph", (data) => {
-    data.paragraphs[0].text = "x".repeat(801)
+  ["251-character item", (data) => {
+    data.items[0].text = "x".repeat(251)
   }],
-  ["long combined text", (data) => {
-    data.paragraphs = [paragraph({ text: "x".repeat(400) }), paragraph({ text: "y".repeat(401) })]
+  ["non-string text", (data) => {
+    data.items[0].text = 123
   }],
   ["duplicate text", (data) => {
-    data.paragraphs.push(paragraph())
+    data.items.push(paragraph({ text: `  ${data.items[0].text.toUpperCase()}  ` }))
   }],
   ["not an object", (data) => {
-    data.paragraphs[0] = null
+    data.items[0] = null
   }],
   ["not an array", (data) => {
-    data.paragraphs = null
+    data.items = null
   }],
 ]) {
   test(`rejects ${label}; retains collected sources and marks digest unavailable`, async () => {
@@ -254,7 +283,7 @@ for (const [label, mutate] of [
     assert.equal(result.analysis.status, "failed")
     assert.match(result.analysis.error, /Invalid market brief/)
     assert.deepEqual(result.sources, collection().sources)
-    assert.deepEqual(result.paragraphs, [])
+    assert.deepEqual(result.items, [])
   })
 }
 
@@ -297,12 +326,38 @@ test("report reader preserves valid v1 day-long event briefs and validates their
     title: "Архивная новость", summary: "По сообщению биржи, проводится расследование.",
     whyItMatters: "Возможны ограничения инфраструктуры.", verification: "unconfirmed", sourceIds: ["source-1"],
   }]
-  delete brief.paragraphs
+  delete brief.items
   assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), brief)
   brief.events[0].sourceIds = ["invented"]
   const invalid = await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief })
   assert.equal(invalid.status, "unavailable")
   assert.deepEqual(invalid.sources, [])
+})
+
+test("report reader preserves v2 paragraphs and their original 800-character and three-source limits", async () => {
+  const brief = await build()
+  brief.schemaVersion = 2
+  brief.paragraphs = [
+    paragraph({ text: "x".repeat(400), sourceIds: ["source-1", "source-2"] }),
+    paragraph({ text: "y".repeat(400), sourceIds: ["source-2", "source-3"] }),
+  ]
+  delete brief.items
+  assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), brief)
+  for (const mutate of [
+    data => data.paragraphs.push(paragraph()),
+    data => data.paragraphs[0].text += "x",
+    (data) => {
+      data.sources.push({ ...data.sources[0], id: "source-4" })
+      data.coverage[0].fetchedCount += 1
+      data.paragraphs[1].sourceIds.push("source-4")
+    },
+  ]) {
+    const invalid = structuredClone(brief)
+    mutate(invalid)
+    const result = await readMarketBriefReport(brief.marketAsOf, { readJson: async () => invalid })
+    assert.equal(result.status, "unavailable")
+    assert.deepEqual(result.items, [])
+  }
 })
 
 test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs", async () => {
@@ -312,7 +367,7 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
       data.marketAsOf = "2026-09-29T10:00:00.000Z"
     },
     (data) => {
-      data.schemaVersion = 3
+      data.schemaVersion = 4
     },
     (data) => {
       data.sources[0].url = "javascript:alert(1)"
@@ -330,10 +385,10 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
       data.sources[1].id = data.sources[0].id
     },
     (data) => {
-      data.paragraphs[0].sourceIds = ["invented"]
+      data.items[0].sourceIds = ["invented"]
     },
     (data) => {
-      data.paragraphs[0].text = "x".repeat(801)
+      data.items[0].text = "x".repeat(251)
     },
     (data) => {
       data.coverage[0].fetchedCount = 100
@@ -354,7 +409,7 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
       data.status = "unavailable"
     },
     (data) => {
-      data.paragraphs = null
+      data.items = null
     },
     (data) => {
       data.analysis.status = "failed"
@@ -367,7 +422,7 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
     mutate(input)
     const result = await readMarketBriefReport(original.marketAsOf, { readJson: async () => input })
     assert.equal(result.status, "unavailable")
-    assert.deepEqual(result.paragraphs, [])
+    assert.deepEqual(result.items, [])
     assert.deepEqual(result.sources, [])
     assert.ok(result.warning)
   }
@@ -380,7 +435,7 @@ test("missing or corrupt optional brief never prevents report assembly", async (
     } })
     assert.equal(result.status, "unavailable")
     assert.equal(result.asOf, null)
-    assert.deepEqual(result.paragraphs, [])
+    assert.deepEqual(result.items, [])
     assert.match(result.warning, /сводк/i)
   }
 })
@@ -405,13 +460,16 @@ test("standalone step saves a brief and removes obsolete output before a failed 
     await assert.rejects(runMarketBriefStep({ buildBrief: async () => { throw new Error("Unexpected failure") } }), /Unexpected failure/)
     await assert.rejects(fs.access("tmp/step12.1-market-brief.json"), { code: "ENOENT" })
   `], { cwd: directory, timeout: 10_000 })
-  assert.match(result.stdout, /Market brief: 1 paragraphs/)
+  assert.match(result.stdout, /Market brief: 1 news items/)
 })
 
-test("prompt enforces concise paragraphs, six-hour freshness, grounding, attribution and no trading advice", async () => {
+test("prompt enforces concise news items, six-hour freshness, grounding, attribution and no trading advice", async () => {
   const prompt = await fs.readFile(new URL("../src/prompts/market-brief.md", import.meta.url), "utf8")
-  for (const text of ["недоверенные данные", "последние 6 часов", "не означает отсутствия событий", "не меняет рейтинг", "перепечаток", "не подтверждено", "Headline only", "время самого события", "Не создавай собственные URL", "от нуля до двух", "800 символов", "торговые рекомендации", "без заголовка", "не более трёх различных", "не добирай вчерашние новости"]) {
+  for (const text of ["недоверенные данные", "последние 6 часов", "не означает отсутствия событий", "не меняет рейтинг", "перепечаток", "не подтверждено", "Headline only", "время самого события", "Не создавай собственные URL", "от нуля до пяти", "3–5", "250 символов с пробелами", "торговые рекомендации", "без заголовка", "Не более двух различных", "по убыванию значимости", "меньше трёх", "Не заполняй объём ради количества", "не добирай вчерашние новости"]) {
     assert.ok(prompt.includes(text), text)
   }
-  assert.doesNotMatch(prompt, /Tavily|whyItMatters|Главное за сутки/)
+  assert.doesNotMatch(prompt, /Tavily|whyItMatters|Главное за сутки|800 символов|paragraphs/)
+  const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
+  assert.equal(example.schemaVersion, 3)
+  assert.deepEqual(Object.keys(example), ["schemaVersion", "asOf", "items"])
 })

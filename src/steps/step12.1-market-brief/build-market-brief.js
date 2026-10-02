@@ -46,13 +46,13 @@ export async function buildMarketBrief (systemPrompt, {
   const incomplete = collection.coverage.some(source => ["partial", "failed"].includes(source.status))
   const failed = collection.coverage.some(source => source.status === "failed" || source.error)
   const output = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     marketAsOf,
     ...collection,
     generatedAt: new Date().toISOString(),
     status: incomplete ? "partial" : "empty",
     warning: failed ? "Не все источники удалось загрузить." : null,
-    paragraphs: [],
+    items: [],
     analysis: {
       source: "github-copilot-unofficial",
       model: "gemini-3.7-flash",
@@ -77,9 +77,9 @@ export async function buildMarketBrief (systemPrompt, {
       model: "gemini-3.7-flash",
       reasoningEffort: "medium",
     })
-    const paragraphs = parseMarketBrief(response, collection.asOf, collection.sources)
-    output.paragraphs = paragraphs
-    output.status = incomplete ? "partial" : paragraphs.length ? "available" : "empty"
+    const items = parseMarketBrief(response, collection.asOf, collection.sources)
+    output.items = items
+    output.status = incomplete ? "partial" : items.length ? "available" : "empty"
     output.analysis.status = "complete"
   } catch (error) {
     output.status = "unavailable"
