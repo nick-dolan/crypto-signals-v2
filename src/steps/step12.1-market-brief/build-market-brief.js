@@ -46,7 +46,7 @@ export async function buildMarketBrief (systemPrompt, {
   const incomplete = collection.coverage.some(source => ["partial", "failed"].includes(source.status))
   const failed = collection.coverage.some(source => source.status === "failed" || source.error)
   const output = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     marketAsOf,
     ...collection,
     generatedAt: new Date().toISOString(),

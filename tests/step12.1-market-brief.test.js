@@ -34,12 +34,13 @@ function collection () {
 function paragraph (overrides = {}) {
   return {
     text: "По сообщению биржи, проводится расследование инцидента.",
+    sentiment: "neutral",
     sourceIds: ["source-1"], ...overrides,
   }
 }
 
 function response (items = [paragraph()]) {
-  return { schemaVersion: 3, asOf: collection().asOf, items }
+  return { schemaVersion: 4, asOf: collection().asOf, items }
 }
 
 function build (overrides = {}) {
@@ -79,7 +80,7 @@ test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup an
     },
   })
   assert.equal(calls, 1)
-  assert.equal(result.schemaVersion, 3)
+  assert.equal(result.schemaVersion, 4)
   assert.equal(result.status, "available")
   assert.equal(result.marketAsOf, "2026-09-29T11:00:00.000Z")
   assert.notEqual(result.asOf, result.marketAsOf)
@@ -191,6 +192,35 @@ test("accepts fenced JSON and preserves attribution and uncertainty in prose", (
   assert.deepEqual(output, [item])
 })
 
+test("preserves each model sentiment without changing text, ordering or source evidence", async () => {
+  const items = ["bearish", "bullish", "neutral"].map((sentiment, index) => paragraph({
+    text: `Новость ${index + 1}`, sentiment, sourceIds: [`source-${index + 1}`],
+  }))
+  const result = await build({ callAgent: async () => JSON.stringify(response(items)) })
+  assert.equal(result.status, "available")
+  assert.deepEqual(result.items, items)
+  assert.deepEqual(result.sources, collection().sources)
+  assert.deepEqual(await readMarketBriefReport(result.marketAsOf, { readJson: async () => result }), result)
+})
+
+test("missing and invalid sentiments are rejected instead of silently becoming neutral", async () => {
+  const original = await build()
+  for (const sentiment of [undefined, null, "", "positive", "BULLISH", "neutral ", "🟢", "__proto__", 1, true, ["neutral"], {}]) {
+    const item = paragraph({ sentiment })
+    const data = response([item])
+    assert.throws(() => parseMarketBrief(JSON.stringify(data), collection().asOf, collection().sources), InvalidMarketBriefError)
+    const result = await build({ callAgent: async () => JSON.stringify(data) })
+    assert.equal(result.status, "unavailable")
+    assert.deepEqual(result.items, [])
+    assert.deepEqual(result.sources, collection().sources)
+    const saved = { ...original, items: [item] }
+    const report = await readMarketBriefReport(original.marketAsOf, { readJson: async () => saved })
+    assert.equal(report.status, "unavailable")
+    assert.deepEqual(report.items, [])
+    assert.deepEqual(saved.items, [item])
+  }
+})
+
 test("accepts up to five 250-character items and ten distinct citations without a minimum quota", async () => {
   const input = collection()
   input.sources = Array.from({ length: 10 }, (_, index) => ({
@@ -249,7 +279,7 @@ for (const [label, mutate] of [
     data.asOf = "2026-09-29T11:00:00.000Z"
   }],
   ["wrong version", (data) => {
-    data.schemaVersion = 2
+    data.schemaVersion = 3
   }],
   ["legacy response shape", (data) => {
     data.paragraphs = data.items
@@ -338,13 +368,13 @@ test("report reader preserves v2 paragraphs and their original 800-character and
   const brief = await build()
   brief.schemaVersion = 2
   brief.paragraphs = [
-    paragraph({ text: "x".repeat(400), sourceIds: ["source-1", "source-2"] }),
-    paragraph({ text: "y".repeat(400), sourceIds: ["source-2", "source-3"] }),
+    { text: "x".repeat(400), sourceIds: ["source-1", "source-2"] },
+    { text: "y".repeat(400), sourceIds: ["source-2", "source-3"] },
   ]
   delete brief.items
   assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), brief)
   for (const mutate of [
-    data => data.paragraphs.push(paragraph()),
+    data => data.paragraphs.push({ text: "Третий абзац", sourceIds: ["source-1"] }),
     data => data.paragraphs[0].text += "x",
     (data) => {
       data.sources.push({ ...data.sources[0], id: "source-4" })
@@ -360,6 +390,26 @@ test("report reader preserves v2 paragraphs and their original 800-character and
   }
 })
 
+test("report reader preserves all five v3 items without inventing sentiment or changing their original limits", async () => {
+  const brief = await build()
+  brief.schemaVersion = 3
+  brief.items = Array.from({ length: 5 }, (_, index) => ({
+    text: `${index} ${"x".repeat(248)}`, sourceIds: ["source-1", "source-2"],
+  }))
+  const before = structuredClone(brief)
+  assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), before)
+  assert.deepEqual(brief, before)
+  for (const mutate of [
+    data => data.items.push({ text: "Шестая новость", sourceIds: ["source-1"] }),
+    data => data.items[0].text += "x",
+    data => data.items[0].sourceIds.push("source-3"),
+  ]) {
+    const invalid = structuredClone(brief)
+    mutate(invalid)
+    assert.equal((await readMarketBriefReport(brief.marketAsOf, { readJson: async () => invalid })).status, "unavailable")
+  }
+})
+
 test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs", async () => {
   const original = await build()
   for (const mutate of [
@@ -367,7 +417,7 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
       data.marketAsOf = "2026-09-29T10:00:00.000Z"
     },
     (data) => {
-      data.schemaVersion = 4
+      data.schemaVersion = 5
     },
     (data) => {
       data.sources[0].url = "javascript:alert(1)"
@@ -470,6 +520,10 @@ test("prompt enforces concise news items, six-hour freshness, grounding, attribu
   }
   assert.doesNotMatch(prompt, /Tavily|whyItMatters|Главное за сутки|800 символов|paragraphs/)
   const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
-  assert.equal(example.schemaVersion, 3)
+  assert.equal(example.schemaVersion, 4)
   assert.deepEqual(Object.keys(example), ["schemaVersion", "asOf", "items"])
+  assert.equal(example.items[0].sentiment, "neutral")
+  for (const text of ["bullish", "neutral", "bearish", "При сомнениях выбирай `neutral`", "не настроение всего рынка", "не прогноз цены", "Не вставляй эмодзи", "без учёта эмодзи и ссылок"]) {
+    assert.ok(prompt.includes(text), text)
+  }
 })

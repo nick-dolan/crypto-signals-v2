@@ -316,7 +316,7 @@
   }
 
   function marketBriefEntries (brief) {
-    if (brief.schemaVersion === 3) {
+    if ([3, 4].includes(brief.schemaVersion)) {
       return (brief.items ?? []).slice(0, 5).filter(item => item.text.trim()).map(item => ({
         ...item,
         text: item.text.length <= 250 ? item.text : `${item.text.slice(0, 249)}…`,
@@ -339,8 +339,19 @@
     })
   }
 
-  function marketBriefEntry (entry, sources, numbers, listItem) {
+  function marketBriefEntry (entry, sources, numbers, schemaVersion) {
+    const listItem = [3, 4].includes(schemaVersion)
     const node = element(listItem ? "li" : "p", listItem ? "market-brief-item" : "market-brief-paragraph")
+    const sentiment = schemaVersion === 4 && [
+      ["bullish", "🟢", "Буллиш"], ["neutral", "⚪", "Нейтрал"], ["bearish", "🔴", "Беариш"],
+    ].find(([value]) => value === entry.sentiment)
+    if (sentiment) {
+      const icon = element("span", "market-brief-sentiment", `${sentiment[1]} `)
+      icon.title = `${sentiment[2]} — оценка события, не прогноз цены`
+      icon.setAttribute("role", "img")
+      icon.setAttribute("aria-label", icon.title)
+      node.append(icon)
+    }
     node.append(element("span", "market-brief-text", entry.text))
     const links = [...new Set(entry.sourceIds ?? [])].reduce((links, id) => {
       const source = sources.get(id)
@@ -387,8 +398,8 @@
       ? "Сводка недоступна."
       : "В полученной выборке нет сообщений для сводки."
     byId("market-brief-empty").hidden = entries.length > 0
-    const content = entries.map(entry => marketBriefEntry(entry, sources, numbers, brief.schemaVersion === 3))
-    if (brief.schemaVersion === 3 && content.length) {
+    const content = entries.map(entry => marketBriefEntry(entry, sources, numbers, brief.schemaVersion))
+    if ([3, 4].includes(brief.schemaVersion) && content.length) {
       const list = element("ul", "market-brief-list")
       list.append(...content)
       byId("market-brief-paragraphs").replaceChildren(list)

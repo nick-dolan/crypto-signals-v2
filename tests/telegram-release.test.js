@@ -568,91 +568,130 @@ for (const [section, title] of [["top", "⭐ Топ агента"], ["positive",
   })
 }
 
-for (const count of [1, 2, 3, 4, 5, 6]) {
-  test(`v3 renders ${count} items as at most five bullets with up to ten distinct citations, without mutating input`, () => {
-    const items = Array.from({ length: count }, (_, index) => ({
-      text: `Пункт ${index + 1}.`, sourceIds: [`s${index * 2 + 1}`, `s${index * 2 + 2}`],
-    }))
-    const sources = items.flatMap(item => item.sourceIds).map(id => ({ id, url: `https://news.example/${id}` }))
+for (const schemaVersion of [3, 4]) {
+  for (const count of [0, 1, 2, 3, 4, 5, 6]) {
+    test(`v${schemaVersion} renders ${count} items as at most five bullets with up to ten distinct citations, without mutating input`, () => {
+      const items = Array.from({ length: count }, (_, index) => ({
+        text: `Пункт ${index + 1}.`, sentiment: "bullish", sourceIds: [`s${index * 2 + 1}`, `s${index * 2 + 2}`],
+      }))
+      const sources = items.flatMap(item => item.sourceIds).map(id => ({ id, url: `https://news.example/${id}` }))
+      const report = deepFreeze(fixture([], { marketBrief: brief({
+        schemaVersion, items, sources, events: [{ summary: "НЕ ИСПОЛЬЗОВАТЬ V1" }],
+      }) }))
+      const before = structuredClone(report)
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      const text = sectionHtml(release, "📰 Новостная сводка")
+      const bullets = [...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item)
+      assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `${schemaVersion === 4 ? "🟢 " : ""}${item.text} ${item.sourceIds
+        .map((id, citation) => `<a href="https://news.example/${id}">[${index * 2 + citation + 1}]</a>`).join(" ")}`))
+      assert.equal([...text.matchAll(/<a href=/gu)].length, Math.min(count, 5) * 2)
+      assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|Пункт 6\./u)
+      assert.deepEqual(buildTelegramRelease(report), release)
+      assert.deepEqual(report, before)
+    })
+  }
+
+  test(`v${schemaVersion} keeps stored order, escaped text and source-based numbering with at most two valid links per item`, () => {
     const report = deepFreeze(fixture([], { marketBrief: brief({
-      schemaVersion: 3, items, sources, events: [{ summary: "НЕ ИСПОЛЬЗОВАТЬ V1" }],
+      schemaVersion,
+      items: [
+        { text: " \n\t", sentiment: "bullish", sourceIds: ["c"] },
+        { text: "Первый <пункт> & \"цитата\".", sentiment: "bearish", sourceIds: ["missing", "unsafe", "b", "b", "a", "c"] },
+        { text: "Второй пункт.", sentiment: "bullish", sourceIds: ["c", "b"] },
+        { text: "Третий пункт.", sentiment: "neutral", sourceIds: ["d", "a"] },
+        { text: "Четвёртый пункт.", sentiment: "bearish", sourceIds: ["d"] },
+      ],
+      sources: [
+        { id: "d", url: "https://news.example/d" }, { id: "c", url: "https://news.example/c" },
+        { id: "a", url: "http://news.example/a" }, { id: "b", url: "https://news.example/b?x=1&y=2" },
+        { id: "unsafe", url: "javascript:alert(1)" },
+      ],
     }) }))
     const before = structuredClone(report)
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     const text = sectionHtml(release, "📰 Новостная сводка")
-    const bullets = [...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item)
-    assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `${item.text} ${item.sourceIds
-      .map((id, citation) => `<a href="https://news.example/${id}">[${index * 2 + citation + 1}]</a>`).join(" ")}`))
-    assert.equal([...text.matchAll(/<a href=/gu)].length, Math.min(count, 5) * 2)
-    assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|Пункт 6\./u)
+    assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+      ["🔴 ", "Первый &lt;пункт&gt; &amp; &quot;цитата&quot;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>"],
+      ["🟢 ", "Второй пункт. <a href=\"https://news.example/c\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>"],
+      ["⚪ ", "Третий пункт. <a href=\"https://news.example/d\">[4]</a> <a href=\"http://news.example/a\">[2]</a>"],
+      ["🔴 ", "Четвёртый пункт. <a href=\"https://news.example/d\">[4]</a>"],
+    ].map(([emoji, item]) => `${schemaVersion === 4 ? emoji : ""}${item}`))
+    assert.doesNotMatch(text, /javascript:|missing|\[5\]/u)
     assert.deepEqual(buildTelegramRelease(report), release)
     assert.deepEqual(report, before)
   })
+
+  test(`v${schemaVersion} missing or malformed items never fall back to archival paragraphs or events`, () => {
+    for (const items of [undefined, null, {}, "not an array"]) {
+      const report = fixture([], { marketBrief: brief({ schemaVersion, items, events: [{ summary: "НЕ ИСПОЛЬЗОВАТЬ V1" }] }) })
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      const text = sectionHtml(release, "📰 Новостная сводка")
+      assert.match(text, /Содержательная сводка не подготовлена; доступных данных недостаточно/u)
+      assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|<p>• /u)
+    }
+  })
 }
 
-test("v3 citations keep source-based numbering across items, deduplicate and take two valid links before assigning numbers", () => {
-  const report = fixture([], { marketBrief: brief({
-    schemaVersion: 3,
-    items: [
-      { text: " \n\t", sourceIds: ["c"] },
-      { text: "Первый <пункт> & \"цитата\".", sourceIds: ["missing", "unsafe", "b", "b", "a", "c"] },
-      { text: "Второй пункт.", sourceIds: ["c", "b"] },
-      { text: "Третий пункт.", sourceIds: ["d", "a"] },
-      { text: "Четвёртый пункт.", sourceIds: ["d"] },
-    ],
-    sources: [
-      { id: "d", url: "https://news.example/d" }, { id: "c", url: "https://news.example/c" },
-      { id: "a", url: "http://news.example/a" }, { id: "b", url: "https://news.example/b?x=1&y=2" },
-      { id: "unsafe", url: "javascript:alert(1)" },
-    ],
-  }) })
+for (const [schemaVersion, sentiment, emoji] of [[3, undefined, ""], [4, "bullish", "🟢 "], [4, "neutral", "⚪ "], [4, "bearish", "🔴 "]]) {
+  test(`v${schemaVersion} ${sentiment ?? "archival"} text keeps the 250 UTF-16 boundary excluding bullets, emojis, links and HTML escaping`, () => {
+    for (const [text, expected] of [
+      [`${"а ".repeat(124)}а`, `${"а ".repeat(124)}а`],
+      [`${"а ".repeat(124)}аб`, `${"а ".repeat(124)}аб`],
+      [`${"а ".repeat(124)}абв`, `${"а ".repeat(124)}а…`],
+      ["\"".repeat(250), "\"".repeat(250)],
+      [`${"<&\"".repeat(83)}!`, `${"<&\"".repeat(83)}!`],
+      ["🙂".repeat(125), "🙂".repeat(125)],
+      [`${"🙂".repeat(125)}!`, `${"🙂".repeat(124)}…`],
+      [`${"а".repeat(247)}🙂!!`, `${"а".repeat(247)}🙂…`],
+      ["а".repeat(1_000), `${"а".repeat(249)}…`],
+      [" \t\n Короткий\u0000 &   текст. \n", "Короткий & текст."],
+    ]) {
+      const report = fixture([], { marketBrief: brief({
+        schemaVersion, items: [{ text, sentiment, sourceIds: ["a", "b"] }],
+        sources: ["a", "b"].map(id => ({ id, url: `https://news.example/${id}` })),
+      }) })
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      const bullets = [...sectionHtml(release, "📰 Новостная сводка").matchAll(/<p>• ([\s\S]*?)<\/p>/gu)]
+        .map(([, item]) => visibleText(item))
+      assert.deepEqual(bullets, [`${emoji}${expected} [1] [2]`])
+      assert.ok(bullets[0].slice(emoji.length).replace(/ \[1\] \[2\]$/u, "").length <= 250)
+    }
+  })
+}
+
+test("v3 archives never infer sentiment labels from news text", () => {
+  const items = ["Позитивная новость о росте.", "Нейтральное обновление.", "Негативная новость о падении."]
+    .map(text => ({ text, sourceIds: ["s"] }))
+  const report = deepFreeze(fixture([], { marketBrief: brief({
+    schemaVersion: 3, items, sources: [{ id: "s", url: "https://news.example/s" }],
+  }) }))
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   const text = sectionHtml(release, "📰 Новостная сводка")
-  assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-    "Первый &lt;пункт&gt; &amp; &quot;цитата&quot;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>",
-    "Второй пункт. <a href=\"https://news.example/c\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
-    "Третий пункт. <a href=\"https://news.example/d\">[4]</a> <a href=\"http://news.example/a\">[2]</a>",
-    "Четвёртый пункт. <a href=\"https://news.example/d\">[4]</a>",
-  ])
-  assert.doesNotMatch(text, /javascript:|missing|\[5\]/u)
+  assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => visibleText(item)), items.map(item => `${item.text} [1]`))
+  assert.doesNotMatch(text, /🟢|⚪|🔴/u)
 })
 
-test("v3 text uses the 250 UTF-16 character boundary including spaces, excluding bullets, links and HTML escaping", () => {
-  for (const [text, expected] of [
-    [`${"а ".repeat(124)}а`, `${"а ".repeat(124)}а`],
-    [`${"а ".repeat(124)}аб`, `${"а ".repeat(124)}аб`],
-    [`${"а ".repeat(124)}абв`, `${"а ".repeat(124)}а…`],
-    ["\"".repeat(250), "\"".repeat(250)],
-    [`${"<&\"".repeat(83)}!`, `${"<&\"".repeat(83)}!`],
-    ["🙂".repeat(125), "🙂".repeat(125)],
-    [`${"🙂".repeat(125)}!`, `${"🙂".repeat(124)}…`],
-    [`${"а".repeat(247)}🙂!!`, `${"а".repeat(247)}🙂…`],
-    ["а".repeat(1_000), `${"а".repeat(249)}…`],
-    [" \t\n Короткий\u0000 &   текст. \n", "Короткий & текст."],
+test("v4 missing or invalid sentiment renders no emoji without defaulting or inferring classification", () => {
+  for (const overrides of [
+    {}, ...[undefined, null, "", "unknown", "positive", "negative", "Neutral", "neutral ", "toString", "constructor", "__proto__", 0, false, {}, ["neutral"]]
+      .map(sentiment => ({ sentiment })),
   ]) {
-    const report = fixture([], { marketBrief: brief({
-      schemaVersion: 3, items: [{ text, sourceIds: ["a", "b"] }],
-      sources: ["a", "b"].map(id => ({ id, url: `https://news.example/${id}` })),
-    }) })
-    const release = buildTelegramRelease(report)
-    assertManifest(release, report)
-    const bullets = [...sectionHtml(release, "📰 Новостная сводка").matchAll(/<p>• ([\s\S]*?)<\/p>/gu)]
-      .map(([, item]) => visibleText(item))
-    assert.deepEqual(bullets, [`${expected} [1] [2]`])
-    assert.ok(bullets[0].replace(/ \[1\] \[2\]$/u, "").length <= 250)
-  }
-})
-
-test("v3 missing or malformed items never fall back to archival paragraphs or events", () => {
-  for (const items of [undefined, null, {}, "not an array"]) {
-    const report = fixture([], { marketBrief: brief({ schemaVersion: 3, items, events: [{ summary: "НЕ ИСПОЛЬЗОВАТЬ V1" }] }) })
+    const report = deepFreeze(fixture([], { marketBrief: brief({
+      schemaVersion: 4, items: [{ text: "Позитивная новость <&\">.", sourceIds: ["s"], ...overrides }],
+      sources: [{ id: "s", url: "https://news.example/s" }],
+    }) }))
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     const text = sectionHtml(release, "📰 Новостная сводка")
-    assert.match(text, /Содержательная сводка не подготовлена; доступных данных недостаточно/u)
-    assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|<p>• /u)
+    assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+      "Позитивная новость &lt;&amp;&quot;&gt;. <a href=\"https://news.example/s\">[1]</a>",
+    ])
+    assert.doesNotMatch(text, /🟢|⚪|🔴/u)
   }
 })
 
@@ -740,13 +779,13 @@ for (const schemaVersion of [1, 2]) {
 
 test("missing, unsupported or mismatched market briefs never leak stale prose, links or publication windows", () => {
   for (const overrides of [
-    undefined, null, { schemaVersion: 4 },
-    ...[1, 2, 3].map(schemaVersion => ({ schemaVersion, marketAsOf: "2026-09-30T22:00:00.000Z" })),
+    undefined, null, ...[0, 5, 99, "4"].map(schemaVersion => ({ schemaVersion })),
+    ...[1, 2, 3, 4].map(schemaVersion => ({ schemaVersion, marketAsOf: "2026-09-30T22:00:00.000Z" })),
   ]) {
     const marketBrief = overrides
       ? brief({
           ...overrides, status: "partial", warning: "НЕ ПОКАЗЫВАТЬ ОГОВОРКУ",
-          items: [{ text: "НЕ ПОКАЗЫВАТЬ V3", sourceIds: ["s"] }],
+          items: [{ text: "НЕ ПОКАЗЫВАТЬ V3/V4", sentiment: "bearish", sourceIds: ["s"] }],
           paragraphs: [{ text: "НЕ ПОКАЗЫВАТЬ V2", sourceIds: ["s"] }],
           events: [{ summary: "НЕ ПОКАЗЫВАТЬ V1", sourceIds: ["s"] }],
           sources: [{ id: "s", url: "https://news.example/stale" }],
@@ -770,10 +809,10 @@ for (const [status, paragraphs, coverage, expected, absent] of [
   ["available", [{ text: "Доступная часть новостей." }], [{ source: "twitter", status: "failed", error: "PRIVATE-HTTP-429" }], /Доступная часть новостей\.[\s\S]*Покрытие новостных источников неполное/u, /PRIVATE-HTTP-429|Сводка недоступна/u],
   ["empty", [], [{ source: "tradingview", status: "partial" }], /нет сообщений для сводки[\s\S]*Покрытие новостных источников неполное/u, /Сводка недоступна/u],
 ]) {
-  for (const schemaVersion of [2, 3]) {
+  for (const schemaVersion of [2, 3, 4]) {
     test(`v${schemaVersion} brief ${status}, ${paragraphs.length} entries and ${coverage[0]?.status ?? "healthy"} coverage have distinct wording`, () => {
       const report = fixture([], { marketBrief: brief({
-        schemaVersion, status, paragraphs, items: paragraphs, coverage, warning: "Оговорка <&\"🙂>",
+        schemaVersion, status, paragraphs, items: paragraphs.map(item => ({ ...item, sentiment: "neutral" })), coverage, warning: "Оговорка <&\"🙂>",
       }) })
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
@@ -803,8 +842,10 @@ test("unsafe and huge saved source URLs are omitted without fetching or dropping
     `https://news.example/${"x".repeat(1_000)}`, "https://news.example/safe",
   ].map((url, index) => ({ id: `s${index}`, url }))
   const paragraphs = [{ text: "Сохранённое сообщение с ограничениями.", sourceIds: sources.map(source => source.id) }]
-  for (const schemaVersion of [2, 3]) {
-    const report = fixture([], { marketBrief: brief({ schemaVersion, sources, paragraphs, items: paragraphs }) })
+  for (const schemaVersion of [2, 3, 4]) {
+    const report = fixture([], { marketBrief: brief({
+      schemaVersion, sources, paragraphs, items: paragraphs.map(item => ({ ...item, sentiment: "bullish" })),
+    }) })
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     assert.match(release.richMessage.html, /Сохранённое сообщение с ограничениями\./u)
@@ -816,8 +857,8 @@ test("unsafe and huge saved source URLs are omitted without fetching or dropping
 })
 
 test("news publication window, market candle close and report creation are separate clocks", () => {
-  for (const schemaVersion of [2, 3]) {
-    const marketBrief = brief({ schemaVersion, items: [{ text: "Сохранённая сводка рынка.", sourceIds: [] }] })
+  for (const schemaVersion of [2, 3, 4]) {
+    const marketBrief = brief({ schemaVersion, items: [{ text: "Сохранённая сводка рынка.", sentiment: "neutral", sourceIds: [] }] })
     const report = fixture([coin("TEST", { topRank: 1 })], { marketBrief })
     const release = buildTelegramRelease(report)
     assertManifest(release, report)

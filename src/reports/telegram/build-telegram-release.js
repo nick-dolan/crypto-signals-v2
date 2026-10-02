@@ -108,7 +108,7 @@ function briefItemText (value) {
 
 function briefBlocks (report) {
   const brief = report.marketBrief
-  if (!brief || brief.marketAsOf !== report.asOf || ![1, 2, 3].includes(brief.schemaVersion)) {
+  if (!brief || brief.marketAsOf !== report.asOf || ![1, 2, 3, 4].includes(brief.schemaVersion)) {
     return ["Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий."]
   }
   const blocks = []
@@ -121,18 +121,18 @@ function briefBlocks (report) {
   } else {
     const paragraphs = brief.status === "empty"
       ? []
-      : brief.schemaVersion === 3
-        ? (isArray(brief.items) ? brief.items : []).slice(0, 5)
-        : brief.schemaVersion === 2
-          ? (isArray(brief.paragraphs) ? brief.paragraphs : []).slice(0, 2)
-          : (isArray(brief.events) ? brief.events : []).slice(0, 5).map(event => ({
-              text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(isString).join(" ")}`,
-              sourceIds: event.sourceIds,
-            }))
+      : [3, 4].includes(brief.schemaVersion)
+          ? (isArray(brief.items) ? brief.items : []).slice(0, 5)
+          : brief.schemaVersion === 2
+            ? (isArray(brief.paragraphs) ? brief.paragraphs : []).slice(0, 2)
+            : (isArray(brief.events) ? brief.events : []).slice(0, 5).map(event => ({
+                text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(isString).join(" ")}`,
+                sourceIds: event.sourceIds,
+              }))
     const sources = new Map((isArray(brief.sources) ? brief.sources : []).map(source => [source.id, source]))
     const numbers = new Map()
     const content = paragraphs.flatMap((paragraph) => {
-      const text = brief.schemaVersion === 3 ? briefItemText(paragraph.text) : telegramText(paragraph.text, 1_200)
+      const text = [3, 4].includes(brief.schemaVersion) ? briefItemText(paragraph.text) : telegramText(paragraph.text, 1_200)
       if (!text) {
         return []
       }
@@ -144,7 +144,14 @@ function briefBlocks (report) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      return [`${brief.schemaVersion === 3 ? "• " : ""}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      const emoji = brief.schemaVersion !== 4
+        ? ""
+        : paragraph.sentiment === "bullish"
+          ? "🟢 "
+          : paragraph.sentiment === "neutral"
+            ? "⚪ "
+            : paragraph.sentiment === "bearish" ? "🔴 " : ""
+      return [`${[3, 4].includes(brief.schemaVersion) ? "• " : ""}${emoji}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
       ? content

@@ -282,7 +282,7 @@ function addMarketBrief (report, schemaVersion = 2) {
     ],
     analysis: { model: "gemini-3.7-flash" },
   }
-  if (schemaVersion === 3) {
+  if ([3, 4].includes(schemaVersion)) {
     report.marketBrief.sources = Array.from({ length: 10 }, (_, index) => ({
       ...report.marketBrief.sources[index % 3],
       id: `source-${index + 1}`,
@@ -291,6 +291,7 @@ function addMarketBrief (report, schemaVersion = 2) {
     }))
     report.marketBrief.items = Array.from({ length: 5 }, (_, index) => ({
       text: `Новость ${index + 1}. Возможное влияние на рынок.`,
+      ...(schemaVersion === 4 ? { sentiment: ["bullish", "neutral", "bearish"][index % 3] } : {}),
       sourceIds: report.marketBrief.sources.slice(index * 2, index * 2 + 2).map(source => source.id),
     }))
   } else if (schemaVersion === 2) {
@@ -316,6 +317,84 @@ function briefEntries (byId) {
   const nodes = byId("market-brief-paragraphs").children
   return nodes[0]?.tagName === "UL" ? nodes[0].children : nodes
 }
+
+test("v4 adds accessible sentiment emojis before all five news, outside the 250-character text budget", () => {
+  const report = createReport()
+  const brief = addMarketBrief(report, 4)
+  brief.items = brief.items.map((item, index) => ({ ...item, text: `${index} ${"Я".repeat(248)}` }))
+  brief.items.push({ text: "Шестая новость", sentiment: "bullish", sourceIds: ["source-1"] })
+  const before = structuredClone(report)
+  const { byId, updateCalls, directRequests } = runReport(report)
+  const list = byId("market-brief-paragraphs").children[0]
+  assert.equal(list.tagName, "UL")
+  assert.equal(list.children.length, 5)
+  for (const [index, node] of list.children.entries()) {
+    const [icon, text, citations] = node.children
+    const [emoji, label] = [["🟢", "Буллиш"], ["⚪", "Нейтрал"], ["🔴", "Беариш"]][index % 3]
+    assert.equal(node.tagName, "LI")
+    assert.equal(icon.className, "market-brief-sentiment")
+    assert.equal(icon.textContent, `${emoji} `)
+    assert.equal(icon.attributes.get("role"), "img")
+    assert.equal(icon.attributes.get("aria-label"), `${label} — оценка события, не прогноз цены`)
+    assert.equal(icon.title, icon.attributes.get("aria-label"))
+    assert.equal(text.className, "market-brief-text")
+    assert.equal(text.textContent, brief.items[index].text)
+    assert.equal(text.textContent.length, 250)
+    assert.deepEqual(citations.children.map(link => link.textContent), [`[${index * 2 + 1}]`, `[${index * 2 + 2}]`])
+    assert.deepEqual(citations.children.map(link => link.href), brief.sources.slice(index * 2, index * 2 + 2).map(source => source.url))
+  }
+  assert.deepEqual(report, before)
+  assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  assert.deepEqual(updateCalls, [])
+  assert.deepEqual(directRequests, [])
+})
+
+test("v4 preserves all sentiment types, escaping and shared citations without reordering or changing scores", () => {
+  const report = createReport()
+  const brief = addMarketBrief(report, 4)
+  const unsafe = "<img src=x onerror=alert(1)><script>alert(1)</script>"
+  brief.items = ["bearish", "bullish", "neutral"].map((sentiment, index) => ({
+    text: `${index} ${unsafe}`, sentiment, sourceIds: ["source-2", `source-${index + 1}`],
+  }))
+  const before = structuredClone(report)
+  const { byId } = runReport(report)
+  const entries = briefEntries(byId)
+  assert.deepEqual(entries.map(node => node.children[0].textContent), ["🔴 ", "🟢 ", "⚪ "])
+  assert.deepEqual(entries.map(node => node.children[1].textContent), brief.items.map(item => item.text))
+  assert.deepEqual(entries.map(node => node.children[2].children.map(link => link.textContent)), [["[1]", "[2]"], ["[1]"], ["[1]", "[3]"]])
+  assert.ok(descendants(byId("market-brief-paragraphs")).every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
+  assert.deepEqual(report, before)
+})
+
+test("v4 missing or unknown sentiment is never silently rendered as neutral or executable markup", () => {
+  for (const sentiment of [undefined, null, "", "positive", "__proto__", "constructor", "<img src=x>", ["bullish"], {}]) {
+    const report = createReport()
+    const brief = addMarketBrief(report, 4)
+    brief.items = [{ ...brief.items[0], sentiment }]
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+    const [entry] = briefEntries(byId)
+    assert.equal(entry.children[0].className, "market-brief-text")
+    assert.equal(entry.children[0].textContent, brief.items[0].text)
+    assert.equal(entry.children[1].className, "market-brief-citations")
+    assert.equal(descendants(entry).some(node => node.className === "market-brief-sentiment" || node.tagName === "IMG"), false)
+    assert.deepEqual(report, before)
+  }
+})
+
+test("archived v1 to v3 briefs never acquire inferred sentiment labels", () => {
+  for (const schemaVersion of [1, 2, 3]) {
+    const report = createReport()
+    const brief = addMarketBrief(report, schemaVersion)
+    const entries = brief[{ 1: "events", 2: "paragraphs", 3: "items" }[schemaVersion]]
+    entries[0].sentiment = "bullish"
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+    assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-sentiment"), false)
+    assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /🟢|⚪|🔴/u)
+    assert.deepEqual(report, before)
+  }
+})
 
 test("v3 shows all five news in saved importance order as a genuine bullet list with ten accessible citations and no headings", () => {
   const report = createReport()
@@ -558,7 +637,7 @@ test("legacy v1 preserves full prose and inline unconfirmed prefixes without eve
 })
 
 test("market brief keeps its actual news window in metadata, including legacy 24-hour windows, not candle or generation times", () => {
-  for (const schemaVersion of [1, 2, 3]) {
+  for (const schemaVersion of [1, 2, 3, 4]) {
     for (const marketAsOf of [null, "2026-09-15T09:00:00.000Z"]) {
       const report = createReport()
       addMarketBrief(report, schemaVersion).marketAsOf = marketAsOf
@@ -597,7 +676,7 @@ test("older reports with no market brief hide the panel, with or without candida
   }
 })
 
-for (const schemaVersion of [1, 2, 3]) {
+for (const schemaVersion of [1, 2, 3, 4]) {
   test(`v${schemaVersion} partial bounded sampling is quiet and never displays stored technical warnings`, () => {
     const report = createReport()
     const brief = addMarketBrief(report, schemaVersion)
@@ -646,7 +725,7 @@ for (const schemaVersion of [1, 2, 3]) {
       const report = createReport([])
       const brief = addMarketBrief(report, schemaVersion)
       brief.status = status
-      brief[{ 1: "events", 2: "paragraphs", 3: "items" }[schemaVersion]] = []
+      brief[{ 1: "events", 2: "paragraphs", 3: "items", 4: "items" }[schemaVersion]] = []
       brief.warning = "RAW_WARNING: internal error"
       brief.analysis.warning = "RAW_ANALYSIS_WARNING: model failed"
       const { byId, charts, updateCalls, directRequests } = runReport(report)

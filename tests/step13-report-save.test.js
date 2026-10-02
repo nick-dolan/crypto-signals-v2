@@ -172,15 +172,17 @@ test("step 13 preserves all five news items and their sources in the immutable a
       })),
     }),
     callAgent: async () => JSON.stringify({
-      schemaVersion: 3, asOf: "2026-09-26T12:00:00.000Z",
+      schemaVersion: 4, asOf: "2026-09-26T12:00:00.000Z",
       items: Array.from({ length: 5 }, (_, index) => ({
-        text: `Короткая сводка </script> ${index + 1}`, sourceIds: [`source-${index + 1}`],
+        text: `Короткая сводка </script> ${index + 1}`, sentiment: ["bullish", "neutral", "bearish"][index % 3],
+        sourceIds: [`source-${index + 1}`],
       })),
     }),
   })
   assert.equal(brief.status, "available")
-  assert.equal(brief.schemaVersion, 3)
+  assert.equal(brief.schemaVersion, 4)
   assert.equal(brief.items.length, 5)
+  assert.deepEqual(brief.items.map(item => item.sentiment), ["bullish", "neutral", "bearish", "bullish", "neutral"])
   await fs.writeFile(path.join(directory, "tmp", "step12.1-market-brief.json"), JSON.stringify(brief))
   await runStep(directory)
   const store = await createReportStore({ directory: path.join(directory, "reports") })
