@@ -1153,6 +1153,30 @@ summary {
     margin-top: 8px;
 }
 
+.market-brief-item[data-sentiment] {
+    position: relative;
+    list-style: none;
+}
+
+.market-brief-sentiment {
+    position: absolute;
+    left: -16px;
+    top: 0.8em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transform: translateY(-50%);
+}
+
+.market-brief-item[data-sentiment="bullish"] .market-brief-sentiment {
+    background: var(--positive);
+}
+
+.market-brief-item[data-sentiment="bearish"] .market-brief-sentiment {
+    background: var(--negative);
+}
+
 .market-brief-citations {
     margin-left: 6px;
     white-space: nowrap;

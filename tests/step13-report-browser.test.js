@@ -318,7 +318,7 @@ function briefEntries (byId) {
   return nodes[0]?.tagName === "UL" ? nodes[0].children : nodes
 }
 
-test("v4 adds accessible sentiment emojis before all five news, outside the 250-character text budget", () => {
+test("v4 replaces native markers with accessible sentiment dots outside the 250-character text budget", () => {
   const report = createReport()
   const brief = addMarketBrief(report, 4)
   brief.items = brief.items.map((item, index) => ({ ...item, text: `${index} ${"Я".repeat(248)}` }))
@@ -327,13 +327,15 @@ test("v4 adds accessible sentiment emojis before all five news, outside the 250-
   const { byId, updateCalls, directRequests } = runReport(report)
   const list = byId("market-brief-paragraphs").children[0]
   assert.equal(list.tagName, "UL")
+  assert.equal(list.attributes.get("role"), "list")
   assert.equal(list.children.length, 5)
   for (const [index, node] of list.children.entries()) {
     const [icon, text, citations] = node.children
-    const [emoji, label] = [["🟢", "Буллиш"], ["⚪", "Нейтрал"], ["🔴", "Беариш"]][index % 3]
+    const [sentiment, label] = [["bullish", "Буллиш"], ["neutral", "Нейтрал"], ["bearish", "Беариш"]][index % 3]
     assert.equal(node.tagName, "LI")
+    assert.equal(node.dataset.sentiment, sentiment)
     assert.equal(icon.className, "market-brief-sentiment")
-    assert.equal(icon.textContent, `${emoji} `)
+    assert.equal(icon.textContent, "")
     assert.equal(icon.attributes.get("role"), "img")
     assert.equal(icon.attributes.get("aria-label"), `${label} — оценка события, не прогноз цены`)
     assert.equal(icon.title, icon.attributes.get("aria-label"))
@@ -359,7 +361,9 @@ test("v4 preserves all sentiment types, escaping and shared citations without re
   const before = structuredClone(report)
   const { byId } = runReport(report)
   const entries = briefEntries(byId)
-  assert.deepEqual(entries.map(node => node.children[0].textContent), ["🔴 ", "🟢 ", "⚪ "])
+  assert.deepEqual(entries.map(node => node.dataset.sentiment), ["bearish", "bullish", "neutral"])
+  assert.ok(entries.every(node => node.children[0].textContent === ""))
+  assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /🟢|⚪|🔴/u)
   assert.deepEqual(entries.map(node => node.children[1].textContent), brief.items.map(item => item.text))
   assert.deepEqual(entries.map(node => node.children[2].children.map(link => link.textContent)), [["[1]", "[2]"], ["[1]"], ["[1]", "[3]"]])
   assert.ok(descendants(byId("market-brief-paragraphs")).every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
@@ -374,6 +378,7 @@ test("v4 missing or unknown sentiment is never silently rendered as neutral or e
     const before = structuredClone(report)
     const { byId } = runReport(report)
     const [entry] = briefEntries(byId)
+    assert.equal(entry.dataset.sentiment, undefined)
     assert.equal(entry.children[0].className, "market-brief-text")
     assert.equal(entry.children[0].textContent, brief.items[0].text)
     assert.equal(entry.children[1].className, "market-brief-citations")
@@ -391,6 +396,7 @@ test("archived v1 to v3 briefs never acquire inferred sentiment labels", () => {
     const before = structuredClone(report)
     const { byId } = runReport(report)
     assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-sentiment"), false)
+    assert.ok(briefEntries(byId).every(node => node.dataset.sentiment === undefined))
     assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /🟢|⚪|🔴/u)
     assert.deepEqual(report, before)
   }

@@ -343,11 +343,12 @@
     const listItem = [3, 4].includes(schemaVersion)
     const node = element(listItem ? "li" : "p", listItem ? "market-brief-item" : "market-brief-paragraph")
     const sentiment = schemaVersion === 4 && [
-      ["bullish", "🟢", "Буллиш"], ["neutral", "⚪", "Нейтрал"], ["bearish", "🔴", "Беариш"],
+      ["bullish", "Буллиш"], ["neutral", "Нейтрал"], ["bearish", "Беариш"],
     ].find(([value]) => value === entry.sentiment)
     if (sentiment) {
-      const icon = element("span", "market-brief-sentiment", `${sentiment[1]} `)
-      icon.title = `${sentiment[2]} — оценка события, не прогноз цены`
+      node.dataset.sentiment = sentiment[0]
+      const icon = element("span", "market-brief-sentiment")
+      icon.title = `${sentiment[1]} — оценка события, не прогноз цены`
       icon.setAttribute("role", "img")
       icon.setAttribute("aria-label", icon.title)
       node.append(icon)
@@ -401,6 +402,8 @@
     const content = entries.map(entry => marketBriefEntry(entry, sources, numbers, brief.schemaVersion))
     if ([3, 4].includes(brief.schemaVersion) && content.length) {
       const list = element("ul", "market-brief-list")
+      // Safari needs an explicit list role when native markers are hidden.
+      list.setAttribute("role", "list")
       list.append(...content)
       byId("market-brief-paragraphs").replaceChildren(list)
     } else {
