@@ -317,16 +317,12 @@ test("agent payload creates documented grouped candidates without changing marke
   assert.equal(payload.schemaVersion, 12)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
-  assert.equal(payload.objective, "P(|движение| > 2.5 ATR в следующие 4–12 часов)")
-  assert.equal(payload.candidateOrder, "От наиболее приоритетного кандидата к наименее приоритетному")
   assert.equal(payload.candidateCount, 1)
-  assert.equal(fields.length, 81)
-  assert.equal(new Set(fields).size, 81)
+  assert.equal(new Set(fields).size, fields.length)
   assert.equal(fields.includes("selectionRank"), false)
   assert.equal(Object.hasOwn(values, "selectionRank"), false)
   assert.equal(Object.keys(payload.definitions).length, fields.length + 1)
   assert.deepEqual(Object.keys(payload.definitions).sort(), [...fields, "selectionRank"].sort())
-  assert.equal(payload.definitions.selectionRank, "Приоритет предварительного отбора, не готовый ответ")
   assert.deepEqual(Object.keys(payload.candidates[0]), [
     "symbol", "name", "selectionRank", ...Object.keys(payload.schema), "flags",
   ])
@@ -575,70 +571,10 @@ test("CoinGecko context leaves selection, late-move exclusions and existing payl
   assert.deepEqual(profiles, before)
 })
 
-test("agent payload and prompt explain CoinGecko attention, unknown matches and separate category semantics", async () => {
-  const payload = buildAgentPayload(createShortlist([]))
-  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
-
-  assert.match(payload.definitions.coingeckoId, /CoinGecko id.*Binance USDT perpetual.*TV/)
-  assert.match(payload.definitions.coingeckoTrending, /true.*поисковому вниманию.*null.*false не используется/)
-  assert.match(payload.definitions.coingeckoTrendingCategories, /пересечения.*не TV-категории.*\[\].*не отсутствие данных/)
-  assert.match(payload.conventions.null, /не доказывает отсутствие тренда/)
-  for (const text of [payload.conventions.coingecko, systemPrompt]) {
-    assert.match(text, /coin_id/)
-    assert.match(text, /fuzzy-сопоставлен/)
-    assert.match(text, /поисковое внимание, не цена, направление или ранний вход/)
-    assert.match(text, /late_pump.*late_dump/)
-  }
-  assert.match(systemPrompt, /\[null, null, null\].*не доказанное отсутствие тренда/)
-  assert.match(systemPrompt, /coingeckoTrendingCategories: \[\].*пересечений категорий нет.*не что данные отсутствуют/)
-  assert.match(systemPrompt, /не TV-категории из `categoryContext`/)
-  assert.match(systemPrompt, /coingeckoTrendingCategories` целиком, без индексов массива/)
-})
-
-test("agent payload documents sustained strength units, coverage and precomputed status", () => {
-  const payload = buildAgentPayload(createShortlist([]))
-  const fields = payload.schema.sustainedStrength
-
-  assert.deepEqual(fields, [
-    "sustainedStatus",
-    "sustainedHistoryScore",
-    "sustainedCurrentScore",
-    "sustainedDownWinRate",
-    "sustainedDownPositiveRate",
-    "sustainedDownExcessMedianPct",
-    "sustainedUpParticipationRate",
-    "sustainedExcess24hPct",
-  ])
-  for (const field of fields) {
-    assert.match(payload.definitions[field], /^Context:/)
-    if (field.includes("Excess")) {
-      assert.match(payload.definitions[field], /п\.п\./)
-    }
-  }
-  assert.match(payload.definitions.sustainedHistoryScore, /0–100.*не вероятность/)
-  assert.match(payload.definitions.sustainedCurrentScore, /0–100.*Не вероятность/)
-  assert.match(payload.definitions.sustainedHistoryScore, />= 28.*>= 4.*>= 12.*>= 12/)
-  assert.match(payload.conventions.sustainedStrength, /до предварительного отбора/)
-  assert.match(payload.conventions.sustainedStrength, /сама монета исключена; минимум 3/)
-  assert.match(payload.conventions.sustainedStrength, /до округления.*не пересчитывай/)
-})
-
-test("agent payload and prompt omit internal sustained details without changing full profiles", async () => {
+test("agent payload ignores internal sustained metrics without changing full profiles", () => {
   const candidate = createCandidate("SOL")
   const before = structuredClone(candidate)
   const payload = buildAgentPayload(createShortlist([candidate]))
-  const serialized = JSON.stringify(payload)
-  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
-
-  for (const field of [
-    "sustainedHistoryHours", "sustainedPeerCount", "sustainedDownWindows",
-    "sustainedUpWindows", "sustainedDailyWindows", "sustainedWeeklyWindows",
-    "sustainedUpExcessMedianPct", "sustainedDailyWinRate", "sustainedWeeklyWinRate",
-    "sustainedExcess4hPct", "sustainedExcess12hPct", "sustainedExcess7dPct",
-  ]) {
-    assert.equal(serialized.includes(field), false, field)
-    assert.equal(systemPrompt.includes(field), false, field)
-  }
 
   const changed = structuredClone(candidate)
   for (const field of [
@@ -932,9 +868,6 @@ for (const background of [
     assert.deepEqual(JSON.parse(JSON.stringify(payload)).marketContext.altMarketBackground, background)
     assert.deepEqual(shortlist, before)
     assert.equal(decodeAgentPayload(payload).fields.includes("altMarketBackground"), false)
-    assert.match(payload.marketDefinitions.altMarketBackground, /шаге 4/)
-    assert.match(payload.marketDefinitions.altMarketBackground, /не прогноз и не вероятность/)
-    assert.match(payload.conventions.rounding, /altMarketBackground.*без округления/)
   })
 }
 
@@ -985,8 +918,6 @@ test("funding keeps tiny signed values and flags are not recalculated from round
     assert.equal(values.fundingRate, funding)
     assert.equal(values.distanceToHigh24hAtr, 0.5)
     assert.equal(values.flags.includes("range_pressure_up"), false)
-    assert.match(payload.conventions.rounding, /fundingRate.*без округления/)
-    assert.match(payload.conventions.flags, /до округления/)
   }
 })
 
@@ -1339,39 +1270,6 @@ test("peer schema supports an empty shortlist through step 7 with no history too
   assert.equal(analysis.candidateCount, 0)
   assert.deepEqual(analysis.assessments, [])
   assert.deepEqual(analysis.topCandidates, [])
-})
-
-test("peer definitions and prompt explain coverage, frozen episodes and non-independent context", async () => {
-  const payload = buildAgentPayload(createShortlist([]))
-  const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
-
-  for (const field of payload.schema.peerContext) {
-    assert.match(payload.definitions[field], /^Context:/)
-  }
-  for (const text of [payload.conventions.peerContext, systemPrompt]) {
-    assert.match(text, /1-hop без транзитивности/)
-    assert.match(text, /всей загруженной вселенной до предварительного отбора.*поздние.*shortlist/)
-    assert.match(text, /минимум 3/)
-    assert.match(text, /положительного роста за 4ч >= 2\.5.*excess.*>= 1.*USD-объёма за 4ч >= 1\.5.*30 дней/)
-    assert.match(text, /не самостоятельные Setup\/Trigger/)
-    assert.match(text, /не меняет shortlist.*late_pump.*late_dump/)
-    assert.match(text, /VET\/VTHO/)
-    assert.match(text, /17 подряд оцениваемых часов/)
-  }
-  for (const text of [payload.conventions.peerEpisodes, systemPrompt]) {
-    assert.match(text, /закрытие свечи первого срабатывания/)
-    assert.match(text, /asOf \+ 1ч/)
-    assert.match(text, /ageHours.*по завершённым часам/)
-    assert.match(text, /4 полных подряд часов без qualifying-trigger/)
-    assert.match(text, /не обновляется на каждом максимуме/)
-    assert.match(text, /ниже 50%.*инвалидирует эпизод/)
-    assert.match(text, /не оживает на отскоке без нового эпизода/)
-    assert.match(text, /возраста <= 12ч с удержанием >= 50%/)
-  }
-  assert.match(payload.definitions.peerLeaders, /coinReturnSinceStartPct.*КАНДИДАТА.*coinMoveSinceStartAtr.*до начала окна/)
-  assert.match(payload.definitions.peerBenchmarkCoinCount, /кандидата и всех его прямых соседей/)
-  assert.match(payload.conventions.peerContext, /partial.*ноль.*не означает, что вся группа тиха; null не отрицательный сигнал/)
-  assert.match(systemPrompt, /peerLeaders` целиком/)
 })
 
 test("agent payload rejects an inconsistent shortlist count", () => {

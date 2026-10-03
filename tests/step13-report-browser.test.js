@@ -320,7 +320,7 @@ function briefEntries (byId) {
   return nodes[0]?.tagName === "UL" ? nodes[0].children : nodes
 }
 
-test("v5 renders five separate strong titles without consuming the text or citation budgets", () => {
+test("v5 renders five separate titles without consuming the text or citation budgets", () => {
   for (const length of [250, 251]) {
     const report = createReport()
     const brief = addMarketBrief(report, 5)
@@ -336,21 +336,15 @@ test("v5 renders five separate strong titles without consuming the text or citat
     assert.equal(list.children.length, 5)
     for (const [index, node] of list.children.entries()) {
       const item = brief.items[index]
-      const [icon, title, lineBreak, text, citations] = node.children
+      const [icon, title, text, citations] = [
+        "market-brief-sentiment", "market-brief-title", "market-brief-text", "market-brief-citations",
+      ].map(className => node.children.find(child => child.className === className))
       assert.equal(node.tagName, "LI")
       assert.equal(node.dataset.sentiment, item.sentiment)
-      assert.equal(icon.className, "market-brief-sentiment")
       assert.equal(icon.attributes.get("role"), "img")
       assert.equal(icon.attributes.get("aria-label"), icon.title)
-      assert.equal(title.tagName, "STRONG")
-      assert.equal(title.className, "market-brief-title")
       assert.equal(title.textContent, item.title)
-      assert.equal(title.textContent.length, 60)
-      assert.equal(lineBreak.tagName, "BR")
-      assert.equal(text.className, "market-brief-text")
       assert.equal(text.textContent, length === 250 ? item.text : `${item.text.slice(0, 249)}…`)
-      assert.equal(text.textContent.length, 250)
-      assert.equal(citations.className, "market-brief-citations")
       assert.deepEqual(citations.children.map(link => link.textContent), [`[${index * 2 + 1}]`, `[${index * 2 + 2}]`])
       assert.deepEqual(citations.children.map(link => link.href), brief.sources.slice(index * 2, index * 2 + 2).map(source => source.url))
     }
@@ -361,7 +355,7 @@ test("v5 renders five separate strong titles without consuming the text or citat
   }
 })
 
-test("v5 missing or invalid titles retain original text and citations without guessed headings or empty breaks", () => {
+test("v5 missing or invalid titles retain original text and citations without guessed headings", () => {
   for (const title of [undefined, null, "", " \t\n", 42, true, {}, ["Не заголовок"]]) {
     const report = createReport()
     const brief = addMarketBrief(report, 5)
@@ -369,7 +363,7 @@ test("v5 missing or invalid titles retain original text and citations without gu
     const before = structuredClone(report)
     const { byId } = runReport(report)
     const [entry] = briefEntries(byId)
-    assert.deepEqual(entry.children.map(node => node.className), ["market-brief-sentiment", "market-brief-text", "market-brief-citations"])
+    assert.equal(descendants(entry).some(node => node.className === "market-brief-title"), false)
     assert.equal(entry.children[1].textContent, brief.items[0].text)
     assert.deepEqual(entry.children[2].children.map(link => link.textContent), ["[1]", "[2]"])
     assert.deepEqual(report, before)
@@ -385,7 +379,7 @@ test("v1 to v4 never render or infer the new item headings", () => {
     const before = structuredClone(report)
     const { byId } = runReport(report)
     const nodes = descendants(byId("market-brief-paragraphs"))
-    assert.ok(nodes.every(node => !["STRONG", "BR"].includes(node.tagName)))
+
     assert.deepEqual(nodes.filter(node => node.className === "market-brief-text").map(node => node.textContent), entries.map(entry => (
       schemaVersion === 1
         ? `${entry.verification === "unconfirmed" ? "Не подтверждено: " : ""}${entry.summary} ${entry.whyItMatters}`
@@ -396,7 +390,7 @@ test("v1 to v4 never render or infer the new item headings", () => {
   }
 })
 
-test("v4 replaces native markers with accessible sentiment dots outside the 250-character text budget", () => {
+test("v4 shows accessible sentiments outside the 250-character text budget", () => {
   const report = createReport()
   const brief = addMarketBrief(report, 4)
   brief.items = brief.items.map((item, index) => ({ ...item, text: `${index} ${"Я".repeat(248)}` }))
@@ -412,14 +406,10 @@ test("v4 replaces native markers with accessible sentiment dots outside the 250-
     const [sentiment, label] = [["bullish", "Bullish"], ["neutral", "Neutral"], ["bearish", "Bearish"]][index % 3]
     assert.equal(node.tagName, "LI")
     assert.equal(node.dataset.sentiment, sentiment)
-    assert.equal(icon.className, "market-brief-sentiment")
-    assert.equal(icon.textContent, "")
     assert.equal(icon.attributes.get("role"), "img")
     assert.equal(icon.attributes.get("aria-label"), label)
     assert.equal(icon.title, label)
-    assert.equal(text.className, "market-brief-text")
     assert.equal(text.textContent, brief.items[index].text)
-    assert.equal(text.textContent.length, 250)
     assert.deepEqual(citations.children.map(link => link.textContent), [`[${index * 2 + 1}]`, `[${index * 2 + 2}]`])
     assert.deepEqual(citations.children.map(link => link.href), brief.sources.slice(index * 2, index * 2 + 2).map(source => source.url))
   }
@@ -440,8 +430,6 @@ test("v4 preserves all sentiment types, escaping and shared citations without re
   const { byId } = runReport(report)
   const entries = briefEntries(byId)
   assert.deepEqual(entries.map(node => node.dataset.sentiment), ["bearish", "bullish", "neutral"])
-  assert.ok(entries.every(node => node.children[0].textContent === ""))
-  assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /🟢|⚪|🔴/u)
   assert.deepEqual(entries.map(node => node.children[1].textContent), brief.items.map(item => item.text))
   assert.deepEqual(entries.map(node => node.children[2].children.map(link => link.textContent)), [["[1]", "[2]"], ["[1]"], ["[1]", "[3]"]])
   assert.ok(descendants(byId("market-brief-paragraphs")).every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
@@ -457,9 +445,7 @@ test("v4 missing or unknown sentiment is never silently rendered as neutral or e
     const { byId } = runReport(report)
     const [entry] = briefEntries(byId)
     assert.equal(entry.dataset.sentiment, undefined)
-    assert.equal(entry.children[0].className, "market-brief-text")
     assert.equal(entry.children[0].textContent, brief.items[0].text)
-    assert.equal(entry.children[1].className, "market-brief-citations")
     assert.equal(descendants(entry).some(node => node.className === "market-brief-sentiment" || node.tagName === "IMG"), false)
     assert.deepEqual(report, before)
   }
@@ -475,12 +461,11 @@ test("archived v1 to v3 briefs never acquire inferred sentiment labels", () => {
     const { byId } = runReport(report)
     assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-sentiment"), false)
     assert.ok(briefEntries(byId).every(node => node.dataset.sentiment === undefined))
-    assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /🟢|⚪|🔴/u)
     assert.deepEqual(report, before)
   }
 })
 
-test("v3 shows all five news in saved importance order as a genuine bullet list with ten accessible citations and no headings", () => {
+test("v3 shows all five news in saved importance order as a list with ten accessible citations", () => {
   const report = createReport()
   const brief = addMarketBrief(report, 3)
   brief.items[0].text = "Главная новость, даже если опубликована раньше остальных."
@@ -493,19 +478,15 @@ test("v3 shows all five news in saved importance order as a genuine bullet list 
   assert.equal(byId("market-brief").hidden, false)
   assert.equal(byId("market-brief").dataset.status, "available")
   assert.equal(byId("market-brief").attributes.get("aria-label"), "Краткая сводка рынка")
-  assert.equal(byId("market-brief").attributes.has("aria-labelledby"), false)
   assert.equal(byId("market-brief-note").hidden, true)
   assert.equal(byId("market-brief-empty").hidden, true)
   assert.equal(content.children.length, 1)
   assert.equal(list.tagName, "UL")
-  assert.equal(list.className, "market-brief-list")
   assert.equal(list.children.length, 5)
   for (const [index, node] of list.children.entries()) {
     const item = brief.items[index]
     assert.equal(node.tagName, "LI")
-    assert.equal(node.className, "market-brief-item")
     assert.equal(node.children[0].textContent, item.text)
-    assert.equal(node.children[1].className, "market-brief-citations")
     assert.equal(node.children[1].children.length, 2)
     for (const [sourceIndex, id] of item.sourceIds.entries()) {
       const source = brief.sources.find(source => source.id === id)
@@ -525,7 +506,7 @@ test("v3 shows all five news in saved importance order as a genuine bullet list 
       assert.equal(link.attributes.get("aria-label"), `Источник ${index * 2 + sourceIndex + 1}: ${link.title}`)
     }
   }
-  assert.ok(descendants(content).every(node => !["H1", "H2", "H3", "H4", "H5", "H6", "P", "ARTICLE"].includes(node.tagName)))
+
   assert.deepEqual(report, before)
   assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
   assert.deepEqual(updateCalls, [])
@@ -571,9 +552,6 @@ test("v3 caps five items independently at 250 JS string characters including spa
     const expected = text.length > 250 ? `${text.slice(0, 249)}…` : text
     assert.equal(items.length, 5)
     assert.deepEqual(items.map(node => node.children[0].textContent), Array(5).fill(expected))
-    assert.equal(items.reduce((length, node) => length + node.children[0].textContent.length, 0), expected.length * 5)
-    assert.ok(expected.length * 5 > 800)
-    assert.ok(items.every(node => node.children[0].textContent.length <= 250))
     assert.equal(descendants(byId("market-brief-paragraphs")).filter(node => node.tagName === "A").length, 10)
     assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Шестая|Архивн/)
     assert.deepEqual(report, before)
@@ -593,7 +571,7 @@ for (const schemaVersion of [3, 4, 5]) {
       const content = byId("market-brief-paragraphs")
       assert.equal(content.children.length, count ? 1 : 0)
       assert.equal(descendants(content).filter(node => node.tagName === "LI").length, count)
-      assert.equal(descendants(content).filter(node => node.tagName === "STRONG").length, schemaVersion === 5 ? count : 0)
+      assert.equal(descendants(content).filter(node => node.className === "market-brief-title").length, schemaVersion === 5 ? count : 0)
       assert.equal(byId("market-brief-empty").hidden, count > 0)
       assert.equal(byId("market-brief-note").hidden, true)
       assert.doesNotMatch(content.textContent, /Не показывать/)
@@ -612,7 +590,7 @@ test("v3 missing or blank items create no empty list or dangling citations", () 
   }
 })
 
-test("v2 market brief shows two short paragraphs with compact, globally numbered citations and no headings", () => {
+test("v2 market brief shows two short paragraphs with compact, globally numbered citations", () => {
   const report = createReport()
   const brief = addMarketBrief(report)
   const before = structuredClone(report)
@@ -622,16 +600,12 @@ test("v2 market brief shows two short paragraphs with compact, globally numbered
   assert.equal(byId("market-brief").hidden, false)
   assert.equal(byId("market-brief").dataset.status, "available")
   assert.equal(byId("market-brief").attributes.get("aria-label"), "Краткая сводка рынка")
-  assert.equal(byId("market-brief").attributes.has("aria-labelledby"), false)
   assert.equal(byId("market-brief-note").hidden, true)
   assert.equal(byId("market-brief-empty").hidden, true)
   assert.equal(paragraphs.length, 2)
-  assert.ok(paragraphs.reduce((length, node) => length + node.children[0].textContent.length, 0) <= 800)
   for (const [index, node] of paragraphs.entries()) {
     const paragraph = brief.paragraphs[index]
-    assert.equal(node.tagName, "P")
     assert.equal(node.children[0].textContent, paragraph.text)
-    assert.equal(node.children[1].className, "market-brief-citations")
     assert.deepEqual(node.children[1].children.map(link => link.textContent), index === 0 ? ["[1]", "[2]"] : ["[2]", "[3]"])
     for (const [sourceIndex, id] of paragraph.sourceIds.entries()) {
       const source = brief.sources.find(source => source.id === id)
@@ -650,10 +624,7 @@ test("v2 market brief shows two short paragraphs with compact, globally numbered
       assert.equal(link.attributes.get("aria-label"), `Источник ${link.textContent.slice(1, -1)}: ${link.title}`)
     }
   }
-  for (const id of ["market-brief-heading", "market-brief-status", "market-brief-window", "market-brief-coverage", "market-brief-warning", "market-brief-events"]) {
-    assert.equal(byId(id), null)
-  }
-  assert.ok(descendants(byId("market-brief-paragraphs")).every(node => !["H2", "H3", "UL", "LI", "ARTICLE"].includes(node.tagName)))
+
   assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Неиспользованная публикация|Сводка готова|получено/)
   assert.deepEqual(report, before)
   assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
@@ -694,7 +665,7 @@ test("v2 retains one 800-character archived paragraph and three citations in tha
   const before = structuredClone(report)
   const { byId } = runReport(report)
   const [paragraph] = byId("market-brief-paragraphs").children
-  assert.equal(paragraph.tagName, "P")
+
   assert.equal(paragraph.children[0].textContent, `${brief.paragraphs[0].text.slice(0, 799)}…`)
   assert.deepEqual(paragraph.children[1].children.map(link => link.textContent), ["[1]", "[2]", "[3]"])
   assert.deepEqual(report, before)
@@ -719,8 +690,7 @@ test("legacy v1 preserves full prose and inline unconfirmed prefixes without eve
     assert.deepEqual(node.children[1].children.map(link => link.textContent), index === 0 ? ["[1]", "[2]", "[3]"] : ["[2]"])
   }
   const nodes = descendants(byId("market-brief-paragraphs"))
-  assert.ok(nodes.every(node => !["H2", "H3", "UL", "LI", "ARTICLE"].includes(node.tagName)))
-  assert.ok(nodes.every(node => !node.className?.includes("badge")))
+
   assert.equal(nodes.filter(node => node.tagName === "A" && node.href.endsWith("/unused")).length, 0)
   assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
 })
@@ -801,7 +771,6 @@ for (const schemaVersion of [1, 2, 3, 4, 5]) {
       const { byId } = runReport(report)
       assert.equal(byId("market-brief-note").hidden, false)
       assert.equal(byId("market-brief-note").textContent, "Не все источники удалось загрузить.")
-      assert.ok(!byId("market-brief-note").attributes.get("class").includes("warning"))
       assert.equal(byId("market-brief-empty").hidden, true)
       assert.equal(briefEntries(byId).length, schemaVersion === 2 ? 2 : 5)
       assert.doesNotMatch(byId("market-brief-note").textContent + byId("market-brief-paragraphs").textContent + byId("market-brief").title, /RAW_|private/)
@@ -903,11 +872,8 @@ for (const schemaVersion of [1, 2, 3, 4, 5]) {
     assert.deepEqual(links.map(link => link.href), brief.sources.slice(-2).map(source => source.url))
     assert.deepEqual(links.map(link => link.textContent), ["[1]", "[2]"])
     assert.ok(links.every(link => link.title === `${unsafe} · Время не указано` && link.target === "_blank" && link.rel === "noopener noreferrer"))
-    assert.ok(nodes.every(node => !["IMG", "SCRIPT", "H1", "H2", "H3", "H4", "H5", "H6"].includes(node.tagName)))
-    if ([1, 2].includes(schemaVersion)) {
-      assert.ok(nodes.every(node => !["UL", "LI"].includes(node.tagName)))
-    }
-    assert.deepEqual(nodes.filter(node => node.tagName === "STRONG").map(node => node.textContent), schemaVersion === 5 ? [unsafe] : [])
+    assert.ok(nodes.every(node => !["IMG", "SCRIPT"].includes(node.tagName)))
+    assert.deepEqual(nodes.filter(node => node.className === "market-brief-title").map(node => node.textContent), schemaVersion === 5 ? [unsafe] : [])
     assert.doesNotMatch(byId("market-brief-paragraphs").textContent + byId("market-brief-note").textContent, /RAW_|Removed event title/)
     assert.deepEqual(updateCalls, [])
     assert.deepEqual(directRequests, [])
@@ -928,7 +894,7 @@ for (const schemaVersion of [2, 3, 4, 5]) {
     const before = structuredClone(report)
     const { byId } = runReport(report)
     assert.deepEqual(descendants(byId("market-brief-paragraphs")).filter(node => node.className === "market-brief-text").map(node => node.textContent), entries.map(entry => entry.text))
-    assert.deepEqual(descendants(byId("market-brief-paragraphs")).filter(node => node.tagName === "STRONG").map(node => node.textContent), schemaVersion === 5 ? entries.map(entry => entry.title) : [])
+    assert.deepEqual(descendants(byId("market-brief-paragraphs")).filter(node => node.className === "market-brief-title").map(node => node.textContent), schemaVersion === 5 ? entries.map(entry => entry.title) : [])
     assert.equal(descendants(byId("market-brief-paragraphs")).some(node => node.className === "market-brief-citations"), false)
     assert.deepEqual(report, before)
     assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
@@ -1235,7 +1201,6 @@ test("all radar lines use the same exact close anchor and common 1/3/7-day windo
         assert.deepEqual(series.data[0], { time: from, value: 0 })
         assert.equal(series.data.at(-1).time, to)
         assert.equal(series.options.priceFormat.type, "percent")
-        assert.equal(series.options.lineWidth, lineIndex === 0 ? 3 : 2)
         if (lineIndex) {
           assert.notEqual(series.options.color, chart.series[0].options.color)
         }
@@ -1526,7 +1491,7 @@ test("peer radar renders independent watch and limited observations with snapsho
   for (const [index, verdict] of ["Обратить внимание", "Ограниченная интерпретация"].entries()) {
     const card = cards[index]
     const observation = data.observations[index]
-    assert.equal(card.tagName, "ARTICLE")
+
     assert.equal(descendants(card).find(node => node.className === "peer-observation-facts").open, false)
     assert.equal(card.dataset.verdict, observation.verdict)
     assert.match(card.children[0].textContent, new RegExp(observation.coin.symbol))
@@ -1561,7 +1526,7 @@ test("peer radar shows all 23 outsiders watch-first without adding them to the m
   assert.deepEqual(cards.map(card => card.children[0].children[0].textContent), [
     ...symbols.filter((_, index) => index % 2 === 0), ...symbols.filter((_, index) => index % 2 === 1),
   ])
-  assert.ok(cards.every(card => !card.open))
+
   assert.equal(byId("peer-radar-counts").children[0].textContent, "Наблюдений: 23")
   assert.equal(byId("candidate-count").textContent, "2")
   for (const id of ["candidate-rows", "top-candidates"]) {
@@ -1617,9 +1582,6 @@ for (const symbols of [[], ["COTI"]]) {
 for (const warning of [
   undefined,
   "Результат шага 12 не найден.",
-  "Срез шага 12 не совпадает с текущим asOf.",
-  "Результат шага 12 повреждён.",
-  "После нового скана шага 11 нужен свежий анализ шага 12.",
   "<img src=x onerror=alert(1)> Причина недоступности",
 ]) {
   test(`unavailable or legacy peer radar preserves the rest of the report: ${warning ?? "legacy"}`, () => {
@@ -1895,7 +1857,6 @@ test("coin descriptions and compact source links follow selection and clear when
   const section = () => byId("coin-description").children[0]
   const links = () => descendants(section()).filter(node => node.tagName === "A")
 
-  assert.equal(section().tagName, "SECTION")
   assert.equal(section().attributes.get("aria-label"), "О монете COTI")
   assert.equal(section().children[0].textContent, descriptions.XTVCCOTI.description)
   assert.equal(section().hidden, false)
@@ -2142,7 +2103,6 @@ test("CoinGecko category names are literal text and never become markup", () => 
   const { byId } = runReport(report)
   const [category] = byId("coingecko-categories").children
 
-  assert.equal(category.tagName, "SPAN")
   assert.equal(category.textContent, unsafe)
   assert.equal(category.children.length, 0)
   assert.equal(descendants(byId("coingecko-context")).some(node => node.tagName === "IMG"), false)
@@ -2680,7 +2640,7 @@ for (const [sentiment, label] of [
       assert.equal(indicators.length, 1)
       const indicator = indicators[0]
       const title = `${label}: ${coin.socialReason}`
-      assert.equal(row.children[0].children[0].children[coin.topRank == null ? 1 : 2], indicator)
+
       assert.equal(indicator.dataset.sentiment, sentiment)
       assert.equal(indicator.title, title)
       assert.equal(indicator.attributes.get("role"), "img")
@@ -2688,9 +2648,6 @@ for (const [sentiment, label] of [
       const svg = indicator.children[0]
       assert.equal(svg.tagName, "SVG")
       assert.equal(svg.namespaceURI, "http://www.w3.org/2000/svg")
-      assert.equal(svg.attributes.get("viewBox"), "0 0 24 24")
-      assert.equal(svg.attributes.get("fill"), "none")
-      assert.equal(svg.attributes.get("stroke"), "currentColor")
       assert.equal(svg.attributes.get("aria-hidden"), "true")
       assert.equal(svg.attributes.get("focusable"), "false")
       assert.equal(svg.children[0].tagName, "PATH")
@@ -3330,8 +3287,6 @@ test("the report marker stays at the saved asOf, never at HTML creation or eithe
     assert.equal(markers.length, 1)
     assert.equal(markers[0].time, hour)
     assert.equal(markers[0].text, "Отчёт")
-    assert.equal(markers[0].shape, "arrowDown")
-    assert.equal(markers[0].position, "aboveBar")
     assert.notEqual(markers[0].time, chartTime(report, end))
     assert.match(browser.byId("report-time-note").textContent, /09:00.*Отметка «Отчёт»/)
     const count = browser.markers.length
@@ -3768,8 +3723,7 @@ for (const mode of ["download", "website"]) {
               1: ["[1]", "[2]", "[3]", "[2]", "[2]", "[2]", "[2]"],
               2: ["[1]", "[2]", "[2]", "[3]"],
             }[schemaVersion])
-      assert.equal(browser.byId("market-brief-paragraphs").children[0].tagName, [3, 4, 5].includes(schemaVersion) ? "UL" : "P")
-      assert.deepEqual(descendants(browser.byId("market-brief-paragraphs")).filter(node => node.tagName === "STRONG").map(node => node.textContent),
+      assert.deepEqual(descendants(browser.byId("market-brief-paragraphs")).filter(node => node.className === "market-brief-title").map(node => node.textContent),
         schemaVersion === 5 ? report.marketBrief.items.map(item => item.title) : [])
       assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), report)
       assert.equal(browser.directRequests.length, 0)

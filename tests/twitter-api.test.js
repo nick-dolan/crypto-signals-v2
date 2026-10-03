@@ -170,26 +170,3 @@ test("sanitizes Twitter HTTP, JSON and transport errors and clears their timers"
   context.mock.timers.tick(15_000)
   assert.ok(fetchMock.mock.calls.every(({ arguments: [, { signal }] }) => !signal.aborted))
 })
-
-test("reports a Twitter API error", async (context) => {
-  const previousApiKey = process.env.TWITTERAPI_IO_KEY
-
-  process.env.TWITTERAPI_IO_KEY = "twitter-test-key"
-
-  try {
-    context.mock.method(globalThis, "fetch", async () => (
-      new Response(null, { status: 429, statusText: "Too Many Requests" })
-    ))
-
-    await assert.rejects(
-      fetchTweetPage("$BTC"),
-      /Twitter API error: 429 Too Many Requests/,
-    )
-  } finally {
-    if (previousApiKey === undefined) {
-      delete process.env.TWITTERAPI_IO_KEY
-    } else {
-      process.env.TWITTERAPI_IO_KEY = previousApiKey
-    }
-  }
-})

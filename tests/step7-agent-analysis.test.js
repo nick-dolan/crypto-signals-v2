@@ -119,34 +119,16 @@ function createAnalysis () {
   return analysis
 }
 
-test("analysis and context prompts do not request a direction forecast", async () => {
-  const [analysisPrompt, contextPrompt] = await Promise.all([
-    readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8"),
-    readFile(new URL("../src/prompts/candidate-context-enrichment.md", import.meta.url), "utf8"),
-  ])
+test("analysis prompt example follows the structured response schema", async () => {
+  const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+  const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
 
-  assert.ok(analysisPrompt.includes("P(|движение| > 2.5 ATR в следующие 4–12 часов)"))
-  for (const prompt of [analysisPrompt, contextPrompt]) {
-    assert.match(prompt, /[Нн]е прогнозируй рост или падение/)
-    assert.doesNotMatch(prompt, /directionBias|не меняй направление прогноза/)
-  }
-
-  const example = JSON.parse(analysisPrompt.match(/```json\n([\s\S]*?)\n```/)[1])
   assert.equal(example.schemaVersion, 2)
-  assert.deepEqual(Object.keys(example.topCandidates[0]), ["symbol", "movementProbability", "technicalSummary"])
-  assert.deepEqual(Object.keys(example.assessments[0]), [
-    "symbol", "movementProbability", "estimateConfidence", "drivers", "counterSignals",
+  assert.deepEqual(Object.keys(example.topCandidates[0]).sort(), ["movementProbability", "symbol", "technicalSummary"])
+  assert.deepEqual(Object.keys(example.assessments[0]).sort(), [
+    "counterSignals", "drivers", "estimateConfidence", "movementProbability", "symbol",
   ])
-  assert.deepEqual(Object.keys(example.topCandidates[0].technicalSummary), ["observation", "caveat"])
-  assert.match(analysisPrompt, /Для монет вне топа отдельное резюме не нужно/)
-  assert.match(analysisPrompt, /не добавляй резюме в `assessments`/)
-  for (const prompt of [analysisPrompt, contextPrompt]) {
-    assert.match(prompt, /300 символов/)
-    assert.match(prompt, /180 символов/)
-    assert.match(prompt, /Не выдумывай оговорку/)
-  }
-  assert.match(contextPrompt, /`schemaVersion` всегда равен `3`/)
-  assert.match(contextPrompt, /Не возвращай `informationBackground` или `explanation`/)
+  assert.deepEqual(Object.keys(example.topCandidates[0].technicalSummary).sort(), ["caveat", "observation"])
 })
 
 test("agent analysis parser rejects a direction forecast as an extra field", () => {

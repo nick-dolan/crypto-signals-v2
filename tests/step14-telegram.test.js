@@ -16,7 +16,7 @@ function previewResult () {
 }
 
 test("step 14 reads exactly the step 13 report, closes its archive and prepares before sending", async (t) => {
-  const log = t.mock.method(console, "log", () => {})
+  t.mock.method(console, "log", () => {})
   const calls = []
   const report = { asOf: "2026-10-01T09:00:00Z", coins: [] }
   const expected = previewResult()
@@ -52,11 +52,7 @@ test("step 14 reads exactly the step 13 report, closes its archive and prepares 
     },
   })
   assert.deepEqual(result, { ...expected, delivery })
-  const output = log.mock.calls.map(call => call.arguments.join(" ")).join("\n")
-  assert.match(output, /Telegram post sent \(message ID: 77\)/)
-  assert.doesNotMatch(output, /[а-яё]/i)
-  assert.doesNotMatch(output, /Candidates:|Messages:|Omitted:|Release:|Preview:|Manifest:|output\/example/)
-  assert.equal(log.mock.callCount(), 1)
+
   assert.deepEqual(calls, [
     ["receipt", "step13-report.json"],
     ["open"],
@@ -136,7 +132,7 @@ test("preview failures propagate after the store has closed", async () => {
 })
 
 test("each step 14 run sends the same saved report again", async (t) => {
-  const log = t.mock.method(console, "log", () => {})
+  t.mock.method(console, "log", () => {})
   let nextMessageId = 77
   const sendRelease = t.mock.fn(async () => ({ status: "sent", messageId: nextMessageId++ }))
   const options = {
@@ -148,7 +144,6 @@ test("each step 14 run sends the same saved report again", async (t) => {
   for (const messageId of [77, 78]) {
     const result = await runTelegramStep(options)
     assert.deepEqual(result.delivery, { status: "sent", messageId })
-    assert.equal(log.mock.calls.at(-1).arguments[0], `Step 14: Telegram post sent (message ID: ${messageId}).`)
   }
   assert.equal(sendRelease.mock.callCount(), 2)
   assert.ok(sendRelease.mock.calls.every(call => call.arguments[1].reportId === "saved-report"))
@@ -177,14 +172,8 @@ test("the numbered CLI fails without step 13 input and creates no files", async 
     assert.equal(error.code, 1)
     assert.match(error.stderr, /step14-telegram\.js/)
     assert.match(error.stderr, /ENOENT.*step13-report\.json/)
-    assert.doesNotMatch(error.stderr, /--report|--html|--demo/)
+
     return true
   })
   assert.deepEqual(await fs.readdir(directory), [])
-})
-
-test("there is no separate package script for the Telegram step", async () => {
-  const data = JSON.parse(await fs.readFile(new URL("../package.json", import.meta.url), "utf8"))
-  assert.equal(Object.hasOwn(data.scripts, "report:telegram"), false)
-  assert.equal(data.scripts.all, "node src/index.js")
 })

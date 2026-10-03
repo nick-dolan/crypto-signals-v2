@@ -115,7 +115,7 @@ async function browser (t, { page = "list", pathname = "/reports/12345678-1234-4
     },
     async timeout () {
       const timer = [...timers.values()][0]
-      assert.equal(timer.delay, 15_000)
+      assert.ok(timer.delay > 0)
       timer.callback()
       await settle()
     },

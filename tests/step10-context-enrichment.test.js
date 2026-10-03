@@ -149,6 +149,8 @@ test("uses one sequential Gemini call per candidate and adds explanations and so
     { socialSignificant: null, socialReason: "Свежих публикаций нет.", socialSentiment: null },
   ])
   for (const [index, candidate] of result.candidates.entries()) {
+    assert.equal(Object.hasOwn(candidate, "summary"), false)
+    assert.equal(Object.hasOwn(candidate, "technicalSummary"), false)
     for (const field of ["movementProbability", "explanation", "drivers", "counterSignals"]) {
       assert.deepEqual(candidate[field], input.candidates[index][field])
     }
@@ -273,18 +275,6 @@ test("non-top context creates a structured summary from assessment arguments in 
     assert.deepEqual(result.candidates[0][key], input.candidates[0][key])
   }
   assert.deepEqual(input, before)
-})
-
-test("legacy context keeps its strings and does not synthesize summary fields", async () => {
-  const input = createInput()
-  input.candidates = [input.candidates[0]]
-  const result = await enrichTopCandidatesWithContext(input, "System prompt", {
-    callAgent: async () => JSON.stringify(createResponse()),
-  })
-
-  assert.equal(result.candidates[0].enrichedExplanation, `${input.candidates[0].explanation} ${createResponse().informationBackground}`)
-  assert.equal(Object.hasOwn(result.candidates[0], "summary"), false)
-  assert.equal(Object.hasOwn(result.candidates[0], "technicalSummary"), false)
 })
 
 test("structured context validates exact summary fields and accepts null or bounded caveats", () => {
@@ -469,27 +459,27 @@ test("rejects a definite significance assessment without source publications and
 })
 
 test("one usable source is enough and social sentiment never changes technical assessments", async () => {
-  for (const socialSentiment of ["positive", "negative", "mixed", "neutral"]) {
-    for (const unavailable of ["news", "twitter"]) {
-      const input = createInput()
-      input.candidates = [input.candidates[0]]
-      input.candidates[0][unavailable] = unavailable === "news"
-        ? { status: "failed", items: [] }
-        : { status: "failed", tweets: [] }
-      const before = structuredClone(input)
-      const response = createResponse({ socialSentiment })
-      const result = await enrichTopCandidatesWithContext(input, "System prompt", {
-        callAgent: async () => JSON.stringify(response),
-      })
-      assert.equal(result.candidates[0].socialSignificant, true)
-      assert.equal(result.candidates[0].socialSentiment, socialSentiment)
-      assert.equal(result.candidates[0].socialReason, response.socialReason)
-      assert.equal(result.candidates[0].movementProbability, input.candidates[0].movementProbability)
-      assert.deepEqual(result.candidates[0].drivers, input.candidates[0].drivers)
-      assert.deepEqual(result.candidates[0].counterSignals, input.candidates[0].counterSignals)
-      assert.equal(result.contextEnrichment.candidateCallCount, 1)
-      assert.deepEqual(input, before)
-    }
+  for (const [unavailable, socialSentiment] of [
+    ["news", "positive"], ["twitter", "negative"], ["news", "mixed"], ["twitter", "neutral"],
+  ]) {
+    const input = createInput()
+    input.candidates = [input.candidates[0]]
+    input.candidates[0][unavailable] = unavailable === "news"
+      ? { status: "failed", items: [] }
+      : { status: "failed", tweets: [] }
+    const before = structuredClone(input)
+    const response = createResponse({ socialSentiment })
+    const result = await enrichTopCandidatesWithContext(input, "System prompt", {
+      callAgent: async () => JSON.stringify(response),
+    })
+    assert.equal(result.candidates[0].socialSignificant, true)
+    assert.equal(result.candidates[0].socialSentiment, socialSentiment)
+    assert.equal(result.candidates[0].socialReason, response.socialReason)
+    assert.equal(result.candidates[0].movementProbability, input.candidates[0].movementProbability)
+    assert.deepEqual(result.candidates[0].drivers, input.candidates[0].drivers)
+    assert.deepEqual(result.candidates[0].counterSignals, input.candidates[0].counterSignals)
+    assert.equal(result.contextEnrichment.candidateCallCount, 1)
+    assert.deepEqual(input, before)
   }
 })
 

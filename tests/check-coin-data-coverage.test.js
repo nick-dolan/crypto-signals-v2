@@ -47,7 +47,7 @@ test("coverage checker fetches 100 days from the market attached by step 1", asy
   assert.equal(capturedOptions.studySettleDelayMs, 20)
   assert.equal(capturedOptions.timeoutMs, 30)
   assert.equal(capturedOptions.to, 1_799_999_999)
-  assert.equal(capturedRequests.at(-1).inputs.in_0, coin.tradingViewSymbol)
+  assert.equal(capturedRequests.find(request => request.key === "activeContributors").inputs.in_0, coin.tradingViewSymbol)
 })
 
 test("bootstrap data path uses symbol and unique baseCurrencyId", () => {

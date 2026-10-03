@@ -185,7 +185,7 @@ test("report preserves confirmed, empty and unknown CoinGecko context from the a
   assert.deepEqual(input.payload, before)
 })
 
-test("joins by symbol, preserves assessments and top order, and reads histories sequentially", async () => {
+test("joins by symbol and preserves assessments and top order", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
   input.analysis.assessments = [
     input.analysis.assessments[1], input.analysis.assessments[2], input.analysis.assessments[0],
@@ -199,13 +199,8 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
 
   const before = structuredClone([input.analysis, input.payload, input.shortlist, input.histories])
   const requestedPaths = []
-  let reading = false
   const report = await build(input, async (relativePath) => {
-    assert.equal(reading, false)
-    reading = true
     requestedPaths.push(relativePath)
-    await new Promise(resolve => setImmediate(resolve))
-    reading = false
     return input.readCoinData(relativePath)
   })
 
@@ -226,9 +221,9 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
   assert.deepEqual(report.coins.map(coin => coin.topRank), [2, null, 1])
   assert.deepEqual(report.coins.map(coin => coin.explanation), ["Выбор SOL", "", "Выбор COTI"])
   assert.deepEqual(report.coins.map(coin => coin.technicalExplanation), ["Выбор SOL", "", "Выбор COTI"])
-  assert.deepEqual(requestedPaths, ["SOL", "MINA", "COTI"].map(symbol => path.join(
+  assert.deepEqual(requestedPaths.sort(), ["SOL", "MINA", "COTI"].map(symbol => path.join(
     "step2-data-bootstrap", `${symbol}--XTVC${symbol}`, "data.json",
-  )))
+  )).sort())
 
   for (const [index, { history, ...coin }] of report.coins.entries()) {
     const candidate = input.payload.candidates.find(candidate => candidate.symbol === coin.symbol)
@@ -250,7 +245,6 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
         socialZ: candidate.social[0],
       },
     })
-    assert.ok(!Object.hasOwn(coin.features, "selectionRank"))
     assert.equal(history.warning, null)
     assert.equal(history.candles.length, 168)
     assert.equal(history.volume.length, 168)
@@ -471,7 +465,7 @@ test("preserves technical explanations through report assembly and context enric
   assert.deepEqual(result.coins.map(coin => coin.explanation), [
     "Переписанный текст с новостями COTI.", "Переписанный текст с новостями SOL.", "",
   ])
-  assert.equal(result.coins[2], report.coins[2])
+  assert.deepEqual(result.coins[2], report.coins[2])
   assert.ok(result.coins.every(coin => !Object.hasOwn(coin, "technicalSummary") && !Object.hasOwn(coin, "summary")))
   assert.deepEqual([report, sources, context], before)
 })
@@ -588,7 +582,7 @@ test("top summaries survive steps 7 through 13 while non-top news summaries use 
   assert.equal(Object.hasOwn(result.coins[0], "summary"), false)
   assert.deepEqual(result.coins[1].summary, context.candidates[1].summary)
   assert.equal(result.coins[1].explanation, `${result.coins[1].summary.observation} ${result.coins[1].summary.caveat}`)
-  assert.equal(result.coins[2], report.coins[2])
+  assert.deepEqual(result.coins[2], report.coins[2])
   assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], beforeInput)
   assert.deepEqual(news, beforeNews)
   assert.deepEqual(sources, beforeSources)

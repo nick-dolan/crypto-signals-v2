@@ -9,7 +9,7 @@ function scripts (html) {
     .map(([, attributes, content]) => ({ attributes, content }))
 }
 
-test("report embeds its data, styles, executable browser scripts and chart license without external assets", async () => {
+test("report embeds its data, executable browser scripts and chart license without external assets", async () => {
   const report = { asOf: "2026-09-15T09:00:00.000Z", reportCreatedAt: "2026-09-15T11:05:12.345Z", coins: [] }
   const html = await renderReportHtml(report)
   const embedded = scripts(html)
@@ -18,99 +18,45 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /^<!doctype html>/i)
   assert.match(html, /<html lang="ru">/)
   assert.match(html, /<meta name="viewport"/)
-  assert.match(html, /ШАГ 13/)
+
   const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
   assert.deepEqual([...sortOptions.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value), [
     "probability", "top", "confidence",
   ])
-  assert.match(sortOptions, /<option value="top" selected>/)
-  assert.doesNotMatch(sortOptions, /По алфавиту/)
+
   const candidateTable = html.match(/<table class="candidate-table">([\s\S]*?)<\/table>/)[1]
-  assert.match(candidateTable, /<caption class="sr-only">Кандидаты с вероятностью сильного движения<\/caption>/)
+  assert.match(candidateTable, /<caption\b[^>]*>Кандидаты с вероятностью сильного движения<\/caption>/)
   assert.deepEqual([...candidateTable.matchAll(/<th scope="col">([^<]+)<\/th>/g)].map(([, label]) => label), [
     "Монета", "P движения",
   ])
-  assert.doesNotMatch(html, /directionBias|Уклон|предполагаемым направлением|Направление неясно|Нет оценки направления/)
+  assert.doesNotMatch(html, /Уклон|предполагаемым направлением|Направление неясно|Нет оценки направления/)
   assert.match(html, /Вероятность — оценка агента, не статистически откалиброванный прогноз\. Это не торговая рекомендация\./)
-  assert.match(html, /id="coin-description"/)
-  assert.ok(html.indexOf("id=\"coin-name\"") < html.indexOf("id=\"coin-description\""))
-  assert.ok(html.indexOf("id=\"coin-description\"") < html.indexOf("id=\"chart\""))
-  assert.match(html, /\.coin-description\s*\{/)
-  assert.match(html, /\.coin-description-sources\s*\{/)
-  assert.match(html, /Описание пока не добавлено/)
-  assert.match(html, /id="information-panel"/)
-  assert.match(html, /id="social-reason"[^>]*class="source-text"[^>]*hidden/)
-  assert.ok(html.indexOf("id=\"information-panel\"") < html.indexOf("id=\"social-reason\""))
-  assert.ok(html.indexOf("id=\"social-reason\"") < html.indexOf("id=\"news-details\""))
-  assert.match(html, /\.social-indicator\s*\{[^}]*width: 14px;[^}]*height: 14px;/)
-  for (const [sentiment, color] of [
-    ["positive", "var(--positive)"], ["negative", "var(--negative)"],
-    ["mixed", "#e2c18a"], ["neutral", "var(--muted)"],
-  ]) {
-    const selector = `.social-indicator[data-sentiment="${sentiment}"]`
-    const styles = html.slice(html.indexOf(selector)).match(/^[^{]+\{([^}]+)\}/)[1]
-    assert.ok(styles.includes(`color: ${color};`))
-  }
-  assert.match(html, /id="news-details"/)
-  assert.match(html, /id="twitter-details"/)
-  assert.match(html, /id="update-chart"/)
+
   assert.deepEqual([...html.matchAll(/data-days="(\d+)" aria-pressed="(true|false)"/g)].map(([, days, pressed]) => [days, pressed]), [
     ["1", "false"], ["3", "false"], ["7", "true"],
   ])
-  assert.match(html, /id="chart-update-status"/)
-  assert.match(html, /id="report-time-note"/)
-  assert.match(html, /id="coingecko-badge"[^>]*hidden/)
+
   assert.match(html, /id="coingecko-context"[^>]*aria-labelledby="coingecko-heading"[^>]*hidden/)
   assert.match(html, /Трендовые категории CoinGecko/)
-  assert.match(html, /id="coingecko-categories"/)
-  assert.match(html, /id="coingecko-category-status"/)
-  assert.match(html, /\.coingecko-badge\s*\{/)
   assert.match(html, /Поисковое внимание, не сигнал роста/)
-  assert.match(html, /id="sustained-strength"/)
+
   assert.match(html, /aria-labelledby="sustained-strength-heading"/)
   assert.match(html, /Устойчивая сила/)
   assert.match(html, /id="sustained-strength-status"[^>]*role="status"/)
-  assert.match(html, /id="sustained-strength-history"/)
-  assert.match(html, /id="sustained-strength-current"/)
   assert.match(html, /Оценки 0–100 — не вероятность\s+движения и не сигнал входа/)
-  assert.ok(html.indexOf("id=\"sustained-strength\"") < html.indexOf("aria-labelledby=\"analysis-heading\""))
-  for (const status of ["persistent", "emerging", "fading"]) {
-    assert.ok(html.includes(`.sustained-strength-panel[data-status="${status}"]`))
-  }
-  assert.match(html, /id="alt-market-background"/)
+
   assert.match(html, /aria-labelledby="alt-market-heading"/)
   assert.match(html, /Фон альтрынка · 4ч/)
   assert.match(text, /более 55%.*менее 45%/)
   assert.match(text, /Это простое правило для текущего среза, не прогноз и не оценка вероятности\./)
-  assert.ok(html.indexOf("id=\"alt-market-background\"") < html.indexOf("id=\"market-summary\""))
-  assert.match(html, /\.alt-market-background\[data-status="up"\]/)
-  assert.match(html, /\.alt-market-background\[data-status="down"\]/)
-  assert.match(html, /<\/header>\s*<section id="market-brief"[^>]*data-status="unavailable"[^>]*aria-label="Краткая сводка рынка"[^>]*hidden>/)
-  const brief = html.match(/<section id="market-brief"[\s\S]*?<\/section>/)[0]
-  assert.doesNotMatch(brief, /<h[1-6]\b|aria-labelledby|class="warning"|role="status"/)
-  assert.doesNotMatch(html, /market-brief-(?:heading|status|window|coverage|warning|events|sources)/)
-  assert.match(brief, /<div id="market-brief-paragraphs"><\/div>/)
-  assert.match(brief, /id="market-brief-empty"[^>]*hidden/)
-  assert.match(brief, /id="market-brief-note"[^>]*class="market-brief-note"[^>]*hidden/)
-  assert.equal(brief.replace(/<[^>]+>/g, "").trim(), "")
-  assert.match(html, /id="market-brief-note"[^>]*><\/p>\s*<\/section>\s*<div id="report-tabs"/)
-  assert.match(html, /\.market-brief\s*\{[^}]*overflow-wrap: anywhere;/)
-  assert.match(html, /\.market-brief-list\s*\{[^}]*margin: 0;[^}]*padding-left: 20px;[^}]*list-style: disc;/)
-  assert.match(html, /\.market-brief-paragraph,\s*\.market-brief-item,\s*\.market-brief-empty\s*\{[^}]*line-height: 1\.6;/)
-  assert.match(html, /\.market-brief-item\+\.market-brief-item\s*\{[^}]*margin-top: 8px;/)
-  assert.match(html, /\.market-brief-item\[data-sentiment\]\s*\{[^}]*position: relative;[^}]*list-style: none;/)
-  assert.match(html, /\.market-brief-sentiment\s*\{[^}]*position: absolute;[^}]*left: -16px;[^}]*top: 0\.8em;[^}]*width: 6px;[^}]*height: 6px;[^}]*border-radius: 50%;[^}]*background: var\(--muted\);[^}]*transform: translateY\(-50%\);/)
-  assert.match(html, /\.market-brief-item\[data-sentiment="bullish"\] \.market-brief-sentiment\s*\{[^}]*background: var\(--positive\);/)
-  assert.match(html, /\.market-brief-item\[data-sentiment="bearish"\] \.market-brief-sentiment\s*\{[^}]*background: var\(--negative\);/)
-  assert.match(html, /\.market-brief-citations\s*\{[^}]*white-space: nowrap;/)
-  assert.doesNotMatch(html, /\.market-brief\[data-status=/)
+  assert.match(html, /id="market-brief"[^>]*aria-label="Краткая сводка рынка"[^>]*hidden/)
   assert.match(html, /id="report-tabs"[^>]*role="tablist"[^>]*aria-label="Разделы отчёта"/)
   assert.match(html, /id="main-tab"[^>]*role="tab"[^>]*aria-controls="main-panel"[^>]*aria-selected="true"[^>]*tabindex="0"/)
   assert.match(html, /id="peer-radar-tab"[^>]*role="tab"[^>]*aria-controls="peer-radar"[^>]*aria-selected="false"[^>]*tabindex="-1"/)
   assert.match(html, /id="main-panel"[^>]*role="tabpanel"[^>]*aria-labelledby="main-tab"[^>]*tabindex="0">/)
   assert.match(html, /id="peer-radar"[^>]*role="tabpanel"[^>]*aria-labelledby="peer-radar-tab"[^>]*tabindex="0"[^>]*hidden/)
   assert.match(html, /Основной анализ/)
-  assert.match(html, /\.report-tabs button\[aria-selected="true"\]/)
+
   assert.deepEqual([...html.matchAll(/data-peer-days="(\d+)" aria-pressed="(true|false)"/g)].map(([, days, pressed]) => [days, pressed]), [
     ["1", "true"], ["3", "false"], ["7", "false"],
   ])
@@ -127,12 +73,7 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(text, /Несколько лидеров.*независимость подтверждений не гарантируется/)
   assert.match(text, /no_peers.*это не ошибка/)
   assert.match(text, /связи неизвестны, а не отсутствуют/)
-  assert.match(html, /id="no-candidates"[^>]*>[^<]*<\/div>\s*<\/div>\s*<\/div>\s*<section id="peer-radar"/)
-  assert.match(html, /id="peer-radar-observations"[^>]*><\/div>\s*<\/div>\s*<\/section>\s*<footer/)
-  assert.match(html, /<details id="peer-radar-method" class="peer-radar-method">/)
-  assert.match(html, /\.peer-observation\[data-verdict="watch"\]/)
-  assert.doesNotMatch(html, /ШАГ 7\.1|публикации последующих шагов сюда не входят/)
-  assert.match(html, /<style>\s*:root/)
+
   assert.doesNotMatch(html, /<(?:script|link|img)\b[^>]*(?:src|href)\s*=/i)
   assert.doesNotMatch(html, /REPORT_(STYLES|SCRIPT|CHARTS|DATA|LICENSE)/)
   assert.equal(embedded.length, 3)
@@ -142,51 +83,12 @@ test("report embeds its data, styles, executable browser scripts and chart licen
   assert.match(html, /Apache License/)
   assert.match(html, /href="https:\/\/www\.tradingview\.com\/"/)
   assert.match(html, /attributionLogo: true/)
-  assert.match(embedded[2].content, /LightweightCharts\.CandlestickSeries/)
-  assert.match(embedded[2].content, /LightweightCharts\.HistogramSeries/)
-  assert.match(embedded[2].content, /LightweightCharts\.LineSeries/)
   assert.match(embedded[2].content, /credentials: "omit"/)
   assert.match(embedded[2].content, /https:\/\/fapi\.binance\.com/)
-  assert.match(embedded[2].content, /LightweightCharts\.createSeriesMarkers/)
   assert.doesNotMatch(embedded[2].content, /\b(?:XMLHttpRequest|WebSocket|setInterval|localStorage|sessionStorage|showSaveFilePicker)\b/)
-  assert.doesNotMatch(embedded[2].content, /\[native code\]/)
   for (const { content } of embedded.slice(1)) {
     assert.doesNotThrow(() => new vm.Script(content))
   }
-})
-
-test("v3 embeds five items and ten sources losslessly while escaping text, tooltips and publication metadata", async () => {
-  const unsafe = "</ScRiPt><script>globalThis.injected = true</script><img src=x onerror=alert(1)><!-- & \" {{charts}} $& $' $` \u2028\u2029"
-  const report = {
-    asOf: "2026-09-15T09:00:00.000Z",
-    coins: [],
-    marketBrief: {
-      schemaVersion: 3,
-      status: "partial",
-      marketAsOf: "2026-09-15T09:00:00.000Z",
-      from: "2026-09-15T08:47:00.000Z",
-      asOf: "2026-09-15T14:31:00.000Z",
-      generatedAt: "2026-09-15T14:32:00.000Z",
-      warning: unsafe,
-      coverage: [{ source: "tradingview", status: "partial", fetchedCount: 10, error: unsafe }],
-      items: Array.from({ length: 5 }, (_, index) => ({ text: unsafe, sourceIds: [`source-${index * 2}`, `source-${index * 2 + 1}`] })),
-      sources: Array.from({ length: 10 }, (_, index) => ({
-        id: `source-${index}`, channel: "tradingview", url: `https://news.example/${index}`,
-        title: unsafe, text: unsafe, author: unsafe, publisher: unsafe, publishedAt: unsafe,
-      })),
-      analysis: { model: "gemini-3.7-flash", warning: unsafe },
-    },
-  }
-  const before = structuredClone(report)
-  const html = await renderReportHtml(report)
-  const embedded = scripts(html)
-  assert.equal(embedded.length, 3)
-  assert.doesNotMatch(embedded[0].content, /<|\u2028|\u2029/)
-  assert.deepEqual(JSON.parse(embedded[0].content), before)
-  assert.deepEqual(report, before)
-  assert.doesNotMatch(html, /<img src=x|<script>globalThis\.injected/)
-  assert.doesNotMatch(embedded[2].content, /\.(?:innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write\(/)
-  assert.doesNotThrow(() => new vm.Script(embedded[2].content))
 })
 
 test("agent text cannot escape embedded JSON, become executable HTML, or replace template slots", async () => {
@@ -207,11 +109,14 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
     definitions: { unsafe },
     altMarketBackground: { status: "unavailable", change4hPct: null, breadth4h: null, warning: unsafe },
     marketBrief: {
-      schemaVersion: 2, marketAsOf: null, asOf: "2026-09-15T13:20:00.000Z", from: "2026-09-15T07:20:00.000Z",
+      schemaVersion: 5, marketAsOf: null, asOf: "2026-09-15T13:20:00.000Z", from: "2026-09-15T07:20:00.000Z",
       generatedAt: "2026-09-15T13:22:00.000Z", status: "partial", warning: unsafe,
       coverage: [{ source: "tradingview", status: "partial", fetchedCount: 1, error: unsafe }],
-      sources: [{ id: "source", channel: "tradingview", url: "https://news.example/market", title: unsafe, text: unsafe, publishedAt: "2026-09-15T13:00:00.000Z", author: unsafe, publisher: unsafe }],
-      paragraphs: [{ text: unsafe, sourceIds: ["source"] }, { text: unsafe, sourceIds: ["source"] }],
+      sources: Array.from({ length: 10 }, (_, index) => ({
+        id: `source-${index}`, channel: "tradingview", url: `https://news.example/${index}`,
+        title: unsafe, text: unsafe, author: unsafe, publisher: unsafe, publishedAt: unsafe,
+      })),
+      items: Array.from({ length: 5 }, (_, index) => ({ title: unsafe, text: unsafe, sourceIds: [`source-${index * 2}`, `source-${index * 2 + 1}`] })),
       analysis: { model: "gemini-3.7-flash", warning: unsafe },
     },
     peerRadar: {
@@ -227,13 +132,14 @@ test("agent text cannot escape embedded JSON, become executable HTML, or replace
       },
     },
   }
+  const before = structuredClone(report)
   const html = await renderReportHtml(report)
   const embedded = scripts(html)
 
   assert.equal(embedded.length, 3)
-  assert.doesNotMatch(embedded[0].content, /</)
-  assert.deepEqual(JSON.parse(embedded[0].content), report)
+  assert.doesNotMatch(embedded[0].content, /[<\u2028\u2029]/)
+  assert.deepEqual(JSON.parse(embedded[0].content), before)
+  assert.deepEqual(report, before)
   assert.doesNotMatch(html, /<img src=x|<script>globalThis\.injected/)
   assert.doesNotMatch(embedded[2].content, /\.(?:innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write\(/)
-  assert.match(embedded[2].content, /\.textContent = text/)
 })

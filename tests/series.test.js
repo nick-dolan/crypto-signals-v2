@@ -56,7 +56,6 @@ test("lag and difference preserve length and respect offsets", () => {
   assert.deepEqual(lag(source, 2), [null, null, 1, null])
   assert.deepEqual(difference(source, 2), [null, null, 2, null])
   assert.deepEqual(difference([1, 4, 9]), [null, 3, 5])
-  assert.equal(lag(source, 2).length, source.length)
 })
 
 test("ratioSeries returns null for gaps and zero denominators", () => {

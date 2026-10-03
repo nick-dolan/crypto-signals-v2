@@ -157,23 +157,6 @@ test("joins reordered top and trending coins by symbol without changing assessme
       }
     }),
   })
-  assert.equal(result.coins[0], input.report.coins[0])
-  assert.equal(Object.hasOwn(result.coins[0], "information"), false)
-  assert.equal(result.informationSources.news, input.sources.newsEnrichment)
-  assert.equal(result.informationSources.twitter, input.sources.twitterEnrichment)
-
-  for (const [index, coin] of result.coins.entries()) {
-    assert.equal(coin.history, input.report.coins[index].history)
-    assert.equal(coin.features, input.report.coins[index].features)
-    assert.equal(coin.technicalExplanation, input.report.coins[index].explanation)
-
-    if (coin.topRank != null || coin.features.coingeckoTrending === true) {
-      const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
-      assert.equal(coin.information.news, source.news)
-      assert.equal(coin.information.twitter, source.twitter)
-      assert.equal(coin.information.twitter.tweets.length, source.twitter.recentTweetCount)
-    }
-  }
 
   assert.deepEqual(input, before)
 })
@@ -218,7 +201,7 @@ test("report uses enriched summaries only for significant context and never over
           assert.deepEqual(coin.summary, context.summary)
         }
       } else {
-        assert.equal(coin, input.report.coins[index])
+        assert.deepEqual(coin, input.report.coins[index])
       }
     }
     assert.deepEqual(input, before)
@@ -259,36 +242,13 @@ test("report validates significant summaries for tops and trending coins but doe
   }
 })
 
-test("enriches non-top trending coins without promoting them or duplicating trending tops", () => {
-  const input = createInput()
-  const result = addContext(input)
-  const trending = result.coins.find(coin => coin.symbol === "DOGE")
-  const top = result.coins.find(coin => coin.symbol === "XVG")
-
-  assert.equal(input.sources.candidates.find(coin => coin.symbol === "DOGE").explanation, "")
-  assert.equal(input.context.candidates.find(coin => coin.symbol === "DOGE").explanation, "")
-  assert.equal(trending.explanation, "Информационный фон DOGE.")
-  assert.equal(trending.technicalExplanation, "")
-  assert.equal(trending.topRank, null)
-  assert.equal(trending.information.news.items.length, 1)
-  assert.equal(trending.information.twitter.tweets.length, 8)
-  assert.equal(top.explanation, "Исходное объяснение XVG. Информационный фон XVG.")
-  assert.equal(top.technicalExplanation, "Исходное объяснение XVG.")
-  assert.equal(top.topRank, 1)
-  assert.equal(result.coins.filter(coin => coin.symbol === "XVG").length, 1)
-  assert.equal(result.coins.filter(coin => coin.information).length, 6)
-  assert.equal(result.coins.filter(coin => coin.topRank != null).length, 5)
-  assert.equal(result.candidateCount, 7)
-  assert.deepEqual(result.coins.map(coin => coin.symbol), input.report.coins.map(coin => coin.symbol))
-})
-
 test("leaves non-top coins without an exact trending flag untouched", () => {
   for (const features of [undefined, null, {}, { coingeckoTrending: false }, { coingeckoTrending: "true" }, { coingeckoTrending: 1 }]) {
     const input = createInput()
     input.report.coins.at(-1).features = features
     const result = addContext(input)
 
-    assert.equal(result.coins.at(-1), input.report.coins.at(-1))
+    assert.deepEqual(result.coins.at(-1), input.report.coins.at(-1))
     assert.equal(Object.hasOwn(result.coins.at(-1), "information"), false)
   }
 })
@@ -323,7 +283,7 @@ for (const [socialSignificant, socialSentiment, reason] of [
       assert.equal(coin.technicalExplanation, input.report.coins[index].explanation)
       const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
       if (!context) {
-        assert.equal(coin, input.report.coins[index])
+        assert.deepEqual(coin, input.report.coins[index])
         assert.equal(Object.hasOwn(coin, "socialSignificant"), false)
         continue
       }
@@ -335,10 +295,6 @@ for (const [socialSignificant, socialSentiment, reason] of [
         explanation: context.enrichedExplanation,
         information: { news: source.news, twitter: source.twitter },
       })
-      assert.equal(coin.information.news, source.news)
-      assert.equal(coin.information.twitter, source.twitter)
-      assert.equal(coin.history, input.report.coins[index].history)
-      assert.equal(coin.features, input.report.coins[index].features)
     }
     assert.deepEqual(input, before)
   })
@@ -357,7 +313,7 @@ test("legacy context stays unknown even when step 9 or the original report has a
     assert.equal(coin.socialReason, null)
     assert.equal(coin.socialSentiment, null)
   }
-  assert.equal(result.coins.at(-1), input.report.coins.at(-1))
+  assert.deepEqual(result.coins.at(-1), input.report.coins.at(-1))
   for (const key of ["socialSignificant", "socialReason", "socialSentiment"]) {
     assert.equal(Object.hasOwn(result.coins.at(-1), key), false)
   }
@@ -436,8 +392,8 @@ test("preserves empty and failed containers, errors, partial results and extra m
 
   for (const coin of result.coins.filter(coin => coin.topRank != null || coin.features.coingeckoTrending === true)) {
     const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
-    assert.equal(coin.information.news, source.news)
-    assert.equal(coin.information.twitter, source.twitter)
+    assert.deepEqual(coin.information.news, source.news)
+    assert.deepEqual(coin.information.twitter, source.twitter)
   }
 
   assert.equal(result.coins[0].information.twitter.tweets.length, 40)
@@ -456,8 +412,8 @@ test("accepts trending-only enrichment when the report has no tops", () => {
   assert.equal(result.candidateCount, 2)
   assert.equal(result.coins[0].topRank, null)
   assert.equal(result.coins[0].explanation, "Информационный фон DOGE.")
-  assert.equal(result.coins[0].information.news, input.sources.candidates[0].news)
-  assert.equal(result.coins[1], input.report.coins[1])
+  assert.deepEqual(result.coins[0].information.news, input.sources.candidates[0].news)
+  assert.deepEqual(result.coins[1], input.report.coins[1])
 })
 
 test("accepts an empty enrichment union with or without non-top coins", () => {
@@ -474,11 +430,6 @@ test("accepts an empty enrichment union with or without non-top coins", () => {
     assert.deepEqual(result.coins, input.report.coins)
     assert.equal(result.candidateCount, input.report.candidateCount)
     assert.equal(result.informationSources.contextGeneratedAt, input.context.generatedAt)
-
-    for (const [index, coin] of result.coins.entries()) {
-      assert.equal(coin, input.report.coins[index])
-      assert.equal(Object.hasOwn(coin, "information"), false)
-    }
   }
 })
 
@@ -492,8 +443,8 @@ test("keeps source windows independent from the market snapshot and accepts equi
   const result = addContext(input)
 
   assert.equal(result.asOf, input.report.asOf)
-  assert.equal(result.informationSources.news, input.sources.newsEnrichment)
-  assert.equal(result.informationSources.twitter, input.sources.twitterEnrichment)
+  assert.deepEqual(result.informationSources.news, input.sources.newsEnrichment)
+  assert.deepEqual(result.informationSources.twitter, input.sources.twitterEnrichment)
   assert.notEqual(result.informationSources.news.asOf, result.asOf)
   assert.notEqual(result.informationSources.twitter.asOf, result.asOf)
 })

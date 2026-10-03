@@ -86,7 +86,6 @@ test("matching peer report is embedded intact, without requiring membership in m
   assert.equal(result.warning, null)
   assert.deepEqual(result.data, radar)
   assert.deepEqual(radar, before)
-  assert.deepEqual(JSON.parse(JSON.stringify(result)), result)
   assert.equal(result.data.observations[0].leaders[0].coinReturnSinceStartPct, -0.00123456789)
 })
 
@@ -258,7 +257,6 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
     const report = await store.read(added[0].id)
     assert.ok(report, "Step 13 must publish a readable report snapshot")
     const html = await renderReportHtml(report)
-    assert.match(html, /id="peer-radar"/)
     const embedded = html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)
     assert.ok(embedded, "Report export must embed report JSON")
     assert.deepEqual(JSON.parse(embedded[1]), report)

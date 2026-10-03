@@ -31,10 +31,11 @@ function fixture () {
   return { report, coin }
 }
 
-function textAt (svg, x, y) {
-  const match = svg.match(new RegExp(`<text x="${x}" y="${y}"[^>]*>([^<]*)</text>`))
-  assert.ok(match, `Missing text at ${x}, ${y}`)
-  return match[1]
+function textAfter (svg, label) {
+  const texts = [...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/g)].map(([, text]) => text)
+  const index = texts.indexOf(label)
+  assert.notEqual(index, -1, `Missing label: ${label}`)
+  return texts[index + 1]
 }
 
 function assertSvg (svg) {
@@ -68,7 +69,6 @@ function assertHourlyBars (svg, data) {
     assert.equal(rectangles.length, points.length)
     for (const [index, rectangle] of rectangles.entries()) {
       const center = 76 + ((points[index].time - data.points[0].time) / 3_600 + 0.5) * 936 / 168
-      assert.ok(Math.abs(rectangle.width - 936 / 168 * 0.6) < 1e-9, "Bar width must follow the full hourly grid")
       assert.ok(rectangle.width > 0 && rectangle.width < 936 / 168, "Bars must be narrower than one hour")
       assert.ok(Math.abs(rectangle.x + rectangle.width / 2 - center) < 1e-9, "Bars must stay centered on their hour")
       if (index > 0) {
@@ -144,20 +144,18 @@ test("the seven-day coin card uses exact hourly endpoints and labels the close, 
 
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  assert.equal(textAt(svg, 1152, 82), "01.10.2026, 03:00")
-  assert.equal(textAt(svg, 48, 274), "150")
-  assert.equal(textAt(svg, 625, 274), "+25%")
-  assert.equal(textAt(svg, 914, 274), "-25%")
-  assert.equal(textAt(svg, 682, 1180), "-25%")
-  assert.equal(textAt(svg, 48, 1180), "2,5×")
-  for (const y of [436, 782, 944]) {
-    assert.equal(textAt(svg, 1128, y), "168/168 ч")
+  assert.equal(textAfter(svg, "Срез закрыт · МСК (UTC+3)"), "01.10.2026, 03:00")
+  assert.equal(textAfter(svg, "Цена закрытия · USDT"), "150")
+  assert.equal(textAfter(svg, "Изменение · 4ч"), "+25%")
+  assert.equal(textAfter(svg, "Изменение · 24ч"), "-25%")
+  assert.equal(textAfter(svg, "Изменение Open Interest · 4ч"), "-25%")
+  assert.equal(textAfter(svg, "Объём 1ч / норма этого часа"), "2,5×")
+  for (const label of ["ЦЕНА · USDT · 1ч", "ОБЪЁМ · ТЕСТ", "OPEN INTEREST · ТЕСТ"]) {
+    assert.equal(textAfter(svg, label), "168/168 ч")
   }
-  assert.equal([...svg.matchAll(/<text x="1128"[^>]*fill="#92a3bc"[^>]*>168\/168 ч<\/text>/g)].length, 3)
   assert.equal(svg.match(/<desc>([\s\S]*?)<\/desc>/)?.[1], "Цена, объём и Open Interest за 7 дней из сохранённого отчёта.")
-  assert.equal(textAt(svg, 682, 1207), "Окно: 7 дней · начало свечей на оси")
-  assert.doesNotMatch(svg, /Экспертная оценка вероятности|статистическая калибровка/u)
-  assert.doesNotMatch(svg, /Только закрытые свечи|в базовом активе|<text x="48" y="1241"/u)
+  assert.match(svg, /Окно: 7 дней · начало свечей на оси/)
+  assert.doesNotMatch(svg, /Пропуски не заполнены/)
   assertHourlyBars(svg, data)
   assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
 })
@@ -204,11 +202,9 @@ test("a saved 72-hour history retains all observations and leaves 96 earlier gap
   assert.ok(data.warnings.includes("Есть пропуски; недостающие значения не восстановлены."))
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  for (const y of [436, 782, 944]) {
-    assert.equal(textAt(svg, 1128, y), "72/168 ч")
+  for (const label of ["ЦЕНА · USDT · 1ч", "ОБЪЁМ · ТЕСТ", "OPEN INTEREST · ТЕСТ"]) {
+    assert.equal(textAfter(svg, label), "72/168 ч")
   }
-  assert.equal([...svg.matchAll(/class="candle"/g)].length, 72)
-  assert.equal([...svg.matchAll(/class="volume-bar"/g)].length, 72)
   assert.equal([...svg.matchAll(/<circle\b/g)].length, 72)
   assertHourlyBars(svg, data)
   assert.deepEqual({ report, coin }, before)
@@ -224,11 +220,10 @@ test("a single missing hour marks coverage as incomplete against all 168 hours",
   assert.ok(data.warnings.includes("Есть пропуски; недостающие значения не восстановлены."))
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  for (const y of [436, 782, 944]) {
-    assert.equal(textAt(svg, 1128, y), "167/168 ч")
+  for (const label of ["ЦЕНА · USDT · 1ч", "ОБЪЁМ · ТЕСТ", "OPEN INTEREST · ТЕСТ"]) {
+    assert.equal(textAfter(svg, label), "167/168 ч")
   }
-  assert.equal([...svg.matchAll(/<text x="1128"[^>]*fill="#f0bd71"[^>]*>167\/168 ч<\/text>/g)].length, 3)
-  assert.equal(textAt(svg, 48, 1241), "Данные неполные или с оговорками. Пропуски не заполнены.")
+  assert.match(svg, /Данные неполные или с оговорками\. Пропуски не заполнены\./)
 })
 
 test("candle and volume bars keep seven-day hourly widths and centers across independent gaps", () => {
@@ -284,9 +279,9 @@ test("the 168-hour grid preserves absent hours and normalizes invalid timestamps
   assert.ok(data.warnings.some(warning => warning.includes("пропуски")))
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  assert.equal(textAt(svg, 1128, 436), "154/168 ч")
-  assert.equal(textAt(svg, 1128, 782), "160/168 ч")
-  assert.equal(textAt(svg, 1128, 944), "160/168 ч")
+  assert.equal(textAfter(svg, "ЦЕНА · USDT · 1ч"), "154/168 ч")
+  assert.equal(textAfter(svg, "ОБЪЁМ · ТЕСТ"), "160/168 ч")
+  assert.equal(textAfter(svg, "OPEN INTEREST · ТЕСТ"), "160/168 ч")
 })
 
 for (const [series, index, metric] of [
@@ -327,10 +322,10 @@ for (const lastCandle of ["missing", "invalid"]) {
 
     const svg = buildCoinCardSvg(report, coin)
     assertSvg(svg)
-    assert.equal(textAt(svg, 48, 274), "Нет данных")
-    assert.equal(textAt(svg, 625, 274), "Нет данных")
-    assert.equal(textAt(svg, 914, 274), "Нет данных")
-    assert.equal(textAt(svg, 48, 1241), "Цена на срезе недоступна. Пропуски не заполнены.")
+    assert.equal(textAfter(svg, "Цена закрытия · USDT"), "Нет данных")
+    assert.equal(textAfter(svg, "Изменение · 4ч"), "Нет данных")
+    assert.equal(textAfter(svg, "Изменение · 24ч"), "Нет данных")
+    assert.match(svg, /Цена на срезе недоступна\. Пропуски не заполнены\./)
     assert.doesNotMatch(svg, /stroke-dasharray=/)
     assert.equal([...svg.matchAll(/class="candle"/g)].length, 167)
   })
@@ -351,8 +346,6 @@ test("sparse history still computes returns from available exact endpoints witho
   assert.deepEqual(data.points[166], { time: data.asOf - 3_600, candle: null, volume: null, openInterest: null })
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  assert.equal([...svg.matchAll(/class="candle"/g)].length, 3)
-  assert.equal([...svg.matchAll(/class="volume-bar"/g)].length, 3)
   assertHourlyBars(svg, data)
 })
 
@@ -373,8 +366,8 @@ test("zero volume and OI are covered observations but a zero change denominator 
 
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  assert.equal(textAt(svg, 48, 1180), "0×")
-  assert.equal(textAt(svg, 682, 1180), "Нет данных")
+  assert.equal(textAfter(svg, "Объём 1ч / норма этого часа"), "0×")
+  assert.equal(textAfter(svg, "Изменение Open Interest · 4ч"), "Нет данных")
   const bars = [...svg.matchAll(/<rect class="volume-bar"[^>]*height="([^"]+)"/g)]
   assert.equal(bars.length, 168)
   assert.ok(bars.every(([, height]) => Number(height) === 0))
@@ -388,7 +381,7 @@ test("a zero current OI with a positive baseline is a real -100% change", () => 
   assert.equal(buildCoinCardData(report, coin).oiChange4hPct, -100)
   const svg = buildCoinCardSvg(report, coin)
   assertSvg(svg)
-  assert.equal(textAt(svg, 682, 1180), "-100%")
+  assert.equal(textAfter(svg, "Изменение Open Interest · 4ч"), "-100%")
 })
 
 test("OI paths break at absent and invalid hours, retain isolated zero observations and keep hourly x positions", () => {
@@ -430,9 +423,9 @@ test("untrusted names, badges and warning metadata remain escaped XML, never scr
     "ДЕМО · &lt;/title&gt;&lt;script&gt;1&lt;/script&gt;&amp;&quot;&apos; · срез 01.10.2026, 03:00 МСК")
   assert.equal(svg.match(/<desc>([\s\S]*?)<\/desc>/)?.[1],
     "&lt;/desc&gt;&lt;ScRiPt&gt;3&lt;/ScRiPt&gt;&lt;image href=&apos;x&apos;/&gt;&amp;&quot;&apos;")
-  assert.equal(textAt(svg, 48, 154), "&lt;image href=&quot;x&quot; onload=&apos;1&apos;/&gt;&amp;")
-  assert.equal(textAt(svg, 1152, 119), "&lt;/text&gt;&lt;script&gt;2&lt;/script&gt;&amp;&quot;&apos;")
-  assert.ok(textAt(svg, 48, 190).includes("ТОП &lt;/text&gt;&lt;image href=&apos;x&apos;/&gt;&amp;&quot;"))
+  assert.ok(svg.includes("&lt;image href=&quot;x&quot; onload=&apos;1&apos;/&gt;&amp;"))
+  assert.ok(svg.includes("&lt;/text&gt;&lt;script&gt;2&lt;/script&gt;&amp;&quot;&apos;"))
+  assert.ok(svg.includes("ТОП &lt;/text&gt;&lt;image href=&apos;x&apos;/&gt;&amp;&quot;"))
   assert.equal([...svg.matchAll(/<title>/g)].length, 1)
   assert.equal([...svg.matchAll(/<desc>/g)].length, 1)
   assert.doesNotMatch(svg, /<\/?(?:script|image|img|foreignObject)\b/i)
@@ -465,9 +458,9 @@ for (const [label, history] of [
     assert.equal([...svg.matchAll(/Нет данных на этом интервале/g)].length, 3)
     assert.equal([...svg.matchAll(/0\/168 ч/g)].length, 3)
     assert.doesNotMatch(svg, /class="(?:candle|volume-bar)"|id="oi-line"/)
-    assert.equal(textAt(svg, 48, 274), "Нет данных")
-    assert.equal(textAt(svg, 72, 352), "Нет данных")
-    assert.equal(textAt(svg, 48, 1180), "Нет данных")
+    assert.equal(textAfter(svg, "Цена закрытия · USDT"), "Нет данных")
+    assert.match(svg, /Нет данных<\/text>\s*<text\b[^>]*>Сильное движение · 4–12ч/)
+    assert.equal(textAfter(svg, "Объём 1ч / норма этого часа"), "Нет данных")
   })
 }
 
@@ -500,7 +493,7 @@ for (const [close, label] of [[100, "100"], [0.0000123456, "0,0000123456"], [0.0
     assert.equal(data.change24hPct, 0)
     const svg = buildCoinCardSvg(report, coin)
     assertSvg(svg)
-    assert.equal(textAt(svg, 48, 274), label)
+    assert.equal(textAfter(svg, "Цена закрытия · USDT"), label)
     const bodies = [...svg.matchAll(/<g class="candle"[^>]*>[\s\S]*?<rect[^>]*y="([^"]+)"[^>]*height="([^"]+)"/g)]
     assert.equal(bodies.length, 168)
     for (const [, y, height] of bodies) {

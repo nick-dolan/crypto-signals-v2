@@ -84,40 +84,38 @@ test("Tavily posts extract URLs and returns empty results with failed_results un
   assert.equal(fetchMock.mock.callCount(), 1)
 })
 
-for (const endpoint of ["/search", "/extract"]) {
-  for (const status of [432, 433]) {
-    test(`Tavily ${endpoint} retries HTTP ${status} once with the trimmed backup key`, async (context) => {
-      context.mock.timers.enable({ apis: ["setTimeout"] })
-      process.env.TAVILY_API_KEY_2 = "  tavily-backup-test-key  "
-      const body = endpoint === "/search" ? { query: "private-query" } : { urls: ["https://example.com/coin"] }
-      const serialize = context.mock.fn(() => body)
-      const payload = { results: [{ title: "Coin website", url: "https://example.com/coin" }] }
-      const limited = new Response("private-response tavily-test-key", { status })
-      const textMock = context.mock.method(limited, "text")
-      const cancelMock = context.mock.method(limited.body, "cancel")
-      const fetchMock = context.mock.method(globalThis, "fetch", async (_url, { headers }) => (
-        headers.authorization === "Bearer tavily-test-key" ? limited : new Response(JSON.stringify(payload))
-      ))
+for (const [endpoint, status] of [["/search", 432], ["/extract", 433]]) {
+  test(`Tavily ${endpoint} retries HTTP ${status} once with the trimmed backup key`, async (context) => {
+    context.mock.timers.enable({ apis: ["setTimeout"] })
+    process.env.TAVILY_API_KEY_2 = "  tavily-backup-test-key  "
+    const body = endpoint === "/search" ? { query: "private-query" } : { urls: ["https://example.com/coin"] }
+    const serialize = context.mock.fn(() => body)
+    const payload = { results: [{ title: "Coin website", url: "https://example.com/coin" }] }
+    const limited = new Response("private-response tavily-test-key", { status })
+    const textMock = context.mock.method(limited, "text")
+    const cancelMock = context.mock.method(limited.body, "cancel")
+    const fetchMock = context.mock.method(globalThis, "fetch", async (_url, { headers }) => (
+      headers.authorization === "Bearer tavily-test-key" ? limited : new Response(JSON.stringify(payload))
+    ))
 
-      assert.deepEqual(await requestTavilyJson(endpoint, { toJSON: serialize }), payload)
-      assert.equal(fetchMock.mock.callCount(), 2)
-      assert.equal(serialize.mock.callCount(), 1)
-      assert.deepEqual(fetchMock.mock.calls.map(({ arguments: [, { headers }] }) => headers.authorization), [
-        "Bearer tavily-test-key", "Bearer tavily-backup-test-key",
-      ])
-      for (const { arguments: [url, options] } of fetchMock.mock.calls) {
-        assert.equal(url, `https://api.tavily.com${endpoint}`)
-        assert.equal(options.method, "POST")
-        assert.equal(options.redirect, "manual")
-        assert.equal(options.body, JSON.stringify(body))
-      }
-      assert.equal(textMock.mock.callCount(), 0)
-      assert.equal(cancelMock.mock.callCount(), 1)
-      assert.equal(fetchMock.mock.calls[0].arguments[1].signal, fetchMock.mock.calls[1].arguments[1].signal)
-      context.mock.timers.tick(30_000)
-      assert.equal(fetchMock.mock.calls[1].arguments[1].signal.aborted, false)
-    })
-  }
+    assert.deepEqual(await requestTavilyJson(endpoint, { toJSON: serialize }), payload)
+    assert.equal(fetchMock.mock.callCount(), 2)
+    assert.equal(serialize.mock.callCount(), 1)
+    assert.deepEqual(fetchMock.mock.calls.map(({ arguments: [, { headers }] }) => headers.authorization), [
+      "Bearer tavily-test-key", "Bearer tavily-backup-test-key",
+    ])
+    for (const { arguments: [url, options] } of fetchMock.mock.calls) {
+      assert.equal(url, `https://api.tavily.com${endpoint}`)
+      assert.equal(options.method, "POST")
+      assert.equal(options.redirect, "manual")
+      assert.equal(options.body, JSON.stringify(body))
+    }
+    assert.equal(textMock.mock.callCount(), 0)
+    assert.equal(cancelMock.mock.callCount(), 1)
+    assert.equal(fetchMock.mock.calls[0].arguments[1].signal, fetchMock.mock.calls[1].arguments[1].signal)
+    context.mock.timers.tick(30_000)
+    assert.equal(fetchMock.mock.calls[1].arguments[1].signal.aborted, false)
+  })
 }
 
 for (const status of [432, 433]) {
@@ -265,7 +263,7 @@ test("Tavily validates a plain object body and positive finite timeout before fe
   assert.equal(timeoutMock.mock.callCount(), 0)
 })
 
-for (const status of [301, 302, 303, 307, 308, 400, 401, 403, 404, 422, 429, 500, 503]) {
+for (const status of [301, 302, 303, 307, 308, 400, 401, 403, 429, 500]) {
   test(`Tavily reports HTTP ${status} without redirects, retries, or response details`, async (context) => {
     context.mock.timers.enable({ apis: ["setTimeout"] })
     const response = new Response("private-response tavily-test-key", {

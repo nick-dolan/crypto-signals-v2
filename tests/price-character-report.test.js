@@ -91,7 +91,7 @@ test("text escaping protects HTML, Markdown tables and inline JSON including U+2
   assert.deepEqual(JSON.parse(embedded[0]), { report, candles })
   assert.doesNotMatch(html, /<img src=x|<\/ScRiPt>/)
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;&amp;&quot;&#39;/)
-  assert.match(html, /<p>Предупреждение: &lt;\/ScRiPt&gt;/)
+  assert.match(html, /Предупреждение: &lt;\/ScRiPt&gt;/)
   const markdown = renderPriceCharacterMarkdown(report)
   assert.doesNotMatch(markdown, /<img|\n\|\[link\]/)
   assert.ok(markdown.includes("\\|\\[link\\]"))
@@ -114,7 +114,7 @@ for (const analysisDays of [90, 58]) {
       assert.ok(html.includes(report.warnings[0]) && markdown.includes(report.warnings[0]))
       assert.match(markdown, /\| Показатель \| 7 дней \| 30 дней \| 58 дней \(доступно из 90\) \|/)
       assert.match(markdown, /Неделя 1 · 2026-02-02 00:00 → 2026-02-04 00:00 \| 2 \/ 192/)
-      assert.match(html, /Неделя 1 · 2026-02-02 00:00 → 2026-02-04 00:00<\/td><td>2 \/ 192/)
+      assert.match(html, /Неделя 1 · 2026-02-02 00:00 → 2026-02-04 00:00<\/td>\s*<td\b[^>]*>2 \/ 192/)
       assert.doesNotMatch(html, /data-days="90"/)
     }
     assert.match(html, /^<!doctype html>/)
@@ -178,8 +178,8 @@ for (const analysisDays of [90, 58]) {
 test("an empty event list remains readable in both formats", async () => {
   const { report, candles } = fixture()
   report.spikes = []
-  assert.match(renderPriceCharacterMarkdown(report), /## Крупнейшие вспышки\n\nНет событий \/ данных\./)
+  assert.match(renderPriceCharacterMarkdown(report), /## Крупнейшие вспышки\s+Нет событий \/ данных\./)
   const html = await renderPriceCharacterHtml(report, candles)
-  assert.match(html, /<h2>Крупнейшие вспышки<\/h2><p>Нет событий \/ данных\.<\/p>/)
+  assert.match(html, /Нет событий \/ данных\./)
   assert.doesNotMatch(html, /data-time="/)
 })

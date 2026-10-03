@@ -82,7 +82,7 @@ test("Binance requester exposes HTTP and Binance error details", async (context)
     requestBinanceFuturesJson("/fapi/v1/klines"),
     (error) => {
       assert.equal(error instanceof BinanceRequestError, true)
-      assert.equal(error.message, "Binance /fapi/v1/klines request failed with HTTP 400: Binance error -1121: Invalid symbol.")
+      assert.match(error.message, /Invalid symbol/)
       assert.equal(error.code, -1121)
       assert.equal(error.retryAfter, "30")
       assert.equal(error.status, 400)

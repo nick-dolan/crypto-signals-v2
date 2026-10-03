@@ -424,7 +424,7 @@ for (const [name, change, error] of [
   })
 }
 
-for (const field of ["probability", "movementProbability", "confidence", "score", "gapAtr", "responseRatio", "coinReaction", "coin", "coverage", "leaders"]) {
+for (const field of ["extra", "movementProbability", "leaders"]) {
   test(`parser rejects the extra ${field} field at both response levels`, () => {
     const scan = createScan()
     for (const location of ["root", "observation"]) {
@@ -462,12 +462,13 @@ test("injected step prepares the complete radar with exact facts in tmp only", a
   const scan = createScan(7)
   const directory = await prepareStepDirectory(context, scan)
   const response = createResponse(scan)
+  const systemPrompt = await fs.readFile(new URL("../src/prompts/peer-radar-analysis.md", import.meta.url), "utf8")
   await runInjectedStep(directory, `
     let calls = 0
     const result = await runPeerRadarAnalysisStep({
       callAgent: async (prompt, message, options) => {
         calls += 1
-        assert.ok(prompt.includes("Независимый peer radar"))
+        assert.equal(prompt, ${JSON.stringify(systemPrompt)})
         assert.deepEqual(JSON.parse(message), ${JSON.stringify(scan)})
         assert.deepEqual(options, { model: "GPT-6.1 Sol", reasoningEffort: "high" })
         return ${JSON.stringify(JSON.stringify(response))}

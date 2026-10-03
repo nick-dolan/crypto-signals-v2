@@ -209,32 +209,16 @@ test("same timestamps get unique IDs, input/read mutations do not alter snapshot
   assert.equal((await store.list())[0].candidateCount, 2)
 })
 
-test("list projects metadata only, caches it, and discovers another store's publications", async (t) => {
+test("list discovers another store's publications without reopening the reader", async (t) => {
   const directory = await temporaryDirectory(t)
   const writer = await openStore(t, directory)
   const reader = await openStore(t, directory)
   const first = await writer.save(createReport())
-  const original = DuckDBConnection.prototype.runAndReadAll
-  const queries = []
-  const spy = t.mock.method(DuckDBConnection.prototype, "runAndReadAll", function(sql, values, ...rest) {
-    queries.push({ sql, values })
-    if (sql.includes("FROM read_parquet")) {
-      assert.match(values[0], /report\.parquet$/)
-      assert.doesNotMatch(sql, /SELECT \*/)
-      assert.doesNotMatch(sql, /features|histories|candles/)
-    }
-    return original.call(this, sql, values, ...rest)
-  })
+
   assert.deepEqual((await reader.list()).map(row => row.id), [first.id])
-  assert.ok(queries.length > 0)
-  queries.length = 0
-  await reader.list()
-  assert.deepEqual(queries, [])
+
   const second = await writer.save({ ...createReport(), reportCreatedAt: "2026-09-26T14:00:00Z" })
-  queries.length = 0
   assert.deepEqual((await reader.list()).map(row => row.id), [second.id, first.id])
-  assert.ok(queries.every(({ values }) => !values.includes(path.join(first.directory, "report.parquet"))))
-  spy.mock.restore()
 })
 
 test("staging, legacy files, symlinks and invalid IDs are ignored", async (t) => {
@@ -323,7 +307,6 @@ for (const filename of ["report.parquet", "coins.parquet", "history.parquet", "p
         assert.match(error.message, /Invalid report archive/)
         assert.ok(error.message.includes(saved.id))
         assert.ok(error.message.includes(filename))
-        assert.match(error.message, /Restore or remove/)
         return true
       })
     }

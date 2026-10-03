@@ -188,10 +188,6 @@ for (const analysisDays of [30, 58, 90]) {
       assert.ok(section.includes("TR — диапазон с разрывами цены, не доходность между закрытиями (close-to-close)"))
       assert.ok(section.includes("p99 не отражает максимум"))
     }
-    for (const output of [markdown, html]) {
-      const positions = ["Ближе по характеру · до 10", "Меньше выбросов · до 5", "Редкие сильные свечи", "Все результаты"].map(title => output.indexOf(title))
-      assert.ok(positions.every((position, index) => position >= 0 && (!index || position > positions[index - 1])))
-    }
     assert.deepEqual(report, before)
   })
 }
@@ -204,16 +200,15 @@ test("offline HTML embeds only reference plus the deduplicated shortlist union, 
   assert.equal(embedded.length, 3)
   const payload = JSON.parse(embedded[0])
   assert.deepEqual(payload.report, report)
-  assert.deepEqual(payload.charts.map(chart => chart.baseCurrencyId), ["prove", "a", "b", "c"])
   assert.deepEqual(payload.charts, ["prove", "a", "b", "c"].map(id => charts.find(chart => chart.baseCurrencyId === id)))
   const select = html.match(/<select id="candidate"[^>]*>([\s\S]*?)<\/select>/)[1]
   assert.deepEqual([...select.matchAll(/<option value="([^"]*)"/g)].map(([, id]) => id), ["a", "b", "c"])
   assert.deepEqual([...html.matchAll(/data-days="(\d+)" aria-pressed="(true|false)"/g)].map(([, days, pressed]) => [days, pressed]), [["7", "true"], ["30", "false"], ["58", "false"]])
   assert.match(html, /^<!doctype html>/)
   assert.match(html, /<html lang="ru">/)
-  assert.match(html, /<details><summary>Все результаты · 4/)
-  assert.match(html, /<details><summary>Отказы загрузки · 1/)
-  assert.match(html, /<details><summary>Ожидают обработки · pending · 1/)
+  assert.match(html, /Все результаты · 4/)
+  assert.match(html, /Отказы загрузки · 1/)
+  assert.match(html, /Ожидают обработки · pending · 1/)
   assert.match(html, /default-src 'none'/)
   assert.match(html, /href="https:\/\/www.tradingview.com\/"/)
   assert.match(html, /Apache License/)

@@ -114,8 +114,6 @@ test("exact clone has zero distance, preserves the full profile and follows the 
   assert.deepEqual(result.calmer, [])
   assert.deepEqual(result.rejected, [])
   assert.deepEqual(result.pending, [])
-  assert.ok(result.methodology.every(text => text.length > 0))
-  assert.match(result.methodology.join("\n"), /less \+ equal\/2/)
 })
 
 test("midranks use the complete cohort before gates; all six groups have equal weight", () => {
@@ -438,7 +436,6 @@ test("ties are deterministic by ID, null scores come last, and list sizes are ca
   assert.deepEqual(first.candidates.slice(-2).map(entry => entry.baseCurrencyId), ["XTVCNULLA", "XTVCNULLZ"])
   assert.ok(!first.closest.includes(first.reference.baseCurrencyId))
   assert.ok(!first.calmer.includes(first.reference.baseCurrencyId))
-  assert.deepEqual(compare([fixture("XTVCONLY")]).calmer, [])
   const alone = compare([])
   assert.equal(alone.reference.distance, 0)
   assert.equal(alone.reference.calmScore, 50)

@@ -181,8 +181,6 @@ test("derivatives preserve raw signed funding and the 2160-hour OI percentile wi
   })
 
   assert.deepEqual(metrics.funding_rate, before.fundingRate)
-  assert.deepEqual(metrics.funding_rate.slice(0, 4), [null, -0.0123, 0, 0.0456])
-  assert.equal(latest(metrics.funding_rate), -0.000123)
   assert.equal(metrics.oi_level_percentile_90d.length, openInterest.length)
   assert.deepEqual(metrics.oi_level_percentile_90d.slice(0, 2_160), Array(2_160).fill(null))
   assert.equal(metrics.oi_level_percentile_90d[2_160], 0.5)

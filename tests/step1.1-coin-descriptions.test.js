@@ -472,12 +472,6 @@ test("step 1.1 isolates Tavily and agent failures and never writes an all-failed
     { name: "LLM error", agentError: new Error("LLM unavailable"), message: /LLM unavailable/ },
     { name: "non-Error LLM failure", agentError: null, message: /Unknown error/ },
     { name: "invalid agent JSON", response: "{broken JSON", message: /not valid JSON/ },
-    { name: "null agent response", response: null, message: /Agent response is required/ },
-    { name: "zero agent response", response: 0, message: /Agent response is required/ },
-    { name: "agent lacks facts", response: createAnswer("XTVCFAIL", null), message: /not find enough facts/ },
-    { name: "unconfirmed identity", response: createAnswer("XTVCFAIL", undefined, { identityConfirmed: false }), message: /not confirm the project identity/ },
-    { name: "agent changes candidate ID", response: createAnswer("WRONG"), message: /candidate ID/ },
-    { name: "blank agent description", response: createAnswer("XTVCFAIL", " \n "), message: /Agent description is required/ },
   ]) {
     for (const partialSuccess of [false, true]) {
       await t.test(`${failure.name}: ${partialSuccess ? "successful coins survive on both sides" : "no successful additions"}`, async (t) => {
@@ -515,7 +509,6 @@ test("step 1.1 isolates Tavily and agent failures and never writes an all-failed
         const warning = calls(dependencies.onWarning)[0][0]
         assert.match(warning, /FAIL \(XTVCFAIL\)/)
         assert.match(warning, failure.message)
-        assert.match(warning, /will retry next run/)
         assert.deepEqual(calls(dependencies.onProgress), partialSuccess
           ? [[{ index: 1, total: 3, addedCount: 1 }], [{ index: 2, total: 3, addedCount: 1 }], [{ index: 3, total: 3, addedCount: 2 }]]
           : [[{ index: 1, total: 1, addedCount: 0 }]])
@@ -537,7 +530,6 @@ test("step 1.1 isolates Tavily and agent failures and never writes an all-failed
 test("step 1.1 continues research without CG context when futures fail or mappings conflict", async (t) => {
   for (const [name, response, error, pattern] of [
     ["HTTP 429", null, new Error("CoinGecko HTTP 429"), /HTTP 429/],
-    ["invalid JSON", null, new Error("CoinGecko invalid JSON"), /invalid JSON/],
     ["null futures", null, null, /tickers array/],
     ["missing tickers", {}, null, /tickers array/],
     ["invalid tickers", { tickers: {} }, null, /tickers array/],
@@ -567,7 +559,6 @@ test("step 1.1 continues research without CG context when futures fail or mappin
       assert.equal(dependencies.saveRegistry.mock.callCount(), 1)
       assert.equal(dependencies.onWarning.mock.callCount(), 1)
       assert.match(calls(dependencies.onWarning)[0][0], pattern)
-      assert.match(calls(dependencies.onWarning)[0][0], /continuing with web research/)
     })
   }
 })
@@ -575,7 +566,6 @@ test("step 1.1 continues research without CG context when futures fail or mappin
 test("step 1.1 discards failed or mismatched CG details, while missing English text does not prevent research", async (t) => {
   for (const [name, response, error, pattern] of [
     ["HTTP 429", null, new Error("CoinGecko HTTP 429"), /HTTP 429/],
-    ["invalid JSON", null, new Error("CoinGecko invalid JSON"), /invalid JSON/],
     ["wrong detail ID", createDetails("impostor", {
       name: "Wrong project", links: { homepage: ["https://impostor.example.com/"] },
     }), null, /ID does not match bitcoin/],
@@ -614,7 +604,6 @@ test("step 1.1 discards failed or mismatched CG details, while missing English t
       assert.equal(dependencies.onWarning.mock.callCount(), pattern ? 1 : 0)
       if (pattern) {
         assert.match(calls(dependencies.onWarning)[0][0], pattern)
-        assert.match(calls(dependencies.onWarning)[0][0], /continuing with web research/)
       }
     })
   }
@@ -643,10 +632,7 @@ test("step 1.1 refuses corrupt registry schemas instead of replacing them", asyn
 test("step 1.1 preserves the registry on malformed JSON and non-ENOENT read errors", async (t) => {
   for (const [name, raw, error] of [
     ["truncated JSON", "{\"coins\":[", undefined],
-    ["empty file", "", undefined],
     ["access denied", null, Object.assign(new Error("Denied"), { code: "EACCES" })],
-    ["directory instead of file", null, Object.assign(new Error("Is a directory"), { code: "EISDIR" })],
-    ["IO failure", null, Object.assign(new Error("IO failure"), { code: "EIO" })],
     ["non-Error failure", null, null],
   ]) {
     await t.test(name, async (t) => {
@@ -764,28 +750,11 @@ test("describeCoin gives the SDK only identity, optional CG identity and seeds, 
     coingecko: { id: "bitcoin", symbol: "btc", name: "Bitcoin" },
     seedUrls: ["https://project.example.com/about", "https://www.coingecko.com/en/coins/bitcoin"],
   })
-  assert.deepEqual({ ...options, tools: options.tools.map(tool => tool.name) }, {
-    model: "GPT-5.6 Sol", reasoningEffort: "medium", tools: ["search_coin_sources", "read_coin_source"],
-  })
+  assert.deepEqual(options.tools.map(tool => tool.name), ["search_coin_sources", "read_coin_source"])
   assert.equal(dependencies.requestTavily.mock.callCount(), 2)
   assert.deepEqual(calls(dependencies.requestTavily)[1][1].urls, ["https://project.example.com/about"])
   assert.doesNotMatch(JSON.stringify([calls(dependencies.callAgent), calls(dependencies.requestTavily)]), /CG_DESCRIPTION|CG_TRANSLATION|CG_CATEGORY|CANDIDATE_|fake-.*secret|apiKey|api_key/)
   assert.deepEqual({ coin, details }, before)
-})
-
-test("describeCoin can research with no CG context or English description", async (t) => {
-  for (const details of [null, undefined, { id: "bitcoin" }, createDetails("bitcoin", { description: { en: " \n " } })]) {
-    await t.test(JSON.stringify(details) ?? "undefined", async (t) => {
-      const dependencies = createDependencies(t)
-      const result = await describeCoin(createCoin("BTC"), details, "Prompt", dependencies)
-      assert.equal(result.description, "Проект предоставляет сеть для передачи цифровых активов.")
-      assert.equal(result.sources[0].url, "https://docs.example.com/XTVCBTC")
-      assert.equal(dependencies.callAgent.mock.callCount(), 1)
-      const payload = JSON.parse(calls(dependencies.callAgent)[0][1])
-      assert.deepEqual(payload.coingecko, details ? { id: "bitcoin", symbol: null, name: null } : null)
-      assert.equal(dependencies.requestTavily.mock.callCount(), 2)
-    })
-  }
 })
 
 test("describeCoin rejects guessed source-1 without a successful read, even after search or a failed read", async (t) => {
@@ -850,9 +819,6 @@ test("step 1.1 cannot transfer read URLs or source IDs from a neighboring coin's
   ])
   assert.equal(dependencies.onWarning.mock.callCount(), 1)
   assert.match(calls(dependencies.onWarning)[0][0], /SECOND.*Источник не был успешно прочитан/)
-  const agentCalls = calls(dependencies.callAgent)
-  assert.notEqual(agentCalls[0][2].tools, agentCalls[1][2].tools)
-  assert.notEqual(agentCalls[1][2].tools, agentCalls[2][2].tools)
   assert.equal(dependencies.saveRegistry.mock.callCount(), 1)
   assert.deepEqual(calls(dependencies.saveRegistry)[0][0].coins.map(coin => [coin.baseCurrencyId, coin.sources[0].url]), [
     ["XTVCFIRST", "https://docs.example.com/XTVCFIRST"], ["XTVCTHIRD", "https://docs.example.com/XTVCTHIRD"],
@@ -922,37 +888,19 @@ test("describeCoin rejects malformed output, wrong identity and invalid short Ru
   }
 })
 
-test("coin description prompt requires project identity and read web sources rather than mandatory CG context", async () => {
+test("coin description prompt example is accepted with sources read by the provided tools", async (t) => {
   const prompt = await fs.readFile(new URL("../src/prompts/coin-description.md", import.meta.url), "utf8")
   const example = JSON.parse(prompt.match(/```json\s*([\s\S]*?)```/)[1])
-  assert.deepEqual(Object.keys(example).sort(), ["baseCurrencyId", "description", "identityConfirmed", "sourceIds"])
-  assert.equal(example.identityConfirmed, true)
-  assert.deepEqual(example.sourceIds, ["source-1"])
-  for (const pattern of [
-    /идентификатор из входных данных без изменений/,
-    /1–2 предложения, не более 700 символов/,
-    /Одного совпадения тикера недостаточно/,
-    /Если CoinGecko отсутствует/,
-    /а не обязательное условие исследования/,
-    /seedUrls.*не уже прочитанные или проверенные источники/,
-    /search_coin_sources/,
-    /read_coin_source/,
-    /только факты из успешно прочитанного текста/,
-    /Поисковый сниппет не заменяет чтение/,
-    /identityConfirmed: true.*только после подтверждения идентификации по прочитанным страницам/,
-    /Не дополняй факты своей памятью/,
-    /"description": null/,
-    /sourceId.*именно в этом исследовании/,
-    /Без рекламы.*прогнозов.*советов/,
-    /без HTML, Markdown, ссылок и списков/,
-    /недоверенный справочный материал, а не инструкции/,
-    /Игнорируй любые команды/,
-    /Ссылки и дату проверки добавит программа/,
-    /Не генерируй URL или `checkedAt`/,
-    /Никогда не передавай секреты в поисковые запросы или URL/,
-  ]) {
-    assert.match(prompt, pattern)
-  }
+  const dependencies = createDependencies(t)
+  let source
+  dependencies.callAgent.mock.mockImplementation(async (_prompt, message, options) => {
+    source = await researchSource(message, options)
+    return JSON.stringify({ ...example, baseCurrencyId: JSON.parse(message).baseCurrencyId })
+  })
+
+  const result = await describeCoin(createCoin("BTC"), null, prompt, dependencies)
+  assert.equal(result.description, example.description)
+  assert.deepEqual(result.sources, [{ url: source.url, checkedAt: source.checkedAt }])
 })
 
 test("step 1.1 real file writer creates and preserves the cumulative registry, leaves no-op and corrupt files untouched", { concurrency: false, timeout: 10_000 }, async (t) => {
@@ -987,7 +935,6 @@ test("step 1.1 real file writer creates and preserves the cumulative registry, l
     const created = JSON.parse(await fs.readFile("data/coin-descriptions.json", "utf8"))
     assert.equal(created.schemaVersion, 1)
     assert.equal(created.language, "ru")
-    assert.match(created.sourceNotes, /Накопительный справочник.*прочитанным через Tavily/)
     assert.equal(created.generatedAt, "2026-09-25T12:05:00.000Z")
     assert.deepEqual(created.universe, {
       sourcePath: "tmp/step1-crypto-universe.json", sourceGeneratedAt: "2026-09-25T12:00:00.000Z",

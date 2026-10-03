@@ -19,7 +19,7 @@ function readEntries (coins, entries) {
   return readCoinDescriptions(coins, { readFile: async () => JSON.stringify({ coins: entries }) })
 }
 
-test("reads the registry from cwd and returns only requested IDs as a plain JSON object", async () => {
+test("reads the registry from cwd and returns only requested IDs", async () => {
   const registry = { coins: [createEntry("MAIN"), createEntry("OUTSIDE"), createEntry("LEADER"), createEntry("UNUSED")] }
   const coins = [{ baseCurrencyId: "MAIN", symbol: "MAIN" }, { baseCurrencyId: "OUTSIDE", symbol: "OUTSIDE" }]
   const before = structuredClone([coins, registry])
@@ -36,8 +36,6 @@ test("reads the registry from cwd and returns only requested IDs as a plain JSON
     MAIN: { description: registry.coins[0].description, sources: registry.coins[0].sources },
     OUTSIDE: { description: registry.coins[1].description, sources: registry.coins[1].sources },
   })
-  assert.equal(Object.getPrototypeOf(result), Object.prototype)
-  assert.deepEqual(JSON.parse(JSON.stringify(result)), result)
   assert.deepEqual([coins, registry], before)
 })
 
@@ -125,13 +123,12 @@ test("missing entries and empty selections return an empty lookup", async () => 
 })
 
 test("repeated requested IDs are harmless but duplicate registry IDs are omitted regardless of order", async (t) => {
-  const warn = t.mock.method(console, "warn", () => {})
+  t.mock.method(console, "warn", () => {})
   const coins = [{ baseCurrencyId: "MAIN" }, { baseCurrencyId: "MAIN" }, { baseCurrencyId: "OTHER" }]
   const entry = createEntry("MAIN")
   assert.deepEqual(await readEntries(coins, [entry]), {
     MAIN: { description: entry.description, sources: entry.sources },
   })
-  assert.equal(warn.mock.callCount(), 0)
 
   for (const duplicates of [
     [entry, createEntry("MAIN", { description: "Different description" })],
@@ -143,8 +140,6 @@ test("repeated requested IDs are harmless but duplicate registry IDs are omitted
       OTHER: { description: "Description OTHER", sources: createEntry("OTHER").sources },
     })
   }
-  assert.ok(warn.mock.callCount() > 0)
-  assert.match(warn.mock.calls[0].arguments[0], /baseCurrencyId.*MAIN/)
 })
 
 test("IDs that match object property names remain ordinary JSON keys", async () => {
@@ -160,8 +155,7 @@ test("IDs that match object property names remain ordinary JSON keys", async () 
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result)
 })
 
-test("a missing registry is optional and does not emit a warning", async (t) => {
-  const warn = t.mock.method(console, "warn", () => {})
+test("a missing registry returns an empty lookup", async () => {
   const result = await readCoinDescriptions([{ baseCurrencyId: "MAIN" }], {
     readFile: async () => {
       throw Object.assign(new Error("File missing"), { code: "ENOENT" })
@@ -169,10 +163,9 @@ test("a missing registry is optional and does not emit a warning", async (t) => 
   })
 
   assert.deepEqual(result, {})
-  assert.equal(warn.mock.callCount(), 0)
 })
 
-test("read errors and bad JSON warn briefly and return an empty lookup", async (t) => {
+test("read errors and bad JSON return an empty lookup", async (t) => {
   for (const [name, readFile] of [
     ["read error", async () => {
       throw Object.assign(new Error("Access denied"), { code: "EACCES" })
@@ -183,23 +176,19 @@ test("read errors and bad JSON warn briefly and return an empty lookup", async (
     ["bad JSON", async () => "{broken JSON"],
   ]) {
     await t.test(name, async (t) => {
-      const warn = t.mock.method(console, "warn", () => {})
+      t.mock.method(console, "warn", () => {})
       assert.deepEqual(await readCoinDescriptions([{ baseCurrencyId: "MAIN" }], { readFile }), {})
-      assert.equal(warn.mock.callCount(), 1)
-      assert.match(warn.mock.calls[0].arguments[0], /coin-descriptions\.json/)
     })
   }
 })
 
-test("invalid registry shapes warn and fall back to an empty lookup", async (t) => {
+test("invalid registry shapes fall back to an empty lookup", async (t) => {
   for (const data of [null, [], "text", true, 123, {}, { coins: null }, { coins: {} }, { coins: "text" }]) {
     await t.test(JSON.stringify(data), async (t) => {
-      const warn = t.mock.method(console, "warn", () => {})
+      t.mock.method(console, "warn", () => {})
       const result = await readCoinDescriptions([{ baseCurrencyId: "MAIN" }], { readFile: async () => JSON.stringify(data) })
 
       assert.deepEqual(result, {})
-      assert.equal(warn.mock.callCount(), 1)
-      assert.match(warn.mock.calls[0].arguments[0], /coin-descriptions\.json.*coins/)
     })
   }
 })

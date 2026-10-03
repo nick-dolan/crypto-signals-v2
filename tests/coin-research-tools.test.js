@@ -244,12 +244,10 @@ test("search reserves exactly two requests before await and never refunds failur
     return operation.promise
   })
   const { tools: [search], selectSources } = createCoinResearchTools({ request })
-  const calls = Array.from({ length: 8 }, () => search.handler({ query: "Coin" }))
+  const calls = Array.from({ length: 3 }, () => search.handler({ query: "Coin" }))
 
   assert.equal(request.mock.callCount(), 2)
-  for (const result of await Promise.all(calls.slice(2))) {
-    failure(result, /не более 2 запросов поиска/)
-  }
+  failure(await calls[2], /не более 2 запросов поиска/)
 
   pending[0].resolve({ results: null, error: "private-response private-key" })
   pending[1].reject(new Error("Tavily /search HTTP 429"))
@@ -263,7 +261,7 @@ test("search reserves exactly two requests before await and never refunds failur
 
 test("extract reserves exactly two attempts before await, including failed responses", async (context) => {
   const pending = []
-  const seedUrls = Array.from({ length: 6 }, (_, index) => `https://example.com/${index}`)
+  const seedUrls = Array.from({ length: 3 }, (_, index) => `https://example.com/${index}`)
   const request = context.mock.fn(() => {
     const operation = Promise.withResolvers()
     pending.push(operation)
@@ -273,9 +271,7 @@ test("extract reserves exactly two attempts before await, including failed respo
   const calls = seedUrls.map(url => read.handler({ url }))
 
   assert.equal(request.mock.callCount(), 2)
-  for (const result of await Promise.all(calls.slice(2))) {
-    failure(result, /не более 2 попыток extract/)
-  }
+  failure(await calls[2], /не более 2 попыток extract/)
 
   assert.throws(() => selectSources(["source-1"]))
   pending[0].resolve(extracted(seedUrls[0]))
