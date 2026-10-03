@@ -42,7 +42,8 @@ function assertPreviewPost (html, manifest) {
     })
   assert.equal(restored, manifest.richMessage.html, "Preview must preserve all trusted HTML and its order exactly, replacing only media tags")
   assert.doesNotMatch(post, /tg-collage|tg:\/\/photo|attach:\/\//u)
-  assert.doesNotMatch(post, /Данные рынка на|Период:|Период новостей недоступен/u)
+  assert.doesNotMatch(post, /Данные рынка на|Период:|Период новостей недоступен|<b>Графики<\/b>/u)
+
   assert.doesNotMatch(html, /<script\b|@import|url\(|<(?:iframe|object|embed|audio|video|source)\b/iu)
   assert.doesNotMatch(html, /<(?:img|link)\b[^>]*(?:src|href)="(?:https?:)?\/\//iu)
   assert.match(html, /default-src 'none'; img-src 'self'/u)
@@ -160,10 +161,11 @@ test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-
     "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>", "<p><br></p>",
     original.coins.slice(3, 7).map(coin => `<p><code>${coin.symbol}</code> · <b>${coin.name}</b><br>${coin.explanation}</p>`).join("\n<p><br></p>\n"),
   ].join("\n"))
-  const positions = ["📊 Крипторадар", "<b>Графики</b>", "<div class=\"photo-grid\">", "Монеты под наблюдением", "📰 Значимые инфоповоды", "<b>Новости за последние 6 часов</b>"]
+  const positions = ["📊 Крипторадар", "<div class=\"photo-grid\">", "Монеты под наблюдением", "📰 Значимые инфоповоды", "<b>Новости за последние 6 часов</b>"]
     .map(marker => html.indexOf(marker))
   assert.ok(positions.every(position => position >= 0))
   assert.deepEqual(positions, [...positions].sort((first, second) => first - second))
+  assert.match(html, /<\/div>\n<p><b>Монеты под наблюдением<\/b><\/p>/u)
   assert.match(html, /max-width: 720px/)
   assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
   assert.match(html, /@media[\s\S]*grid-template-columns: 1fr/)

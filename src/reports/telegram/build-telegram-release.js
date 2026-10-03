@@ -132,7 +132,9 @@ export function buildTelegramRelease (report) {
   if (report?.timeframe !== "1h" || !isSafeInteger(asOf) || asOf % 3_600_000 !== 0) {
     throw new Error("Telegram-выпуск требует сохранённый часовой отчёт (asOf, 1h)")
   }
+
   const selection = selectTelegramCandidates(report)
+
   const candidates = selection.candidates.map((item, index) => ({
     symbol: item.coin.symbol,
     section: item.section,
@@ -141,28 +143,28 @@ export function buildTelegramRelease (report) {
     image: `cards/${String(index + 1).padStart(2, "0")}-${item.coin.symbol.replace(/[^a-z\d_-]+/gi, "_").slice(0, 40)}.png`,
     mediaId: `card_${index + 1}`,
   }))
+
   const photos = candidates.map(item => `<img src="tg://photo?id=${item.mediaId}"/>`).join("")
   const closedAt = new Date(asOf + 3_600_000).toISOString()
   const createdAt = isString(report.reportCreatedAt) && isFinite(Date.parse(report.reportCreatedAt))
     ? report.reportCreatedAt
     : closedAt
-  const introductory = [
-    report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
-    `<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b>`,
-  ].filter(Boolean).join("\n")
-  const sections = [telegramSection(introductory, [])]
+  const sections = [telegramSection(`<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b>`, [])]
+
   if (photos) {
-    sections.push("<p><br></p>", telegramSection("<b>Графики</b>", []),
-      candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos)
+    sections.push(candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos)
   }
+
   for (const [section, title] of [["top", "Монеты под наблюдением"], ["news", "📰 Значимые инфоповоды"]]) {
     const blocks = selection.candidates.flatMap(item => item.section === section
       ? [candidateBlock(item.coin, report.demo === true)]
       : [])
+
     if (section === "news" && !blocks.length) {
       continue
     }
-    sections.push("<p><br></p>", telegramSection(`<b>${title}</b>`, [
+
+    sections.push(section === "top" && photos ? null : "<p><br></p>", telegramSection(`<b>${title}</b>`, [
       "<br>",
       ...(blocks.length
         ? blocks.flatMap((block, index) => index ? ["<br>", block] : [block])
@@ -171,6 +173,7 @@ export function buildTelegramRelease (report) {
   }
   const brief = matchingBrief(report)
   sections.push("<p><br></p>", telegramSection(`<b>${briefTitle(brief)}</b>`, ["<br>", ...briefBlocks(brief)]))
+
   return {
     schemaVersion: 2,
     asOf: report.asOf,

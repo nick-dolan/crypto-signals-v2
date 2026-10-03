@@ -52,7 +52,7 @@ function deepFreeze (value) {
 }
 
 function sectionHtml (release, title) {
-  const section = release.richMessage.html.split(/\n<p><br><\/p>\n(?=<p><b>)/u)
+  const section = release.richMessage.html.split(/\n(?:<p><br><\/p>\n)?(?=<p><b>)/u)
     .find(text => text.startsWith(`<p><b>${title}</b>`))
   assert.ok(section, `Missing section: ${title}`)
   return section
@@ -164,7 +164,7 @@ function assertManifest (release, report) {
   for (const title of [newsTitle, "Монеты под наблюдением"]) {
     assert.equal(html.split(`<b>${title}</b>`).length - 1, 1)
   }
-  assert.equal(html.split("<b>Графики</b>").length - 1, photos ? 1 : 0)
+  assert.doesNotMatch(html, /<b>Графики<\/b>/u)
   assert.equal(html.split("<tg-collage>").length - 1, media.length > 1 ? 1 : 0)
   assert.doesNotMatch(html, /<b>(?:🟢 Позитивные инфоповоды|🦎 CoinGecko Trending)<\/b>|В выпуске нет дополнительных монет/u)
   const top = candidateParagraphs(release, "Монеты под наблюдением")
@@ -175,14 +175,14 @@ function assertManifest (release, report) {
   assert.equal(news.length, newsCount)
   const createdAt = isString(report.reportCreatedAt) && isFinite(Date.parse(report.reportCreatedAt)) ? report.reportCreatedAt : release.closedAt
   assert.equal(html, [
-    `<p>${report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b><br>" : ""}<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b></p>`,
+    `<p><b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b></p>`,
     ...(photos
       ? [
-          "<p><br></p>", "<p><b>Графики</b></p>",
+          "<p><br></p>",
           media.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
         ]
-      : []),
-    "<p><br></p>", "<p><b>Монеты под наблюдением</b></p>", "<p><br></p>",
+      : ["<p><br></p>"]),
+    "<p><b>Монеты под наблюдением</b></p>", "<p><br></p>",
     top.length
       ? top.map(text => `<p>${text}</p>`).join("\n<p><br></p>\n")
       : "<p>Агент не выделил убедительных ранних кандидатов.</p>",
@@ -314,13 +314,14 @@ for (const [topCount, topBlocks] of [
       const photos = Array.from({ length: topCount + newsCount }, (_, index) => `<img src="tg://photo?id=card_${index + 1}"/>`).join("")
       assert.equal(html, [
         "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
-        ...(photos ? ["<p><br></p>", "<p><b>Графики</b></p>", topCount + newsCount > 1 ? `<tg-collage>${photos}</tg-collage>` : photos] : []),
-        "<p><br></p>", "<p><b>Монеты под наблюдением</b></p>", "<p><br></p>", ...topBlocks,
+        "<p><br></p>",
+        ...(photos ? [topCount + newsCount > 1 ? `<tg-collage>${photos}</tg-collage>` : photos] : []),
+        "<p><b>Монеты под наблюдением</b></p>", "<p><br></p>", ...topBlocks,
         ...(newsCount ? ["<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>", "<p><br></p>", ...newsBlocks] : []),
         "<p><br></p>", "<p><b>Новости за последние 6 часов</b></p>", "<p><br></p>",
         "<p>• Сохранённая сводка рынка.</p>",
       ].join("\n"))
-      assert.equal(html.split("<p><br></p>").length - 1, 4 + Math.max(0, topCount - 1) + (newsCount ? newsCount + 1 : 0) + (photos ? 1 : 0))
+      assert.equal(html.split("<p><br></p>").length - 1, 4 + Math.max(0, topCount - 1) + (newsCount ? newsCount + 1 : 0))
       assert.doesNotMatch(html, /· · ·|<p>- <code>|[🟩⬜🟥]/u)
       assert.deepEqual(report, before)
     })
@@ -356,7 +357,7 @@ for (const [section, attributes] of [
     assertManifest(release, report)
     assert.equal(release.eligibleCount, 1)
     assert.equal(release.omittedCount, 0)
-    assert.equal(sectionHtml(release, "Графики"), "<p><b>Графики</b></p>\n<img src=\"tg://photo?id=card_1\"/>")
+    assert.ok(release.richMessage.html.includes("<img src=\"tg://photo?id=card_1\"/>\n<p><b>Монеты под наблюдением</b></p>"))
     assert.doesNotMatch(release.richMessage.html, /<tg-collage>/u)
     assert.deepEqual(release.candidates.map(({ symbol, section, coinIndex, number }) => ({ symbol, section, coinIndex, number })), [
       { symbol: "ONLY", section, coinIndex: 1, number: 1 },
@@ -1539,13 +1540,13 @@ test("the complete post puts charts after the title, then candidates and uniform
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   const { html } = release.richMessage
-  assert.ok(html.startsWith("<p><b>📊 Крипторадар | 27 сентября 2026, 11:03 МСК</b></p>\n<p><br></p>\n<p><b>Графики</b></p>\n<img src=\"tg://photo?id=card_1\"/>\n<p><br></p>\n<p><b>Монеты под наблюдением</b></p>\n<p><br></p>\n<p><code>TOP</code>"))
+  assert.ok(html.startsWith("<p><b>📊 Крипторадар | 27 сентября 2026, 11:03 МСК</b></p>\n<p><br></p>\n<img src=\"tg://photo?id=card_1\"/>\n<p><b>Монеты под наблюдением</b></p>\n<p><br></p>\n<p><code>TOP</code>"))
   for (const number of [1, 2, 3]) {
     assert.ok(html.includes(`<p>• Новость ${number}. <a href="https://news.example/source">[1]</a></p>`))
   }
   assert.ok(html.includes("<br>Изменение активности требует наблюдения.</p>\n<p><br></p>\n<p><b>Новости за последние 6 часов</b></p>\n<p><br></p>\n<p>• Новость 1."))
   assert.ok(html.endsWith("<p>• Новость 3. <a href=\"https://news.example/source\">[1]</a></p>"))
-  assert.equal(html.split("<p><br></p>").length - 1, 7)
+  assert.equal(html.split("<p><br></p>").length - 1, 6)
   assert.doesNotMatch(html, /· · ·|🟩|⬜|🟥|• •|⊕|○|⊖|──────|Крипто-пульс|Публикации:|Кандидатов:|Срез по закрытым свечам|P — оценка|без статистической калибровки|Покрытие новостных источников/u)
   assert.deepEqual(candidateParagraphs(release, "Монеты под наблюдением"), [
     "<code>TOP</code> · <b><a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a></b><br>Изменение активности требует наблюдения.",
@@ -1555,13 +1556,13 @@ test("the complete post puts charts after the title, then candidates and uniform
   assert.deepEqual(report, before)
 })
 
-test("only an explicit demo flag labels the single post synthetic and suppresses market links", () => {
+test("demo does not change the post heading but still suppresses market links", () => {
   for (const demo of [true, false, "true"]) {
     const report = fixture([coin("TEST", { topRank: 1 })], { demo })
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     assert.equal(release.demo, demo === true)
-    assert.equal([...release.richMessage.html.matchAll(/ДЕМО · синтетические данные/giu)].length, demo === true ? 1 : 0)
+    assert.doesNotMatch(release.richMessage.html, /ДЕМО · синтетические данные/iu)
     assert.equal(release.richMessage.html.includes("https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P"), demo !== true)
     assert.deepEqual(candidateParagraphs(release, "Монеты под наблюдением"), [
       `<code>TEST</code> · <b>${demo === true ? "Монета TEST" : "<a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P\">Монета TEST</a>"}</b><br>Изменение активности требует наблюдения.`,
@@ -1608,8 +1609,9 @@ test("one rich post keeps news and all candidate sections above ordinary text an
   assert.equal([...html.matchAll(/Инфоповод-\d/gu)].length, 7)
   assert.equal([...html.matchAll(/<p><code>LONG-\d<\/code> · <b><a href=/gu)].length, 10)
   assert.doesNotMatch(html, /PRIVATE-|Категории:|CoinGecko Trending/u)
-  const positions = ["<b>Графики</b>", "</tg-collage>", "<b>Монеты под наблюдением</b>", "<b>📰 Значимые инфоповоды</b>", "<b>Новости за последние 6 часов</b>"]
+  const positions = ["📊 Крипторадар", "</tg-collage>", "<b>Монеты под наблюдением</b>", "<b>📰 Значимые инфоповоды</b>", "<b>Новости за последние 6 часов</b>"]
     .map(marker => html.indexOf(marker))
+  assert.ok(positions.every(position => position >= 0))
   assert.deepEqual(positions, [...positions].sort((first, second) => first - second))
   assert.equal(candidateParagraphs(release, "Монеты под наблюдением").length, 3)
   assert.equal(candidateParagraphs(release, "📰 Значимые инфоповоды").length, 7)
