@@ -52,14 +52,14 @@ function deepFreeze (value) {
 }
 
 function sectionHtml (release, title) {
-  const section = release.richMessage.html.split(/(?=<p><b>(?:📰|⭐) )/u)
+  const section = release.richMessage.html.split(/(?=<p><b>)/u)
     .find(text => text.startsWith(`<p><b>${title}</b>`))
   assert.ok(section, `Missing section: ${title}`)
   return section
 }
 
 function candidateParagraphs (release, title) {
-  return [...sectionHtml(release, title).matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text)
+  return [...sectionHtml(release, title).matchAll(/<p>(• <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text)
 }
 
 function assertEscaped (text) {
@@ -142,6 +142,7 @@ function assertManifest (release, report) {
   assert.deepEqual(Object.keys(release.richMessage).sort(), ["html", "media"])
   const { html, media } = release.richMessage
   assertTelegramHtml(html)
+  assert.doesNotMatch(html, /· · ·|<p>- <code>|[🟩⬜🟥]|<b>(?:📰 Новостная сводка|⭐ Топ агента)/u)
   assert.deepEqual(media, release.candidates.map(item => ({
     id: item.mediaId, media: { type: "photo", media: `attach://${item.mediaId}` },
   })))
@@ -150,32 +151,32 @@ function assertManifest (release, report) {
   const photos = media.map(item => `<img src="tg://photo?id=${item.id}"/>`).join("")
   assert.ok(html.startsWith(media.length > 1 ? `<tg-collage>${photos}</tg-collage>\n<p>` : `${photos}${photos ? "\n" : ""}<p>`))
   assert.doesNotMatch(html.slice(html.indexOf("<p>")), /<img\b|<tg-collage>/u)
-  assert.ok(html.includes("<p><b>📰 Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n"))
-  for (const title of ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента"]) {
+  assert.ok(html.includes("<p><b>Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n"))
+  for (const title of ["Новостная сводка за последние 6 часов", "Топ агента"]) {
     assert.equal(html.split(`<b>${title}</b>`).length - 1, 1)
     assert.ok(sectionHtml(release, title).startsWith(`<p><b>${title}</b></p>\n`), `Section heading must not include a description: ${title}`)
   }
   assert.doesNotMatch(html, /<b>(?:🟢 Позитивные инфоповоды|🦎 CoinGecko Trending)<\/b>|В выпуске нет дополнительных монет/u)
-  const top = candidateParagraphs(release, "⭐ Топ агента")
+  const top = candidateParagraphs(release, "Топ агента")
   const newsCount = release.candidates.filter(item => item.section === "news").length
   const news = newsCount ? candidateParagraphs(release, "📰 Значимые инфоповоды") : []
   assert.equal(html.split("<b>📰 Значимые инфоповоды</b>").length - 1, newsCount ? 1 : 0)
   assert.equal(top.length, release.candidates.length - newsCount)
   assert.equal(news.length, newsCount)
-  assert.equal(html.slice(html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
-    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
+  assert.equal(html.slice(html.indexOf("<p><b>Топ агента</b></p>")), [
+    "<p><b>Топ агента</b></p>", "<p><br></p>",
     top.length
-      ? top.map(text => `<p>${text}</p>`).join("\n<p>· · ·</p>\n")
+      ? top.map(text => `<p>${text}</p>`).join("\n<p><br></p>\n")
       : "<p>Агент не выделил убедительных ранних кандидатов.</p>",
     ...(newsCount
       ? [
           "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
-          news.map(text => `<p>${text}</p>`).join("\n<p>· · ·</p>\n"),
+          news.map(text => `<p>${text}</p>`).join("\n<p><br></p>\n"),
         ]
       : []),
-  ].join("\n"), "Candidate sections must have exact spacing and only between-coin separators")
+  ].join("\n"), "Candidate sections must preserve exact blank-line spacing")
   for (const paragraph of [...top, ...news]) {
-    assert.match(paragraph, /^- <code>[^<>]*<\/code>(?: |$)/u)
+    assert.match(paragraph, /^• <code>[^<>]*<\/code>(?: |$)/u)
     assert.equal([...paragraph.matchAll(/<code>/gu)].length, 1)
     assert.doesNotMatch(paragraph, /<br>|<\/?(?:b|i)>/u)
   }
@@ -256,29 +257,29 @@ test("an empty report keeps the empty top and its blank line, without news or in
   assert.deepEqual(release.richMessage.media, [])
   assert.doesNotMatch(release.richMessage.html, /<img\b|<tg-collage>/u)
   assert.doesNotMatch(release.richMessage.html, /Кандидатов:/u)
-  assert.equal(sectionHtml(release, "⭐ Топ агента"), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
+  assert.equal(sectionHtml(release, "Топ агента"), "<p><b>Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
   assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
 })
 
 for (const [topCount, topBlocks] of [
   [0, ["<p>Агент не выделил убедительных ранних кандидатов.</p>"]],
-  [1, ["<p>- <code>TOP-1</code> — Техника.</p>"]],
+  [1, ["<p>• <code>TOP-1</code> — Техника.</p>"]],
   [3, [
-    "<p>- <code>TOP-1</code> — Техника.</p>", "<p>· · ·</p>",
-    "<p>- <code>TOP-2</code> — Техника.</p>", "<p>· · ·</p>",
-    "<p>- <code>TOP-3</code> — Техника.</p>",
+    "<p>• <code>TOP-1</code> — Техника.</p>", "<p><br></p>",
+    "<p>• <code>TOP-2</code> — Техника.</p>", "<p><br></p>",
+    "<p>• <code>TOP-3</code> — Техника.</p>",
   ]],
 ]) {
   for (const [newsCount, newsBlocks] of [
     [0, []],
-    [1, ["<p>- <code>NEWS-1</code> — Инфоповод.</p>"]],
+    [1, ["<p>• <code>NEWS-1</code> — Инфоповод.</p>"]],
     [3, [
-      "<p>- <code>NEWS-1</code> — Инфоповод.</p>", "<p>· · ·</p>",
-      "<p>- <code>NEWS-2</code> — Инфоповод.</p>", "<p>· · ·</p>",
-      "<p>- <code>NEWS-3</code> — Инфоповод.</p>",
+      "<p>• <code>NEWS-1</code> — Инфоповод.</p>", "<p><br></p>",
+      "<p>• <code>NEWS-2</code> — Инфоповод.</p>", "<p><br></p>",
+      "<p>• <code>NEWS-3</code> — Инфоповод.</p>",
     ]],
   ]) {
-    test(`${topCount} top and ${newsCount} news candidates have exact paragraphs, separators and blank lines without changing the opening`, () => {
+    test(`${topCount} top and ${newsCount} news candidates have exact bulleted paragraphs and blank lines without changing the opening`, () => {
       const report = deepFreeze(fixture([
         ...Array.from({ length: topCount }, (_, index) => coin(`TOP-${index + 1}`, {
           topRank: index + 1, name: null, technicalExplanation: "Техника.",
@@ -293,19 +294,19 @@ for (const [topCount, topBlocks] of [
       const { html } = release.richMessage
       assert.equal(html.slice(html.indexOf("<p>")), [
         "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>", "<p><br></p>",
-        "<p><b>📰 Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
-        "<p>Сохранённая сводка рынка.</p>", "<p><br></p>",
-        "<p><b>⭐ Топ агента</b></p>", "<p><br></p>", ...topBlocks,
+        "<p><b>Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
+        "<p>• Сохранённая сводка рынка.</p>", "<p><br></p>",
+        "<p><b>Топ агента</b></p>", "<p><br></p>", ...topBlocks,
         ...(newsCount ? ["<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>", ...newsBlocks] : []),
       ].join("\n"))
-      assert.equal(html.split("<p><br></p>").length - 1, newsCount ? 5 : 4)
-      assert.equal(html.split("<p>· · ·</p>").length - 1, Math.max(0, topCount - 1) + Math.max(0, newsCount - 1))
+      assert.equal(html.split("<p><br></p>").length - 1, 4 + Math.max(0, topCount - 1) + newsCount)
+      assert.doesNotMatch(html, /· · ·|<p>- <code>|[🟩⬜🟥]/u)
       assert.deepEqual(report, before)
     })
   }
 }
 
-test("news fully deduplicated against top leaves no news heading, placeholder, separator or preceding blank line", () => {
+test("news fully deduplicated against top leaves no news heading, placeholder or extra blank line", () => {
   const report = deepFreeze(fixture([
     coin("BCH", {
       topRank: 1, name: null, socialSignificant: true, socialSentiment: "negative", explanation: "Готовое объяснение.",
@@ -317,7 +318,7 @@ test("news fully deduplicated against top leaves no news heading, placeholder, s
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   assert.deepEqual(release.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [[0, "top"]])
-  assert.equal(sectionHtml(release, "⭐ Топ агента"), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>- <code>BCH</code> — Готовое объяснение.</p>")
+  assert.equal(sectionHtml(release, "Топ агента"), "<p><b>Топ агента</b></p>\n<p><br></p>\n<p>• <code>BCH</code> — Готовое объяснение.</p>")
   assert.equal(release.richMessage.html, buildTelegramRelease(fixture([report.coins[0]])).richMessage.html)
   assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
   assert.deepEqual(report, before)
@@ -376,9 +377,9 @@ test("overlaps, normalized symbols and canonical baseCurrencyId aliases occur on
   assert.deepEqual(release.candidates.map(item => item.coinIndex), [3, 0, 5, 7, 8, 9])
   assert.equal(release.eligibleCount, 6)
   assert.equal(release.omittedCount, 0)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /<p>- <code>BETA<\/code> <a [\s\S]*<p>- <code>alpha<\/code> <a /u)
+  assert.match(sectionHtml(release, "Топ агента"), /<p>• <code>BETA<\/code> <a [\s\S]*<p>• <code>alpha<\/code> <a /u)
   assert.deepEqual(release.candidates.map(item => item.section), ["top", "top", "news", "news", "news", "news"])
-  assert.match(sectionHtml(release, "📰 Значимые инфоповоды"), /<p>- <code>GAMMA<\/code> <a /u)
+  assert.match(sectionHtml(release, "📰 Значимые инфоповоды"), /<p>• <code>GAMMA<\/code> <a /u)
   assert.doesNotMatch(release.richMessage.html, /CoinGecko Trending|Смешанный фон|Позитивный инфоповод|Негативный инфоповод|<i>/u)
 })
 
@@ -447,12 +448,12 @@ for (const sentiment of ["positive", "negative", "mixed", "neutral", null, undef
     assertManifest(release, report)
     assert.equal(release.eligibleCount, ["positive", "negative"].includes(sentiment) ? 2 : 1)
     assert.equal(release.candidates[0].section, "top")
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-      "- <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Объём растёт. У вывода есть новостные оговорки.",
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+      "• <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Объём растёт. У вывода есть новостные оговорки.",
     ])
     if (["positive", "negative"].includes(sentiment)) {
       assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), [
-        "- <code>SOCIAL-ONLY</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ASOCIAL-ONLYUSDT.P\">Монета SOCIAL-ONLY</a> — Готовый инфоповод вне топа.",
+        "• <code>SOCIAL-ONLY</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ASOCIAL-ONLYUSDT.P\">Монета SOCIAL-ONLY</a> — Готовый инфоповод вне топа.",
       ])
     } else {
       assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|SOCIAL-ONLY/u)
@@ -473,8 +474,8 @@ test("BCH-like insignificant or unknown social background leaves only the separa
     const before = structuredClone(report)
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-      "- <code>BCH</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ABCHUSDT.P\">Bitcoin Cash</a> — BCH сжимает диапазон при растущем объёме.",
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+      "• <code>BCH</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ABCHUSDT.P\">Bitcoin Cash</a> — BCH сжимает диапазон при растущем объёме.",
     ])
     assert.doesNotMatch(release.richMessage.html, /соцсетях|старую новость|НЕ ВОССТАНАВЛИВАТЬ/u)
     assert.deepEqual(report, before)
@@ -482,7 +483,7 @@ test("BCH-like insignificant or unknown social background leaves only the separa
 })
 
 for (const [section, sentiment, title] of [
-  ["top", "mixed", "⭐ Топ агента"],
+  ["top", "mixed", "Топ агента"],
   ["news", "positive", "📰 Значимые инфоповоды"],
   ["news", "negative", "📰 Значимые инфоповоды"],
 ]) {
@@ -496,7 +497,7 @@ for (const [section, sentiment, title] of [
       })])
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      assert.deepEqual(candidateParagraphs(release, title), [`- <code>FALLBACK</code> — ${telegramText(socialReason, 320)}`])
+      assert.deepEqual(candidateParagraphs(release, title), [`• <code>FALLBACK</code> — ${telegramText(socialReason, 320)}`])
       assert.doesNotMatch(release.richMessage.html, /НЕ ПОДСТАВЛЯТЬ|Инфоповод:|Техника:/u)
     }
   })
@@ -512,8 +513,8 @@ test("missing or invalid significant explanations and social reasons leave the h
     })])
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>EMPTY</code>"])
-    assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), ["- <code>NEWS</code>"])
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>EMPTY</code>"])
+    assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), ["• <code>NEWS</code>"])
   }
 })
 
@@ -526,7 +527,7 @@ test("empty or invalid technicalExplanation never falls back to enriched prose, 
       })])
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>EMPTY</code>"])
+      assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>EMPTY</code>"])
     }
   }
 })
@@ -543,7 +544,7 @@ test("legacy archives without technicalExplanation never reconstruct technical p
     const before = structuredClone(report)
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>LEGACY</code>"])
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>LEGACY</code>"])
     assert.deepEqual(report, before)
     assert.equal(Object.hasOwn(archived, "technicalExplanation"), false)
   }
@@ -577,7 +578,7 @@ test("zero, one and missing or invalid probabilities remain unchanged and never 
     assert.equal(selectTelegramCandidates(report).candidates[0].coin.movementProbability, movementProbability)
     assert.equal(report.coins[0].movementProbability, movementProbability)
     assert.equal(release.richMessage.html, expected)
-    assert.doesNotMatch(visibleText(sectionHtml(release, "⭐ Топ агента")), /P движения|уверенность|нет оценки|NaN|Infinity|%/u)
+    assert.doesNotMatch(visibleText(sectionHtml(release, "Топ агента")), /P движения|уверенность|нет оценки|NaN|Infinity|%/u)
   }
 })
 
@@ -612,9 +613,9 @@ test("candidate paragraphs never append drivers, counter-signals, badges, catego
   ])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>TOP</code> — Готовое техническое объяснение."])
+  assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>TOP</code> — Готовое техническое объяснение."])
   assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), [
-    "- <code>POS</code> — Готовый позитивный инфоповод.", "- <code>NEG</code> — Готовый негативный инфоповод.",
+    "• <code>POS</code> — Готовый позитивный инфоповод.", "• <code>NEG</code> — Готовый негативный инфоповод.",
   ])
   assert.doesNotMatch(release.richMessage.html, /PRIVATE-|peers=|rvRatio=|risk=|funding=|⚠|CoinGecko|Категории:|Техника:|Инфоповод:|P движения|уверенность/u)
   assert.doesNotMatch(JSON.stringify(release), /CG-ONLY/u)
@@ -627,8 +628,8 @@ test("the ticker is unlinked code and only the name links to the encoded Trading
     })])
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-      `- <code>WLD</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(marketSymbol)}">Worldcoin</a> — готовое описание`,
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+      `• <code>WLD</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(marketSymbol)}">Worldcoin</a> — готовое описание`,
     ])
   }
 })
@@ -642,14 +643,14 @@ test("ticker code and name escape tag injection without nesting code or moving t
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     const name = "&lt;code&gt;Worldcoin&lt;/code&gt;&amp;&quot;"
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-      `- <code>WLD&lt;/code&gt;&amp;&quot;</code> ${demo ? name : `<a href="https://www.tradingview.com/chart/?symbol=BINANCE%3AWLD%2F%3Fx%3D%22%26y%3D%3Ccode%3E">${name}</a>`} — Текст &lt;code&gt;не разметка&lt;/code&gt;.`,
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+      `• <code>WLD&lt;/code&gt;&amp;&quot;</code> ${demo ? name : `<a href="https://www.tradingview.com/chart/?symbol=BINANCE%3AWLD%2F%3Fx%3D%22%26y%3D%3Ccode%3E">${name}</a>`} — Текст &lt;code&gt;не разметка&lt;/code&gt;.`,
     ])
     assert.equal([...release.richMessage.html.matchAll(/<code>/gu)].length, 1)
     assert.equal([...release.richMessage.html.matchAll(/<a href=/gu)].length, demo ? 0 : 1)
   }
-  assert.throws(() => assertTelegramHtml("<p>- <code><a href=\"https://example.com\">WLD</a></code></p>"), /Ticker code must contain only escaped text/u)
-  assert.throws(() => assertTelegramHtml("<p>- <a href=\"https://example.com\"><code>WLD</code></a></p>"), /Ticker code must not be wrapped in a link/u)
+  assert.throws(() => assertTelegramHtml("<p>• <code><a href=\"https://example.com\">WLD</a></code></p>"), /Ticker code must contain only escaped text/u)
+  assert.throws(() => assertTelegramHtml("<p>• <a href=\"https://example.com\"><code>WLD</code></a></p>"), /Ticker code must not be wrapped in a link/u)
 })
 
 test("missing, empty or invalid names leave just the symbol without a link or duplicated code", () => {
@@ -657,7 +658,7 @@ test("missing, empty or invalid names leave just the symbol without a link or du
     const report = fixture([coin("WLD", { topRank: 1, name, technicalExplanation: null })])
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>WLD</code>"])
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>WLD</code>"])
     assert.doesNotMatch(release.richMessage.html, /<a /u)
   }
 })
@@ -667,7 +668,7 @@ test("missing or invalid market symbols keep the name as plain text without inve
     const report = fixture([coin("WLD", { topRank: 1, name: "Worldcoin", marketSymbol, technicalExplanation: null })])
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>WLD</code> Worldcoin"])
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>WLD</code> Worldcoin"])
     assert.doesNotMatch(release.richMessage.html, /<a /u)
   }
 })
@@ -683,7 +684,7 @@ for (const socialSignificant of [false, true]) {
       })])
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [`- <code>LONG</code> — ${telegramText(description, 1_200)}`])
+      assert.deepEqual(candidateParagraphs(release, "Топ агента"), [`• <code>LONG</code> — ${telegramText(description, 1_200)}`])
       assert.doesNotMatch(release.richMessage.html, /НЕ ДУБЛИРОВАТЬ|НЕ ПОКАЗЫВАТЬ|НЕ ДОБАВЛЯТЬ/u)
     }
   })
@@ -742,7 +743,7 @@ test("huge link URLs are dropped rather than truncated, including growth caused 
   const report = fixture([coin("HUGE-MARKET", { topRank: 1, marketSymbol: "X".repeat(1_000) })])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>HUGE-MARKET</code> Монета HUGE-MARKET — Изменение активности требует наблюдения."])
+  assert.deepEqual(candidateParagraphs(release, "Топ агента"), ["• <code>HUGE-MARKET</code> Монета HUGE-MARKET — Изменение активности требует наблюдения."])
   assert.doesNotMatch(release.richMessage.html, /<a /u)
 })
 
@@ -803,7 +804,7 @@ test("all rendered report fields are escaped, while raw source errors and histor
   for (const prefix of ["SYMBOL", "NAME", "TECH", "WHY", "SOCIAL", "BRIEF", "WARNING"]) {
     assert.ok(text.includes(`${prefix}${escaped}`), `Missing escaped ${prefix}`)
   }
-  assert.ok(sectionHtml(release, "⭐ Топ агента").includes(`SYMBOL${escaped}`))
+  assert.ok(sectionHtml(release, "Топ агента").includes(`SYMBOL${escaped}`))
   assert.doesNotMatch(text, /<img src=x|<script|PRIVATE-ERROR|PRIVATE-HISTORY|metric=|DRIVER|RISK|CATEGORY/u)
   assert.doesNotMatch(text, /График с оговорками|Не все источники новостей и обсуждений удалось загрузить/u)
 })
@@ -820,8 +821,8 @@ test("card paths stay unique and local even for traversal-like symbols and ident
 })
 
 for (const [section, title, demo] of [
-  ["top", "⭐ Топ агента", false], ["news", "📰 Значимые инфоповоды", false],
-  ["top", "⭐ Топ агента", true], ["news", "📰 Значимые инфоповоды", true],
+  ["top", "Топ агента", false], ["news", "📰 Значимые инфоповоды", false],
+  ["top", "Топ агента", true], ["news", "📰 Значимые инфоповоды", true],
 ]) {
   test(`long escaped ${section} ${demo ? "demo" : "linked"} candidates keep one paragraph each, 100-character symbols and names, and 1200-character descriptions`, () => {
     const long = "<&\"🙂>".repeat(1_000)
@@ -843,18 +844,61 @@ for (const [section, title, demo] of [
     assert.deepEqual(paragraphs, report.coins.map((coin) => {
       const name = telegramText(coin.name, 100)
       const heading = demo ? name : `<a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}">${name}</a>`
-      return `- <code>${telegramText(coin.symbol, 100)}</code> ${heading} — ${telegramText(long, 1_200)}`
+      return `• <code>${telegramText(coin.symbol, 100)}</code> ${heading} — ${telegramText(long, 1_200)}`
     }))
     assert.equal([...text.matchAll(/<a href=/gu)].length, demo ? 0 : 10)
     assert.ok(paragraphs.every(paragraph => paragraph.includes("…") && paragraph.length < 2_000))
-    assert.ok(text.startsWith(`<p><b>${title}</b></p>\n${section === "top" ? "<p><br></p>\n" : ""}<p>- <code>`))
+    assert.ok(text.startsWith(`<p><b>${title}</b></p>\n${section === "top" ? "<p><br></p>\n" : ""}<p>• <code>`))
     assert.doesNotMatch(release.richMessage.html, /PRIVATE-|P — оценка|в любую сторону за 4–12ч/u)
+  })
+}
+
+for (const schemaVersion of [1, 2, 3, 4]) {
+  test(`v${schemaVersion} news uses one bullet regardless of sentiment, one blank line between items and an unbulleted warning`, () => {
+    for (const sentiment of ["bullish", "neutral", "bearish", undefined, null, "unknown"]) {
+      const paragraphs = ["Первая новость.", "Вторая новость."].map(text => ({ text, sentiment, sourceIds: ["s"] }))
+      const report = deepFreeze(fixture([], { marketBrief: brief({
+        schemaVersion, status: "partial", paragraphs, items: paragraphs,
+        events: paragraphs.map(item => ({ summary: item.text, sentiment, verification: "confirmed", sourceIds: item.sourceIds })),
+        warning: "Оговорка <&\"🙂>", sources: [{ id: "s", url: "https://news.example/s" }],
+      }) }))
+      const before = structuredClone(report)
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      assert.equal(sectionHtml(release, "Новостная сводка за последние 6 часов"), [
+        "<p><b>Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
+        "<p>• Первая новость. <a href=\"https://news.example/s\">[1]</a></p>", "<p><br></p>",
+        "<p>• Вторая новость. <a href=\"https://news.example/s\">[1]</a></p>",
+        "<p>⚠ Оговорка &lt;&amp;&quot;🙂&gt;</p>", "<p><br></p>", "",
+      ].join("\n"))
+      assert.deepEqual(report, before)
+    }
+  })
+
+  test(`v${schemaVersion} empty or invalid news text adds no bullet, citation or extra blank line`, () => {
+    for (const text of [undefined, null, "", " \t\n\u0000", 42, true, {}, []]) {
+      const paragraphs = [{ text, sourceIds: ["s"] }, { text: "Содержательная новость.", sourceIds: ["s"] }]
+      const report = deepFreeze(fixture([], { marketBrief: brief({
+        schemaVersion, paragraphs, items: paragraphs,
+        events: paragraphs.map(item => ({ summary: item.text, verification: "confirmed", sourceIds: item.sourceIds })),
+        warning: "Оговорка.", sources: [{ id: "s", url: "https://news.example/s" }],
+      }) }))
+      const before = structuredClone(report)
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      assert.equal(sectionHtml(release, "Новостная сводка за последние 6 часов"), [
+        "<p><b>Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
+        "<p>• Содержательная новость. <a href=\"https://news.example/s\">[1]</a></p>",
+        "<p>⚠ Оговорка.</p>", "<p><br></p>", "",
+      ].join("\n"))
+      assert.deepEqual(report, before)
+    }
   })
 }
 
 for (const schemaVersion of [3, 4]) {
   for (const count of [0, 1, 2, 3, 4, 5, 6]) {
-    test(`v${schemaVersion} renders ${count} items as at most five bullets with up to ten distinct citations, without mutating input`, () => {
+    test(`v${schemaVersion} renders ${count} items as at most five uniform bullets separated by blank lines, with up to ten distinct citations and no mutation`, () => {
       const items = Array.from({ length: count }, (_, index) => ({
         text: `Пункт ${index + 1}.`, sentiment: "bullish", sourceIds: [`s${index * 2 + 1}`, `s${index * 2 + 2}`],
       }))
@@ -865,17 +909,14 @@ for (const schemaVersion of [3, 4]) {
       const before = structuredClone(report)
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
-      const bullets = [...text.matchAll(/<p>([•🟩⬜🟥] [\s\S]*?)<\/p>/gu)].map(([, item]) => item)
-      assert.equal(text.split("<p>· · ·</p>").length - 1, Math.max(0, Math.min(count, 5) - 1))
-      assert.ok(text.includes(bullets.map(item => `<p>${item}</p>`).join("\n<p>· · ·</p>\n")))
-      assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `${schemaVersion === 4 ? "🟩 " : "• "}${item.text} ${item.sourceIds
+      const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
+      const bullets = [...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item)
+      assert.equal(text.split("<p><br></p>").length - 1, 2 + Math.max(0, Math.min(count, 5) - 1))
+      assert.ok(text.includes(bullets.map(item => `<p>${item}</p>`).join("\n<p><br></p>\n")))
+      assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `• ${item.text} ${item.sourceIds
         .map((id, citation) => `<a href="https://news.example/${id}">[${index * 2 + citation + 1}]</a>`).join(" ")}`))
       assert.equal([...text.matchAll(/<a href=/gu)].length, Math.min(count, 5) * 2)
-      assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|Пункт 6\./u)
-      if (schemaVersion === 4) {
-        assert.doesNotMatch(text, /•|🟢|⚪|🔴/u)
-      }
+      assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|Пункт 6\.|· · ·|🟩|⬜|🟥|🟢|⚪|🔴/u)
       assert.deepEqual(buildTelegramRelease(report), release)
       assert.deepEqual(report, before)
     })
@@ -900,19 +941,16 @@ for (const schemaVersion of [3, 4]) {
     const before = structuredClone(report)
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
-    assert.equal(text.split("<p>· · ·</p>").length - 1, 3)
-    assert.ok(text.startsWith(`<p><b>📰 Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n<p>${schemaVersion === 4 ? "🟥" : "•"} Первый`))
-    assert.deepEqual([...text.matchAll(/<p>([•🟩⬜🟥] [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-      ["🟥 ", "Первый &lt;пункт&gt; &amp; &quot;цитата&quot;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>"],
-      ["🟩 ", "Второй пункт. <a href=\"https://news.example/c\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>"],
-      ["⬜ ", "Третий пункт. <a href=\"https://news.example/d\">[4]</a> <a href=\"http://news.example/a\">[2]</a>"],
-      ["🟥 ", "Четвёртый пункт. <a href=\"https://news.example/d\">[4]</a>"],
-    ].map(([marker, item]) => `${schemaVersion === 4 ? marker : "• "}${item}`))
-    assert.doesNotMatch(text, /javascript:|missing|\[5\]|🟢|⚪|🔴/u)
-    if (schemaVersion === 4) {
-      assert.doesNotMatch(text, /•/u)
-    }
+    const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
+    assert.equal(text.split("<p><br></p>").length - 1, 5)
+    assert.ok(text.startsWith("<p><b>Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n<p>• Первый"))
+    assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+      "• Первый &lt;пункт&gt; &amp; &quot;цитата&quot;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>",
+      "• Второй пункт. <a href=\"https://news.example/c\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
+      "• Третий пункт. <a href=\"https://news.example/d\">[4]</a> <a href=\"http://news.example/a\">[2]</a>",
+      "• Четвёртый пункт. <a href=\"https://news.example/d\">[4]</a>",
+    ])
+    assert.doesNotMatch(text, /javascript:|missing|\[5\]|· · ·|🟩|⬜|🟥|🟢|⚪|🔴/u)
     assert.deepEqual(buildTelegramRelease(report), release)
     assert.deepEqual(report, before)
   })
@@ -922,7 +960,7 @@ for (const schemaVersion of [3, 4]) {
       const report = fixture([], { marketBrief: brief({ schemaVersion, items, events: [{ summary: "НЕ ИСПОЛЬЗОВАТЬ V1" }] }) })
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
+      const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
       assert.doesNotMatch(text, /· · ·/u)
       assert.match(text, /Содержательная сводка не подготовлена; доступных данных недостаточно/u)
       assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|<p>[•🟩⬜🟥] /u)
@@ -930,8 +968,8 @@ for (const schemaVersion of [3, 4]) {
   })
 }
 
-for (const [schemaVersion, sentiment, marker] of [[3, undefined, "• "], [4, "bullish", "🟩 "], [4, "neutral", "⬜ "], [4, "bearish", "🟥 "]]) {
-  test(`v${schemaVersion} ${sentiment ?? "archival"} text keeps the 250 UTF-16 boundary excluding markers, links and HTML escaping`, () => {
+for (const [schemaVersion, sentiment] of [[3, undefined], [4, "bullish"], [4, "neutral"], [4, "bearish"]]) {
+  test(`v${schemaVersion} ${sentiment ?? "archival"} text keeps the 250 UTF-16 boundary excluding the bullet prefix, links and HTML escaping`, () => {
     for (const [text, expected] of [
       [`${"а ".repeat(124)}а`, `${"а ".repeat(124)}а`],
       [`${"а ".repeat(124)}аб`, `${"а ".repeat(124)}аб`],
@@ -950,10 +988,10 @@ for (const [schemaVersion, sentiment, marker] of [[3, undefined, "• "], [4, "b
       }) })
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      const bullets = [...sectionHtml(release, "📰 Новостная сводка за последние 6 часов").matchAll(/<p>([•🟩⬜🟥] [\s\S]*?)<\/p>/gu)]
+      const bullets = [...sectionHtml(release, "Новостная сводка за последние 6 часов").matchAll(/<p>(• [\s\S]*?)<\/p>/gu)]
         .map(([, item]) => visibleText(item))
-      assert.deepEqual(bullets, [`${marker}${expected} [1] [2]`])
-      assert.ok(bullets[0].slice(marker.length).replace(/ \[1\] \[2\]$/u, "").length <= 250)
+      assert.deepEqual(bullets, [`• ${expected} [1] [2]`])
+      assert.ok(bullets[0].slice(2).replace(/ \[1\] \[2\]$/u, "").length <= 250)
     }
   })
 }
@@ -966,12 +1004,12 @@ test("v3 archives never infer sentiment labels from news text", () => {
   }) }))
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
+  const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
   assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => visibleText(item)), items.map(item => `${item.text} [1]`))
   assert.doesNotMatch(text, /🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
 })
 
-test("v4 missing or invalid sentiment renders no marker without defaulting or inferring classification", () => {
+test("v4 missing or invalid sentiment still renders one bullet without defaulting or inferring classification", () => {
   for (const overrides of [
     {}, ...[undefined, null, "", "unknown", "positive", "negative", "Neutral", "neutral ", "toString", "constructor", "__proto__", 0, false, {}, ["neutral"]]
       .map(sentiment => ({ sentiment })),
@@ -982,11 +1020,11 @@ test("v4 missing or invalid sentiment renders no marker without defaulting or in
     }) }))
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
-    assert.deepEqual([...text.matchAll(/<p>(Позитивная новость[\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-      "Позитивная новость &lt;&amp;&quot;&gt;. <a href=\"https://news.example/s\">[1]</a>",
+    const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
+    assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+      "• Позитивная новость &lt;&amp;&quot;&gt;. <a href=\"https://news.example/s\">[1]</a>",
     ])
-    assert.doesNotMatch(text, /•|🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
+    assert.doesNotMatch(text, /• •|🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
   }
 })
 
@@ -1006,10 +1044,12 @@ test("v2 paragraphs use stored prose and stable deduplicated citations, ignoring
   }) })
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
-  assert.ok(text.includes("Первый абзац. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>"))
-  assert.ok(text.includes("Второй абзац. <a href=\"http://news.example/a\">[2]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>"))
-  assert.doesNotMatch(text, /Лишний абзац|УСТАРЕВШЕЕ СОБЫТИЕ|НЕ ИСПОЛЬЗОВАТЬ V3|javascript:|\[3\]|<p>• /u)
+  const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
+  assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, paragraph]) => paragraph), [
+    "• Первый абзац. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>",
+    "• Второй абзац. <a href=\"http://news.example/a\">[2]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
+  ])
+  assert.doesNotMatch(text, /Лишний абзац|УСТАРЕВШЕЕ СОБЫТИЕ|НЕ ИСПОЛЬЗОВАТЬ V3|javascript:|\[3\]/u)
 })
 
 test("v2 citations stay consecutive when previously omitted sources appear in the next paragraph", () => {
@@ -1022,11 +1062,11 @@ test("v2 citations stay consecutive when previously omitted sources appear in th
   }) })
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  const paragraphs = [...sectionHtml(release, "📰 Новостная сводка за последние 6 часов").matchAll(/<p>((?:Первый|Второй) абзац\.[\s\S]*?)<\/p>/gu)]
+  const paragraphs = [...sectionHtml(release, "Новостная сводка за последние 6 часов").matchAll(/<p>(• [\s\S]*?)<\/p>/gu)]
     .map(([, text]) => text)
   assert.deepEqual(paragraphs, [
-    "Первый абзац. <a href=\"https://news.example/a\">[1]</a> <a href=\"https://news.example/b\">[2]</a>",
-    "Второй абзац. <a href=\"https://news.example/f\">[3]</a> <a href=\"https://news.example/c\">[4]</a>",
+    "• Первый абзац. <a href=\"https://news.example/a\">[1]</a> <a href=\"https://news.example/b\">[2]</a>",
+    "• Второй абзац. <a href=\"https://news.example/f\">[3]</a> <a href=\"https://news.example/c\">[4]</a>",
   ])
 })
 
@@ -1041,12 +1081,14 @@ test("legacy v1 events retain unconfirmed warnings, summaries, significance and 
   }) })
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
-  assert.match(text, /Не подтверждено: Возможный инцидент &lt;не проверен&gt;\. Доступность &amp; ликвидность под вопросом\./u)
-  assert.match(text, /Подтверждённое обновление\. Меняется инфраструктура\./u)
+  const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
+  assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+    "• Не подтверждено: Возможный инцидент &lt;не проверен&gt;. Доступность &amp; ликвидность под вопросом. <a href=\"https://news.example/event\">[1]</a>",
+    "• Подтверждённое обновление. Меняется инфраструктура.",
+  ])
   assert.equal(text.split("Не подтверждено:").length - 1, 1)
   assert.match(text, /<a href="https:\/\/news\.example\/event">\[1\]<\/a>/u)
-  assert.doesNotMatch(text, /НЕ ИСПОЛЬЗОВАТЬ V2|НЕ ИСПОЛЬЗОВАТЬ V3|<p>• /u)
+  assert.doesNotMatch(text, /НЕ ИСПОЛЬЗОВАТЬ V2|НЕ ИСПОЛЬЗОВАТЬ V3/u)
 })
 
 for (const schemaVersion of [1, 2]) {
@@ -1059,18 +1101,18 @@ for (const schemaVersion of [1, 2]) {
     }) })
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
+    const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
     assert.ok(text.length > 4_096)
-    assert.equal(text.split("<b>📰 Новостная сводка за последние 6 часов</b>").length - 1, 1)
-    assert.equal(text.split("<p>· · ·</p>").length - 1, schemaVersion === 2 ? 1 : 4)
-    assert.doesNotMatch(text, /<p>· · ·<\/p>\n<p>⚠/u)
+    assert.equal(text.split("<b>Новостная сводка за последние 6 часов</b>").length - 1, 1)
+    assert.equal(text.split("<p><br></p>").length - 1, schemaVersion === 2 ? 3 : 6)
+    assert.doesNotMatch(text, /· · ·|<p><br><\/p>\n<p>⚠/u)
     assert.equal([...text.matchAll(schemaVersion === 2 ? /Абзац-\d/gu : /Не подтверждено: Событие-\d/gu)].length, schemaVersion === 2 ? 2 : 5)
     assert.equal([...text.matchAll(/<a href=/gu)].length, schemaVersion === 2 ? 4 : 10)
-    const prose = [...text.matchAll(/<p>((?:Абзац-|Не подтверждено: Событие-)[\s\S]*?) <a /gu)].map(([, paragraph]) => paragraph)
+    const prose = [...text.matchAll(/<p>• ((?:Абзац-|Не подтверждено: Событие-)[\s\S]*?) <a /gu)].map(([, paragraph]) => paragraph)
     assert.equal(prose.length, schemaVersion === 2 ? 2 : 5)
     assert.ok(prose.every(paragraph => visibleText(paragraph).length > 250))
-    assert.doesNotMatch(text, /<p>• /u)
-    assert.match(text, /⚠ Оговорка/u)
+    assert.equal([...text.matchAll(/<p>• /gu)].length, schemaVersion === 2 ? 2 : 5)
+    assert.match(text, /<p>⚠ Оговорка/u)
   })
 }
 
@@ -1093,7 +1135,7 @@ test("missing, unsupported or mismatched market briefs never leak stale prose, l
     assertManifest(release, report)
     assert.match(release.richMessage.html, /Сводка недоступна или относится к другому срезу/u)
     assert.match(release.richMessage.html, /Отсутствие данных не означает отсутствие событий/u)
-    assert.doesNotMatch(release.richMessage.html, /НЕ ПОКАЗЫВАТЬ|Публикации:|<a |⚠/u)
+    assert.doesNotMatch(release.richMessage.html, /НЕ ПОКАЗЫВАТЬ|Публикации:|<a |⚠|•/u)
   }
 })
 
@@ -1106,18 +1148,23 @@ for (const [status, paragraphs, coverage, expected, absent] of [
   ["available", [{ text: "Доступная часть новостей." }], [{ source: "twitter", status: "failed", error: "PRIVATE-HTTP-429" }], /Доступная часть новостей\./u, /PRIVATE-HTTP-429|Сводка недоступна|Покрытие/u],
   ["empty", [], [{ source: "tradingview", status: "partial" }], /нет сообщений для сводки/u, /Сводка недоступна|Покрытие/u],
 ]) {
-  for (const schemaVersion of [2, 3, 4]) {
-    test(`v${schemaVersion} brief ${status}, ${paragraphs.length} entries and ${coverage[0]?.status ?? "healthy"} coverage have distinct wording`, () => {
+  for (const schemaVersion of [1, 2, 3, 4]) {
+    test(`v${schemaVersion} brief ${status}, ${paragraphs.length} entries and ${coverage[0]?.status ?? "healthy"} coverage keep distinct wording and only news gets bullets`, () => {
       const report = fixture([], { marketBrief: brief({
-        schemaVersion, status, paragraphs, items: paragraphs.map(item => ({ ...item, sentiment: "neutral" })), coverage, warning: "Оговорка <&\"🙂>",
+        schemaVersion, status, paragraphs, items: paragraphs.map(item => ({ ...item, sentiment: "neutral" })),
+        events: paragraphs.map(item => ({ summary: item.text, sourceIds: item.sourceIds })),
+        coverage, warning: "Оговорка <&\"🙂>",
       }) })
       const release = buildTelegramRelease(report)
       assertManifest(release, report)
-      const text = sectionHtml(release, "📰 Новостная сводка за последние 6 часов")
+      const text = sectionHtml(release, "Новостная сводка за последние 6 часов")
       assert.match(text, expected)
       assert.doesNotMatch(text, absent)
       assert.doesNotMatch(text, /Публикации:|· · ·/u)
-      assert.match(text, /⚠ Оговорка &lt;&amp;&quot;🙂&gt;/u)
+      assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => item),
+        ["available", "partial"].includes(status) ? paragraphs.map(item => telegramText(item.text)).filter(Boolean) : [])
+      assert.match(text, /<\/p>\n<p>⚠ Оговорка &lt;&amp;&quot;🙂&gt;<\/p>\n<p><br><\/p>\n$/u)
+      assert.equal(text.split("<p><br></p>").length - 1, 2)
     })
   }
 }
@@ -1201,7 +1248,7 @@ test("archived reports without a valid creation timestamp use the stored candle 
   }
 })
 
-test("compact opening keeps colored square sentiment markers, dotted separators and blank lines before the new candidate sections", () => {
+test("compact opening uses uniform bullets and blank lines while preserving bold headings and candidate spacing", () => {
   const report = deepFreeze(fixture([coin("TOP", { topRank: 1 })], {
     asOf: "2026-09-27T07:00:00.000Z", reportCreatedAt: "2026-09-27T08:03:00.000Z",
     marketBrief: brief({
@@ -1216,16 +1263,15 @@ test("compact opening keeps colored square sentiment markers, dotted separators 
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   const { html } = release.richMessage
-  assert.ok(html.includes("<p><b>📊 Крипторадар | 27 сентября 2026, 11:03 МСК</b></p>\n<p><br></p>\n<p><b>📰 Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n<p>🟩 Новость 1."))
-  for (const [index, marker] of ["🟩", "⬜", "🟥"].entries()) {
-    assert.ok(html.includes(`<p>${marker} Новость ${index + 1}. <a href="https://news.example/source">[1]</a></p>`))
+  assert.ok(html.includes("<p><b>📊 Крипторадар | 27 сентября 2026, 11:03 МСК</b></p>\n<p><br></p>\n<p><b>Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n<p>• Новость 1."))
+  for (const number of [1, 2, 3]) {
+    assert.ok(html.includes(`<p>• Новость ${number}. <a href="https://news.example/source">[1]</a></p>`))
   }
-  assert.ok(html.includes("Новость 3. <a href=\"https://news.example/source\">[1]</a></p>\n<p><br></p>\n<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>- <code>TOP</code>"))
-  assert.equal(html.split("<p><br></p>").length - 1, 4)
-  assert.equal(html.split("<p>· · ·</p>").length - 1, 2)
-  assert.doesNotMatch(html, /⊕|○|⊖|──────|Крипто-пульс|Публикации:|Кандидатов:|Срез по закрытым свечам|P — оценка|без статистической калибровки|Покрытие новостных источников|• [🟩⬜🟥]/u)
-  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-    "- <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Изменение активности требует наблюдения.",
+  assert.ok(html.includes("Новость 3. <a href=\"https://news.example/source\">[1]</a></p>\n<p><br></p>\n<p><b>Топ агента</b></p>\n<p><br></p>\n<p>• <code>TOP</code>"))
+  assert.equal(html.split("<p><br></p>").length - 1, 6)
+  assert.doesNotMatch(html, /· · ·|🟩|⬜|🟥|• •|⊕|○|⊖|──────|Крипто-пульс|Публикации:|Кандидатов:|Срез по закрытым свечам|P — оценка|без статистической калибровки|Покрытие новостных источников/u)
+  assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+    "• <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Изменение активности требует наблюдения.",
   ])
   assert.doesNotMatch(html, /Значимые инфоповоды|В выпуске нет дополнительных монет/u)
   assert.doesNotMatch(html, /P движения|уверенность|Нет подтверждения интересом|CoinGecko|Ранние кандидаты в исходном порядке агента/u)
@@ -1240,8 +1286,8 @@ test("only an explicit demo flag labels the single post synthetic and suppresses
     assert.equal(release.demo, demo === true)
     assert.equal([...release.richMessage.html.matchAll(/ДЕМО · синтетические данные/giu)].length, demo === true ? 1 : 0)
     assert.equal(release.richMessage.html.includes("https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P"), demo !== true)
-    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
-      `- <code>TEST</code> ${demo === true ? "Монета TEST" : "<a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P\">Монета TEST</a>"} — Изменение активности требует наблюдения.`,
+    assert.deepEqual(candidateParagraphs(release, "Топ агента"), [
+      `• <code>TEST</code> ${demo === true ? "Монета TEST" : "<a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P\">Монета TEST</a>"} — Изменение активности требует наблюдения.`,
     ])
   }
 })
@@ -1283,12 +1329,12 @@ test("one rich post keeps news and all candidate sections above ordinary text an
   assert.equal([...html.matchAll(/Событие-\d/gu)].length, 5)
   assert.equal([...html.matchAll(/Техника и новости-\d/gu)].length, 3)
   assert.equal([...html.matchAll(/Инфоповод-\d/gu)].length, 7)
-  assert.equal([...html.matchAll(/<p>- <code>LONG-\d<\/code> <a href=/gu)].length, 10)
+  assert.equal([...html.matchAll(/<p>• <code>LONG-\d<\/code> <a href=/gu)].length, 10)
   assert.doesNotMatch(html, /PRIVATE-|Категории:|CoinGecko Trending/u)
-  const titles = ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента", "📰 Значимые инфоповоды"]
+  const titles = ["Новостная сводка за последние 6 часов", "Топ агента", "📰 Значимые инфоповоды"]
   const positions = [html.indexOf("</tg-collage>"), ...titles.map(title => html.indexOf(`<b>${title}</b>`))]
   assert.deepEqual(positions, [...positions].sort((first, second) => first - second))
-  assert.equal(candidateParagraphs(release, "⭐ Топ агента").length, 3)
+  assert.equal(candidateParagraphs(release, "Топ агента").length, 3)
   assert.equal(candidateParagraphs(release, "📰 Значимые инфоповоды").length, 7)
   assert.doesNotMatch(html, /Ранние кандидаты в исходном порядке|Дополнительные монеты вне топа|не у всего рынка|Поисковое внимание — не сигнал роста/u)
 })

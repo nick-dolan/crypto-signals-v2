@@ -133,16 +133,18 @@ test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-
   assert.doesNotMatch(html, /Кандидаты: \d+ \/ 10/)
   assert.ok(html.includes(`Не включено: ${manifest.omittedCount}`))
   assert.match(html, /Точное отображение в клиентах Telegram не гарантируется/)
-  assert.match(html, /<p><b>⭐ Топ агента<\/b><\/p>/u)
+  assert.match(html, /<p><b>Новостная сводка за последние 6 часов<\/b><\/p>\n<p><br><\/p>\n<p>• ДЕМО\./u)
+  assert.match(html, /<p><b>Топ агента<\/b><\/p>/u)
   assert.match(html, /<p><b>📰 Значимые инфоповоды<\/b><\/p>/u)
+  assert.doesNotMatch(html, /· · ·|<p>- <code>|[🟩⬜🟥]|<b>(?:📰 Новостная сводка|⭐ Топ агента)/u)
   assert.doesNotMatch(html, /CoinGecko Trending|🟢 Позитивные инфоповоды|PRIVATE-ENRICHED|P движения|уверенность|Категории:|<a /u)
-  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), original.coins.slice(0, 7)
-    .map(coin => `- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}`))
-  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
-    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
-    original.coins.slice(0, 3).map(coin => `<p>- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p>· · ·</p>\n"),
+  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(• <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), original.coins.slice(0, 7)
+    .map(coin => `• <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}`))
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>Топ агента</b></p>")), [
+    "<p><b>Топ агента</b></p>", "<p><br></p>",
+    original.coins.slice(0, 3).map(coin => `<p>• <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p><br></p>\n"),
     "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
-    original.coins.slice(3, 7).map(coin => `<p>- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p>· · ·</p>\n"),
+    original.coins.slice(3, 7).map(coin => `<p>• <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p><br></p>\n"),
   ].join("\n"))
   assert.match(html, /max-width: 720px/)
   assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
@@ -185,9 +187,9 @@ test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-
   const nextManifest = JSON.parse(await fs.readFile(next.manifestPath, "utf8"))
   assert.equal(next.candidateCount, 1)
   assert.equal(next.messageCount, 1)
-  assert.equal(nextManifest.richMessage.html.slice(nextManifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
-    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
-    `<p>- <code>DEMO-01</code> Вымышленная монета 1 — ${report.coins[0].explanation}</p>`,
+  assert.equal(nextManifest.richMessage.html.slice(nextManifest.richMessage.html.indexOf("<p><b>Топ агента</b></p>")), [
+    "<p><b>Топ агента</b></p>", "<p><br></p>",
+    `<p>• <code>DEMO-01</code> Вымышленная монета 1 — ${report.coins[0].explanation}</p>`,
   ].join("\n"))
   assert.doesNotMatch(nextManifest.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
   assertPreviewPost(await fs.readFile(next.previewPath, "utf8"), nextManifest)
@@ -202,6 +204,30 @@ test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-
   assert.equal(await fs.readFile(result.previewPath, "utf8"), html)
 })
 
+test("preview preserves uniform news bullets, blank lines and only the significant-events heading emoji", () => {
+  const report = reportWithCoins(4)
+  report.marketBrief = {
+    ...report.marketBrief, schemaVersion: 4,
+    items: ["bullish", "neutral", "bearish"].map((sentiment, index) => ({ text: `Новость ${index + 1}.`, sentiment, sourceIds: ["s"] })),
+    sources: [{ id: "s", url: "https://news.example/s" }],
+  }
+  const before = structuredClone(report)
+  const manifest = buildTelegramRelease(report)
+  const beforeManifest = structuredClone(manifest)
+  const html = renderTelegramPreview(manifest)
+  assertPreviewPost(html, manifest)
+  assert.ok(html.includes([
+    "<p><b>Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
+    [1, 2, 3].map(number => `<p>• Новость ${number}. <a href="https://news.example/s">[1]</a></p>`).join("\n<p><br></p>\n"),
+    "<p>⚠ ДЕМО: вымышленные примеры, не реальные новости.</p>", "<p><br></p>",
+    "<p><b>Топ агента</b></p>", "<p><br></p>", "<p>• <code>DEMO-01</code>",
+  ].join("\n")))
+  assert.ok(html.includes("<p><br></p>\n<p><b>📰 Значимые инфоповоды</b></p>\n<p>• <code>DEMO-04</code>"))
+  assert.doesNotMatch(html, /· · ·|<p>- <code>|[🟩⬜🟥]|• •|<b>(?:📰 Новостная сводка|⭐ Топ агента)/u)
+  assert.deepEqual(report, before)
+  assert.deepEqual(manifest, beforeManifest)
+})
+
 test("zero candidates produces an explicit empty preview without invented photos", async (t) => {
   const result = await writeTelegramPreview(reportWithCoins(0), { directory: await temporaryDirectory(t) })
   const manifest = JSON.parse(await fs.readFile(result.manifestPath, "utf8"))
@@ -214,7 +240,7 @@ test("zero candidates produces an explicit empty preview without invented photos
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.match(html, /Кандидаты: 0<\/span>/)
   assert.match(html, /Агент не выделил убедительных ранних кандидатов/)
-  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>Топ агента</b></p>")), "<p><b>Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
   assert.doesNotMatch(html, /<img\b|CoinGecko Trending|🟢 Позитивные инфоповоды|Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
   assertPreviewPost(html, manifest)
 })
@@ -227,10 +253,10 @@ test("a single news candidate follows the empty top with one preceding blank lin
   const html = renderTelegramPreview(manifest)
   assertPreviewPost(html, manifest)
   assert.deepEqual(manifest.candidates.map(item => item.section), ["news"])
-  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
-    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>", "<p>Агент не выделил убедительных ранних кандидатов.</p>",
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>Топ агента</b></p>")), [
+    "<p><b>Топ агента</b></p>", "<p><br></p>", "<p>Агент не выделил убедительных ранних кандидатов.</p>",
     "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
-    "<p>- <code>DEMO-01</code> Вымышленная монета 1 — Готовый инфоповод.</p>",
+    "<p>• <code>DEMO-01</code> Вымышленная монета 1 — Готовый инфоповод.</p>",
   ].join("\n"))
   assert.doesNotMatch(html, /· · ·|В выпуске нет дополнительных монет/u)
   assert.deepEqual(report, before)
@@ -246,9 +272,9 @@ test("preview omits the entire news section and its spacing after symbol and can
   const html = renderTelegramPreview(manifest)
   assertPreviewPost(html, manifest)
   assert.deepEqual(manifest.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [[0, "top"]])
-  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
-    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
-    "<p>- <code>DEMO-01</code> Вымышленная монета 1 — Готовое объяснение.</p>",
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>Топ агента</b></p>")), [
+    "<p><b>Топ агента</b></p>", "<p><br></p>",
+    "<p>• <code>DEMO-01</code> Вымышленная монета 1 — Готовое объяснение.</p>",
   ].join("\n"))
   assert.equal(html, renderTelegramPreview(buildTelegramRelease({ ...report, coins: [report.coins[0]] })))
   assert.doesNotMatch(html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
@@ -257,7 +283,7 @@ test("preview omits the entire news section and its spacing after symbol and can
 
 test("renderer escapes all metadata while preserving trusted rich text HTML without mutation", () => {
   const unsafe = "<img src=x onerror=alert(1)> & \"'"
-  const text = "<p><b>Сводка</b><br><i>Пример</i> <a href=\"https://example.com\">Источник</a></p>\n<p>- <code>DEMO&lt;&amp;</code> &lt;code&gt;Имя&lt;/code&gt;</p>"
+  const text = "<p><b>Сводка</b><br><i>Пример</i> <a href=\"https://example.com\">Источник</a></p>\n<p>• <code>DEMO&lt;&amp;</code> &lt;code&gt;Имя&lt;/code&gt;</p>"
   const manifest = {
     schemaVersion: 2, asOf: unsafe, closedAt: unsafe, demo: false,
     eligibleCount: unsafe, omittedCount: unsafe, source: `javascript:alert(1) ${unsafe}`,
@@ -298,10 +324,10 @@ test("preview preserves technical-only, enriched and legacy heading-only paragra
   const manifest = buildTelegramRelease(report)
   const html = renderTelegramPreview(manifest)
   assertPreviewPost(html, manifest)
-  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), [
-    `- <code>DEMO-01</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[0].marketSymbol)}">Вымышленная монета 1</a> — Чистое техническое описание.`,
-    "- <code>DEMO-02</code>",
-    `- <code>DEMO-03</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[2].marketSymbol)}">Вымышленная монета 3</a> — Готовая техника вместе со значимым смешанным фоном.`,
+  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(• <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), [
+    `• <code>DEMO-01</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[0].marketSymbol)}">Вымышленная монета 1</a> — Чистое техническое описание.`,
+    "• <code>DEMO-02</code>",
+    `• <code>DEMO-03</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[2].marketSymbol)}">Вымышленная монета 3</a> — Готовая техника вместе со значимым смешанным фоном.`,
   ])
   assert.doesNotMatch(html, /PRIVATE-|P движения|уверенность|CoinGecko Trending/u)
   assert.deepEqual(report, before)

@@ -46,7 +46,7 @@ function candidateHeading (coin, demo) {
   const url = !demo && isString(coin.marketSymbol) && coin.marketSymbol.trim()
     ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}`
     : null
-  return `- <code>${telegramText(coin.symbol, 100)}</code>${name ? ` ${telegramLink(coin.name, url) ?? name}` : ""}`
+  return `• <code>${telegramText(coin.symbol, 100)}</code>${name ? ` ${telegramLink(coin.name, url) ?? name}` : ""}`
 }
 
 function candidateBlock (coin, demo) {
@@ -95,14 +95,10 @@ function briefBlocks (report) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      const marker = brief.schemaVersion === 4
-        ? [["bullish", "🟩 "], ["neutral", "⬜ "], ["bearish", "🟥 "]]
-            .find(([sentiment]) => sentiment === paragraph.sentiment)?.[1] ?? ""
-        : brief.schemaVersion === 3 ? "• " : ""
-      return [`${marker}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      return [`• ${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
-      ? content.flatMap((item, index) => index ? ["· · ·", item] : [item])
+      ? content.flatMap((item, index) => index ? ["<br>", item] : [item])
       : [brief.status === "empty"
           ? "В полученной выборке нет сообщений для сводки."
           : "Содержательная сводка не подготовлена; доступных данных недостаточно."]))
@@ -141,10 +137,10 @@ export function buildTelegramRelease (report) {
     candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
     telegramSection(introductory, []),
     "<p><br></p>",
-    telegramSection("<b>📰 Новостная сводка за последние 6 часов</b>", ["<br>", ...briefBlocks(report)]),
+    telegramSection("<b>Новостная сводка за последние 6 часов</b>", ["<br>", ...briefBlocks(report)]),
     "<p><br></p>",
   ]
-  for (const [section, title] of [["top", "⭐ Топ агента"], ["news", "📰 Значимые инфоповоды"]]) {
+  for (const [section, title] of [["top", "Топ агента"], ["news", "📰 Значимые инфоповоды"]]) {
     const blocks = selection.candidates.flatMap(item => item.section === section
       ? [candidateBlock(item.coin, report.demo === true)]
       : [])
@@ -157,7 +153,7 @@ export function buildTelegramRelease (report) {
     sections.push(telegramSection(`<b>${title}</b>`, [
       section === "top" ? "<br>" : null,
       ...(blocks.length
-        ? blocks.flatMap((block, index) => index ? ["· · ·", block] : [block])
+        ? blocks.flatMap((block, index) => index ? ["<br>", block] : [block])
         : ["Агент не выделил убедительных ранних кандидатов."]),
     ]))
   }
