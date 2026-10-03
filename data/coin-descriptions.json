@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T08:02:47.015Z",
+  "generatedAt": "2026-10-03T16:24:16.388Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-01T08:02:15.988Z"
+    "sourceGeneratedAt": "2026-10-03T16:23:58.621Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 263,
+  "coinCount": 264,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3862,6 +3862,22 @@
         {
           "url": "https://www.coingecko.com/en/coins/movement",
           "checkedAt": "2026-10-01T08:02:43.213Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCO1",
+      "symbol": "O",
+      "name": "o1.exchange",
+      "description": "o1.exchange — некастодиальная платформа для ончейн-торговли в сетях Base и Solana. Она объединяет торговый терминал, агрегатор обменов и площадку для запуска токенов, поддерживая рыночные и лимитные заявки, TWAP и сделки при открытии ликвидности.",
+      "sources": [
+        {
+          "url": "https://o1.exchange/",
+          "checkedAt": "2026-10-03T16:24:12.437Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/o1-exchange",
+          "checkedAt": "2026-10-03T16:24:12.575Z"
         }
       ]
     }
