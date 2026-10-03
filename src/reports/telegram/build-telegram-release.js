@@ -141,13 +141,13 @@ function briefBlocks (report) {
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
       const marker = brief.schemaVersion === 4
-        ? [["bullish", "<b>⊕</b> "], ["neutral", "<b>○</b> "], ["bearish", "<b>⊖</b> "]]
+        ? [["bullish", "🟩 "], ["neutral", "⬜ "], ["bearish", "🟥 "]]
             .find(([sentiment]) => sentiment === paragraph.sentiment)?.[1] ?? ""
         : brief.schemaVersion === 3 ? "• " : ""
       return [`${marker}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
-      ? content.flatMap((item, index) => index ? ["──────", item] : [item])
+      ? content.flatMap((item, index) => index ? ["· · ·", item] : [item])
       : [brief.status === "empty"
           ? "В полученной выборке нет сообщений для сводки."
           : "Содержательная сводка не подготовлена; доступных данных недостаточно."]))
