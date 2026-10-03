@@ -20,6 +20,7 @@ function createInput () {
       marketSymbol: `BINANCE:${symbol}USDT.P`,
       topRank: index < 5 ? index + 1 : null,
       explanation: index < 5 ? `Исходное объяснение ${symbol}.` : "",
+      technicalExplanation: index < 5 ? `Исходное объяснение ${symbol}.` : "",
       movementProbability: 0.8 - index / 10,
       estimateConfidence: "medium",
       drivers: [`Драйвер ${symbol}`],
@@ -164,6 +165,7 @@ test("joins reordered top and trending coins by symbol without changing assessme
   for (const [index, coin] of result.coins.entries()) {
     assert.equal(coin.history, input.report.coins[index].history)
     assert.equal(coin.features, input.report.coins[index].features)
+    assert.equal(coin.technicalExplanation, input.report.coins[index].explanation)
 
     if (coin.topRank != null || coin.features.coingeckoTrending === true) {
       const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
@@ -185,10 +187,12 @@ test("enriches non-top trending coins without promoting them or duplicating tren
   assert.equal(input.sources.candidates.find(coin => coin.symbol === "DOGE").explanation, "")
   assert.equal(input.context.candidates.find(coin => coin.symbol === "DOGE").explanation, "")
   assert.equal(trending.explanation, "Информационный фон DOGE.")
+  assert.equal(trending.technicalExplanation, "")
   assert.equal(trending.topRank, null)
   assert.equal(trending.information.news.items.length, 1)
   assert.equal(trending.information.twitter.tweets.length, 8)
   assert.equal(top.explanation, "Исходное объяснение XVG. Информационный фон XVG.")
+  assert.equal(top.technicalExplanation, "Исходное объяснение XVG.")
   assert.equal(top.topRank, 1)
   assert.equal(result.coins.filter(coin => coin.symbol === "XVG").length, 1)
   assert.equal(result.coins.filter(coin => coin.information).length, 6)
@@ -235,6 +239,7 @@ for (const [socialSignificant, socialSentiment, reason] of [
     assert.equal(result.universeCoinCount, input.report.universeCoinCount)
     assert.deepEqual(result.coins.map(coin => coin.symbol), input.report.coins.map(coin => coin.symbol))
     for (const [index, coin] of result.coins.entries()) {
+      assert.equal(coin.technicalExplanation, input.report.coins[index].explanation)
       const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
       if (!context) {
         assert.equal(coin, input.report.coins[index])

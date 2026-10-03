@@ -17,7 +17,10 @@ function coin (symbol, overrides = {}) {
   return {
     symbol, baseCurrencyId: `XTVC${symbol}`, name: `Монета ${symbol}`, marketSymbol: `BINANCE:${symbol}USDT.P`,
     topRank: null, movementProbability: 0.5, estimateConfidence: "medium",
-    explanation: "Изменение активности требует наблюдения.",
+    technicalExplanation: "Изменение активности требует наблюдения.",
+    explanation: overrides.topRank
+      ? "Изменение активности требует наблюдения. Сохранённый новостной контекст."
+      : "Сохранённый новостной контекст.",
     drivers: ["relVolume=2: Объём растёт."], counterSignals: ["oiChange4h=0: Нет подтверждения интересом."],
     socialSignificant: false, socialSentiment: null, socialReason: null, features: {},
     ...overrides,
@@ -49,10 +52,14 @@ function deepFreeze (value) {
 }
 
 function sectionHtml (release, title) {
-  const section = release.richMessage.html.split(/(?=<p><b>(?:📰|⭐|🟢|🦎) )/u)
+  const section = release.richMessage.html.split(/(?=<p><b>(?:📰|⭐) )/u)
     .find(text => text.startsWith(`<p><b>${title}</b>`))
   assert.ok(section, `Missing section: ${title}`)
   return section
+}
+
+function candidateParagraphs (release, title) {
+  return [...sectionHtml(release, title).matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text)
 }
 
 function assertEscaped (text) {
@@ -87,13 +94,17 @@ function assertTelegramHtml (text, limit = 32_768) {
       blocks++
       continue
     }
-    const tag = token.match(/^<(\/?)(b|i|a|p|tg-collage)(?: href="([^"<>]+)")?>$/u)
+    const tag = token.match(/^<(\/?)(b|i|a|code|p|tg-collage)(?: href="([^"<>]+)")?>$/u)
     assert.ok(tag, `Unsupported or incomplete Telegram tag: ${token}`)
     const [, closing, name, href] = tag
     if (closing) {
       assert.equal(href, undefined)
       assert.equal(stack.pop(), name, "Telegram tags must be properly nested")
     } else {
+      assert.ok(!stack.includes("code"), "Ticker code must contain only escaped text, never links or nested tags")
+      if (name === "code") {
+        assert.ok(!stack.includes("a"), "Ticker code must not be wrapped in a link")
+      }
       if (name === "a") {
         assert.ok(href, "Links require an href and no other attributes")
         assertEscaped(href)
@@ -140,13 +151,38 @@ function assertManifest (release, report) {
   assert.ok(html.startsWith(media.length > 1 ? `<tg-collage>${photos}</tg-collage>\n<p>` : `${photos}${photos ? "\n" : ""}<p>`))
   assert.doesNotMatch(html.slice(html.indexOf("<p>")), /<img\b|<tg-collage>/u)
   assert.ok(html.includes("<p><b>📰 Новостная сводка за последние 6 часов</b></p>\n<p><br></p>\n"))
-  for (const title of ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента", "🟢 Позитивные инфоповоды", "🦎 CoinGecko Trending"]) {
+  for (const title of ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента"]) {
     assert.equal(html.split(`<b>${title}</b>`).length - 1, 1)
+    assert.ok(sectionHtml(release, title).startsWith(`<p><b>${title}</b></p>\n`), `Section heading must not include a description: ${title}`)
+  }
+  assert.doesNotMatch(html, /<b>(?:🟢 Позитивные инфоповоды|🦎 CoinGecko Trending)<\/b>|В выпуске нет дополнительных монет/u)
+  const top = candidateParagraphs(release, "⭐ Топ агента")
+  const newsCount = release.candidates.filter(item => item.section === "news").length
+  const news = newsCount ? candidateParagraphs(release, "📰 Значимые инфоповоды") : []
+  assert.equal(html.split("<b>📰 Значимые инфоповоды</b>").length - 1, newsCount ? 1 : 0)
+  assert.equal(top.length, release.candidates.length - newsCount)
+  assert.equal(news.length, newsCount)
+  assert.equal(html.slice(html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
+    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
+    top.length
+      ? top.map(text => `<p>${text}</p>`).join("\n<p>· · ·</p>\n")
+      : "<p>Агент не выделил убедительных ранних кандидатов.</p>",
+    ...(newsCount
+      ? [
+          "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
+          news.map(text => `<p>${text}</p>`).join("\n<p>· · ·</p>\n"),
+        ]
+      : []),
+  ].join("\n"), "Candidate sections must have exact spacing and only between-coin separators")
+  for (const paragraph of [...top, ...news]) {
+    assert.match(paragraph, /^- <code>[^<>]*<\/code>(?: |$)/u)
+    assert.equal([...paragraph.matchAll(/<code>/gu)].length, 1)
+    assert.doesNotMatch(paragraph, /<br>|<\/?(?:b|i)>/u)
   }
   for (const [index, item] of release.candidates.entries()) {
     assert.equal(item.number, index + 1)
     assert.equal(item.symbol, report.coins[item.coinIndex].symbol, "coinIndex must refer to the original report order")
-    assert.ok(["top", "positive", "coingecko"].includes(item.section))
+    assert.ok(["top", "news"].includes(item.section))
     assert.match(item.image, /^cards\/\d{2}-[a-z\d_-]{1,40}\.png$/iu)
     assert.ok(item.image.startsWith(`cards/${String(item.number).padStart(2, "0")}-`))
     assert.equal(item.mediaId, `card_${index + 1}`)
@@ -154,17 +190,17 @@ function assertManifest (release, report) {
   }
 }
 
-test("all eligible candidates follow topRank, positive news, then CoinGecko without promoting assessments", () => {
+test("all eligible candidates follow topRank then significant positive or negative news, without promoting assessments or CoinGecko", () => {
   const report = fixture([
     coin("CG-LOW", { movementProbability: 0.1, features: { coingeckoTrending: true } }),
-    coin("POS-LOW", { movementProbability: 0.2, socialSignificant: true, socialSentiment: "positive" }),
+    coin("NEG-LOW", { movementProbability: 0.2, socialSignificant: true, socialSentiment: "negative" }),
     coin("TOP-THREE", { topRank: 3, movementProbability: 0.99 }),
     coin("ASSESSMENT-ONLY", { movementProbability: 1 }),
     coin("CG-FIRST", { movementProbability: 0.9, features: { coingeckoTrending: true } }),
     coin("TOP-ONE", { topRank: 1, movementProbability: 0.1, socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true } }),
     coin("POS-FIRST", { movementProbability: 0.8, socialSignificant: true, socialSentiment: "positive" }),
     coin("CG-SECOND", { movementProbability: 0.8, features: { coingeckoTrending: true } }),
-    coin("POS-SECOND", { movementProbability: 0.7, socialSignificant: true, socialSentiment: "positive" }),
+    coin("NEG-SECOND", { movementProbability: 0.7, socialSignificant: true, socialSentiment: "negative" }),
     coin("TOP-TWO", { topRank: 2, movementProbability: 0.05 }),
     coin("CG-THIRD", { movementProbability: 0.7, features: { coingeckoTrending: true } }),
     coin("POS-THIRD", { movementProbability: 0.6, socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true } }),
@@ -172,24 +208,23 @@ test("all eligible candidates follow topRank, positive news, then CoinGecko with
   ])
   const selected = selectTelegramCandidates(report)
   assert.deepEqual(selected.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [
-    [5, "top"], [9, "top"], [2, "top"], [6, "positive"], [8, "positive"], [11, "positive"], [1, "positive"],
-    [4, "coingecko"], [7, "coingecko"], [10, "coingecko"], [12, "coingecko"], [0, "coingecko"],
+    [5, "top"], [9, "top"], [2, "top"], [6, "news"], [8, "news"], [11, "news"], [1, "news"],
   ])
   for (const item of selected.candidates) {
     assert.equal(item.coin, report.coins[item.coinIndex])
   }
-  assert.equal(selected.eligibleCount, 12)
+  assert.equal(selected.eligibleCount, 7)
   assert.equal(selected.omittedCount, 0)
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   assert.deepEqual(release.candidates.map(({ coinIndex, section }) => [coinIndex, section]), selected.candidates.map(({ coinIndex, section }) => [coinIndex, section]))
-  assert.equal(release.eligibleCount, 12)
+  assert.equal(release.eligibleCount, 7)
   assert.doesNotMatch(release.richMessage.html, /общий лимит|не вошли|Кандидатов:/u)
-  assert.doesNotMatch(release.richMessage.html, /ASSESSMENT-ONLY/u)
-  assert.match(sectionHtml(release, "🦎 CoinGecko Trending"), /CG-FOURTH[\s\S]*CG-LOW/u)
+  assert.doesNotMatch(JSON.stringify(release), /ASSESSMENT-ONLY|CG-(?:LOW|FIRST|SECOND|THIRD|FOURTH)/u)
+  assert.match(sectionHtml(release, "📰 Значимые инфоповоды"), /<code>POS-FIRST<\/code>[\s\S]*<code>NEG-SECOND<\/code>[\s\S]*<code>POS-THIRD<\/code>[\s\S]*<code>NEG-LOW<\/code>/u)
 })
 
-test("more than ten top candidates retain supplementary groups and deduplicate overlapping entries", () => {
+test("more than ten top candidates retain supplementary news without a limit and deduplicate overlapping entries", () => {
   const coins = Array.from({ length: 14 }, (_, index) => coin(`TOP-${index + 1}`, {
     topRank: index + 1, movementProbability: index / 14,
     socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true },
@@ -198,19 +233,21 @@ test("more than ten top candidates retain supplementary groups and deduplicate o
     coin("EXTRA-POS", { movementProbability: 1, socialSignificant: true, socialSentiment: "positive" }),
     ...coins,
     coin("EXTRA-CG", { movementProbability: 1, features: { coingeckoTrending: true } }),
+    coin("EXTRA-NEG", { movementProbability: 0, socialSignificant: true, socialSentiment: "negative" }),
     { ...coins[0], symbol: "TOP-14-ALIAS" },
   ])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   assert.deepEqual(release.candidates.map(item => item.symbol), [
-    ...Array.from({ length: 14 }, (_, index) => `TOP-${index + 1}`), "EXTRA-POS", "EXTRA-CG",
+    ...Array.from({ length: 14 }, (_, index) => `TOP-${index + 1}`), "EXTRA-POS", "EXTRA-NEG",
   ])
-  assert.deepEqual(release.candidates.map(item => item.section), [...Array(14).fill("top"), "positive", "coingecko"])
+  assert.deepEqual(release.candidates.map(item => item.section), [...Array(14).fill("top"), "news", "news"])
+  assert.doesNotMatch(JSON.stringify(release), /EXTRA-CG/u)
   assert.equal(release.eligibleCount, 16, "Duplicate aliases must not inflate the candidate count")
   assert.equal(release.omittedCount, 0)
 })
 
-test("an empty report produces explicit empty sections and no invented candidates or images", () => {
+test("an empty report keeps the empty top and its blank line, without news or invented candidates and images", () => {
   const report = fixture()
   assert.deepEqual(selectTelegramCandidates(report), { candidates: [], eligibleCount: 0, omittedCount: 0 })
   const release = buildTelegramRelease(report)
@@ -219,17 +256,79 @@ test("an empty report produces explicit empty sections and no invented candidate
   assert.deepEqual(release.richMessage.media, [])
   assert.doesNotMatch(release.richMessage.html, /<img\b|<tg-collage>/u)
   assert.doesNotMatch(release.richMessage.html, /Кандидатов:/u)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /Агент не выделил/u)
-  assert.match(sectionHtml(release, "🟢 Позитивные инфоповоды"), /нет дополнительных монет/u)
-  assert.match(sectionHtml(release, "🦎 CoinGecko Trending"), /нет дополнительных CoinGecko/u)
+  assert.equal(sectionHtml(release, "⭐ Топ агента"), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
+  assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
+})
+
+for (const [topCount, topBlocks] of [
+  [0, ["<p>Агент не выделил убедительных ранних кандидатов.</p>"]],
+  [1, ["<p>- <code>TOP-1</code> — Техника.</p>"]],
+  [3, [
+    "<p>- <code>TOP-1</code> — Техника.</p>", "<p>· · ·</p>",
+    "<p>- <code>TOP-2</code> — Техника.</p>", "<p>· · ·</p>",
+    "<p>- <code>TOP-3</code> — Техника.</p>",
+  ]],
+]) {
+  for (const [newsCount, newsBlocks] of [
+    [0, []],
+    [1, ["<p>- <code>NEWS-1</code> — Инфоповод.</p>"]],
+    [3, [
+      "<p>- <code>NEWS-1</code> — Инфоповод.</p>", "<p>· · ·</p>",
+      "<p>- <code>NEWS-2</code> — Инфоповод.</p>", "<p>· · ·</p>",
+      "<p>- <code>NEWS-3</code> — Инфоповод.</p>",
+    ]],
+  ]) {
+    test(`${topCount} top and ${newsCount} news candidates have exact paragraphs, separators and blank lines without changing the opening`, () => {
+      const report = deepFreeze(fixture([
+        ...Array.from({ length: topCount }, (_, index) => coin(`TOP-${index + 1}`, {
+          topRank: index + 1, name: null, technicalExplanation: "Техника.",
+        })),
+        ...Array.from({ length: newsCount }, (_, index) => coin(`NEWS-${index + 1}`, {
+          name: null, socialSignificant: true, socialSentiment: index % 2 ? "negative" : "positive", explanation: "Инфоповод.",
+        })),
+      ], { marketBrief: brief() }))
+      const before = structuredClone(report)
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      const { html } = release.richMessage
+      assert.equal(html.slice(html.indexOf("<p>")), [
+        "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>", "<p><br></p>",
+        "<p><b>📰 Новостная сводка за последние 6 часов</b></p>", "<p><br></p>",
+        "<p>Сохранённая сводка рынка.</p>", "<p><br></p>",
+        "<p><b>⭐ Топ агента</b></p>", "<p><br></p>", ...topBlocks,
+        ...(newsCount ? ["<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>", ...newsBlocks] : []),
+      ].join("\n"))
+      assert.equal(html.split("<p><br></p>").length - 1, newsCount ? 5 : 4)
+      assert.equal(html.split("<p>· · ·</p>").length - 1, Math.max(0, topCount - 1) + Math.max(0, newsCount - 1))
+      assert.deepEqual(report, before)
+    })
+  }
+}
+
+test("news fully deduplicated against top leaves no news heading, placeholder, separator or preceding blank line", () => {
+  const report = deepFreeze(fixture([
+    coin("BCH", {
+      topRank: 1, name: null, socialSignificant: true, socialSentiment: "negative", explanation: "Готовое объяснение.",
+    }),
+    coin(" bch ", { baseCurrencyId: "OTHER-ID", socialSignificant: true, socialSentiment: "positive", movementProbability: 1 }),
+    coin("BCH-ALIAS", { baseCurrencyId: " XTVCBCH ", socialSignificant: true, socialSentiment: "negative", movementProbability: 1 }),
+  ]))
+  const before = structuredClone(report)
+  const release = buildTelegramRelease(report)
+  assertManifest(release, report)
+  assert.deepEqual(release.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [[0, "top"]])
+  assert.equal(sectionHtml(release, "⭐ Топ агента"), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>- <code>BCH</code> — Готовое объяснение.</p>")
+  assert.equal(release.richMessage.html, buildTelegramRelease(fixture([report.coins[0]])).richMessage.html)
+  assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
+  assert.deepEqual(report, before)
 })
 
 for (const [section, attributes] of [
   ["top", { topRank: 1 }],
-  ["positive", { socialSignificant: true, socialSentiment: "positive" }],
-  ["coingecko", { features: { coingeckoTrending: true } }],
+  ["news", { socialSignificant: true, socialSentiment: "positive" }],
+  ["news", { socialSignificant: true, socialSentiment: "negative" }],
 ]) {
-  test(`a single ${section} candidate stays a single photo, without implicit filling or promotion`, () => {
+  test(`a single ${attributes.socialSentiment ?? section} candidate stays a single photo, without implicit filling or promotion`, () => {
     const report = fixture([coin("UNSELECTED", { movementProbability: 1 }), coin("ONLY", attributes)])
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
@@ -247,9 +346,11 @@ test("truthy flags, invalid ranks and high-probability assessments do not implic
   const report = fixture([
     ...[null, undefined, 0, -1, 1.5, "1", true, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]
       .map((topRank, index) => coin(`RANK-${index}`, { topRank, movementProbability: 1 })),
-    ...[false, "true", 1, null].map((socialSignificant, index) => coin(`SOCIAL-${index}`, { socialSignificant, socialSentiment: "positive" })),
-    ...["negative", "mixed", "neutral", "Positive", null].map((socialSentiment, index) => coin(`SENTIMENT-${index}`, { socialSignificant: true, socialSentiment })),
-    ...[false, "true", 1].map((coingeckoTrending, index) => coin(`CG-${index}`, { features: { coingeckoTrending } })),
+    ...[false, "true", 1, null, undefined, {}, []].flatMap((socialSignificant, index) => ["positive", "negative"]
+      .map(socialSentiment => coin(`SOCIAL-${index}-${socialSentiment}`, { socialSignificant, socialSentiment }))),
+    ...["mixed", "neutral", "Positive", "Negative", "positive ", " negative", "", null, undefined, true, ["positive"], {}]
+      .map((socialSentiment, index) => coin(`SENTIMENT-${index}`, { socialSignificant: true, socialSentiment, features: { coingeckoTrending: true } })),
+    ...[true, false, "true", 1].map((coingeckoTrending, index) => coin(`CG-${index}`, { features: { coingeckoTrending } })),
   ], { candidateCount: 100, topCandidates: [{ symbol: "RANK-0" }] })
   assert.deepEqual(selectTelegramCandidates(report), { candidates: [], eligibleCount: 0, omittedCount: 0 })
   const release = buildTelegramRelease(report)
@@ -257,43 +358,49 @@ test("truthy flags, invalid ranks and high-probability assessments do not implic
   assert.deepEqual(release.candidates, [])
 })
 
-test("overlaps, normalized symbols and canonical baseCurrencyId aliases occur once and retain selected badges", () => {
+test("overlaps, normalized symbols and canonical baseCurrencyId aliases occur once without visible badges", () => {
   const report = fixture([
     coin(" alpha ", { baseCurrencyId: "XTVCALPHA", topRank: 2, socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true } }),
     coin("ALPHA", { baseCurrencyId: "OTHER-ID", topRank: 5 }),
     coin("OLD-ALPHA", { baseCurrencyId: " XTVCALPHA ", socialSignificant: true, socialSentiment: "positive", movementProbability: 1 }),
     coin("BETA", { topRank: 1, socialSignificant: true, socialSentiment: "mixed", features: { coingeckoTrending: true } }),
-    coin("BETA-ALIAS", { baseCurrencyId: "XTVCBETA", features: { coingeckoTrending: true } }),
+    coin("BETA-ALIAS", { baseCurrencyId: "XTVCBETA", socialSignificant: true, socialSentiment: "negative", features: { coingeckoTrending: true } }),
     coin("GAMMA", { socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true } }),
-    coin(" gamma ", { features: { coingeckoTrending: true } }),
-    coin("DELTA", { baseCurrencyId: null, features: { coingeckoTrending: true } }),
-    coin("EPSILON", { baseCurrencyId: "", features: { coingeckoTrending: true } }),
-    coin("ZETA", { baseCurrencyId: " ", features: { coingeckoTrending: true } }),
+    coin(" gamma ", { socialSignificant: true, socialSentiment: "negative", features: { coingeckoTrending: true } }),
+    coin("DELTA", { baseCurrencyId: null, socialSignificant: true, socialSentiment: "negative" }),
+    coin("EPSILON", { baseCurrencyId: "", socialSignificant: true, socialSentiment: "positive" }),
+    coin("ZETA", { baseCurrencyId: " ", socialSignificant: true, socialSentiment: "negative" }),
   ])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   assert.deepEqual(release.candidates.map(item => item.coinIndex), [3, 0, 5, 7, 8, 9])
   assert.equal(release.eligibleCount, 6)
   assert.equal(release.omittedCount, 0)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /01 · BETA[\s\S]*<i>CoinGecko Trending · Смешанный фон<\/i>/u)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /02 · alpha[\s\S]*<i>CoinGecko Trending · Позитивный инфоповод<\/i>/u)
-  assert.equal(release.candidates[2].section, "positive")
-  assert.match(sectionHtml(release, "🟢 Позитивные инфоповоды"), /03 · GAMMA[\s\S]*<i>CoinGecko Trending · Позитивный инфоповод<\/i>/u)
+  assert.match(sectionHtml(release, "⭐ Топ агента"), /<p>- <code>BETA<\/code> <a [\s\S]*<p>- <code>alpha<\/code> <a /u)
+  assert.deepEqual(release.candidates.map(item => item.section), ["top", "top", "news", "news", "news", "news"])
+  assert.match(sectionHtml(release, "📰 Значимые инфоповоды"), /<p>- <code>GAMMA<\/code> <a /u)
+  assert.doesNotMatch(release.richMessage.html, /CoinGecko Trending|Смешанный фон|Позитивный инфоповод|Негативный инфоповод|<i>/u)
 })
 
-for (const [section, attributes] of [
-  ["positive", { socialSignificant: true, socialSentiment: "positive" }],
-  ["coingecko", { features: { coingeckoTrending: true } }],
-]) {
-  test(`${section} sorts valid probabilities descending and preserves input order for all ties`, () => {
-    const report = fixture([null, 0.5, 1, 0.5, 0, NaN, "0.99", -0.1, Infinity, 1.1]
-      .map((movementProbability, index) => coin(`COIN-${index}`, { ...attributes, movementProbability })))
+for (const sentiment of ["positive", "negative", "alternating"]) {
+  test(`${sentiment} news sorts valid probabilities descending and preserves input order for all ties without a limit`, () => {
+    const report = deepFreeze(fixture([null, 0.5, 1, 0.5, 0, NaN, "0.99", -0.1, Infinity, 1.1, undefined, -Infinity]
+      .map((movementProbability, index) => coin(`COIN-${index}`, {
+        movementProbability, socialSignificant: true,
+        socialSentiment: sentiment === "alternating" ? index % 2 ? "negative" : "positive" : sentiment,
+      }))))
+    const before = structuredClone(report)
     const selected = selectTelegramCandidates(report)
-    assert.deepEqual(selected.candidates.map(item => item.coinIndex), [2, 1, 3, 4, 0, 5, 6, 7, 8, 9])
-    assert.ok(selected.candidates.every(item => item.section === section))
-    assert.equal(selected.eligibleCount, 10)
+    assert.deepEqual(selected.candidates.map(item => item.coinIndex), [2, 1, 3, 4, 0, 5, 6, 7, 8, 9, 10, 11])
+    assert.ok(selected.candidates.every(item => item.section === "news"))
+    assert.equal(selected.eligibleCount, 12)
     assert.equal(selected.omittedCount, 0)
+    for (const item of selected.candidates) {
+      assert.equal(item.coin, report.coins[item.coinIndex])
+      assert.equal(item.coin.movementProbability, before.coins[item.coinIndex].movementProbability)
+    }
     assertManifest(buildTelegramRelease(report), report)
+    assert.deepEqual(report, before)
   })
 }
 
@@ -301,8 +408,9 @@ test("equal topRank preserves original order instead of resorting by probability
   const report = fixture([
     coin("SECOND-RANK", { topRank: 2 }), coin("FIRST-TIE", { topRank: 1, movementProbability: 0.1 }),
     coin("SECOND-TIE", { topRank: 1, movementProbability: 0.9 }),
+    coin("LAST-RANK", { topRank: Number.MAX_SAFE_INTEGER, movementProbability: 1 }),
   ])
-  assert.deepEqual(selectTelegramCandidates(report).candidates.map(item => item.coinIndex), [1, 2, 0])
+  assert.deepEqual(selectTelegramCandidates(report).candidates.map(item => item.coinIndex), [1, 2, 0, 3])
 })
 
 test("selection and repeated builds do not mutate even deeply frozen source reports", () => {
@@ -321,29 +429,127 @@ test("selection and repeated builds do not mutate even deeply frozen source repo
   assert.deepEqual(report, before)
 })
 
-for (const [sentiment, label] of [["negative", "Негативный инфоповод"], ["mixed", "Смешанный фон"]]) {
-  for (const [section, attributes, title] of [
-    ["top", { topRank: 1 }, "⭐ Топ агента"],
-    ["coingecko", { features: { coingeckoTrending: true } }, "🦎 CoinGecko Trending"],
-  ]) {
-    test(`${sentiment} news is not positive and is not masked when selected through ${section}`, () => {
-      const report = fixture([
-        coin("SELECTED", { ...attributes, socialSignificant: true, socialSentiment: sentiment, socialReason: "У вывода есть существенные оговорки." }),
-        coin("SOCIAL-ONLY", { socialSignificant: true, socialSentiment: sentiment, movementProbability: 1 }),
+for (const sentiment of ["positive", "negative", "mixed", "neutral", null, undefined, "unknown"]) {
+  test(`significant ${sentiment} background uses the prepared explanation in top, but only positive or negative news qualifies outside top`, () => {
+    const report = fixture([
+      coin("TOP", {
+        topRank: 1, socialSignificant: true, socialSentiment: sentiment,
+        technicalExplanation: "Объём растёт.", explanation: "Объём растёт. У вывода есть новостные оговорки.",
+        socialReason: "НЕ ДОБАВЛЯТЬ ОТДЕЛЬНЫЙ ФОН", features: { coingeckoTrending: true },
+      }),
+      coin("SOCIAL-ONLY", {
+        socialSignificant: true, socialSentiment: sentiment, movementProbability: 1,
+        explanation: "Готовый инфоповод вне топа.", technicalExplanation: "НЕ ДОБАВЛЯТЬ ТЕХНИКУ ВНЕ ТОПА",
+        socialReason: "НЕ ДУБЛИРОВАТЬ ИНФОПОВОД", features: { coingeckoTrending: true },
+      }),
+    ])
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.equal(release.eligibleCount, ["positive", "negative"].includes(sentiment) ? 2 : 1)
+    assert.equal(release.candidates[0].section, "top")
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+      "- <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Объём растёт. У вывода есть новостные оговорки.",
+    ])
+    if (["positive", "negative"].includes(sentiment)) {
+      assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), [
+        "- <code>SOCIAL-ONLY</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ASOCIAL-ONLYUSDT.P\">Монета SOCIAL-ONLY</a> — Готовый инфоповод вне топа.",
       ])
-      const release = buildTelegramRelease(report)
-      assertManifest(release, report)
-      assert.equal(release.eligibleCount, 1)
-      assert.equal(release.candidates[0].section, section)
-      const text = sectionHtml(release, title)
-      assert.ok(text.includes(label))
-      assert.match(text, /Инфоповод: У вывода есть существенные оговорки\./u)
-      assert.doesNotMatch(text, /Позитивный инфоповод/u)
-    })
-  }
+    } else {
+      assert.doesNotMatch(release.richMessage.html, /Значимые инфоповоды|SOCIAL-ONLY/u)
+    }
+    assert.doesNotMatch(release.richMessage.html, /НЕ ДОБАВЛЯТЬ|НЕ ДУБЛИРОВАТЬ|Инфоповод:|Техника:|CoinGecko Trending|<i>/u)
+  })
 }
 
-test("stored movement probability is only displayed, never recomputed from social, technical or directional data", () => {
+test("BCH-like insignificant or unknown social background leaves only the separately saved technical explanation", () => {
+  for (const socialSignificant of [false, null, undefined, "true", 1, {}, []]) {
+    const report = deepFreeze(fixture([coin("BCH", {
+      topRank: 1, name: "Bitcoin Cash", socialSignificant, socialSentiment: "positive",
+      technicalExplanation: "BCH сжимает диапазон при растущем объёме.",
+      explanation: "BCH сжимает диапазон при растущем объёме. В соцсетях обсуждают старую новость.",
+      socialReason: "В соцсетях обсуждают старую новость.",
+      drivers: ["relVolume=2: НЕ ВОССТАНАВЛИВАТЬ ТЕХНИКУ"],
+    })]))
+    const before = structuredClone(report)
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+      "- <code>BCH</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ABCHUSDT.P\">Bitcoin Cash</a> — BCH сжимает диапазон при растущем объёме.",
+    ])
+    assert.doesNotMatch(release.richMessage.html, /соцсетях|старую новость|НЕ ВОССТАНАВЛИВАТЬ/u)
+    assert.deepEqual(report, before)
+  }
+})
+
+for (const [section, sentiment, title] of [
+  ["top", "mixed", "⭐ Топ агента"],
+  ["news", "positive", "📰 Значимые инфоповоды"],
+  ["news", "negative", "📰 Значимые инфоповоды"],
+]) {
+  test(`${section} ${sentiment} uses socialReason up to 320 only when a significant prepared explanation is empty or invalid`, () => {
+    const socialReason = "Готовый инфоповод <&\"🙂>. ".repeat(100)
+    for (const explanation of [undefined, null, "", " \t\n\u0000", 42, true, {}, []]) {
+      const report = fixture([coin("FALLBACK", {
+        topRank: section === "top" ? 1 : null, name: null,
+        socialSignificant: true, socialSentiment: sentiment, explanation, socialReason,
+        technicalExplanation: "НЕ ПОДСТАВЛЯТЬ ТЕХНИКУ", drivers: ["metric=1: НЕ ПОДСТАВЛЯТЬ ДРАЙВЕР"],
+      })])
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      assert.deepEqual(candidateParagraphs(release, title), [`- <code>FALLBACK</code> — ${telegramText(socialReason, 320)}`])
+      assert.doesNotMatch(release.richMessage.html, /НЕ ПОДСТАВЛЯТЬ|Инфоповод:|Техника:/u)
+    }
+  })
+}
+
+test("missing or invalid significant explanations and social reasons leave the heading without invented text or a dash", () => {
+  for (const socialReason of [undefined, null, "", " \t\n\u0000", 42, true, {}, []]) {
+    const report = fixture([coin("EMPTY", {
+      topRank: 1, name: null, socialSignificant: true, socialSentiment: "neutral", explanation: null, socialReason,
+      technicalExplanation: "НЕ ИСПОЛЬЗОВАТЬ ТЕХНИЧЕСКИЙ FALLBACK",
+    }), coin("NEWS", {
+      name: null, socialSignificant: true, socialSentiment: "negative", explanation: "", socialReason,
+    })])
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>EMPTY</code>"])
+    assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), ["- <code>NEWS</code>"])
+  }
+})
+
+test("empty or invalid technicalExplanation never falls back to enriched prose, socialReason or drivers", () => {
+  for (const technicalExplanation of [undefined, null, "", " \t\n\u0000", 42, true, {}, []]) {
+    for (const socialSignificant of [false, null, "true"]) {
+      const report = fixture([coin("EMPTY", {
+        topRank: 1, name: null, technicalExplanation, socialSignificant,
+        socialSentiment: "negative", socialReason: "НЕ ПОКАЗЫВАТЬ ФОН",
+      })])
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>EMPTY</code>"])
+    }
+  }
+})
+
+test("legacy archives without technicalExplanation never reconstruct technical prose from enriched explanations", () => {
+  for (const socialSignificant of [false, null, undefined, "true"]) {
+    const archived = coin("LEGACY", {
+      topRank: 1, name: null, socialSignificant,
+      explanation: "Объём растёт.\nИнфоповод: старое обсуждение. Техника: не восстанавливать эвристикой.",
+      socialReason: "Старое обсуждение.",
+    })
+    delete archived.technicalExplanation
+    const report = deepFreeze(fixture([archived]))
+    const before = structuredClone(report)
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>LEGACY</code>"])
+    assert.deepEqual(report, before)
+    assert.equal(Object.hasOwn(archived, "technicalExplanation"), false)
+  }
+})
+
+test("stored movement probability is neither displayed nor recomputed from social, technical or directional data", () => {
   const report = fixture([coin("TEST", {
     topRank: 1, movementProbability: 0.3749, estimateConfidence: "high", directionBias: "up",
     socialSignificant: true, socialSentiment: "positive",
@@ -351,26 +557,27 @@ test("stored movement probability is only displayed, never recomputed from socia
   })], { marketContext: { altMarketBackground: { status: "up" } } })
   const release = buildTelegramRelease(report)
   const text = release.richMessage.html
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /P движения: 37% · уверенность: высокая/u)
+  assertManifest(release, report)
+  assert.doesNotMatch(text, /P движения|уверенность|37%|0\.3749|estimateConfidence|movementProbability/u)
   assert.doesNotMatch(text, /P — оценка|без статистической калибровки|Срез по закрытым свечам/u)
   assert.doesNotMatch(text, /P роста|P падения|directionBias|short_squeeze_setup|прогноз направления/u)
   assert.equal(selectTelegramCandidates(report).candidates[0].coin.movementProbability, 0.3749)
   const changed = structuredClone(report)
   Object.assign(changed.coins[0], { directionBias: "down", socialSentiment: "negative", features: {} })
-  assert.match(buildTelegramRelease(changed).richMessage.html, /P движения: 37%/u)
+  assert.equal(selectTelegramCandidates(changed).candidates[0].coin.movementProbability, 0.3749)
+  assert.equal(buildTelegramRelease(changed).richMessage.html, text)
 })
 
-test("zero, one and missing or invalid probabilities remain distinct, without clamping or invented estimates", () => {
-  for (const [movementProbability, expected] of [
-    [0, "0%"], [1, "100%"], [0.625, "63%"], [null, "нет оценки"], [undefined, "нет оценки"],
-    [NaN, "нет оценки"], [Infinity, "нет оценки"], [-0.01, "нет оценки"], [1.01, "нет оценки"], ["0.8", "нет оценки"],
-  ]) {
-    const report = fixture([coin("TEST", { topRank: 1, movementProbability, estimateConfidence: "unknown" })])
+test("zero, one and missing or invalid probabilities remain unchanged and never affect candidate text", () => {
+  const expected = buildTelegramRelease(fixture([coin("TEST", { topRank: 1 })])).richMessage.html
+  for (const movementProbability of [0, 1, 0.625, null, undefined, NaN, Infinity, -0.01, 1.01, "0.8"]) {
+    const report = deepFreeze(fixture([coin("TEST", { topRank: 1, movementProbability, estimateConfidence: "unknown" })]))
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
-    const text = sectionHtml(release, "⭐ Топ агента")
-    assert.ok(text.includes(`P движения: ${expected} · уверенность: не указана`))
-    assert.doesNotMatch(text, /NaN|Infinity/u)
+    assert.equal(selectTelegramCandidates(report).candidates[0].coin.movementProbability, movementProbability)
+    assert.equal(report.coins[0].movementProbability, movementProbability)
+    assert.equal(release.richMessage.html, expected)
+    assert.doesNotMatch(visibleText(sectionHtml(release, "⭐ Топ агента")), /P движения|уверенность|нет оценки|NaN|Infinity|%/u)
   }
 })
 
@@ -389,29 +596,98 @@ test("signal descriptions drop metric evidence but skip separators inside JSON s
   }
 })
 
-test("candidate explanations, positive technical notes and counter-signals show prose rather than metric evidence", () => {
+test("candidate paragraphs never append drivers, counter-signals, badges, categories or source and history warnings", () => {
   const attributes = {
-    explanation: "", drivers: [`peers=${JSON.stringify({ note: "a: \"b: c\"" })}: Ускорение интереса.`, "rvRatio=0.5: Сжатие диапазона.", "unused=1: ТРЕТИЙ ДРАЙВЕР"],
-    counterSignals: ["risk={\"note\":\"x: y\"}: Нет подтверждения.", "funding=0.01: Перегрев позиций.", "unused=1: ТРЕТИЙ РИСК"],
+    drivers: [`peers=${JSON.stringify({ note: "a: \"b: c\"" })}: PRIVATE-DRIVER`, "rvRatio=0.5: PRIVATE-COMPRESSION"],
+    counterSignals: ["risk={\"note\":\"x: y\"}: PRIVATE-RISK", "funding=0.01: PRIVATE-FUNDING"],
+    features: { coingeckoTrending: true, coingeckoTrendingCategories: ["PRIVATE-CATEGORY"] },
+    information: { news: { status: "failed", error: "PRIVATE-NEWS" }, twitter: { status: "failed", error: "PRIVATE-TWITTER" } },
+    history: { warning: "PRIVATE-HISTORY" }, name: null,
   }
   const report = fixture([
-    coin("TOP", { ...attributes, topRank: 1 }),
-    coin("POS", { ...attributes, socialSignificant: true, socialSentiment: "positive", socialReason: "Новость требует проверки." }),
-    coin("CG", { ...attributes, features: { coingeckoTrending: true } }),
+    coin("TOP", { ...attributes, topRank: 1, technicalExplanation: "Готовое техническое объяснение." }),
+    coin("POS", { ...attributes, socialSignificant: true, socialSentiment: "positive", explanation: "Готовый позитивный инфоповод." }),
+    coin("NEG", { ...attributes, socialSignificant: true, socialSentiment: "negative", explanation: "Готовый негативный инфоповод." }),
+    coin("CG-ONLY", attributes),
   ])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  for (const title of ["⭐ Топ агента", "🟢 Позитивные инфоповоды", "🦎 CoinGecko Trending"]) {
-    const text = sectionHtml(release, title)
-    assert.match(text, /Ускорение интереса\./u)
-    assert.match(text, /⚠ Нет подтверждения\. Перегрев позиций\./u)
-    assert.doesNotMatch(text, /peers=|rvRatio=|risk=|funding=|ТРЕТИЙ ДРАЙВЕР|ТРЕТИЙ РИСК/u)
-  }
-  assert.match(sectionHtml(release, "🟢 Позитивные инфоповоды"), /Техника: Ускорение интереса\./u)
-  const withExplanation = buildTelegramRelease(fixture([coin("TOP", { ...attributes, topRank: 1, explanation: "Готовое объяснение агента." })]))
-  assert.match(withExplanation.richMessage.html, /Готовое объяснение агента\./u)
-  assert.doesNotMatch(withExplanation.richMessage.html, /Ускорение интереса/u)
+  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>TOP</code> — Готовое техническое объяснение."])
+  assert.deepEqual(candidateParagraphs(release, "📰 Значимые инфоповоды"), [
+    "- <code>POS</code> — Готовый позитивный инфоповод.", "- <code>NEG</code> — Готовый негативный инфоповод.",
+  ])
+  assert.doesNotMatch(release.richMessage.html, /PRIVATE-|peers=|rvRatio=|risk=|funding=|⚠|CoinGecko|Категории:|Техника:|Инфоповод:|P движения|уверенность/u)
+  assert.doesNotMatch(JSON.stringify(release), /CG-ONLY/u)
 })
+
+test("the ticker is unlinked code and only the name links to the encoded TradingView market", () => {
+  for (const marketSymbol of ["BINANCE:WLDUSDT.P", "BINANCE:WLD/USDT?x=1&y=\"<🙂>#"]) {
+    const report = fixture([coin("WLD", {
+      topRank: 1, name: "Worldcoin", marketSymbol, technicalExplanation: "готовое описание",
+    })])
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+      `- <code>WLD</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(marketSymbol)}">Worldcoin</a> — готовое описание`,
+    ])
+  }
+})
+
+test("ticker code and name escape tag injection without nesting code or moving the link onto the ticker", () => {
+  for (const demo of [false, true]) {
+    const report = fixture([coin("WLD</code>&\"", {
+      topRank: 1, name: "<code>Worldcoin</code>&\"", marketSymbol: "BINANCE:WLD/?x=\"&y=<code>",
+      technicalExplanation: "Текст <code>не разметка</code>.",
+    })], { demo })
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    const name = "&lt;code&gt;Worldcoin&lt;/code&gt;&amp;&quot;"
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+      `- <code>WLD&lt;/code&gt;&amp;&quot;</code> ${demo ? name : `<a href="https://www.tradingview.com/chart/?symbol=BINANCE%3AWLD%2F%3Fx%3D%22%26y%3D%3Ccode%3E">${name}</a>`} — Текст &lt;code&gt;не разметка&lt;/code&gt;.`,
+    ])
+    assert.equal([...release.richMessage.html.matchAll(/<code>/gu)].length, 1)
+    assert.equal([...release.richMessage.html.matchAll(/<a href=/gu)].length, demo ? 0 : 1)
+  }
+  assert.throws(() => assertTelegramHtml("<p>- <code><a href=\"https://example.com\">WLD</a></code></p>"), /Ticker code must contain only escaped text/u)
+  assert.throws(() => assertTelegramHtml("<p>- <a href=\"https://example.com\"><code>WLD</code></a></p>"), /Ticker code must not be wrapped in a link/u)
+})
+
+test("missing, empty or invalid names leave just the symbol without a link or duplicated code", () => {
+  for (const name of [undefined, null, "", " \t\n\u0000", 42, true, {}, []]) {
+    const report = fixture([coin("WLD", { topRank: 1, name, technicalExplanation: null })])
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>WLD</code>"])
+    assert.doesNotMatch(release.richMessage.html, /<a /u)
+  }
+})
+
+test("missing or invalid market symbols keep the name as plain text without inventing a TradingView URL", () => {
+  for (const marketSymbol of [undefined, null, "", " \t\n", 42, true, {}, []]) {
+    const report = fixture([coin("WLD", { topRank: 1, name: "Worldcoin", marketSymbol, technicalExplanation: null })])
+    const release = buildTelegramRelease(report)
+    assertManifest(release, report)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>WLD</code> Worldcoin"])
+    assert.doesNotMatch(release.richMessage.html, /<a /u)
+  }
+})
+
+for (const socialSignificant of [false, true]) {
+  test(`${socialSignificant ? "prepared" : "technical"} explanation uses the 1200 encoded-character budget without appending other prose`, () => {
+    for (const description of ["я".repeat(1_199), "я".repeat(1_200), "я".repeat(1_201), "<&\"🙂>".repeat(1_000)]) {
+      const report = fixture([coin("LONG", {
+        topRank: 1, name: null, socialSignificant, socialSentiment: "positive",
+        technicalExplanation: socialSignificant ? "НЕ ДУБЛИРОВАТЬ ТЕХНИКУ" : description,
+        explanation: socialSignificant ? description : "НЕ ПОКАЗЫВАТЬ СКЛЕЕННЫЙ ТЕКСТ",
+        socialReason: "НЕ ДОБАВЛЯТЬ ФОН",
+      })])
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [`- <code>LONG</code> — ${telegramText(description, 1_200)}`])
+      assert.doesNotMatch(release.richMessage.html, /НЕ ДУБЛИРОВАТЬ|НЕ ПОКАЗЫВАТЬ|НЕ ДОБАВЛЯТЬ/u)
+    }
+  })
+}
 
 test("telegramText escapes every untrusted HTML character and normalizes whitespace and controls", () => {
   assert.equal(telegramText(" \u0000\tПривет\n<&>\"\r \u0007🙂 "), "Привет &lt;&amp;&gt;&quot; 🙂")
@@ -466,7 +742,7 @@ test("huge link URLs are dropped rather than truncated, including growth caused 
   const report = fixture([coin("HUGE-MARKET", { topRank: 1, marketSymbol: "X".repeat(1_000) })])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  assert.match(release.richMessage.html, /<b>01 · HUGE-MARKET<\/b>/u)
+  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), ["- <code>HUGE-MARKET</code> Монета HUGE-MARKET — Изменение активности требует наблюдения."])
   assert.doesNotMatch(release.richMessage.html, /<a /u)
 })
 
@@ -507,7 +783,7 @@ test("all rendered report fields are escaped, while raw source errors and histor
   const unsafe = "<img src=x onerror=\"alert(1)\">&"
   const escaped = "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;&amp;"
   const attributes = {
-    name: `NAME${unsafe}`, explanation: `WHY${unsafe}`, drivers: [`metric=1: DRIVER${unsafe}`],
+    name: `NAME${unsafe}`, technicalExplanation: `TECH${unsafe}`, explanation: `WHY${unsafe}`, drivers: [`metric=1: DRIVER${unsafe}`],
     counterSignals: [`metric=2: RISK${unsafe}`], socialSignificant: true, socialSentiment: "positive", socialReason: `SOCIAL${unsafe}`,
     features: { coingeckoTrending: true, coingeckoTrendingCategories: [`CATEGORY${unsafe}`, 123] },
     history: { warning: `PRIVATE-HISTORY${unsafe}` }, information: { news: { status: "failed", error: `PRIVATE-ERROR${unsafe}` } },
@@ -515,7 +791,8 @@ test("all rendered report fields are escaped, while raw source errors and histor
   const report = fixture([
     coin(`SYMBOL${unsafe}`, { ...attributes, topRank: 1, marketSymbol: `BINANCE:${unsafe}` }),
     coin("POS", attributes),
-    coin("CG", { ...attributes, explanation: "", socialSentiment: "negative" }),
+    coin("NEG", { ...attributes, explanation: "", socialSentiment: "negative" }),
+    coin("TECH", { ...attributes, topRank: 2, socialSignificant: false }),
   ], { marketBrief: brief({
     paragraphs: [{ text: `BRIEF${unsafe}`, sourceIds: ["s"] }], warning: `WARNING${unsafe}`,
     sources: [{ id: "s", url: "https://news.example/?q=\" onclick=\"alert(1)&b=<script>", title: unsafe, publisher: unsafe }],
@@ -523,13 +800,12 @@ test("all rendered report fields are escaped, while raw source errors and histor
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   const text = release.richMessage.html
-  for (const prefix of ["SYMBOL", "NAME", "WHY", "DRIVER", "RISK", "SOCIAL", "CATEGORY", "BRIEF", "WARNING"]) {
+  for (const prefix of ["SYMBOL", "NAME", "TECH", "WHY", "SOCIAL", "BRIEF", "WARNING"]) {
     assert.ok(text.includes(`${prefix}${escaped}`), `Missing escaped ${prefix}`)
   }
   assert.ok(sectionHtml(release, "⭐ Топ агента").includes(`SYMBOL${escaped}`))
-  assert.doesNotMatch(text, /<img src=x|<script|PRIVATE-ERROR|PRIVATE-HISTORY|metric=/u)
-  assert.match(text, /График с оговорками/u)
-  assert.match(text, /Не все источники новостей и обсуждений удалось загрузить/u)
+  assert.doesNotMatch(text, /<img src=x|<script|PRIVATE-ERROR|PRIVATE-HISTORY|metric=|DRIVER|RISK|CATEGORY/u)
+  assert.doesNotMatch(text, /График с оговорками|Не все источники новостей и обсуждений удалось загрузить/u)
 })
 
 test("card paths stay unique and local even for traversal-like symbols and identical sanitized stems", () => {
@@ -543,15 +819,19 @@ test("card paths stay unique and local even for traversal-like symbols and ident
   assert.ok(release.candidates.every(item => !item.image.includes("..")))
 })
 
-for (const [section, title] of [["top", "⭐ Топ агента"], ["positive", "🟢 Позитивные инфоповоды"], ["coingecko", "🦎 CoinGecko Trending"]]) {
-  test(`long escaped ${section} candidates keep whole blocks, concise fields and a single section title`, () => {
+for (const [section, title, demo] of [
+  ["top", "⭐ Топ агента", false], ["news", "📰 Значимые инфоповоды", false],
+  ["top", "⭐ Топ агента", true], ["news", "📰 Значимые инфоповоды", true],
+]) {
+  test(`long escaped ${section} ${demo ? "demo" : "linked"} candidates keep one paragraph each, 100-character symbols and names, and 1200-character descriptions`, () => {
     const long = "<&\"🙂>".repeat(1_000)
     const report = fixture(Array.from({ length: 10 }, (_, index) => coin(`COIN-${index}-${long}`, {
       name: long, topRank: section === "top" ? index + 1 : null, marketSymbol: `BINANCE:${"X".repeat(450)}${index}`,
-      explanation: long, drivers: [`metric=1: ${long}`], counterSignals: [`risk=1: ${long}`, long],
-      socialSignificant: true, socialSentiment: section === "coingecko" ? "mixed" : "positive", socialReason: long,
-      features: { coingeckoTrending: true, coingeckoTrendingCategories: [long] },
-    })))
+      technicalExplanation: long, explanation: section === "top" ? "PRIVATE-ENRICHED" : long,
+      drivers: ["metric=1: PRIVATE-DRIVER"], counterSignals: ["risk=1: PRIVATE-RISK"],
+      socialSignificant: section === "news", socialSentiment: index % 2 ? "negative" : "positive", socialReason: "PRIVATE-SOCIAL",
+      features: { coingeckoTrending: true, coingeckoTrendingCategories: ["PRIVATE-CATEGORY"] },
+    })), { demo })
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     assert.equal(release.candidates.length, 10)
@@ -559,13 +839,16 @@ for (const [section, title] of [["top", "⭐ Топ агента"], ["positive",
     const text = sectionHtml(release, title)
     assert.ok(text.length > 4_096)
     assert.equal(text.split(`<b>${title}</b>`).length - 1, 1)
-    assert.deepEqual([...text.matchAll(/<p><b><a href="[^"]+">(\d{2}) · /gu)].map(match => Number(match[1])),
-      Array.from({ length: 10 }, (_, index) => index + 1))
-    const blocks = [...text.matchAll(/<p><b><a href=[\s\S]*?<\/p>/gu)].map(([block]) => block)
-    assert.equal(blocks.length, 10)
-    assert.ok(blocks.every(block => block.includes("…") && block.length < 2_300))
-    assert.ok(text.startsWith(`<p><b>${title}</b><br>`))
-    assert.doesNotMatch(release.richMessage.html, /P — оценка|в любую сторону за 4–12ч/u)
+    const paragraphs = candidateParagraphs(release, title)
+    assert.deepEqual(paragraphs, report.coins.map((coin) => {
+      const name = telegramText(coin.name, 100)
+      const heading = demo ? name : `<a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}">${name}</a>`
+      return `- <code>${telegramText(coin.symbol, 100)}</code> ${heading} — ${telegramText(long, 1_200)}`
+    }))
+    assert.equal([...text.matchAll(/<a href=/gu)].length, demo ? 0 : 10)
+    assert.ok(paragraphs.every(paragraph => paragraph.includes("…") && paragraph.length < 2_000))
+    assert.ok(text.startsWith(`<p><b>${title}</b></p>\n${section === "top" ? "<p><br></p>\n" : ""}<p>- <code>`))
+    assert.doesNotMatch(release.richMessage.html, /PRIVATE-|P — оценка|в любую сторону за 4–12ч/u)
   })
 }
 
@@ -839,13 +1122,14 @@ for (const [status, paragraphs, coverage, expected, absent] of [
   }
 }
 
-test("failed coin news and Twitter sources warn instead of masquerading as a healthy empty sample", () => {
+test("coin news and Twitter source statuses never add service warnings to candidate text", () => {
+  const expected = buildTelegramRelease(fixture([coin("TEST", { topRank: 1 })])).richMessage.html
   for (const source of ["news", "twitter"]) {
     for (const status of ["available", "empty", "failed"]) {
       const report = fixture([coin("TEST", { topRank: 1, information: { [source]: { status, error: "PRIVATE-SOURCE-ERROR" } } })])
       const text = buildTelegramRelease(report).richMessage.html
-      assert.equal(text.includes("Не все источники новостей и обсуждений удалось загрузить."), status === "failed")
-      assert.doesNotMatch(text, /PRIVATE-SOURCE-ERROR/u)
+      assert.equal(text, expected)
+      assert.doesNotMatch(text, /PRIVATE-SOURCE-ERROR|Не все источники новостей и обсуждений удалось загрузить/u)
     }
   }
 })
@@ -917,7 +1201,7 @@ test("archived reports without a valid creation timestamp use the stored candle 
   }
 })
 
-test("compact opening has colored square sentiment markers, dotted separators and blank lines without changing later sections", () => {
+test("compact opening keeps colored square sentiment markers, dotted separators and blank lines before the new candidate sections", () => {
   const report = deepFreeze(fixture([coin("TOP", { topRank: 1 })], {
     asOf: "2026-09-27T07:00:00.000Z", reportCreatedAt: "2026-09-27T08:03:00.000Z",
     marketBrief: brief({
@@ -936,14 +1220,15 @@ test("compact opening has colored square sentiment markers, dotted separators an
   for (const [index, marker] of ["🟩", "⬜", "🟥"].entries()) {
     assert.ok(html.includes(`<p>${marker} Новость ${index + 1}. <a href="https://news.example/source">[1]</a></p>`))
   }
-  assert.ok(html.includes("Новость 3. <a href=\"https://news.example/source\">[1]</a></p>\n<p><br></p>\n<p><b>⭐ Топ агента</b><br>Ранние кандидаты в исходном порядке агента.</p>"))
-  assert.equal(html.split("<p><br></p>").length - 1, 3)
+  assert.ok(html.includes("Новость 3. <a href=\"https://news.example/source\">[1]</a></p>\n<p><br></p>\n<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>- <code>TOP</code>"))
+  assert.equal(html.split("<p><br></p>").length - 1, 4)
   assert.equal(html.split("<p>· · ·</p>").length - 1, 2)
   assert.doesNotMatch(html, /⊕|○|⊖|──────|Крипто-пульс|Публикации:|Кандидатов:|Срез по закрытым свечам|P — оценка|без статистической калибровки|Покрытие новостных источников|• [🟩⬜🟥]/u)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /P движения: 50% · уверенность: средняя/u)
-  assert.match(sectionHtml(release, "⭐ Топ агента"), /⚠ Нет подтверждения интересом\./u)
-  assert.match(sectionHtml(release, "🟢 Позитивные инфоповоды"), /нет дополнительных монет/u)
-  assert.match(sectionHtml(release, "🦎 CoinGecko Trending"), /нет дополнительных CoinGecko/u)
+  assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+    "- <code>TOP</code> <a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATOPUSDT.P\">Монета TOP</a> — Изменение активности требует наблюдения.",
+  ])
+  assert.doesNotMatch(html, /Значимые инфоповоды|В выпуске нет дополнительных монет/u)
+  assert.doesNotMatch(html, /P движения|уверенность|Нет подтверждения интересом|CoinGecko|Ранние кандидаты в исходном порядке агента/u)
   assert.deepEqual(report, before)
 })
 
@@ -955,6 +1240,9 @@ test("only an explicit demo flag labels the single post synthetic and suppresses
     assert.equal(release.demo, demo === true)
     assert.equal([...release.richMessage.html.matchAll(/ДЕМО · синтетические данные/giu)].length, demo === true ? 1 : 0)
     assert.equal(release.richMessage.html.includes("https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P"), demo !== true)
+    assert.deepEqual(candidateParagraphs(release, "⭐ Топ агента"), [
+      `- <code>TEST</code> ${demo === true ? "Монета TEST" : "<a href=\"https://www.tradingview.com/chart/?symbol=BINANCE%3ATESTUSDT.P\">Монета TEST</a>"} — Изменение активности требует наблюдения.`,
+    ])
   }
 })
 
@@ -962,7 +1250,7 @@ test("rich media IDs map deterministically to unique local candidates without le
   const report = fixture([
     coin("SECOND", { topRank: 2, image: "https://remote.example/private.png", mediaId: "PRIVATE-ID" }),
     coin("FIRST", { topRank: 1, image: "/Users/private/card.png", history: { candles: [{ secret: "PRIVATE-HISTORY" }] } }),
-    coin("FIRST-ALIAS", { baseCurrencyId: "XTVCFIRST", features: { coingeckoTrending: true } }),
+    coin("FIRST-ALIAS", { baseCurrencyId: "XTVCFIRST", socialSignificant: true, socialSentiment: "negative", features: { coingeckoTrending: true } }),
   ], { directory: "/Users/private", source: "PRIVATE-SOURCE", token: "PRIVATE-TOKEN" })
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
@@ -978,8 +1266,10 @@ test("one rich post keeps news and all candidate sections above ordinary text an
   const long = "Явное усиление активности требует наблюдения. ".repeat(200)
   const report = fixture(Array.from({ length: 10 }, (_, index) => coin(`LONG-${index}`, {
     topRank: index < 3 ? index + 1 : null,
-    explanation: `Описание-${index} ${long}`, drivers: [`metric=1: Техника-${index} ${long}`], counterSignals: [long, long],
-    socialSignificant: true, socialSentiment: index < 7 ? "positive" : "mixed", socialReason: `Фон-${index} ${long}`,
+    technicalExplanation: `Техника-${index} ${long}`,
+    explanation: `${index < 3 ? "Техника и новости" : "Инфоповод"}-${index} ${long}`,
+    drivers: [`metric=1: PRIVATE-DRIVER-${index}`], counterSignals: ["PRIVATE-RISK"],
+    socialSignificant: true, socialSentiment: index < 7 ? "positive" : "negative", socialReason: `PRIVATE-SOCIAL-${index}`,
     features: { coingeckoTrending: true, coingeckoTrendingCategories: [long] },
   })), { marketBrief: brief({
     schemaVersion: 1,
@@ -991,13 +1281,16 @@ test("one rich post keeps news and all candidate sections above ordinary text an
   assert.ok([...visibleText(html)].length > 4_096)
   assert.ok(Buffer.byteLength(visibleText(html), "utf8") > 32_768, "Byte limits must not replace character limits")
   assert.equal([...html.matchAll(/Событие-\d/gu)].length, 5)
-  assert.equal([...html.matchAll(/Фон-\d/gu)].length, 10)
-  assert.equal([...html.matchAll(/<p><b><a href=/gu)].length, 10)
-  const titles = ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента", "🟢 Позитивные инфоповоды", "🦎 CoinGecko Trending"]
+  assert.equal([...html.matchAll(/Техника и новости-\d/gu)].length, 3)
+  assert.equal([...html.matchAll(/Инфоповод-\d/gu)].length, 7)
+  assert.equal([...html.matchAll(/<p>- <code>LONG-\d<\/code> <a href=/gu)].length, 10)
+  assert.doesNotMatch(html, /PRIVATE-|Категории:|CoinGecko Trending/u)
+  const titles = ["📰 Новостная сводка за последние 6 часов", "⭐ Топ агента", "📰 Значимые инфоповоды"]
   const positions = [html.indexOf("</tg-collage>"), ...titles.map(title => html.indexOf(`<b>${title}</b>`))]
   assert.deepEqual(positions, [...positions].sort((first, second) => first - second))
-  assert.match(sectionHtml(release, "🟢 Позитивные инфоповоды"), /Позитивная новость — не технический сигнал.*не у всего рынка/u)
-  assert.match(sectionHtml(release, "🦎 CoinGecko Trending"), /Поисковое внимание — не сигнал роста/u)
+  assert.equal(candidateParagraphs(release, "⭐ Топ агента").length, 3)
+  assert.equal(candidateParagraphs(release, "📰 Значимые инфоповоды").length, 7)
+  assert.doesNotMatch(html, /Ранние кандидаты в исходном порядке|Дополнительные монеты вне топа|не у всего рынка|Поисковое внимание — не сигнал роста/u)
 })
 
 test("invalid report time or timeframe fails explicitly instead of constructing a plausible release", () => {

@@ -58,11 +58,14 @@ function reportWithCoins (count = 14) {
       marketSymbol: `ПРИМЕР · ${symbol} / USDT`,
       topRank: index < 3 ? index + 1 : null,
       movementProbability: (78 - index * 2) / 100,
-      explanation: `Пример для ${symbol}: объём и Open Interest растут. Все значения синтетические.`,
+      technicalExplanation: `Пример для ${symbol}: объём и Open Interest растут. Все значения синтетические.`,
+      explanation: index < 3
+        ? `Пример для ${symbol}: объём и Open Interest растут. Вымышленный инфоповод уточняет оценку.`
+        : index < 7 ? `Вымышленный инфоповод для ${symbol}, без технического сигнала.` : `PRIVATE-ENRICHED-${symbol}`,
       drivers: ["Пример: сжатие волатильности"],
       counterSignals: ["Пример: всплеск объёма может оказаться кратковременным"],
       socialSignificant: index < 7,
-      socialSentiment: index < 7 ? "positive" : null,
+      socialSentiment: index < 7 ? index % 2 ? "negative" : "positive" : null,
       socialReason: index < 7 ? "Вымышленный пример: тестовое обновление, не настоящая новость." : "Демо: инфоповод не задан.",
       features: {
         ...coin.features,
@@ -89,7 +92,7 @@ function reportWithCoins (count = 14) {
   }
 }
 
-test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-photo rerun uses a fresh folder", async (t) => {
+test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-only images, and an offline preview; reruns use fresh folders", async (t) => {
   const directory = await temporaryDirectory(t)
   const syntheticReport = reportWithCoins()
   const original = structuredClone(syntheticReport)
@@ -99,19 +102,23 @@ test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-ph
   const manifest = JSON.parse(json)
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.deepEqual(manifest, { ...buildTelegramRelease(original), source: "Синтетический отчёт" })
-  assert.equal(result.candidateCount, 14)
+  assert.equal(original.coins.length, 14)
+  assert.equal(result.candidateCount, 7)
   assert.equal(result.messageCount, 1)
   assert.equal(manifest.schemaVersion, 2)
-  assert.equal(manifest.richMessage.media.length, 14)
+  assert.equal(manifest.richMessage.media.length, 7)
   assert.equal(Object.hasOwn(manifest, "messages"), false)
   assert.equal(result.asOf, original.asOf)
   assert.equal(result.omittedCount, manifest.omittedCount)
   assert.equal(result.demo, true)
-  assert.equal(manifest.eligibleCount, 14)
+  assert.equal(manifest.eligibleCount, 7)
   assert.equal(manifest.omittedCount, 0)
-  assert.equal(new Set(manifest.candidates.map(item => item.symbol)).size, 14)
-  assert.equal(new Set(manifest.candidates.map(item => item.image)).size, 14)
-  assert.deepEqual(new Set(manifest.candidates.map(item => item.section)), new Set(["top", "positive", "coingecko"]))
+  assert.equal(new Set(manifest.candidates.map(item => item.symbol)).size, 7)
+  assert.equal(new Set(manifest.candidates.map(item => item.image)).size, 7)
+  assert.deepEqual(manifest.candidates.map(item => item.coinIndex), [0, 1, 2, 3, 4, 5, 6])
+  assert.deepEqual(manifest.candidates.map(item => item.symbol), original.coins.slice(0, 7).map(coin => coin.symbol))
+  assert.deepEqual(manifest.candidates.map(item => item.section), ["top", "top", "top", "news", "news", "news", "news"])
+  assert.deepEqual(manifest.candidates.slice(3).map(item => original.coins[item.coinIndex].socialSentiment), ["negative", "positive", "negative", "positive"])
   assert.equal(path.dirname(result.directory), directory)
   assert.match(path.basename(result.directory), /^release-/)
   assert.equal(result.previewPath, path.join(result.directory, "index.html"))
@@ -122,13 +129,21 @@ test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-ph
   assert.match(html, /Сообщения: 1/)
   assert.doesNotMatch(html, /Не отправлено|Подпись к фото|Фото и подписи/u)
   assert.match(html, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
-  assert.match(html, /Кандидаты: 14<\/span>/)
+  assert.match(html, /Кандидаты: 7<\/span>/)
   assert.doesNotMatch(html, /Кандидаты: \d+ \/ 10/)
   assert.ok(html.includes(`Не включено: ${manifest.omittedCount}`))
   assert.match(html, /Точное отображение в клиентах Telegram не гарантируется/)
-  assert.match(html, /⭐ Топ агента/)
-  assert.match(html, /🟢 Позитивные инфоповоды/)
-  assert.match(html, /🦎 CoinGecko Trending/)
+  assert.match(html, /<p><b>⭐ Топ агента<\/b><\/p>/u)
+  assert.match(html, /<p><b>📰 Значимые инфоповоды<\/b><\/p>/u)
+  assert.doesNotMatch(html, /CoinGecko Trending|🟢 Позитивные инфоповоды|PRIVATE-ENRICHED|P движения|уверенность|Категории:|<a /u)
+  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), original.coins.slice(0, 7)
+    .map(coin => `- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}`))
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
+    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
+    original.coins.slice(0, 3).map(coin => `<p>- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p>· · ·</p>\n"),
+    "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
+    original.coins.slice(3, 7).map(coin => `<p>- <code>${coin.symbol}</code> ${coin.name} — ${coin.explanation}</p>`).join("\n<p>· · ·</p>\n"),
+  ].join("\n"))
   assert.match(html, /max-width: 720px/)
   assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
   assert.match(html, /@media[\s\S]*grid-template-columns: 1fr/)
@@ -155,13 +170,26 @@ test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-ph
     assert.match(svg, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
   }
   assertPreviewPost(html, manifest)
-  assert.ok(manifest.richMessage.html.length > 4_096)
+  const artifacts = (await fs.readdir(path.join(result.directory, "cards"))).sort()
+  assert.deepEqual(artifacts, manifest.candidates.flatMap(item => [path.basename(item.image), path.basename(item.image.replace(/\.png$/, ".svg"))]).sort())
+  for (const coin of original.coins.slice(7)) {
+    assert.equal(coin.features.coingeckoTrending, true)
+    assert.equal(coin.socialSignificant, false)
+    assert.ok(!json.includes(coin.symbol))
+    assert.ok(!html.includes(coin.symbol))
+    assert.ok(artifacts.every(filename => !filename.includes(coin.symbol)))
+  }
   const report = reportWithCoins(1)
   const before = structuredClone(report)
   const next = await writeTelegramPreview(report, { directory, source: "local example" })
   const nextManifest = JSON.parse(await fs.readFile(next.manifestPath, "utf8"))
   assert.equal(next.candidateCount, 1)
   assert.equal(next.messageCount, 1)
+  assert.equal(nextManifest.richMessage.html.slice(nextManifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
+    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
+    `<p>- <code>DEMO-01</code> Вымышленная монета 1 — ${report.coins[0].explanation}</p>`,
+  ].join("\n"))
+  assert.doesNotMatch(nextManifest.richMessage.html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
   assertPreviewPost(await fs.readFile(next.previewPath, "utf8"), nextManifest)
   assert.notEqual(next.directory, result.directory)
   assert.deepEqual(report, before)
@@ -169,7 +197,7 @@ test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-ph
   assert.deepEqual((await fs.readdir(path.join(next.directory, "cards"))).sort(), [
     path.basename(nextManifest.candidates[0].image), path.basename(nextManifest.candidates[0].image.replace(/\.png$/, ".svg")),
   ].sort())
-  assert.equal((await fs.readdir(path.join(result.directory, "cards"))).length, 28)
+  assert.equal((await fs.readdir(path.join(result.directory, "cards"))).length, 14)
   assert.equal(await fs.readFile(result.manifestPath, "utf8"), json)
   assert.equal(await fs.readFile(result.previewPath, "utf8"), html)
 })
@@ -186,13 +214,50 @@ test("zero candidates produces an explicit empty preview without invented photos
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.match(html, /Кандидаты: 0<\/span>/)
   assert.match(html, /Агент не выделил убедительных ранних кандидатов/)
-  assert.doesNotMatch(html, /<img\b/)
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), "<p><b>⭐ Топ агента</b></p>\n<p><br></p>\n<p>Агент не выделил убедительных ранних кандидатов.</p>")
+  assert.doesNotMatch(html, /<img\b|CoinGecko Trending|🟢 Позитивные инфоповоды|Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
   assertPreviewPost(html, manifest)
+})
+
+test("a single news candidate follows the empty top with one preceding blank line and no gap after the news heading", () => {
+  const report = reportWithCoins(1)
+  Object.assign(report.coins[0], { topRank: null, explanation: "Готовый инфоповод." })
+  const before = structuredClone(report)
+  const manifest = buildTelegramRelease(report)
+  const html = renderTelegramPreview(manifest)
+  assertPreviewPost(html, manifest)
+  assert.deepEqual(manifest.candidates.map(item => item.section), ["news"])
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
+    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>", "<p>Агент не выделил убедительных ранних кандидатов.</p>",
+    "<p><br></p>", "<p><b>📰 Значимые инфоповоды</b></p>",
+    "<p>- <code>DEMO-01</code> Вымышленная монета 1 — Готовый инфоповод.</p>",
+  ].join("\n"))
+  assert.doesNotMatch(html, /· · ·|В выпуске нет дополнительных монет/u)
+  assert.deepEqual(report, before)
+})
+
+test("preview omits the entire news section and its spacing after symbol and canonical ID deduplication", () => {
+  const report = reportWithCoins(3)
+  Object.assign(report.coins[0], { baseCurrencyId: "DEMO-ID", explanation: "Готовое объяснение." })
+  Object.assign(report.coins[1], { topRank: null, symbol: " demo-01 ", baseCurrencyId: "OTHER-ID" })
+  Object.assign(report.coins[2], { topRank: null, symbol: "ALIAS", baseCurrencyId: " DEMO-ID " })
+  const before = structuredClone(report)
+  const manifest = buildTelegramRelease(report)
+  const html = renderTelegramPreview(manifest)
+  assertPreviewPost(html, manifest)
+  assert.deepEqual(manifest.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [[0, "top"]])
+  assert.equal(manifest.richMessage.html.slice(manifest.richMessage.html.indexOf("<p><b>⭐ Топ агента</b></p>")), [
+    "<p><b>⭐ Топ агента</b></p>", "<p><br></p>",
+    "<p>- <code>DEMO-01</code> Вымышленная монета 1 — Готовое объяснение.</p>",
+  ].join("\n"))
+  assert.equal(html, renderTelegramPreview(buildTelegramRelease({ ...report, coins: [report.coins[0]] })))
+  assert.doesNotMatch(html, /Значимые инфоповоды|В выпуске нет дополнительных монет|· · ·/u)
+  assert.deepEqual(report, before)
 })
 
 test("renderer escapes all metadata while preserving trusted rich text HTML without mutation", () => {
   const unsafe = "<img src=x onerror=alert(1)> & \"'"
-  const text = "<p><b>Сводка</b><br><i>Пример</i> <a href=\"https://example.com\">Источник</a></p>"
+  const text = "<p><b>Сводка</b><br><i>Пример</i> <a href=\"https://example.com\">Источник</a></p>\n<p>- <code>DEMO&lt;&amp;</code> &lt;code&gt;Имя&lt;/code&gt;</p>"
   const manifest = {
     schemaVersion: 2, asOf: unsafe, closedAt: unsafe, demo: false,
     eligibleCount: unsafe, omittedCount: unsafe, source: `javascript:alert(1) ${unsafe}`,
@@ -214,6 +279,32 @@ test("renderer escapes all metadata while preserving trusted rich text HTML with
   assert.ok(html.includes(text))
   assert.doesNotMatch(html, /<script\b|<img src=x|href="javascript:/)
   assertPreviewPost(html, manifest)
+})
+
+test("preview preserves technical-only, enriched and legacy heading-only paragraphs with links only on names", () => {
+  const report = reportWithCoins(3)
+  report.demo = false
+  Object.assign(report.coins[0], {
+    socialSignificant: false, technicalExplanation: "Чистое техническое описание.",
+    explanation: "Чистое техническое описание. PRIVATE-INSIGNIFICANT-SOCIAL", socialReason: "PRIVATE-SOCIAL",
+  })
+  Object.assign(report.coins[1], { socialSignificant: null, name: null, explanation: "PRIVATE-LEGACY-ENRICHED" })
+  delete report.coins[1].technicalExplanation
+  Object.assign(report.coins[2], {
+    socialSignificant: true, socialSentiment: "mixed", technicalExplanation: "PRIVATE-TECHNICAL",
+    explanation: "Готовая техника вместе со значимым смешанным фоном.", socialReason: "PRIVATE-DUPLICATED-SOCIAL",
+  })
+  const before = structuredClone(report)
+  const manifest = buildTelegramRelease(report)
+  const html = renderTelegramPreview(manifest)
+  assertPreviewPost(html, manifest)
+  assert.deepEqual([...manifest.richMessage.html.matchAll(/<p>(- <code>[\s\S]*?)<\/p>/gu)].map(([, text]) => text), [
+    `- <code>DEMO-01</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[0].marketSymbol)}">Вымышленная монета 1</a> — Чистое техническое описание.`,
+    "- <code>DEMO-02</code>",
+    `- <code>DEMO-03</code> <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(report.coins[2].marketSymbol)}">Вымышленная монета 3</a> — Готовая техника вместе со значимым смешанным фоном.`,
+  ])
+  assert.doesNotMatch(html, /PRIVATE-|P движения|уверенность|CoinGecko Trending/u)
+  assert.deepEqual(report, before)
 })
 
 test("preview resolves images by rich media ID and preserves the HTML photo order", () => {
@@ -241,10 +332,13 @@ test("one-photo preview keeps a valid rich post above 1024 and 4096 characters w
   const report = reportWithCoins(1)
   const long = "Наблюдение за активностью без обещания направления. ".repeat(100)
   Object.assign(report.coins[0], {
-    explanation: long, socialReason: long, counterSignals: [long, long],
+    technicalExplanation: "PRIVATE-TECHNICAL", explanation: long, socialReason: "PRIVATE-SOCIAL", counterSignals: [long, long],
     features: { ...report.coins[0].features, coingeckoTrendingCategories: [long] },
   })
-  report.marketBrief.paragraphs = [{ text: long, sourceIds: [] }, { text: long, sourceIds: [] }]
+  report.marketBrief = {
+    ...report.marketBrief, schemaVersion: 1,
+    events: Array.from({ length: 3 }, () => ({ summary: long, verification: "confirmed", sourceIds: [] })),
+  }
   const before = structuredClone(report)
   const result = await writeTelegramPreview(report, { directory: await temporaryDirectory(t) })
   const manifest = JSON.parse(await fs.readFile(result.manifestPath, "utf8"))
@@ -254,6 +348,7 @@ test("one-photo preview keeps a valid rich post above 1024 and 4096 characters w
   assert.ok([...visible].length <= 32_768)
   assert.equal(result.messageCount, 1)
   assert.equal(result.candidateCount, 1)
+  assert.doesNotMatch(manifest.richMessage.html, /PRIVATE-TECHNICAL|PRIVATE-SOCIAL/u)
   assertPreviewPost(html, manifest)
   assert.deepEqual(report, before)
 })

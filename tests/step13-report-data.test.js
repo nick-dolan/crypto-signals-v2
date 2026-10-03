@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import test from "node:test"
 
+import { addReportContext } from "../src/steps/step13-report/add-report-context.js"
 import { buildReportData } from "../src/steps/step13-report/build-report-data.js"
 
 function createHistory (coin, asOf) {
@@ -186,6 +187,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
     input.analysis.assessments[1], input.analysis.assessments[2], input.analysis.assessments[0],
   ]
   input.analysis.assessments[1].explanation = "Не из topCandidates"
+  input.analysis.assessments[1].technicalExplanation = "Не из topCandidates"
   input.payload.candidates.reverse()
   input.shortlist.candidates = [
     input.shortlist.candidates[2], input.shortlist.candidates[0], input.shortlist.candidates[1],
@@ -219,6 +221,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
   assert.deepEqual(report.coins.map(coin => coin.symbol), ["SOL", "MINA", "COTI"])
   assert.deepEqual(report.coins.map(coin => coin.topRank), [2, null, 1])
   assert.deepEqual(report.coins.map(coin => coin.explanation), ["Выбор SOL", "", "Выбор COTI"])
+  assert.deepEqual(report.coins.map(coin => coin.technicalExplanation), ["Выбор SOL", "", "Выбор COTI"])
   assert.deepEqual(requestedPaths, ["SOL", "MINA", "COTI"].map(symbol => path.join(
     "step2-data-bootstrap", `${symbol}--XTVC${symbol}`, "data.json",
   )))
@@ -229,6 +232,7 @@ test("joins by symbol, preserves assessments and top order, and reads histories 
     assert.deepEqual(coin, {
       ...input.analysis.assessments[index],
       explanation: input.analysis.topCandidates.find(top => top.symbol === coin.symbol)?.explanation ?? "",
+      technicalExplanation: input.analysis.topCandidates.find(top => top.symbol === coin.symbol)?.explanation ?? "",
       topRank: [2, null, 1][index],
       name: `Coin ${coin.symbol}`,
       baseCurrencyId: `XTVC${coin.symbol}`,
@@ -420,13 +424,61 @@ test("accepts an empty candidate set without reading any raw files", async () =>
   assert.deepEqual(report.coins, [])
 })
 
+test("preserves technical explanations through report assembly and context enrichment", async () => {
+  const input = createInput(["COTI", "SOL", "MINA"])
+  input.analysis.topCandidates = [input.analysis.topCandidates[0]]
+  input.analysis.topCandidates[0].explanation = "  Объём COTI растёт.\nOI без подтверждения.  "
+  input.payload.schemaVersion = 11
+  input.payload.schema.coingecko = ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"]
+  input.payload.candidates.forEach((candidate) => {
+    candidate.coingecko = [null, candidate.symbol === "SOL", null]
+  })
+  const report = await build(input)
+  const sources = {
+    asOf: report.asOf,
+    newsEnrichment: { from: report.asOf, asOf: report.asOf },
+    twitterEnrichment: { from: report.asOf, asOf: report.asOf },
+    candidates: report.coins
+      .filter(coin => coin.topRank != null || coin.features.coingeckoTrending === true)
+      .map(({ symbol, explanation }) => ({
+        symbol,
+        explanation,
+        news: { status: "empty", items: [] },
+        twitter: { status: "empty", tweets: [] },
+      })),
+  }
+  const context = {
+    asOf: report.asOf,
+    generatedAt: report.asOf,
+    newsEnrichment: sources.newsEnrichment,
+    twitterEnrichment: sources.twitterEnrichment,
+    candidates: sources.candidates.map(({ symbol, explanation }) => ({
+      symbol,
+      explanation,
+      enrichedExplanation: `Переписанный текст с новостями ${symbol}.`,
+    })),
+  }
+  const before = structuredClone([report, sources, context])
+  const result = addReportContext(report, sources, context)
+
+  assert.deepEqual(result.coins.map(coin => coin.technicalExplanation), [
+    input.analysis.topCandidates[0].explanation, "", "",
+  ])
+  assert.deepEqual(result.coins.map(coin => coin.explanation), [
+    "Переписанный текст с новостями COTI.", "Переписанный текст с новостями SOL.", "",
+  ])
+  assert.equal(result.coins[2], report.coins[2])
+  assert.deepEqual([report, sources, context], before)
+})
+
 test("uses empty explanations when the top candidate has none", async () => {
   const input = createInput()
   delete input.analysis.topCandidates[0].explanation
 
-  const { explanation, topRank } = (await build(input)).coins[0]
+  const { explanation, technicalExplanation, topRank } = (await build(input)).coins[0]
 
   assert.equal(explanation, "")
+  assert.equal(technicalExplanation, "")
   assert.equal(topRank, 1)
 })
 

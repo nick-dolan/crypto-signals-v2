@@ -1,5 +1,5 @@
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
+import { reportTitleTime, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
 
 function probability (coin) {
   return isFinite(coin.movementProbability) && coin.movementProbability >= 0 && coin.movementProbability <= 1
@@ -7,8 +7,8 @@ function probability (coin) {
     : null
 }
 
-function positiveNews (coin) {
-  return coin.socialSignificant === true && coin.socialSentiment === "positive"
+function significantNews (coin) {
+  return coin.socialSignificant === true && ["positive", "negative"].includes(coin.socialSentiment)
 }
 
 export function selectTelegramCandidates (report) {
@@ -19,8 +19,7 @@ export function selectTelegramCandidates (report) {
   const groups = [
     ["top", report.coins.filter(coin => isSafeInteger(coin.topRank) && coin.topRank > 0)
       .sort((first, second) => first.topRank - second.topRank)],
-    ["positive", report.coins.filter(positiveNews).sort(byProbability)],
-    ["coingecko", report.coins.filter(coin => coin.features?.coingeckoTrending === true).sort(byProbability)],
+    ["news", report.coins.filter(significantNews).sort(byProbability)],
   ]
   const symbols = new Set()
   const coinIds = new Set()
@@ -42,62 +41,18 @@ export function selectTelegramCandidates (report) {
   return { candidates: eligible, eligibleCount: eligible.length, omittedCount: 0 }
 }
 
-function estimate (coin) {
-  const value = probability(coin)
-  return `P движения: ${value === null ? "нет оценки" : `${Math.round(value * 100)}%`} · уверенность: ${{
-    high: "высокая", medium: "средняя", low: "низкая",
-  }[coin.estimateConfidence] ?? "не указана"}`
-}
-
-function socialLabel (coin) {
-  return coin.socialSignificant === true
-    ? {
-        positive: "Позитивный инфоповод", negative: "Негативный инфоповод", mixed: "Смешанный фон", neutral: "Значимый инфоповод",
-      }[coin.socialSentiment]
-    : null
-}
-
-function candidateHeading (coin, number, demo) {
-  const label = `${String(number).padStart(2, "0")} · ${coin.symbol}`
+function candidateHeading (coin, demo) {
+  const name = telegramText(coin.name, 100)
   const url = !demo && isString(coin.marketSymbol) && coin.marketSymbol.trim()
     ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}`
     : null
-  return `<b>${telegramLink(label, url) ?? telegramText(label, 100)}</b>${coin.name ? ` — ${telegramText(coin.name, 100)}` : ""}`
+  return `- <code>${telegramText(coin.symbol, 100)}</code>${name ? ` ${telegramLink(coin.name, url) ?? name}` : ""}`
 }
 
-function candidateBlock (item, number, demo) {
-  const { coin, section } = item
-  const badges = [
-    coin.features?.coingeckoTrending === true ? "CoinGecko Trending" : null,
-    socialLabel(coin),
-  ].filter(Boolean)
-  const risks = (isArray(coin.counterSignals) ? coin.counterSignals : []).slice(0, 2).map(signalText).filter(Boolean)
-  const explanation = telegramText(coin.explanation, 520)
-    || telegramText((isArray(coin.drivers) ? coin.drivers : []).slice(0, 2).map(signalText).filter(Boolean).join(" "), 520)
-  const background = telegramText(coin.socialReason, 320)
-  const categories = coin.features?.coingeckoTrending === true && isArray(coin.features.coingeckoTrendingCategories)
-    ? telegramText(coin.features.coingeckoTrendingCategories.filter(isString).join(", "), 140)
-    : ""
-  return [
-    candidateHeading(coin, number, demo),
-    estimate(coin),
-    badges.length ? `<i>${badges.join(" · ")}</i>` : null,
-    section === "positive"
-      ? `Инфоповод: ${background || "Позитивный фон отмечен, но пояснение в отчёте отсутствует."}`
-      : explanation || "Краткое объяснение в отчёте отсутствует.",
-    section !== "positive" && coin.socialSignificant === true
-      ? `Инфоповод: ${background || "Пояснение в отчёте отсутствует."}`
-      : null,
-    section === "positive" && (coin.drivers ?? []).length
-      ? `Техника: ${telegramText(signalText(coin.drivers[0]), 220) || "Нет краткого пояснения."}`
-      : null,
-    categories ? `Категории: ${categories}` : null,
-    risks.length ? `⚠ ${telegramText(risks.join(" "), 360)}` : null,
-    coin.information?.news?.status === "failed" || coin.information?.twitter?.status === "failed"
-      ? "⚠ Не все источники новостей и обсуждений удалось загрузить."
-      : null,
-    coin.history?.warning ? "⚠ График с оговорками по данным; см. карточку." : null,
-  ].filter(Boolean).join("\n")
+function candidateBlock (coin, demo) {
+  const explanation = telegramText(coin.socialSignificant === true ? coin.explanation : coin.technicalExplanation, 1_200)
+    || (coin.socialSignificant === true ? telegramText(coin.socialReason, 320) : "")
+  return `${candidateHeading(coin, demo)}${explanation ? ` — ${explanation}` : ""}`
 }
 
 function briefItemText (value) {
@@ -189,15 +144,22 @@ export function buildTelegramRelease (report) {
     telegramSection("<b>📰 Новостная сводка за последние 6 часов</b>", ["<br>", ...briefBlocks(report)]),
     "<p><br></p>",
   ]
-  for (const [section, title, description, empty] of [
-    ["top", "⭐ Топ агента", "Ранние кандидаты в исходном порядке агента.", "Агент не выделил убедительных ранних кандидатов."],
-    ["positive", "🟢 Позитивные инфоповоды", "Дополнительные монеты вне топа. Позитивная новость — не технический сигнал. Фон проверен у топа и CoinGecko-монет, не у всего рынка.", "В выпуске нет дополнительных монет с позитивным значимым инфоповодом."],
-    ["coingecko", "🦎 CoinGecko Trending", "Дополнительный список наблюдения. Поисковое внимание — не сигнал роста.", "В выпуске нет дополнительных CoinGecko-кандидатов."],
-  ]) {
-    const blocks = selection.candidates.flatMap((item, index) => item.section === section
-      ? [candidateBlock(item, index + 1, report.demo === true)]
+  for (const [section, title] of [["top", "⭐ Топ агента"], ["news", "📰 Значимые инфоповоды"]]) {
+    const blocks = selection.candidates.flatMap(item => item.section === section
+      ? [candidateBlock(item.coin, report.demo === true)]
       : [])
-    sections.push(telegramSection(`<b>${title}</b>\n${description}`, blocks.length ? blocks : [empty]))
+    if (section === "news" && !blocks.length) {
+      continue
+    }
+    if (section === "news") {
+      sections.push("<p><br></p>")
+    }
+    sections.push(telegramSection(`<b>${title}</b>`, [
+      section === "top" ? "<br>" : null,
+      ...(blocks.length
+        ? blocks.flatMap((block, index) => index ? ["· · ·", block] : [block])
+        : ["Агент не выделил убедительных ранних кандидатов."]),
+    ]))
   }
   return {
     schemaVersion: 2,

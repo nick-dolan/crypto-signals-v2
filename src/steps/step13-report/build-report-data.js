@@ -221,10 +221,12 @@ export async function buildReportData (
     const { coin } = shortlistBySymbol.get(assessment.symbol)
     const row = rowsBySymbol.get(assessment.symbol)
     const top = topBySymbol.get(assessment.symbol)
+    const explanation = isString(top?.explanation) ? top.explanation : ""
 
     coins.push({
       ...omit(assessment, ["directionBias"]),
-      explanation: isString(top?.explanation) ? top.explanation : "",
+      explanation,
+      technicalExplanation: explanation,
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,
       name: coin.name,
       baseCurrencyId: coin.baseCurrencyId,
