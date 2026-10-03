@@ -123,8 +123,8 @@ function assertManifest (release, report) {
   assert.equal(release.schemaVersion, 2)
   assert.equal(release.asOf, report.asOf)
   assert.equal(Date.parse(release.closedAt) - Date.parse(report.asOf), 3_600_000)
-  assert.equal(release.candidates.length, Math.min(10, release.eligibleCount))
-  assert.equal(release.omittedCount, release.eligibleCount - release.candidates.length)
+  assert.equal(release.candidates.length, release.eligibleCount)
+  assert.equal(release.omittedCount, 0)
   assert.equal(new Set(release.candidates.map(item => item.symbol.trim().toUpperCase())).size, release.candidates.length)
   assert.equal(new Set(release.candidates.map(item => item.image)).size, release.candidates.length)
   assert.equal(Object.hasOwn(release, "messages"), false)
@@ -154,7 +154,7 @@ function assertManifest (release, report) {
   }
 }
 
-test("one shared ten-candidate budget follows topRank, positive news, then CoinGecko without promoting assessments", () => {
+test("all eligible candidates follow topRank, positive news, then CoinGecko without promoting assessments", () => {
   const report = fixture([
     coin("CG-LOW", { movementProbability: 0.1, features: { coingeckoTrending: true } }),
     coin("POS-LOW", { movementProbability: 0.2, socialSignificant: true, socialSentiment: "positive" }),
@@ -173,23 +173,23 @@ test("one shared ten-candidate budget follows topRank, positive news, then CoinG
   const selected = selectTelegramCandidates(report)
   assert.deepEqual(selected.candidates.map(({ coinIndex, section }) => [coinIndex, section]), [
     [5, "top"], [9, "top"], [2, "top"], [6, "positive"], [8, "positive"], [11, "positive"], [1, "positive"],
-    [4, "coingecko"], [7, "coingecko"], [10, "coingecko"],
+    [4, "coingecko"], [7, "coingecko"], [10, "coingecko"], [12, "coingecko"], [0, "coingecko"],
   ])
   for (const item of selected.candidates) {
     assert.equal(item.coin, report.coins[item.coinIndex])
   }
   assert.equal(selected.eligibleCount, 12)
-  assert.equal(selected.omittedCount, 2)
+  assert.equal(selected.omittedCount, 0)
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
   assert.deepEqual(release.candidates.map(({ coinIndex, section }) => [coinIndex, section]), selected.candidates.map(({ coinIndex, section }) => [coinIndex, section]))
   assert.equal(release.eligibleCount, 12)
-  assert.match(release.richMessage.html, /Ещё 2 кандидатов не вошли в общий лимит 10\./u)
-  assert.doesNotMatch(release.richMessage.html, /Кандидатов:/u)
-  assert.doesNotMatch(release.richMessage.html, /ASSESSMENT-ONLY|CG-LOW|CG-FOURTH/u)
+  assert.doesNotMatch(release.richMessage.html, /общий лимит|не вошли|Кандидатов:/u)
+  assert.doesNotMatch(release.richMessage.html, /ASSESSMENT-ONLY/u)
+  assert.match(sectionHtml(release, "🦎 CoinGecko Trending"), /CG-FOURTH[\s\S]*CG-LOW/u)
 })
 
-test("more than ten top candidates consume the entire shared budget before any supplementary group", () => {
+test("more than ten top candidates retain supplementary groups and deduplicate overlapping entries", () => {
   const coins = Array.from({ length: 14 }, (_, index) => coin(`TOP-${index + 1}`, {
     topRank: index + 1, movementProbability: index / 14,
     socialSignificant: true, socialSentiment: "positive", features: { coingeckoTrending: true },
@@ -202,10 +202,12 @@ test("more than ten top candidates consume the entire shared budget before any s
   ])
   const release = buildTelegramRelease(report)
   assertManifest(release, report)
-  assert.deepEqual(release.candidates.map(item => item.symbol), Array.from({ length: 10 }, (_, index) => `TOP-${index + 1}`))
-  assert.ok(release.candidates.every(item => item.section === "top"))
-  assert.equal(release.eligibleCount, 16, "Duplicates beyond the cap must not inflate omittedCount")
-  assert.equal(release.omittedCount, 6)
+  assert.deepEqual(release.candidates.map(item => item.symbol), [
+    ...Array.from({ length: 14 }, (_, index) => `TOP-${index + 1}`), "EXTRA-POS", "EXTRA-CG",
+  ])
+  assert.deepEqual(release.candidates.map(item => item.section), [...Array(14).fill("top"), "positive", "coingecko"])
+  assert.equal(release.eligibleCount, 16, "Duplicate aliases must not inflate the candidate count")
+  assert.equal(release.omittedCount, 0)
 })
 
 test("an empty report produces explicit empty sections and no invented candidates or images", () => {

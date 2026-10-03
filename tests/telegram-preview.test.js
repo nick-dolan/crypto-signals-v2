@@ -89,7 +89,7 @@ function reportWithCoins (count = 14) {
   }
 }
 
-test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo rerun uses a fresh folder", async (t) => {
+test("writes all fourteen unique PNGs, SVGs, manifest and offline HTML; a one-photo rerun uses a fresh folder", async (t) => {
   const directory = await temporaryDirectory(t)
   const syntheticReport = reportWithCoins()
   const original = structuredClone(syntheticReport)
@@ -99,18 +99,18 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
   const manifest = JSON.parse(json)
   const html = await fs.readFile(result.previewPath, "utf8")
   assert.deepEqual(manifest, { ...buildTelegramRelease(original), source: "Синтетический отчёт" })
-  assert.equal(result.candidateCount, 10)
+  assert.equal(result.candidateCount, 14)
   assert.equal(result.messageCount, 1)
   assert.equal(manifest.schemaVersion, 2)
-  assert.equal(manifest.richMessage.media.length, 10)
+  assert.equal(manifest.richMessage.media.length, 14)
   assert.equal(Object.hasOwn(manifest, "messages"), false)
   assert.equal(result.asOf, original.asOf)
   assert.equal(result.omittedCount, manifest.omittedCount)
   assert.equal(result.demo, true)
-  assert.ok(manifest.eligibleCount > 10)
-  assert.equal(manifest.omittedCount, manifest.eligibleCount - 10)
-  assert.equal(new Set(manifest.candidates.map(item => item.symbol)).size, 10)
-  assert.equal(new Set(manifest.candidates.map(item => item.image)).size, 10)
+  assert.equal(manifest.eligibleCount, 14)
+  assert.equal(manifest.omittedCount, 0)
+  assert.equal(new Set(manifest.candidates.map(item => item.symbol)).size, 14)
+  assert.equal(new Set(manifest.candidates.map(item => item.image)).size, 14)
   assert.deepEqual(new Set(manifest.candidates.map(item => item.section)), new Set(["top", "positive", "coingecko"]))
   assert.equal(path.dirname(result.directory), directory)
   assert.match(path.basename(result.directory), /^release-/)
@@ -122,7 +122,8 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
   assert.match(html, /Сообщения: 1/)
   assert.doesNotMatch(html, /Не отправлено|Подпись к фото|Фото и подписи/u)
   assert.match(html, /ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ/)
-  assert.match(html, /Кандидаты: 10 \/ 10/)
+  assert.match(html, /Кандидаты: 14<\/span>/)
+  assert.doesNotMatch(html, /Кандидаты: \d+ \/ 10/)
   assert.ok(html.includes(`Не включено: ${manifest.omittedCount}`))
   assert.match(html, /Точное отображение в клиентах Telegram не гарантируется/)
   assert.match(html, /⭐ Топ агента/)
@@ -168,7 +169,7 @@ test("writes ten unique real PNGs, SVGs, manifest and offline HTML; a one-photo 
   assert.deepEqual((await fs.readdir(path.join(next.directory, "cards"))).sort(), [
     path.basename(nextManifest.candidates[0].image), path.basename(nextManifest.candidates[0].image.replace(/\.png$/, ".svg")),
   ].sort())
-  assert.equal((await fs.readdir(path.join(result.directory, "cards"))).length, 20)
+  assert.equal((await fs.readdir(path.join(result.directory, "cards"))).length, 28)
   assert.equal(await fs.readFile(result.manifestPath, "utf8"), json)
   assert.equal(await fs.readFile(result.previewPath, "utf8"), html)
 })
@@ -183,7 +184,7 @@ test("zero candidates produces an explicit empty preview without invented photos
   assert.equal(manifest.source, null)
   assert.deepEqual(await fs.readdir(path.join(result.directory, "cards")), [])
   const html = await fs.readFile(result.previewPath, "utf8")
-  assert.match(html, /Кандидаты: 0 \/ 10/)
+  assert.match(html, /Кандидаты: 0<\/span>/)
   assert.match(html, /Агент не выделил убедительных ранних кандидатов/)
   assert.doesNotMatch(html, /<img\b/)
   assertPreviewPost(html, manifest)

@@ -65,7 +65,7 @@ export function renderTelegramPreview (manifest) {
       </div>
       ${manifest.demo === true ? "<p class=\"warning\"><b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ.</b> Монеты, оценки и события вымышлены. Это не рыночный сигнал.</p>" : ""}
       <div class="counts">
-        <span>Кандидаты: ${escapeHtml(manifest.candidates.length)} / 10</span>
+        <span>Кандидаты: ${escapeHtml(manifest.candidates.length)}</span>
         <span>Подходящих: ${escapeHtml(manifest.eligibleCount)}</span>
         <span>Не включено: ${escapeHtml(manifest.omittedCount)}</span>
         <span>Сообщения: 1</span>

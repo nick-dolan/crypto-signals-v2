@@ -34,7 +34,7 @@ async function prepareRelease (t, count = 2) {
   }
 }
 
-for (const count of [0, 1, 10]) {
+for (const count of [0, 1, 10, 11, 50]) {
   test(`sends one rich post with ${count} photos on every invocation and records the latest confirmation`, async (t) => {
     const { release, manifest, png, options, receiptPath } = await prepareRelease(t, count)
     const result = await sendTelegramRelease(release, options)
@@ -84,7 +84,7 @@ test("mismatched, synthetic and unsafe releases never reach the client", async (
     { ...manifest, source: "reports/different-report" },
     { ...manifest, demo: true },
     { ...manifest, richMessage: null },
-    { ...manifest, candidates: Array(11).fill(manifest.candidates[0]) },
+    { ...manifest, candidates: null },
     { ...manifest, candidates: [{ ...manifest.candidates[0], image: "../private.png" }] },
     { ...manifest, candidates: [{ ...manifest.candidates[0], mediaId: "../../private" }] },
   ]) {

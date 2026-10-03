@@ -39,7 +39,7 @@ export function selectTelegramCandidates (report) {
       eligible.push({ coin, coinIndex: report.coins.indexOf(coin), section })
     }
   }
-  return { candidates: eligible.slice(0, 10), eligibleCount: eligible.length, omittedCount: Math.max(0, eligible.length - 10) }
+  return { candidates: eligible, eligibleCount: eligible.length, omittedCount: 0 }
 }
 
 function estimate (coin) {
@@ -181,7 +181,6 @@ export function buildTelegramRelease (report) {
   const introductory = [
     report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
     `<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b>`,
-    selection.omittedCount ? `Ещё ${selection.omittedCount} кандидатов не вошли в общий лимит 10.` : null,
   ].filter(Boolean).join("\n")
   const sections = [
     candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,

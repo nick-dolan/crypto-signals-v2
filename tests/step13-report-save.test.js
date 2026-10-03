@@ -285,7 +285,7 @@ for (const empty of [false, true]) {
       NODE_OPTIONS: `--import ${pathToFileURL(preload).href}`,
     }
     const { stdout } = await runStep(directory, "step14-telegram.js", env)
-    assert.match(stdout, new RegExp(`Candidates: ${empty ? 0 : 1}/10 · Messages: 1 · Omitted: 0`))
+    assert.doesNotMatch(stdout, /Candidates:|Messages:|Omitted:/)
     assert.doesNotMatch(stdout, /Release:|Preview:|Manifest:/)
     assert.ok(!stdout.includes(directory))
     assert.match(stdout, /Step 14: Telegram post sent \(message ID: 77\)\./)

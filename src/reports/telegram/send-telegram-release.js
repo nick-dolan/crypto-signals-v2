@@ -14,7 +14,7 @@ export async function sendTelegramRelease (release, {
   }
   const manifest = JSON.parse(await fs.readFile(release.manifestPath, "utf8"))
   if (manifest?.schemaVersion !== 2 || manifest.source !== `reports/${reportId}`
-    || !isObject(manifest.richMessage) || !isArray(manifest.candidates) || manifest.candidates.length > 10) {
+    || !isObject(manifest.richMessage) || !isArray(manifest.candidates)) {
     throw new Error("Telegram release does not match the saved step 13 report")
   }
   if (manifest.demo === true) {

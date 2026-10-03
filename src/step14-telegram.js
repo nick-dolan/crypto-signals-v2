@@ -30,8 +30,6 @@ export async function runTelegramStep ({
   }
 
   const result = await createPreview(report, { source: `reports/${saved.id}` })
-  console.log(`✓ Candidates: ${result.candidateCount}/10 · Messages: ${result.messageCount} · Omitted: ${result.omittedCount}`)
-
   const delivery = await sendRelease(result, { reportId: saved.id })
   console.log(`Step 14: Telegram post sent (message ID: ${delivery.messageId}).`)
   return { ...result, delivery }
