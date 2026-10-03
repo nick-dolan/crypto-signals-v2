@@ -331,14 +331,14 @@ test("v4 replaces native markers with accessible sentiment dots outside the 250-
   assert.equal(list.children.length, 5)
   for (const [index, node] of list.children.entries()) {
     const [icon, text, citations] = node.children
-    const [sentiment, label] = [["bullish", "Буллиш"], ["neutral", "Нейтрал"], ["bearish", "Беариш"]][index % 3]
+    const [sentiment, label] = [["bullish", "Bullish"], ["neutral", "Neutral"], ["bearish", "Bearish"]][index % 3]
     assert.equal(node.tagName, "LI")
     assert.equal(node.dataset.sentiment, sentiment)
     assert.equal(icon.className, "market-brief-sentiment")
     assert.equal(icon.textContent, "")
     assert.equal(icon.attributes.get("role"), "img")
-    assert.equal(icon.attributes.get("aria-label"), `${label} — оценка события, не прогноз цены`)
-    assert.equal(icon.title, icon.attributes.get("aria-label"))
+    assert.equal(icon.attributes.get("aria-label"), label)
+    assert.equal(icon.title, label)
     assert.equal(text.className, "market-brief-text")
     assert.equal(text.textContent, brief.items[index].text)
     assert.equal(text.textContent.length, 250)

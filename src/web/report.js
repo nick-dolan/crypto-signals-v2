@@ -343,12 +343,12 @@
     const listItem = [3, 4].includes(schemaVersion)
     const node = element(listItem ? "li" : "p", listItem ? "market-brief-item" : "market-brief-paragraph")
     const sentiment = schemaVersion === 4 && [
-      ["bullish", "Буллиш"], ["neutral", "Нейтрал"], ["bearish", "Беариш"],
+      ["bullish", "Bullish"], ["neutral", "Neutral"], ["bearish", "Bearish"],
     ].find(([value]) => value === entry.sentiment)
     if (sentiment) {
       node.dataset.sentiment = sentiment[0]
       const icon = element("span", "market-brief-sentiment")
-      icon.title = `${sentiment[1]} — оценка события, не прогноз цены`
+      icon.title = sentiment[1]
       icon.setAttribute("role", "img")
       icon.setAttribute("aria-label", icon.title)
       node.append(icon)

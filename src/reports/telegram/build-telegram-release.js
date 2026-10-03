@@ -1,5 +1,5 @@
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { reportTime, reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
+import { reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "./telegram-format.js"
 
 function probability (coin) {
   return isFinite(coin.movementProbability) && coin.movementProbability >= 0 && coin.movementProbability <= 1
@@ -112,10 +112,6 @@ function briefBlocks (report) {
     return ["Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий."]
   }
   const blocks = []
-  if ([brief.from, brief.asOf].every(value => isString(value) && isFinite(Date.parse(value)))
-    && Date.parse(brief.from) <= Date.parse(brief.asOf)) {
-    blocks.push(`<i>Публикации: ${reportTime(brief.from)} — ${reportTime(brief.asOf)} МСК.</i>`)
-  }
   if (!["available", "partial", "empty"].includes(brief.status)) {
     blocks.push("Сводка недоступна. Отсутствие данных не означает отсутствие событий.")
   } else {
@@ -151,7 +147,7 @@ function briefBlocks (report) {
       return [`${marker}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
-      ? content
+      ? content.flatMap((item, index) => index ? ["──────", item] : [item])
       : [brief.status === "empty"
           ? "В полученной выборке нет сообщений для сводки."
           : "Содержательная сводка не подготовлена; доступных данных недостаточно."]))
@@ -184,14 +180,14 @@ export function buildTelegramRelease (report) {
     : closedAt
   const introductory = [
     report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
-    `<b>📊 Крипто-пульс | ${reportTitleTime(createdAt)} МСК</b>`,
+    `<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b>`,
     selection.omittedCount ? `Ещё ${selection.omittedCount} кандидатов не вошли в общий лимит 10.` : null,
   ].filter(Boolean).join("\n")
   const sections = [
     candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
     telegramSection(introductory, []),
     "<p><br></p>",
-    telegramSection("<b>📰 Новостная сводка</b>", briefBlocks(report)),
+    telegramSection("<b>📰 Новостная сводка за последние 6 часов</b>", ["<br>", ...briefBlocks(report)]),
     "<p><br></p>",
   ]
   for (const [section, title, description, empty] of [

@@ -48,7 +48,7 @@ export async function runReportStep ({ createStore = createReportStore } = {}) {
 
   await writeTmpJson("step13-report.json", { id: archive.id, asOf: report.asOf })
 
-  console.log(`✓ Saved ${report.candidateCount} candidates with charts, context and peer radar as a Parquet snapshot to ${archive.directory}`)
+  console.log(`✓ Saved ${report.candidateCount} candidates with charts, context and peer radar as a Parquet snapshot`)
   if (report.peerRadar.warning) {
     console.warn(`⚠ ${report.peerRadar.warning}`)
   }
