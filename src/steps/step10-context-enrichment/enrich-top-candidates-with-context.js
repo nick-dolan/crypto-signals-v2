@@ -2,6 +2,7 @@ import { omit } from "radash"
 import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
+import { formatCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 import {
   InvalidContextEnrichmentError,
   parseContextEnrichment,
@@ -51,6 +52,7 @@ function buildUserMessage (asOf, { candidate, explanation, symbol }) {
     asOf,
     symbol,
     explanation,
+    ...(candidate.technicalSummary === undefined ? {} : { technicalSummary: candidate.technicalSummary }),
     ...(!explanation ? { drivers: candidate.drivers, counterSignals: candidate.counterSignals } : {}),
     news: candidate.news,
     twitter: candidate.twitter,
@@ -93,8 +95,11 @@ async function enrichCandidate (
   }
 
   return {
-    ...omit(candidate.candidate, ["news", "twitter"]),
-    enrichedExplanation: [candidate.explanation, enrichment.informationBackground].filter(Boolean).join(" "),
+    ...omit(candidate.candidate, ["news", "twitter", "summary"]),
+    enrichedExplanation: enrichment.summary
+      ? formatCoinSummary(enrichment.summary)
+      : [candidate.explanation, enrichment.informationBackground].filter(Boolean).join(" "),
+    ...(enrichment.socialSignificant === true && enrichment.summary ? { summary: enrichment.summary } : {}),
     socialSignificant: enrichment.socialSignificant,
     socialReason: enrichment.socialReason,
     socialSentiment: enrichment.socialSentiment,
@@ -128,7 +133,7 @@ export async function enrichTopCandidatesWithContext (
 
   return {
     ...input,
-    schemaVersion: 7,
+    schemaVersion: 8,
     generatedAt: new Date().toISOString(),
     contextEnrichment: {
       source: "github-copilot-unofficial",

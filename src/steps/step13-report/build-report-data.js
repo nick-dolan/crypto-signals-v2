@@ -3,6 +3,7 @@ import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
 import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
+import { formatCoinSummary, readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 
 function indexBySymbol (items, symbolOf, label) {
   if (!isArray(items)) {
@@ -221,10 +222,15 @@ export async function buildReportData (
     const { coin } = shortlistBySymbol.get(assessment.symbol)
     const row = rowsBySymbol.get(assessment.symbol)
     const top = topBySymbol.get(assessment.symbol)
-    const explanation = isString(top?.explanation) ? top.explanation : ""
+    const summary = top?.technicalSummary === undefined ? assessment.technicalSummary : top.technicalSummary
+    const technicalSummary = summary === undefined ? undefined : readCoinSummary(summary, `${coin.symbol} technicalSummary`)
+    const explanation = isString(top?.explanation)
+      ? top.explanation
+      : top && technicalSummary ? formatCoinSummary(technicalSummary) : ""
 
     coins.push({
       ...omit(assessment, ["directionBias"]),
+      ...(technicalSummary === undefined ? {} : { technicalSummary }),
       explanation,
       technicalExplanation: explanation,
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,

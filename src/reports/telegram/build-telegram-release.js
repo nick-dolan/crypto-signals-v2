@@ -46,13 +46,17 @@ function candidateHeading (coin, demo) {
   const url = !demo && isString(coin.marketSymbol) && coin.marketSymbol.trim()
     ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}`
     : null
-  return `• <code>${telegramText(coin.symbol, 100)}</code>${name ? ` ${telegramLink(coin.name, url) ?? name}` : ""}`
+  return `<code>${telegramText(coin.symbol, 100)}</code>${name ? ` · <b>${telegramLink(coin.name, url) ?? name}</b>` : ""}`
 }
 
 function candidateBlock (coin, demo) {
-  const explanation = telegramText(coin.socialSignificant === true ? coin.explanation : coin.technicalExplanation, 1_200)
+  const summary = coin.socialSignificant === true ? coin.summary : coin.technicalSummary
+  const observation = telegramText(summary?.observation, 1_200)
+  const caveat = observation ? telegramText(summary?.caveat, 720) : ""
+  const explanation = observation
+    || telegramText(coin.socialSignificant === true ? coin.explanation : coin.technicalExplanation, 1_200)
     || (coin.socialSignificant === true ? telegramText(coin.socialReason, 320) : "")
-  return `${candidateHeading(coin, demo)}${explanation ? ` — ${explanation}` : ""}`
+  return [candidateHeading(coin, demo), explanation, caveat ? `<b>Оговорка:</b> ${caveat}` : ""].filter(Boolean).join("\n")
 }
 
 function briefItemText (value) {
@@ -61,9 +65,20 @@ function briefItemText (value) {
   return telegramText(text.length <= 250 ? text : `${text.slice(0, 249).replace(/[\uD800-\uDBFF]$/u, "")}…`, Infinity)
 }
 
-function briefBlocks (report) {
+function matchingBrief (report) {
   const brief = report.marketBrief
-  if (!brief || brief.marketAsOf !== report.asOf || ![1, 2, 3, 4].includes(brief.schemaVersion)) {
+  return brief?.marketAsOf === report.asOf && [1, 2, 3, 4, 5].includes(brief.schemaVersion) ? brief : null
+}
+
+function briefTitle (brief) {
+  const from = isString(brief?.from) ? Date.parse(brief.from) : NaN
+  const asOf = isString(brief?.asOf) ? Date.parse(brief.asOf) : NaN
+  const hours = (asOf - from) / 3_600_000
+  return hours === 6 ? "Новости за последние 6 часов" : hours === 24 ? "Новости за последние 24 часа" : "Новости"
+}
+
+function briefBlocks (brief) {
+  if (!brief) {
     return ["Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий."]
   }
   const blocks = []
@@ -72,18 +87,20 @@ function briefBlocks (report) {
   } else {
     const paragraphs = brief.status === "empty"
       ? []
-      : [3, 4].includes(brief.schemaVersion)
+      : [3, 4, 5].includes(brief.schemaVersion)
           ? (isArray(brief.items) ? brief.items : []).slice(0, 5)
           : brief.schemaVersion === 2
             ? (isArray(brief.paragraphs) ? brief.paragraphs : []).slice(0, 2)
             : (isArray(brief.events) ? brief.events : []).slice(0, 5).map(event => ({
+                title: event.title,
                 text: `${event.verification === "unconfirmed" ? "Не подтверждено: " : ""}${[event.summary, event.whyItMatters].filter(isString).join(" ")}`,
                 sourceIds: event.sourceIds,
               }))
     const sources = new Map((isArray(brief.sources) ? brief.sources : []).map(source => [source.id, source]))
     const numbers = new Map()
     const content = paragraphs.flatMap((paragraph) => {
-      const text = [3, 4].includes(brief.schemaVersion) ? briefItemText(paragraph.text) : telegramText(paragraph.text, 1_200)
+      const text = [3, 4, 5].includes(brief.schemaVersion) ? briefItemText(paragraph.text) : telegramText(paragraph.text, 1_200)
+      const title = [1, 5].includes(brief.schemaVersion) ? telegramText(paragraph.title, 400) : ""
       if (!text) {
         return []
       }
@@ -95,7 +112,7 @@ function briefBlocks (report) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      return [`• ${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      return [`• ${title ? `<b>${title}</b>\n` : ""}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
       ? content.flatMap((item, index) => index ? ["<br>", item] : [item])
@@ -133,30 +150,27 @@ export function buildTelegramRelease (report) {
     report.demo === true ? "<b>ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</b>" : null,
     `<b>📊 Крипторадар | ${reportTitleTime(createdAt)} МСК</b>`,
   ].filter(Boolean).join("\n")
-  const sections = [
-    candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos,
-    telegramSection(introductory, []),
-    "<p><br></p>",
-    telegramSection("<b>Новостная сводка за последние 6 часов</b>", ["<br>", ...briefBlocks(report)]),
-    "<p><br></p>",
-  ]
-  for (const [section, title] of [["top", "Топ агента"], ["news", "📰 Значимые инфоповоды"]]) {
+  const sections = [telegramSection(introductory, [])]
+  if (photos) {
+    sections.push("<p><br></p>", telegramSection("<b>Графики</b>", []),
+      candidates.length > 1 ? `<tg-collage>${photos}</tg-collage>` : photos)
+  }
+  for (const [section, title] of [["top", "Монеты под наблюдением"], ["news", "📰 Значимые инфоповоды"]]) {
     const blocks = selection.candidates.flatMap(item => item.section === section
       ? [candidateBlock(item.coin, report.demo === true)]
       : [])
     if (section === "news" && !blocks.length) {
       continue
     }
-    if (section === "news") {
-      sections.push("<p><br></p>")
-    }
-    sections.push(telegramSection(`<b>${title}</b>`, [
-      section === "top" ? "<br>" : null,
+    sections.push("<p><br></p>", telegramSection(`<b>${title}</b>`, [
+      "<br>",
       ...(blocks.length
         ? blocks.flatMap((block, index) => index ? ["<br>", block] : [block])
         : ["Агент не выделил убедительных ранних кандидатов."]),
     ]))
   }
+  const brief = matchingBrief(report)
+  sections.push("<p><br></p>", telegramSection(`<b>${briefTitle(brief)}</b>`, ["<br>", ...briefBlocks(brief)]))
   return {
     schemaVersion: 2,
     asOf: report.asOf,

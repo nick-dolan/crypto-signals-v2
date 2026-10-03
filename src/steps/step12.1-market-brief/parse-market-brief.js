@@ -20,6 +20,26 @@ function readText (value, limit, field) {
   return value.trim()
 }
 
+function readPlainText (value, limit, field) {
+  const text = readText(value, limit, field)
+  if (
+    /[`*]|__|~~|<\/?[a-z][^>]*>|\[[^\]]*\]|(?:^|\s)_[^_\n]+_(?=\s|[.,!?;:]|$)/i.test(text)
+    || /^\s*(?:#{1,6}\s|[>•+-]\s|\d+[.)]\s)/m.test(text)
+  ) {
+    throw new InvalidMarketBriefError(`${field} must be plain text without markup, list markers or inline citations`)
+  }
+  return text
+}
+
+function readTitle (value) {
+  const title = readPlainText(value, 60, "item title")
+  const words = title.split(/\s+/).filter(word => /[\p{L}\p{N}]/u.test(word))
+  if (/[\r\n\u2028\u2029]/u.test(title) || words.length < 2 || words.length > 6) {
+    throw new InvalidMarketBriefError("item title must be a single line of two to six words")
+  }
+  return title
+}
+
 function readSourceIds (ids, sourceIds) {
   if (
     !isArray(ids) || !ids.length
@@ -31,14 +51,17 @@ function readSourceIds (ids, sourceIds) {
   return [...ids]
 }
 
-export function validateBriefItems (items, sources, schemaVersion = 4) {
+export function validateBriefItems (items, sources, schemaVersion = 5) {
   if (!isArray(items) || items.length > 5) {
     throw new InvalidMarketBriefError("items must contain at most five news items")
   }
   const sourceIds = new Set(sources.map(source => source.id))
   const result = items.map((item) => {
-    requireKeys(item, schemaVersion === 4 ? ["text", "sentiment", "sourceIds"] : ["text", "sourceIds"])
-    if (schemaVersion === 4 && !["bullish", "neutral", "bearish"].includes(item.sentiment)) {
+    requireKeys(item, [
+      ...(schemaVersion === 5 ? ["title"] : []),
+      "text", ...(schemaVersion >= 4 ? ["sentiment"] : []), "sourceIds",
+    ])
+    if (schemaVersion >= 4 && !["bullish", "neutral", "bearish"].includes(item.sentiment)) {
       throw new InvalidMarketBriefError("item sentiment must be bullish, neutral or bearish")
     }
     const ids = readSourceIds(item.sourceIds, sourceIds)
@@ -46,8 +69,9 @@ export function validateBriefItems (items, sources, schemaVersion = 4) {
       throw new InvalidMarketBriefError("each news item must cite at most two sources")
     }
     return {
-      text: readText(item.text, 250, "item text"),
-      ...(schemaVersion === 4 ? { sentiment: item.sentiment } : {}),
+      ...(schemaVersion === 5 ? { title: readTitle(item.title) } : {}),
+      text: (schemaVersion === 5 ? readPlainText : readText)(item.text, 250, "item text"),
+      ...(schemaVersion >= 4 ? { sentiment: item.sentiment } : {}),
       sourceIds: ids,
     }
   })
@@ -122,7 +146,7 @@ export function parseMarketBrief (content, asOf, sources) {
     throw new InvalidMarketBriefError("response is not valid JSON")
   }
   requireKeys(response, ["schemaVersion", "asOf", "items"])
-  if (response.schemaVersion !== 4 || response.asOf !== asOf) {
+  if (response.schemaVersion !== 5 || response.asOf !== asOf) {
     throw new InvalidMarketBriefError("response version or news cutoff does not match the request")
   }
   return validateBriefItems(response.items, sources)

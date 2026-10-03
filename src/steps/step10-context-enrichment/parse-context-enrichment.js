@@ -1,5 +1,6 @@
 import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isError, isObject, isString } from "../../helpers/utils.typed.js"
+import { readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 
 export class InvalidContextEnrichmentError extends Error {
   constructor (message) {
@@ -49,29 +50,36 @@ export function parseContextEnrichment (content, expectedSymbol) {
 
   assertExactKeys(
     enrichment,
-    ["schemaVersion", "symbol", "informationBackground", "socialSignificant", "socialReason", "socialSentiment"],
+    [
+      "schemaVersion", "symbol", "socialSignificant", "socialReason", "socialSentiment",
+      enrichment?.schemaVersion === 3 ? "summary" : "informationBackground",
+    ],
   )
 
-  if (enrichment.schemaVersion !== 2) {
-    invalidEnrichment("schemaVersion must equal 2")
+  if (![2, 3].includes(enrichment.schemaVersion)) {
+    invalidEnrichment("schemaVersion must equal 2 or 3")
   }
 
   if (enrichment.symbol !== expectedSymbol) {
     invalidEnrichment("symbol does not match the candidate")
   }
 
-  if (
+  if (enrichment.schemaVersion === 2 && (
     !isString(enrichment.informationBackground)
     || !enrichment.informationBackground.trim()
     || enrichment.informationBackground.length > 700
-  ) {
+  )) {
     invalidEnrichment("informationBackground must be a short non-empty string")
   }
 
   let socialSignal
+  let summary
 
   try {
     socialSignal = readSocialSignal(enrichment)
+    if (enrichment.schemaVersion === 3) {
+      summary = readCoinSummary(enrichment.summary, "summary")
+    }
   } catch (error) {
     invalidEnrichment(isError(error) ? error.message : "invalid social signal")
   }
@@ -79,6 +87,6 @@ export function parseContextEnrichment (content, expectedSymbol) {
   return {
     ...enrichment,
     ...socialSignal,
-    informationBackground: enrichment.informationBackground.trim(),
+    ...(summary ? { summary } : { informationBackground: enrichment.informationBackground.trim() }),
   }
 }

@@ -1,5 +1,7 @@
+import { omit } from "radash"
 import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isArray, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
+import { readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 
 function getTimestamp (value, label) {
   if (!isString(value) || !isFinite(Date.parse(value))) {
@@ -107,9 +109,14 @@ export function addReportContext (report, sources, context) {
     validateContainer(sourceCandidate.news, "items", `${coin.symbol} news`)
     validateContainer(sourceCandidate.twitter, "tweets", `${coin.symbol} twitter`)
 
+    const socialSignal = readSocialSignal(contextCandidate)
+
     return {
-      ...coin,
-      ...readSocialSignal(contextCandidate),
+      ...omit(coin, ["summary"]),
+      ...socialSignal,
+      ...(socialSignal.socialSignificant === true && contextCandidate.summary !== undefined
+        ? { summary: readCoinSummary(contextCandidate.summary, `${coin.symbol} summary`) }
+        : {}),
       explanation: contextCandidate.enrichedExplanation,
       information: { news: sourceCandidate.news, twitter: sourceCandidate.twitter },
     }

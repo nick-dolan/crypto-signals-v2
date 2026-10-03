@@ -1,5 +1,6 @@
 import { isArray, isError, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
 import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
+import { formatCoinSummary, readCoinSummary } from "./coin-summary.js"
 
 export class InvalidCopilotAnalysisError extends Error {
   constructor (message) {
@@ -94,6 +95,23 @@ function normalizeObservations (value, maxLength, payload, candidate, label) {
   })
 }
 
+function assertReadableExplanation (explanation, fields, label) {
+  if (
+    !isString(explanation)
+    || !explanation.trim()
+    || explanation.length > 500
+    || /\d/.test(explanation)
+  ) {
+    invalidAnalysis(`${label} has an invalid explanation`)
+  }
+
+  const technicalField = fields.find(field => explanation.includes(field))
+
+  if (technicalField) {
+    invalidAnalysis(`${label} explanation contains ${technicalField}`)
+  }
+}
+
 function readAgentPayload (payload) {
   let decoded
 
@@ -131,8 +149,8 @@ export function parseAgentAnalysis (content, payload) {
     "response",
   )
 
-  if (analysis.schemaVersion !== 1) {
-    invalidAnalysis("schemaVersion must equal 1")
+  if (![1, 2].includes(analysis.schemaVersion)) {
+    invalidAnalysis("schemaVersion must equal 1 or 2")
   }
 
   if (analysis.asOf !== payload.asOf) {
@@ -141,6 +159,8 @@ export function parseAgentAnalysis (content, payload) {
 
   const { fields, candidates } = readAgentPayload(payload)
   const symbols = candidates.map(candidate => candidate.symbol)
+  const marketFields = isObject(payload.marketContext) ? Object.keys(payload.marketContext) : []
+  const explanationFields = [...fields, ...marketFields]
 
   if (!isArray(analysis.assessments) || analysis.assessments.length !== symbols.length) {
     invalidAnalysis("assessments must contain every candidate")
@@ -212,7 +232,9 @@ export function parseAgentAnalysis (content, payload) {
   analysis.topCandidates.forEach((candidate, index) => {
     assertExactKeys(
       candidate,
-      ["symbol", "movementProbability", "explanation"],
+      analysis.schemaVersion === 2
+        ? ["symbol", "movementProbability", "technicalSummary"]
+        : ["symbol", "movementProbability", "explanation"],
       `top candidate ${index}`,
     )
 
@@ -225,26 +247,19 @@ export function parseAgentAnalysis (content, payload) {
       invalidAnalysis(`top candidate ${index} does not match assessments`)
     }
 
-    if (
-      !isString(candidate.explanation)
-      || !candidate.explanation.trim()
-      || candidate.explanation.length > 500
-      || /\d/.test(candidate.explanation)
-    ) {
-      invalidAnalysis(`top candidate ${candidate.symbol} has an invalid explanation`)
-    }
+    if (analysis.schemaVersion === 2) {
+      const label = `top candidate ${candidate.symbol} technicalSummary`
 
-    const marketFields = isObject(payload.marketContext)
-      ? Object.keys(payload.marketContext)
-      : []
-    const technicalField = [...fields, ...marketFields].find(field => (
-      candidate.explanation.includes(field)
-    ))
+      try {
+        candidate.technicalSummary = readCoinSummary(candidate.technicalSummary, label)
+      } catch (error) {
+        invalidAnalysis(error.message)
+      }
 
-    if (technicalField) {
-      invalidAnalysis(
-        `top candidate ${candidate.symbol} explanation contains ${technicalField}`,
-      )
+      candidate.explanation = formatCoinSummary(candidate.technicalSummary)
+      assertReadableExplanation(candidate.explanation, explanationFields, label)
+    } else {
+      assertReadableExplanation(candidate.explanation, explanationFields, `top candidate ${candidate.symbol}`)
     }
   })
 

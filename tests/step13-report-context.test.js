@@ -178,6 +178,87 @@ test("joins reordered top and trending coins by symbol without changing assessme
   assert.deepEqual(input, before)
 })
 
+test("report uses enriched summaries only for significant context and never overwrites technical summaries", () => {
+  for (const socialSignificant of [true, false, null, undefined]) {
+    const input = createInput()
+    input.report.coins.forEach((coin) => {
+      coin.technicalSummary = { observation: `Техническое наблюдение ${coin.symbol}.`, caveat: "Подтверждение неполное." }
+      if (coin.topRank != null || coin.features.coingeckoTrending === true) {
+        coin.summary = { observation: "Устаревшее обогащение.", caveat: null }
+      }
+    })
+    input.sources.candidates.forEach((candidate) => {
+      candidate.technicalSummary = { observation: "Не брать из источников.", caveat: null }
+      candidate.summary = { observation: "Не брать из источников.", caveat: null }
+    })
+    input.context.candidates.forEach((candidate) => {
+      candidate.technicalSummary = { observation: "Не подменять техническое резюме новостями.", caveat: null }
+      candidate.summary = { observation: `Обновление сети ${candidate.symbol}.`, caveat: null }
+      if (socialSignificant !== undefined) {
+        Object.assign(candidate, {
+          socialSignificant,
+          socialReason: "Причина оценки фона.",
+          socialSentiment: socialSignificant ? "positive" : null,
+        })
+      }
+    })
+    const before = structuredClone(input)
+    const result = addContext(input)
+
+    for (const [index, coin] of result.coins.entries()) {
+      const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
+      assert.deepEqual(coin.technicalSummary, input.report.coins[index].technicalSummary)
+      assert.equal(coin.technicalExplanation, input.report.coins[index].technicalExplanation)
+      assert.equal(coin.movementProbability, input.report.coins[index].movementProbability)
+      assert.equal(coin.topRank, input.report.coins[index].topRank)
+      assert.equal(Object.hasOwn(coin, "summary"), socialSignificant === true && Boolean(context))
+      if (context) {
+        assert.equal(coin.explanation, context.enrichedExplanation)
+        if (socialSignificant === true) {
+          assert.deepEqual(coin.summary, context.summary)
+        }
+      } else {
+        assert.equal(coin, input.report.coins[index])
+      }
+    }
+    assert.deepEqual(input, before)
+  }
+})
+
+test("legacy context keeps fallback strings without deriving structured summaries", () => {
+  const input = createInput()
+  input.context.candidates.forEach((candidate) => {
+    Object.assign(candidate, { socialSignificant: true, socialReason: "Значимое обновление.", socialSentiment: "positive" })
+  })
+  const before = structuredClone(input)
+  const result = addContext(input)
+
+  assert.ok(result.coins.every(coin => !Object.hasOwn(coin, "summary") && !Object.hasOwn(coin, "technicalSummary")))
+  assert.equal(result.coins[0].explanation, input.context.candidates[0].enrichedExplanation)
+  assert.equal(result.coins[0].technicalExplanation, input.report.coins[0].technicalExplanation)
+  assert.equal(result.coins[0].socialReason, "Значимое обновление.")
+  assert.deepEqual(input, before)
+})
+
+test("report validates significant summaries for tops and trending coins but does not consume insignificant summaries", () => {
+  for (const symbol of ["XVG", "DOGE"]) {
+    for (const summary of [
+      null, {}, { observation: "", caveat: null }, { observation: "Наблюдение.", caveat: "" },
+      { observation: "я".repeat(301), caveat: null }, { observation: "Наблюдение.", caveat: "я".repeat(181) },
+    ]) {
+      const input = createInput()
+      const candidate = input.context.candidates.find(candidate => candidate.symbol === symbol)
+      Object.assign(candidate, { summary, socialSignificant: true, socialReason: "Событие.", socialSentiment: "positive" })
+      assert.throws(() => addContext(input), /summary/)
+      Object.assign(candidate, { socialSignificant: false, socialSentiment: null })
+      const before = structuredClone(input)
+      const result = addContext(input)
+      assert.equal(Object.hasOwn(result.coins.find(coin => coin.symbol === symbol), "summary"), false)
+      assert.deepEqual(input, before)
+    }
+  }
+})
+
 test("enriches non-top trending coins without promoting them or duplicating trending tops", () => {
   const input = createInput()
   const result = addContext(input)

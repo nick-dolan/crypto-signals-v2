@@ -44,6 +44,7 @@ async function prepareInputs (t, empty = false) {
         ? []
         : [{
             symbol: coin.symbol, movementProbability: 0.7, estimateConfidence: "medium",
+            technicalSummary: { observation: "Объём растёт при сжатии диапазона.", caveat: "Направление не подтверждено." },
             drivers: ["Объём"], counterSignals: [], tradingViewUrl: "https://www.tradingview.com/",
           }],
     },
@@ -54,6 +55,7 @@ async function prepareInputs (t, empty = false) {
       asOf, generatedAt: "2026-09-26T12:00:00.000Z", newsEnrichment: window, twitterEnrichment: window,
       candidates: candidates.map(({ symbol, explanation }) => ({
         symbol, explanation, enrichedExplanation: "Объяснение и новости </script>",
+        summary: { observation: "Команда объявила об обновлении проекта.", caveat: null },
         socialSignificant: true, socialReason: "Обновление проекта", socialSentiment: "positive",
       })),
     },
@@ -117,6 +119,10 @@ for (const empty of [false, true]) {
         assert.equal(report.coins[0].features.volumeZ, 2.5)
         assert.equal(report.coins[0].movementProbability, 0.7)
         assert.equal(report.coins[0].explanation, "Объяснение и новости </script>")
+        assert.deepEqual(report.coins[0].technicalSummary, {
+          observation: "Объём растёт при сжатии диапазона.", caveat: "Направление не подтверждено.",
+        })
+        assert.deepEqual(report.coins[0].summary, { observation: "Команда объявила об обновлении проекта.", caveat: null })
         assert.equal(report.coins[0].socialSignificant, true)
         assert.equal(report.coins[0].information.news.items[0].title, "Новость <script>")
         assert.equal(report.coins[0].history.candles[0].close, 1.5)
@@ -155,7 +161,7 @@ test("rebuilding step 13 updates the receipt without changing the previous snaps
   }
 })
 
-test("step 13 preserves all five news items and their sources in the immutable archive and downloadable HTML", async (t) => {
+test("step 13 preserves five v5 news items, sources and structured coin summaries in the archive and downloadable HTML", async (t) => {
   const directory = await prepareInputs(t)
   const brief = await buildMarketBrief("Prompt", {
     marketAsOf: "2026-09-26T11:00:00.000Z",
@@ -172,16 +178,18 @@ test("step 13 preserves all five news items and their sources in the immutable a
       })),
     }),
     callAgent: async () => JSON.stringify({
-      schemaVersion: 4, asOf: "2026-09-26T12:00:00.000Z",
+      schemaVersion: 5, asOf: "2026-09-26T12:00:00.000Z",
       items: Array.from({ length: 5 }, (_, index) => ({
-        text: `Короткая сводка </script> ${index + 1}`, sentiment: ["bullish", "neutral", "bearish"][index % 3],
+        title: `Событие ${index + 1} — обновление`,
+        text: `Короткая сводка ${index + 1}`, sentiment: ["bullish", "neutral", "bearish"][index % 3],
         sourceIds: [`source-${index + 1}`],
       })),
     }),
   })
   assert.equal(brief.status, "available")
-  assert.equal(brief.schemaVersion, 4)
+  assert.equal(brief.schemaVersion, 5)
   assert.equal(brief.items.length, 5)
+  assert.deepEqual(brief.items.map(item => item.title), Array.from({ length: 5 }, (_, index) => `Событие ${index + 1} — обновление`))
   assert.deepEqual(brief.items.map(item => item.sentiment), ["bullish", "neutral", "bearish", "bullish", "neutral"])
   await fs.writeFile(path.join(directory, "tmp", "step12.1-market-brief.json"), JSON.stringify(brief))
   await runStep(directory)
@@ -194,13 +202,21 @@ test("step 13 preserves all five news items and their sources in the immutable a
     assert.equal(report.asOf, brief.marketAsOf)
     assert.notEqual(report.asOf, report.marketBrief.asOf)
     await fs.rm(path.join(directory, "tmp"), { recursive: true })
-    assert.deepEqual((await store.read(metadata.id)).marketBrief, brief)
-    const html = await renderReportHtml(report)
+    const archived = await store.read(metadata.id)
+    assert.deepEqual(archived, report)
+    assert.deepEqual(archived.marketBrief, brief)
+    assert.deepEqual(archived.coins[0].technicalSummary, {
+      observation: "Объём растёт при сжатии диапазона.", caveat: "Направление не подтверждено.",
+    })
+    assert.deepEqual(archived.coins[0].summary, { observation: "Команда объявила об обновлении проекта.", caveat: null })
+    const html = await renderReportHtml(archived)
     assert.match(html, /"marketBrief":/)
     assert.match(html, /"publisher":"Original publisher"/)
     assert.ok(html.includes("Сохранённая публикация \\u003c/script>"))
-    assert.ok(html.includes("Короткая сводка \\u003c/script>"))
-    assert.doesNotMatch(html, /Короткая сводка <\/script>/)
+    assert.ok(html.includes("Событие 1 \\u003cscript>"))
+    assert.doesNotMatch(html, /Сохранённая публикация <\/script>|Событие \d+ <script>/)
+    const embedded = JSON.parse(html.match(/<script[^>]*id="report-data"[^>]*>([\s\S]*?)<\/script>/)[1])
+    assert.deepEqual(embedded, report)
   } finally {
     await store.close()
   }
@@ -274,7 +290,10 @@ for (const empty of [false, true]) {
           assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
           assert.equal(png.readUInt32BE(16), 1200)
           assert.equal(png.readUInt32BE(20), 1280)
-          assert.ok(rich.html.indexOf("<img") < rich.html.indexOf("Новостная сводка"))
+          assert.ok(rich.html.indexOf("Крипторадар") < rich.html.indexOf("<img"))
+          assert.ok(rich.html.indexOf("<img") < rich.html.indexOf("Монеты под наблюдением"))
+          assert.ok(rich.html.indexOf("Монеты под наблюдением") < rich.html.indexOf("<p><b>Новости"))
+          assert.doesNotMatch(rich.html, /Данные рынка на|Период:|Период новостей недоступен/)
         }
         await fs.appendFile("telegram-requests.jsonl", JSON.stringify(rich) + "\\n")
         return new Response(JSON.stringify({ ok: true, result: { message_id: 77, chat: { id: -100123 } } }))

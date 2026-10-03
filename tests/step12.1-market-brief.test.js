@@ -33,6 +33,7 @@ function collection () {
 
 function paragraph (overrides = {}) {
   return {
+    title: "Биржа — расследование инцидента",
     text: "По сообщению биржи, проводится расследование инцидента.",
     sentiment: "neutral",
     sourceIds: ["source-1"], ...overrides,
@@ -40,7 +41,7 @@ function paragraph (overrides = {}) {
 }
 
 function response (items = [paragraph()]) {
-  return { schemaVersion: 4, asOf: collection().asOf, items }
+  return { schemaVersion: 5, asOf: collection().asOf, items }
 }
 
 function build (overrides = {}) {
@@ -80,8 +81,10 @@ test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup an
     },
   })
   assert.equal(calls, 1)
-  assert.equal(result.schemaVersion, 4)
+  assert.equal(result.schemaVersion, 5)
   assert.equal(result.status, "available")
+  assert.equal(result.from, original.from)
+  assert.equal(result.asOf, original.asOf)
   assert.equal(result.marketAsOf, "2026-09-29T11:00:00.000Z")
   assert.notEqual(result.asOf, result.marketAsOf)
   assert.deepEqual(result.items, [paragraph()])
@@ -168,6 +171,7 @@ for (const failed of [false, true]) {
       collectSources: async () => input,
       callAgent: async () => assert.fail("Gemini must not run without publications"),
     })
+    assert.equal(result.schemaVersion, 5)
     assert.equal(result.status, failed ? "unavailable" : "empty")
     assert.equal(result.analysis.callCount, 0)
     assert.deepEqual(result.items, [])
@@ -221,7 +225,69 @@ test("missing and invalid sentiments are rejected instead of silently becoming n
   }
 })
 
-test("accepts up to five 250-character items and ten distinct citations without a minimum quota", async () => {
+test("accepts short plain titles with two to six words without counting standalone dashes", async () => {
+  for (const title of [
+    "Взлом биржи", "SEC — правила хранения", "Bitcoin ETF — приток средств", "Layer-2 — сбой сети",
+    "SEC — новые правила хранения для кастодианов",
+  ]) {
+    const item = paragraph({ title, text: "По сообщению @reporter_news, потери < 5%; сведения ещё проверяются." })
+    const result = await build({ callAgent: async () => JSON.stringify(response([item])) })
+    assert.equal(result.status, "available", title)
+    assert.deepEqual(result.items, [item])
+    assert.deepEqual(await readMarketBriefReport(result.marketAsOf, { readJson: async () => result }), result)
+  }
+})
+
+test("rejects missing, non-string, oversized, multiline and wrong-word-count titles without inferring replacements", async () => {
+  const original = await build()
+  for (const title of [
+    undefined, null, "", "  ", 12, true, [], {},
+    `${"Я".repeat(30)} ${"Я".repeat(30)}`, "SEC", "SEC —", "— —", "один два три четыре пять шесть семь",
+    "SEC\nправила хранения", "SEC\rправила хранения", "SEC\u2028правила хранения", "SEC\u2029правила хранения",
+  ]) {
+    const item = paragraph({ title })
+    const data = JSON.stringify(response([item]))
+    assert.throws(() => parseMarketBrief(data, collection().asOf, collection().sources), InvalidMarketBriefError)
+    const result = await build({ callAgent: async () => data })
+    assert.equal(result.schemaVersion, 5)
+    assert.equal(result.status, "unavailable")
+    assert.deepEqual(result.items, [])
+    assert.deepEqual(result.sources, collection().sources)
+    const saved = { ...original, items: [item] }
+    const before = structuredClone(saved)
+    const report = await readMarketBriefReport(original.marketAsOf, { readJson: async () => saved })
+    assert.equal(report.status, "unavailable")
+    assert.deepEqual(report.items, [])
+    assert.deepEqual(report.sources, [])
+    assert.deepEqual(saved, before)
+  }
+})
+
+test("v5 titles and text reject markup and inline citations rather than silently stripping it", async () => {
+  const original = await build()
+  for (const value of [
+    "**SEC — правила хранения**", "*SEC — правила хранения*", "__SEC — правила хранения__",
+    "_SEC — правила хранения_", "~~SEC — правила хранения~~", "`SEC — правила хранения`",
+    "[SEC — правила хранения](https://fake.example)", "SEC — правила хранения [1]",
+    "<b>SEC — правила хранения</b>", "SEC <br> правила хранения", "<script>alert(1)</script> правила хранения",
+    "# SEC — правила хранения", "> SEC — правила хранения", "• SEC — правила хранения",
+    "- SEC — правила хранения", "+ SEC — правила хранения", "1. SEC — правила хранения",
+  ]) {
+    for (const field of ["title", "text"]) {
+      const item = paragraph({ [field]: value })
+      const data = JSON.stringify(response([item]))
+      assert.throws(() => parseMarketBrief(data, collection().asOf, collection().sources), InvalidMarketBriefError)
+      const saved = { ...original, items: [item] }
+      const result = await readMarketBriefReport(original.marketAsOf, { readJson: async () => saved })
+      assert.equal(result.status, "unavailable")
+      assert.deepEqual(result.items, [])
+      assert.deepEqual(result.sources, [])
+      assert.equal(saved.items[0][field], value)
+    }
+  }
+})
+
+test("accepts five 60-character titles, independent 250-character texts and ten citations without a minimum quota", async () => {
   const input = collection()
   input.sources = Array.from({ length: 10 }, (_, index) => ({
     ...input.sources[0], id: `source-${index + 1}`, url: `https://publisher.example/${index + 1}`,
@@ -231,6 +297,7 @@ test("accepts up to five 250-character items and ten distinct citations without 
     { source: "twitter", status: "empty", fetchedCount: 0, error: null },
   ]
   const items = Array.from({ length: 5 }, (_, index) => paragraph({
+    title: `${"Я".repeat(58)} ${index}`,
     text: `${index} ${"x".repeat(248)}`,
     sourceIds: [`source-${index * 2 + 1}`, `source-${index * 2 + 2}`],
   }))
@@ -244,13 +311,15 @@ test("accepts up to five 250-character items and ten distinct citations without 
   }
 })
 
-test("allows shared citations and trims text without changing news order or attribution", () => {
+test("allows shared citations and trims titles and text without changing order, attribution or inputs", () => {
   const items = [
-    paragraph({ text: "  По сообщению биржи, вывод приостановлен.  ", sourceIds: ["source-1", "source-2"] }),
+    paragraph({ title: "  Биржа — пауза вывода  ", text: "  По сообщению биржи, вывод приостановлен.  ", sourceIds: ["source-1", "source-2"] }),
     paragraph({ text: "По сообщению биржи, расследование продолжается.", sourceIds: ["source-2", "source-3"] }),
   ]
+  const before = structuredClone(items)
   const result = parseMarketBrief(JSON.stringify(response(items)), collection().asOf, collection().sources)
-  assert.deepEqual(result, items.map(item => ({ ...item, text: item.text.trim() })))
+  assert.deepEqual(result, items.map(item => ({ ...item, title: item.title.trim(), text: item.text.trim() })))
+  assert.deepEqual(items, before)
 })
 
 for (const [label, mutate] of [
@@ -272,14 +341,15 @@ for (const [label, mutate] of [
   ["invented URL field", (data) => {
     data.items[0].url = "https://fake.example"
   }],
-  ["unexpected heading", (data) => {
-    data.items[0].title = "Heading"
+  ["missing title", (data) => {
+    delete data.items[0].title
   }],
   ["wrong snapshot", (data) => {
     data.asOf = "2026-09-29T11:00:00.000Z"
   }],
-  ["wrong version", (data) => {
-    data.schemaVersion = 3
+  ["legacy generation version", (data) => {
+    data.schemaVersion = 4
+    delete data.items[0].title
   }],
   ["legacy response shape", (data) => {
     data.paragraphs = data.items
@@ -343,7 +413,9 @@ test("report reader accepts the matching market snapshot with a distinct news cu
     assert.equal(filename, "step12.1-market-brief.json")
     return brief
   } })
-  assert.deepEqual(result, brief)
+  assert.strictEqual(result, brief)
+  assert.equal(result.from, collection().from)
+  assert.equal(result.asOf, collection().asOf)
 })
 
 test("report reader preserves valid v1 day-long event briefs and validates their original citations", async () => {
@@ -353,11 +425,13 @@ test("report reader preserves valid v1 day-long event briefs and validates their
   brief.sources[0].channel = "tavily"
   brief.coverage = ["tavily", "tradingview", "twitter"].map(source => ({ source, status: "available", fetchedCount: 1, error: null }))
   brief.events = [{
-    title: "Архивная новость", summary: "По сообщению биржи, проводится расследование.",
+    title: "Архивное событие ".repeat(8).trim(), summary: "По сообщению биржи, проводится расследование.",
     whyItMatters: "Возможны ограничения инфраструктуры.", verification: "unconfirmed", sourceIds: ["source-1"],
   }]
   delete brief.items
-  assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), brief)
+  const before = structuredClone(brief)
+  assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), before)
+  assert.deepEqual(brief, before)
   brief.events[0].sourceIds = ["invented"]
   const invalid = await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief })
   assert.equal(invalid.status, "unavailable")
@@ -390,25 +464,61 @@ test("report reader preserves v2 paragraphs and their original 800-character and
   }
 })
 
-test("report reader preserves all five v3 items without inventing sentiment or changing their original limits", async () => {
-  const brief = await build()
-  brief.schemaVersion = 3
-  brief.items = Array.from({ length: 5 }, (_, index) => ({
-    text: `${index} ${"x".repeat(248)}`, sourceIds: ["source-1", "source-2"],
-  }))
-  const before = structuredClone(brief)
-  assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), before)
-  assert.deepEqual(brief, before)
-  for (const mutate of [
-    data => data.items.push({ text: "Шестая новость", sourceIds: ["source-1"] }),
-    data => data.items[0].text += "x",
-    data => data.items[0].sourceIds.push("source-3"),
-  ]) {
-    const invalid = structuredClone(brief)
-    mutate(invalid)
-    assert.equal((await readMarketBriefReport(brief.marketAsOf, { readJson: async () => invalid })).status, "unavailable")
-  }
-})
+for (const schemaVersion of [3, 4]) {
+  test(`report reader preserves all five v${schemaVersion} items without adding titles or changing original fields and limits`, async () => {
+    const brief = await build()
+    brief.schemaVersion = schemaVersion
+    brief.items = Array.from({ length: 5 }, (_, index) => ({
+      text: `${index} ${"x".repeat(248)}`,
+      ...(schemaVersion === 4 ? { sentiment: ["bearish", "bullish", "neutral"][index % 3] } : {}),
+      sourceIds: ["source-1", "source-2"],
+    }))
+    const before = structuredClone(brief)
+    assert.deepEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), before)
+    assert.deepEqual(brief, before)
+    for (const mutate of [
+      data => data.items.push({ ...data.items[0], text: "Шестая новость" }),
+      data => data.items[0].text += "x",
+      data => data.items[0].sourceIds.push("source-3"),
+      data => data.items[0].sourceIds = ["invented"],
+      data => data.items[0].sentiment = "unknown",
+      data => data.items[0].title = "Неожиданный заголовок",
+    ]) {
+      const invalid = structuredClone(brief)
+      mutate(invalid)
+      assert.equal((await readMarketBriefReport(brief.marketAsOf, { readJson: async () => invalid })).status, "unavailable")
+    }
+    if (schemaVersion === 4) {
+      delete brief.items[0].sentiment
+      assert.equal((await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief })).status, "unavailable")
+    }
+  })
+}
+
+for (const schemaVersion of [2, 3, 4]) {
+  test(`v${schemaVersion} archives retain original prose, source evidence and exact timestamps without guessed titles`, async () => {
+    const brief = await build()
+    brief.schemaVersion = schemaVersion
+    brief.from = "2026-09-29T09:30:00.000+03:00"
+    brief.asOf = "2026-09-29T15:30:00.000+03:00"
+    const entries = [{
+      text: "  **Архивная формулировка**. <b>Сохранённые детали</b>.  ",
+      ...(schemaVersion === 4 ? { sentiment: "bearish" } : {}),
+      sourceIds: ["source-2", "source-1"],
+    }]
+    if (schemaVersion === 2) {
+      brief.paragraphs = entries
+      delete brief.items
+    } else {
+      brief.items = entries
+    }
+    const before = structuredClone(brief)
+    const result = await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief })
+    assert.deepEqual(result, before)
+    assert.deepEqual(brief, before)
+    assert.equal(Object.hasOwn((result.paragraphs ?? result.items)[0], "title"), false)
+  })
+}
 
 test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs", async () => {
   const original = await build()
@@ -417,7 +527,7 @@ test("report reader rejects stale, malformed, unsafe and ungrounded saved briefs
       data.marketAsOf = "2026-09-29T10:00:00.000Z"
     },
     (data) => {
-      data.schemaVersion = 5
+      data.schemaVersion = 6
     },
     (data) => {
       data.sources[0].url = "javascript:alert(1)"
@@ -483,8 +593,10 @@ test("missing or corrupt optional brief never prevents report assembly", async (
     const result = await readMarketBriefReport("2026-09-29T11:00:00.000Z", { readJson: async () => {
       throw error
     } })
+    assert.equal(result.schemaVersion, 5)
     assert.equal(result.status, "unavailable")
     assert.equal(result.asOf, null)
+    assert.equal(result.from, null)
     assert.deepEqual(result.items, [])
     assert.match(result.warning, /сводк/i)
   }
@@ -503,6 +615,8 @@ test("standalone step saves a brief and removes obsolete output before a failed 
     const brief = ${JSON.stringify(brief)}
     await runMarketBriefStep({ buildBrief: async (prompt, options) => {
       assert.match(prompt, /недоверенные данные/)
+      assert.match(prompt, /"schemaVersion": 5/)
+      assert.equal(brief.schemaVersion, 5)
       assert.equal(options.marketAsOf, brief.marketAsOf)
       return brief
     } })
@@ -515,14 +629,21 @@ test("standalone step saves a brief and removes obsolete output before a failed 
 
 test("prompt enforces concise news items, six-hour freshness, grounding, attribution and no trading advice", async () => {
   const prompt = await fs.readFile(new URL("../src/prompts/market-brief.md", import.meta.url), "utf8")
-  for (const text of ["недоверенные данные", "последние 6 часов", "не означает отсутствия событий", "не меняет рейтинг", "перепечаток", "не подтверждено", "Headline only", "время самого события", "Не создавай собственные URL", "от нуля до пяти", "3–5", "250 символов с пробелами", "торговые рекомендации", "без заголовка", "Не более двух различных", "по убыванию значимости", "меньше трёх", "Не заполняй объём ради количества", "не добирай вчерашние новости"]) {
+  for (const text of ["недоверенные данные", "последние 6 часов", "не означает отсутствия событий", "не меняет рейтинг", "перепечаток", "не подтверждено", "Headline only", "время самого события", "Не создавай собственные URL", "от нуля до пяти", "3–5", "250 символов с пробелами", "торговые рекомендации", "Не более двух различных", "по убыванию значимости", "меньше трёх", "Не заполняй объём ради количества", "не добирай вчерашние новости"]) {
     assert.ok(prompt.includes(text), text)
   }
-  assert.doesNotMatch(prompt, /Tavily|whyItMatters|Главное за сутки|800 символов|paragraphs/)
+  assert.doesNotMatch(prompt, /Tavily|whyItMatters|Главное за сутки|800 символов|paragraphs|без заголовка/)
   const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
-  assert.equal(example.schemaVersion, 4)
+  assert.equal(example.schemaVersion, 5)
   assert.deepEqual(Object.keys(example), ["schemaVersion", "asOf", "items"])
+  assert.deepEqual(Object.keys(example.items[0]), ["title", "text", "sentiment", "sourceIds"])
   assert.equal(example.items[0].sentiment, "neutral")
+  assert.equal(example.items[0].title, "SEC — правила хранения")
+  assert.equal(example.items[0].text.includes(example.items[0].title), false)
+  assert.deepEqual(parseMarketBrief(JSON.stringify(example), example.asOf, collection().sources), example.items)
+  for (const text of ["2–6 слов", "60 символов с пробелами", "Не повторяй заголовок в тексте", "без Markdown и HTML", "все сведения в `title` и `text`", "не превращай слух или план в свершившийся факт", "Пример показывает только формат"]) {
+    assert.ok(prompt.includes(text), text)
+  }
   for (const text of ["bullish", "neutral", "bearish", "При сомнениях выбирай `neutral`", "не настроение всего рынка", "не прогноз цены", "Не вставляй эмодзи", "без учёта маркеров и ссылок"]) {
     assert.ok(prompt.includes(text), text)
   }

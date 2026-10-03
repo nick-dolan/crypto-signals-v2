@@ -54,6 +54,21 @@ function createResponse (overrides = {}) {
   }
 }
 
+function createStructuredResponse (overrides = {}) {
+  const response = createResponse()
+  delete response.informationBackground
+
+  return {
+    ...response,
+    schemaVersion: 3,
+    summary: {
+      observation: "Торговая активность оживает на фоне сообщений о запуске обновления сети.",
+      caveat: "Пробоя диапазона ещё нет.",
+    },
+    ...overrides,
+  }
+}
+
 test("uses one sequential Gemini call per candidate and adds explanations and social assessments", async () => {
   const input = createInput()
   const before = structuredClone(input)
@@ -109,7 +124,7 @@ test("uses one sequential Gemini call per candidate and adds explanations and so
     },
     options: { model: "gemini-3.7-flash", reasoningEffort: "medium" },
   })
-  assert.equal(result.schemaVersion, 7)
+  assert.equal(result.schemaVersion, 8)
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.contextEnrichment, {
     source: "github-copilot-unofficial",
@@ -184,6 +199,148 @@ test("uses assessment arguments for a trending coin without a top explanation", 
   }])
   assert.equal(result.contextEnrichment.candidateCallCount, 1)
   assert.deepEqual(input, before)
+})
+
+test("structured context derives a legacy explanation and carries a separate summary only for significant news", async () => {
+  for (const socialSignificant of [true, false, null]) {
+    const input = createInput()
+    input.candidates = [input.candidates[0]]
+    input.candidates[0].technicalSummary = {
+      observation: "После затишья торговая активность начинает оживать.", caveat: "Пробоя диапазона ещё нет.",
+    }
+    input.candidates[0].summary = { observation: "Устаревшее обогащение.", caveat: null }
+    const before = structuredClone(input)
+    const response = createStructuredResponse({
+      socialSignificant,
+      socialSentiment: socialSignificant ? "positive" : null,
+      ...(socialSignificant !== true
+        ? { summary: { observation: "После затишья активность оживает.", caveat: "Публикации не дают надёжного подтверждения." } }
+        : {}),
+    })
+    const messages = []
+    const result = await enrichTopCandidatesWithContext(input, "System prompt", {
+      callAgent: async (_, message) => {
+        messages.push(JSON.parse(message))
+        return JSON.stringify(response)
+      },
+    })
+    const candidate = result.candidates[0]
+
+    assert.equal(messages.length, 1)
+    assert.deepEqual(messages[0].technicalSummary, input.candidates[0].technicalSummary)
+    assert.equal(Object.hasOwn(messages[0], "summary"), false)
+    assert.equal(candidate.enrichedExplanation, `${response.summary.observation} ${response.summary.caveat}`)
+    assert.equal(candidate.socialSignificant, socialSignificant)
+    assert.equal(Object.hasOwn(candidate, "summary"), socialSignificant === true)
+    if (socialSignificant === true) {
+      assert.deepEqual(candidate.summary, response.summary)
+    }
+    for (const field of ["technicalSummary", "explanation", "movementProbability", "drivers", "counterSignals"]) {
+      assert.deepEqual(candidate[field], input.candidates[0][field])
+    }
+    assert.deepEqual(input, before)
+  }
+})
+
+test("non-top context creates a structured summary from assessment arguments in the existing single call", async () => {
+  const input = createInput()
+  input.candidates = [{ ...input.candidates[0], explanation: "" }]
+  const before = structuredClone(input)
+  const response = createStructuredResponse({ summary: {
+    observation: "Торговая активность растёт на фоне сообщений о запуске обновления сети.", caveat: "Пробоя ещё нет.",
+  } })
+  let callCount = 0
+  const result = await enrichTopCandidatesWithContext(input, "System prompt", {
+    callAgent: async (_, message) => {
+      callCount += 1
+      const payload = JSON.parse(message)
+      assert.equal(payload.explanation, "")
+      assert.deepEqual(payload.drivers, input.candidates[0].drivers)
+      assert.deepEqual(payload.counterSignals, input.candidates[0].counterSignals)
+      assert.equal(Object.hasOwn(payload, "technicalSummary"), false)
+      assert.equal(Object.hasOwn(payload, "summary"), false)
+      return JSON.stringify(response)
+    },
+  })
+
+  assert.equal(callCount, 1)
+  assert.equal(result.contextEnrichment.candidateCallCount, 1)
+  assert.deepEqual(result.candidates[0].summary, response.summary)
+  assert.equal(result.candidates[0].enrichedExplanation, `${response.summary.observation} ${response.summary.caveat}`)
+  assert.equal(result.candidates[0].explanation, "")
+  assert.equal(Object.hasOwn(result.candidates[0], "technicalSummary"), false)
+  for (const key of ["movementProbability", "drivers", "counterSignals"]) {
+    assert.deepEqual(result.candidates[0][key], input.candidates[0][key])
+  }
+  assert.deepEqual(input, before)
+})
+
+test("legacy context keeps its strings and does not synthesize summary fields", async () => {
+  const input = createInput()
+  input.candidates = [input.candidates[0]]
+  const result = await enrichTopCandidatesWithContext(input, "System prompt", {
+    callAgent: async () => JSON.stringify(createResponse()),
+  })
+
+  assert.equal(result.candidates[0].enrichedExplanation, `${input.candidates[0].explanation} ${createResponse().informationBackground}`)
+  assert.equal(Object.hasOwn(result.candidates[0], "summary"), false)
+  assert.equal(Object.hasOwn(result.candidates[0], "technicalSummary"), false)
+})
+
+test("structured context validates exact summary fields and accepts null or bounded caveats", () => {
+  for (const summary of [
+    undefined, null, [], "text", {},
+    { observation: "Наблюдение." },
+    { observation: "Наблюдение.", caveat: null, extra: true },
+    { observation: "", caveat: null },
+    { observation: " \n ", caveat: null },
+    { observation: 42, caveat: null },
+    { observation: "я".repeat(301), caveat: null },
+    { observation: "Наблюдение.", caveat: "" },
+    { observation: "Наблюдение.", caveat: " \n " },
+    { observation: "Наблюдение.", caveat: false },
+    { observation: "Наблюдение.", caveat: "я".repeat(181) },
+  ]) {
+    assert.throws(
+      () => parseContextEnrichment(JSON.stringify(createStructuredResponse({ summary })), "SOL"),
+      error => error instanceof InvalidContextEnrichmentError && /summary|unexpected structure/.test(error.message),
+    )
+  }
+
+  for (const caveat of [null, "я".repeat(180)]) {
+    const response = createStructuredResponse({ summary: { observation: "я".repeat(300), caveat } })
+    assert.deepEqual(parseContextEnrichment(JSON.stringify(response), "SOL"), response)
+  }
+  const response = createStructuredResponse()
+  const padded = createStructuredResponse({ summary: {
+    observation: ` ${response.summary.observation}\n`, caveat: ` ${response.summary.caveat} `,
+  } })
+  assert.deepEqual(parseContextEnrichment(`\`\`\`json\n${JSON.stringify(padded)}\n\`\`\``, "SOL"), response)
+
+  for (const overrides of [
+    { schemaVersion: 2 }, { schemaVersion: 4 }, { informationBackground: "Дублирование." },
+    { socialSignificant: "true" }, { socialSentiment: null }, { socialReason: null }, { symbol: "BTC" },
+  ]) {
+    assert.throws(
+      () => parseContextEnrichment(JSON.stringify(createStructuredResponse(overrides)), "SOL"),
+      InvalidContextEnrichmentError,
+    )
+  }
+})
+
+test("structured context still rejects significant news without any source publications", async () => {
+  const input = createInput()
+  input.candidates = [input.candidates[1]]
+  const response = JSON.stringify(createStructuredResponse({ symbol: "BTC" }))
+  await assert.rejects(enrichTopCandidatesWithContext(input, "System prompt", {
+    callAgent: async () => response,
+  }), (error) => {
+    assert.ok(error instanceof InvalidContextEnrichmentError)
+    assert.match(error.message, /must be null without source publications/)
+    assert.equal(error.symbol, "BTC")
+    assert.equal(error.response, response)
+    return true
+  })
 })
 
 test("accepts JSON wrapped in one Markdown fence and trims both explanations", () => {

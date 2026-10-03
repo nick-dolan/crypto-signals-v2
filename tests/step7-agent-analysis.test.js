@@ -88,6 +88,23 @@ function createAgentResponse () {
   }
 }
 
+function createStructuredAgentResponse () {
+  const response = createAgentResponse()
+
+  return {
+    ...response,
+    schemaVersion: 2,
+    topCandidates: response.topCandidates.map(({ symbol, movementProbability }, index) => ({
+      symbol,
+      movementProbability,
+      technicalSummary: {
+        observation: "После затишья торговая активность начинает оживать.",
+        caveat: index === 0 ? null : "Свежий объёмный триггер слаб.",
+      },
+    })),
+  }
+}
+
 function createAnalysis () {
   const analysis = createAgentResponse()
 
@@ -115,9 +132,21 @@ test("analysis and context prompts do not request a direction forecast", async (
   }
 
   const example = JSON.parse(analysisPrompt.match(/```json\n([\s\S]*?)\n```/)[1])
+  assert.equal(example.schemaVersion, 2)
+  assert.deepEqual(Object.keys(example.topCandidates[0]), ["symbol", "movementProbability", "technicalSummary"])
   assert.deepEqual(Object.keys(example.assessments[0]), [
     "symbol", "movementProbability", "estimateConfidence", "drivers", "counterSignals",
   ])
+  assert.deepEqual(Object.keys(example.topCandidates[0].technicalSummary), ["observation", "caveat"])
+  assert.match(analysisPrompt, /Для монет вне топа отдельное резюме не нужно/)
+  assert.match(analysisPrompt, /не добавляй резюме в `assessments`/)
+  for (const prompt of [analysisPrompt, contextPrompt]) {
+    assert.match(prompt, /300 символов/)
+    assert.match(prompt, /180 символов/)
+    assert.match(prompt, /Не выдумывай оговорку/)
+  }
+  assert.match(contextPrompt, /`schemaVersion` всегда равен `3`/)
+  assert.match(contextPrompt, /Не возвращай `informationBackground` или `explanation`/)
 })
 
 test("agent analysis parser rejects a direction forecast as an extra field", () => {
@@ -137,6 +166,123 @@ test("agent analysis parser inserts exact payload values into evidence", () => {
     parseAgentAnalysis(JSON.stringify(createAgentResponse()), createPayload()),
     createAnalysis(),
   )
+})
+
+test("structured analysis normalizes only top summaries and derives their legacy explanations in one agent call", async () => {
+  const response = createStructuredAgentResponse()
+  response.topCandidates = [response.topCandidates[0]]
+  response.topCandidates[0].technicalSummary.observation = "  После затишья активность оживает.\n"
+  response.topCandidates[0].technicalSummary.caveat = "  Свежий объёмный триггер слаб.  "
+  const payload = createPayload()
+  const shortlist = createShortlist()
+  const before = structuredClone([response, payload, shortlist])
+  let callCount = 0
+  const result = await analyzeCandidates(payload, shortlist, "System prompt", {
+    callAgent: async () => {
+      callCount += 1
+      return JSON.stringify(response)
+    },
+  })
+
+  assert.equal(result.schemaVersion, 2)
+  assert.equal(result.candidateCount, 2)
+  assert.equal(callCount, 1)
+  assert.deepEqual(result.topCandidates[0].technicalSummary, {
+    observation: "После затишья активность оживает.", caveat: "Свежий объёмный триггер слаб.",
+  })
+  assert.deepEqual(result.topCandidates.map(({ symbol, movementProbability }) => ({ symbol, movementProbability })), [
+    { symbol: response.topCandidates[0].symbol, movementProbability: response.topCandidates[0].movementProbability },
+  ])
+  assert.equal(result.topCandidates[0].explanation, "После затишья активность оживает. Свежий объёмный триггер слаб.")
+  for (const [index, assessment] of result.assessments.entries()) {
+    for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals"]) {
+      assert.deepEqual(assessment[key], createAnalysis().assessments[index][key])
+    }
+    assert.equal(Object.hasOwn(assessment, "explanation"), false)
+    assert.equal(Object.hasOwn(assessment, "technicalSummary"), false)
+  }
+  assert.deepEqual([response, payload, shortlist], before)
+})
+
+test("structured analysis validates exact summary fields, lengths and readable technical prose", () => {
+  for (const technicalSummary of [
+    undefined, null, [], "text", {},
+    { observation: "Наблюдение." },
+    { observation: "Наблюдение.", caveat: null, extra: true },
+    { observation: "", caveat: null },
+    { observation: " \n ", caveat: null },
+    { observation: 42, caveat: null },
+    { observation: "я".repeat(301), caveat: null },
+    { observation: "Наблюдение.", caveat: "" },
+    { observation: "Наблюдение.", caveat: " \n " },
+    { observation: "Наблюдение.", caveat: false },
+    { observation: "Наблюдение.", caveat: "я".repeat(181) },
+    { observation: "Объём вырос в 2 раза.", caveat: null },
+    { observation: "Наблюдение.", caveat: "Ограничение 1." },
+    { observation: "rvRatio снижается.", caveat: null },
+    { observation: "Наблюдение.", caveat: "volumeZ слабый." },
+    { observation: "Наблюдение.", caveat: "breadth4h узкий." },
+  ]) {
+    const response = createStructuredAgentResponse()
+    response.topCandidates[0].technicalSummary = technicalSummary
+    assert.throws(
+      () => parseAgentAnalysis(JSON.stringify(response), createPayload()),
+      /Invalid Copilot analysis: .*(technicalSummary|unexpected structure)/,
+    )
+  }
+
+  for (const caveat of [null, "я".repeat(180)]) {
+    const response = createStructuredAgentResponse()
+    response.topCandidates[0].technicalSummary = { observation: "я".repeat(300), caveat }
+    const parsed = parseAgentAnalysis(JSON.stringify(response), createPayload())
+    assert.deepEqual(parsed.topCandidates[0].technicalSummary, response.topCandidates[0].technicalSummary)
+    assert.equal(parsed.topCandidates[0].explanation, ["я".repeat(300), caveat].filter(Boolean).join(" "))
+  }
+})
+
+test("summary schema keeps top selection validation and accepts legacy responses without inventing structure", () => {
+  const legacy = parseAgentAnalysis(JSON.stringify(createAgentResponse()), createPayload())
+  assert.equal(Object.hasOwn(legacy.topCandidates[0], "technicalSummary"), false)
+  assert.equal(Object.hasOwn(legacy.assessments[0], "technicalSummary"), false)
+
+  for (const selected of [[], [0], [1]]) {
+    const response = createStructuredAgentResponse()
+    response.topCandidates = selected.map(index => response.topCandidates[index])
+    const result = parseAgentAnalysis(JSON.stringify(response), createPayload())
+    assert.deepEqual(result.topCandidates, response.topCandidates.map(candidate => ({
+      ...candidate,
+      explanation: [candidate.technicalSummary.observation, candidate.technicalSummary.caveat].filter(Boolean).join(" "),
+    })))
+    assert.deepEqual(result.assessments, createAnalysis().assessments)
+  }
+
+  for (const change of [
+    response => response.topCandidates.reverse(),
+    response => response.topCandidates.push(response.topCandidates[0]),
+    response => response.topCandidates[0].movementProbability = 0.9,
+    response => response.topCandidates[0].explanation = "Не дублировать текст.",
+    response => response.schemaVersion = 3,
+  ]) {
+    const response = createStructuredAgentResponse()
+    change(response)
+    assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /Invalid Copilot analysis/)
+  }
+})
+
+test("both response versions reject extra assessment prose even for selected coins", () => {
+  for (const responseOf of [createAgentResponse, createStructuredAgentResponse]) {
+    for (const index of [0, 1]) {
+      for (const [field, value] of [
+        ["technicalSummary", { observation: "Не дублировать резюме.", caveat: null }],
+        ["explanation", "Не добавлять текст оценки."],
+      ]) {
+        const response = responseOf()
+        response.topCandidates = [response.topCandidates[0]]
+        response.assessments[index][field] = value
+        assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /assessment .*unexpected structure/)
+      }
+    }
+  }
 })
 
 test("agent analysis parser inserts exact market context values into evidence", () => {

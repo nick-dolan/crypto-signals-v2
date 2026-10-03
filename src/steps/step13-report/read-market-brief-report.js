@@ -8,7 +8,7 @@ function isTimestamp (value) {
 }
 
 function validBrief (data) {
-  if (!isObject(data) || ![1, 2, 3, 4].includes(data.schemaVersion)) {
+  if (!isObject(data) || ![1, 2, 3, 4, 5].includes(data.schemaVersion)) {
     return false
   }
   const channels = data.schemaVersion === 1 ? ["tavily", "tradingview", "twitter"] : ["tradingview", "twitter"]
@@ -48,7 +48,7 @@ function validBrief (data) {
   ))) {
     return false
   }
-  const content = [3, 4].includes(data.schemaVersion)
+  const content = [3, 4, 5].includes(data.schemaVersion)
     ? validateBriefItems(data.items, data.sources, data.schemaVersion)
     : data.schemaVersion === 2
       ? validateBriefParagraphs(data.paragraphs, data.sources)
@@ -63,7 +63,7 @@ function validBrief (data) {
 
 function unavailable (marketAsOf, warning) {
   return {
-    schemaVersion: 4, marketAsOf, asOf: null, from: null, generatedAt: null,
+    schemaVersion: 5, marketAsOf, asOf: null, from: null, generatedAt: null,
     status: "unavailable", warning, coverage: [], sources: [], items: [],
   }
 }

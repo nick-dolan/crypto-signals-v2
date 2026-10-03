@@ -1,4 +1,4 @@
-/* global document, LightweightCharts, updateChartHistory */
+/* global document, LightweightCharts, updateChartHistory, isString */
 
 (() => {
   const report = JSON.parse(document.getElementById("report-data").textContent)
@@ -316,7 +316,7 @@
   }
 
   function marketBriefEntries (brief) {
-    if ([3, 4].includes(brief.schemaVersion)) {
+    if ([3, 4, 5].includes(brief.schemaVersion)) {
       return (brief.items ?? []).slice(0, 5).filter(item => item.text.trim()).map(item => ({
         ...item,
         text: item.text.length <= 250 ? item.text : `${item.text.slice(0, 249)}…`,
@@ -340,9 +340,9 @@
   }
 
   function marketBriefEntry (entry, sources, numbers, schemaVersion) {
-    const listItem = [3, 4].includes(schemaVersion)
+    const listItem = [3, 4, 5].includes(schemaVersion)
     const node = element(listItem ? "li" : "p", listItem ? "market-brief-item" : "market-brief-paragraph")
-    const sentiment = schemaVersion === 4 && [
+    const sentiment = [4, 5].includes(schemaVersion) && [
       ["bullish", "Bullish"], ["neutral", "Neutral"], ["bearish", "Bearish"],
     ].find(([value]) => value === entry.sentiment)
     if (sentiment) {
@@ -352,6 +352,9 @@
       icon.setAttribute("role", "img")
       icon.setAttribute("aria-label", icon.title)
       node.append(icon)
+    }
+    if (schemaVersion === 5 && isString(entry.title) && entry.title.trim()) {
+      node.append(element("strong", "market-brief-title", entry.title), element("br"))
     }
     node.append(element("span", "market-brief-text", entry.text))
     const links = [...new Set(entry.sourceIds ?? [])].reduce((links, id) => {
@@ -400,7 +403,7 @@
       : "В полученной выборке нет сообщений для сводки."
     byId("market-brief-empty").hidden = entries.length > 0
     const content = entries.map(entry => marketBriefEntry(entry, sources, numbers, brief.schemaVersion))
-    if ([3, 4].includes(brief.schemaVersion) && content.length) {
+    if ([3, 4, 5].includes(brief.schemaVersion) && content.length) {
       const list = element("ul", "market-brief-list")
       // Safari needs an explicit list role when native markers are hidden.
       list.setAttribute("role", "list")
