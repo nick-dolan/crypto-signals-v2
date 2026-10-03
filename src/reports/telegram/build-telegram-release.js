@@ -46,7 +46,7 @@ function candidateHeading (coin, demo) {
   const url = !demo && isString(coin.marketSymbol) && coin.marketSymbol.trim()
     ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(coin.marketSymbol)}`
     : null
-  return `<code>${telegramText(coin.symbol, 100)}</code>${name ? ` · <b>${telegramLink(coin.name, url) ?? name}</b>` : ""}`
+  return `<b>${telegramText(coin.symbol, 100)}</b>${name ? ` · <b>${telegramLink(coin.name, url) ?? name}</b>` : ""}`
 }
 
 function candidateBlock (coin, demo) {
@@ -81,7 +81,9 @@ function briefBlocks (brief) {
   if (!brief) {
     return ["Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий."]
   }
+
   const blocks = []
+
   if (!["available", "partial", "empty"].includes(brief.status)) {
     blocks.push("Сводка недоступна. Отсутствие данных не означает отсутствие событий.")
   } else {
