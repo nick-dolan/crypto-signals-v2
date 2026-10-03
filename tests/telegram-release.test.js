@@ -983,7 +983,8 @@ for (const [section, title, demo] of [
 
 for (const schemaVersion of [1, 2, 3, 4, 5]) {
   test(`v${schemaVersion} news uses one bullet regardless of sentiment, one blank line between items and an unbulleted warning`, () => {
-    for (const sentiment of ["bullish", "neutral", "bearish", undefined, null, "unknown"]) {
+    for (const [sentiment, suffix] of [["bullish", " 🚀"], ["neutral", ""], ["bearish", " 📉"], [undefined, ""], [null, ""], ["unknown", ""]]) {
+      const emoji = schemaVersion >= 4 ? suffix : ""
       const paragraphs = ["Первая новость.", "Вторая новость."].map(text => ({ text, sentiment, sourceIds: ["s"] }))
       const report = deepFreeze(fixture([], { marketBrief: brief({
         schemaVersion, status: "partial", paragraphs, items: paragraphs,
@@ -995,8 +996,8 @@ for (const schemaVersion of [1, 2, 3, 4, 5]) {
       assertManifest(release, report)
       assert.equal(sectionHtml(release, "Новости за последние 6 часов"), [
         "<p><b>Новости за последние 6 часов</b></p>", "<p><br></p>",
-        "<p>• Первая новость. <a href=\"https://news.example/s\">[1]</a></p>", "<p><br></p>",
-        "<p>• Вторая новость. <a href=\"https://news.example/s\">[1]</a></p>",
+        `<p>• Первая новость.${emoji} <a href="https://news.example/s">[1]</a></p>`, "<p><br></p>",
+        `<p>• Вторая новость.${emoji} <a href="https://news.example/s">[1]</a></p>`,
         "<p>⚠ Оговорка &lt;&amp;&quot;🙂&gt;</p>",
       ].join("\n"))
       assert.deepEqual(report, before)
@@ -1041,7 +1042,7 @@ for (const schemaVersion of [3, 4, 5]) {
       const bullets = [...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item)
       assert.equal(text.split("<p><br></p>").length - 1, 1 + Math.max(0, Math.min(count, 5) - 1))
       assert.ok(text.includes(bullets.map(item => `<p>${item}</p>`).join("\n<p><br></p>\n")))
-      assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `• ${item.text} ${item.sourceIds
+      assert.deepEqual(bullets, items.slice(0, 5).map((item, index) => `• ${item.text}${schemaVersion === 3 ? "" : " 🚀"} ${item.sourceIds
         .map((id, citation) => `<a href="https://news.example/${id}">[${index * 2 + citation + 1}]</a>`).join(" ")}`))
       assert.equal([...text.matchAll(/<a href=/gu)].length, Math.min(count, 5) * 2)
       assert.doesNotMatch(text, /Сохранённая сводка рынка|НЕ ИСПОЛЬЗОВАТЬ V1|Пункт 6\.|· · ·|🟩|⬜|🟥|🟢|⚪|🔴/u)
@@ -1073,10 +1074,10 @@ for (const schemaVersion of [3, 4, 5]) {
     assert.equal(text.split("<p><br></p>").length - 1, 4)
     assert.ok(text.startsWith("<p><b>Новости за последние 6 часов</b></p>\n<p><br></p>\n<p>• Первый"))
     assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-      "• Первый &lt;пункт&gt; &amp; &quot;цитата&quot;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"http://news.example/a\">[2]</a>",
-      "• Второй пункт. <a href=\"https://news.example/c\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
+      `• Первый &lt;пункт&gt; &amp; &quot;цитата&quot;.${schemaVersion === 3 ? "" : " 📉"} <a href="https://news.example/b?x=1&amp;y=2">[1]</a> <a href="http://news.example/a">[2]</a>`,
+      `• Второй пункт.${schemaVersion === 3 ? "" : " 🚀"} <a href="https://news.example/c">[3]</a> <a href="https://news.example/b?x=1&amp;y=2">[1]</a>`,
       "• Третий пункт. <a href=\"https://news.example/d\">[4]</a> <a href=\"http://news.example/a\">[2]</a>",
-      "• Четвёртый пункт. <a href=\"https://news.example/d\">[4]</a>",
+      `• Четвёртый пункт.${schemaVersion === 3 ? "" : " 📉"} <a href="https://news.example/d">[4]</a>`,
     ])
     assert.doesNotMatch(text, /javascript:|missing|\[5\]|· · ·|🟩|⬜|🟥|🟢|⚪|🔴/u)
     assert.deepEqual(buildTelegramRelease(report), release)
@@ -1096,8 +1097,11 @@ for (const schemaVersion of [3, 4, 5]) {
   })
 }
 
-for (const [schemaVersion, sentiment] of [[3, undefined], [4, "bullish"], [4, "neutral"], [4, "bearish"], [5, "bullish"], [5, "neutral"], [5, "bearish"]]) {
-  test(`v${schemaVersion} ${sentiment ?? "archival"} text keeps the 250 UTF-16 boundary excluding the bullet prefix, links and HTML escaping`, () => {
+for (const [schemaVersion, sentiment, emoji] of [
+  [3, undefined, ""], [4, "bullish", " 🚀"], [4, "neutral", ""], [4, "bearish", " 📉"],
+  [5, "bullish", " 🚀"], [5, "neutral", ""], [5, "bearish", " 📉"],
+]) {
+  test(`v${schemaVersion} ${sentiment ?? "archival"} text keeps the 250 UTF-16 boundary excluding the bullet, emoji, links and HTML escaping`, () => {
     for (const [text, expected] of [
       [`${"а ".repeat(124)}а`, `${"а ".repeat(124)}а`],
       [`${"а ".repeat(124)}аб`, `${"а ".repeat(124)}аб`],
@@ -1118,8 +1122,8 @@ for (const [schemaVersion, sentiment] of [[3, undefined], [4, "bullish"], [4, "n
       assertManifest(release, report)
       const bullets = [...sectionHtml(release, "Новости за последние 6 часов").matchAll(/<p>(• [\s\S]*?)<\/p>/gu)]
         .map(([, item]) => visibleText(item))
-      assert.deepEqual(bullets, [`• ${expected} [1] [2]`])
-      assert.ok(bullets[0].slice(2).replace(/ \[1\] \[2\]$/u, "").length <= 250)
+      assert.deepEqual(bullets, [`• ${expected}${emoji} [1] [2]`])
+      assert.ok(bullets[0].slice(2).replace(/ (?:[🚀📉] )?\[1\] \[2\]$/u, "").length <= 250)
     }
   })
 }
@@ -1128,8 +1132,8 @@ test("v5 renders stored bold titles above text with safe consecutive citations, 
   const report = deepFreeze(fixture([], { marketBrief: brief({
     schemaVersion: 5,
     items: [
-      { title: "Первый <заголовок> & \"цитата\"", text: "Событие <не разметка>.", sourceIds: ["missing", "unsafe", "b", "b", "a", "c"] },
-      { title: "Второй заголовок", text: "Второе событие.", sourceIds: ["c", "b"] },
+      { title: "Первый <заголовок> & \"цитата\"", text: "Событие <не разметка>.", sentiment: "bearish", sourceIds: ["missing", "unsafe", "b", "b", "a", "c"] },
+      { title: "Второй заголовок", text: "Второе событие.", sentiment: "bullish", sourceIds: ["c", "b"] },
       { title: null, text: "Новость без заголовка. Не делать первое предложение заголовком.", sourceIds: ["a"] },
       { title: "PRIVATE-EMPTY-TEXT", text: " \t\n", sourceIds: ["unused"] },
       { title: "Последний заголовок", text: "Последняя сохранённая новость.", sourceIds: ["d"] },
@@ -1146,8 +1150,8 @@ test("v5 renders stored bold titles above text with safe consecutive citations, 
   assertManifest(release, report)
   const text = sectionHtml(release, "Новости за последние 6 часов")
   assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-    "• <b>Первый &lt;заголовок&gt; &amp; &quot;цитата&quot;</b><br>Событие &lt;не разметка&gt;. <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"https://news.example/a?x=1&amp;y=2\">[2]</a>",
-    "• <b>Второй заголовок</b><br>Второе событие. <a href=\"https://news.example/c?x=1&amp;y=2\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
+    "• <b>Первый &lt;заголовок&gt; &amp; &quot;цитата&quot;</b><br>Событие &lt;не разметка&gt;. 📉 <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a> <a href=\"https://news.example/a?x=1&amp;y=2\">[2]</a>",
+    "• <b>Второй заголовок</b><br>Второе событие. 🚀 <a href=\"https://news.example/c?x=1&amp;y=2\">[3]</a> <a href=\"https://news.example/b?x=1&amp;y=2\">[1]</a>",
     "• Новость без заголовка. Не делать первое предложение заголовком. <a href=\"https://news.example/a?x=1&amp;y=2\">[2]</a>",
     "• <b>Последний заголовок</b><br>Последняя сохранённая новость. <a href=\"https://news.example/d?x=1&amp;y=2\">[4]</a>",
   ])
@@ -1213,27 +1217,49 @@ test("v3 archives never infer sentiment labels from news text", () => {
   assertManifest(release, report)
   const text = sectionHtml(release, "Новости за последние 6 часов")
   assert.deepEqual([...text.matchAll(/<p>• ([\s\S]*?)<\/p>/gu)].map(([, item]) => visibleText(item)), items.map(item => `${item.text} [1]`))
-  assert.doesNotMatch(text, /🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
+  assert.doesNotMatch(text, /🚀|📉|🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
 })
 
-test("v4 missing or invalid sentiment still renders one bullet without defaulting or inferring classification", () => {
-  for (const overrides of [
-    {}, ...[undefined, null, "", "unknown", "positive", "negative", "Neutral", "neutral ", "toString", "constructor", "__proto__", 0, false, {}, ["neutral"]]
-      .map(sentiment => ({ sentiment })),
-  ]) {
+for (const schemaVersion of [4, 5]) {
+  test(`v${schemaVersion} missing or invalid sentiment never adds or infers an emoji`, () => {
+    for (const overrides of [
+      {}, ...[undefined, null, "", "unknown", "positive", "negative", "Bullish", "bearish ", "Neutral", "neutral ", "toString", "constructor", "__proto__", 0, false, {}, ["bullish"], ["bearish"]]
+        .map(sentiment => ({ sentiment })),
+    ]) {
+      const report = deepFreeze(fixture([], { marketBrief: brief({
+        schemaVersion, items: [{ text: "Позитивная новость <&\">.", sourceIds: ["s"], ...overrides }],
+        sources: [{ id: "s", url: "https://news.example/s" }],
+      }) }))
+      const release = buildTelegramRelease(report)
+      assertManifest(release, report)
+      const text = sectionHtml(release, "Новости за последние 6 часов")
+      assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
+        "• Позитивная новость &lt;&amp;&quot;&gt;. <a href=\"https://news.example/s\">[1]</a>",
+      ])
+      assert.doesNotMatch(text, /🚀|📉|• •|🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
+    }
+  })
+
+  test(`v${schemaVersion} keeps sentiment emojis without usable sources and omits markers for empty text`, () => {
     const report = deepFreeze(fixture([], { marketBrief: brief({
-      schemaVersion: 4, items: [{ text: "Позитивная новость <&\">.", sourceIds: ["s"], ...overrides }],
-      sources: [{ id: "s", url: "https://news.example/s" }],
+      schemaVersion,
+      items: [
+        { text: "Позитивное событие.", sentiment: "bullish", sourceIds: [] },
+        { text: "Негативное событие.", sentiment: "bearish", sourceIds: ["unknown", "unsafe"] },
+        { text: "Нейтральное событие.", sentiment: "neutral", sourceIds: [] },
+        { text: " \n\t", sentiment: "bullish", sourceIds: [] },
+      ],
+      sources: [{ id: "unsafe", url: "javascript:alert(1)" }],
     }) }))
     const release = buildTelegramRelease(report)
     assertManifest(release, report)
     const text = sectionHtml(release, "Новости за последние 6 часов")
     assert.deepEqual([...text.matchAll(/<p>(• [\s\S]*?)<\/p>/gu)].map(([, item]) => item), [
-      "• Позитивная новость &lt;&amp;&quot;&gt;. <a href=\"https://news.example/s\">[1]</a>",
+      "• Позитивное событие. 🚀", "• Негативное событие. 📉", "• Нейтральное событие.",
     ])
-    assert.doesNotMatch(text, /• •|🟩|⬜|🟥|⊕|○|⊖|🟢|⚪|🔴/u)
-  }
-})
+    assert.doesNotMatch(text, /<a\b|javascript:|unsafe|unknown/u)
+  })
+}
 
 test("v2 paragraphs use stored prose and stable deduplicated citations, ignoring other schemas and unknown sources", () => {
   const report = fixture([], { marketBrief: brief({
@@ -1541,11 +1567,11 @@ test("the complete post puts charts after the title, then candidates and uniform
   assertManifest(release, report)
   const { html } = release.richMessage
   assert.ok(html.startsWith("<p><b>📊 Крипторадар | 27 сентября 2026, 11:03 МСК</b></p>\n<p><br></p>\n<img src=\"tg://photo?id=card_1\"/>\n<p><b>Монеты под наблюдением</b></p>\n<p><br></p>\n<p><code>TOP</code>"))
-  for (const number of [1, 2, 3]) {
-    assert.ok(html.includes(`<p>• Новость ${number}. <a href="https://news.example/source">[1]</a></p>`))
+  for (const [number, emoji] of [[1, " 🚀"], [2, ""], [3, " 📉"]]) {
+    assert.ok(html.includes(`<p>• Новость ${number}.${emoji} <a href="https://news.example/source">[1]</a></p>`))
   }
   assert.ok(html.includes("<br>Изменение активности требует наблюдения.</p>\n<p><br></p>\n<p><b>Новости за последние 6 часов</b></p>\n<p><br></p>\n<p>• Новость 1."))
-  assert.ok(html.endsWith("<p>• Новость 3. <a href=\"https://news.example/source\">[1]</a></p>"))
+  assert.ok(html.endsWith("<p>• Новость 3. 📉 <a href=\"https://news.example/source\">[1]</a></p>"))
   assert.equal(html.split("<p><br></p>").length - 1, 6)
   assert.doesNotMatch(html, /· · ·|🟩|⬜|🟥|• •|⊕|○|⊖|──────|Крипто-пульс|Публикации:|Кандидатов:|Срез по закрытым свечам|P — оценка|без статистической калибровки|Покрытие новостных источников/u)
   assert.deepEqual(candidateParagraphs(release, "Монеты под наблюдением"), [

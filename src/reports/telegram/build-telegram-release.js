@@ -114,7 +114,10 @@ function briefBlocks (brief) {
           numbers.set(id, number)
           return telegramLink(`[${number}]`, sources.get(id)?.url)
         })
-      return [`• ${title ? `<b>${title}</b>\n` : ""}${text}${citations.length ? ` ${citations.join(" ")}` : ""}`]
+      const emoji = [4, 5].includes(brief.schemaVersion)
+        ? paragraph.sentiment === "bullish" ? "🚀" : paragraph.sentiment === "bearish" ? "📉" : ""
+        : ""
+      return [`• ${title ? `<b>${title}</b>\n` : ""}${text}${emoji ? ` ${emoji}` : ""}${citations.length ? ` ${citations.join(" ")}` : ""}`]
     })
     blocks.push(...(content.length
       ? content.flatMap((item, index) => index ? ["<br>", item] : [item])

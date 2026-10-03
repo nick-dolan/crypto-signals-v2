@@ -224,7 +224,7 @@ test("fourteen input coins produce seven qualifying PNGs and SVGs, no CoinGecko-
   assert.equal(await fs.readFile(result.previewPath, "utf8"), html)
 })
 
-test("preview preserves uniform news bullets, blank lines and only the significant-events heading emoji", () => {
+test("preview preserves news sentiment emojis before citations and leaves neutral news unmarked", () => {
   const report = reportWithCoins(4)
   report.marketBrief = {
     ...report.marketBrief, schemaVersion: 4,
@@ -238,7 +238,7 @@ test("preview preserves uniform news bullets, blank lines and only the significa
   assertPreviewPost(html, manifest)
   assert.ok(html.includes([
     "<p><b>Новости за последние 6 часов</b></p>", "<p><br></p>",
-    [1, 2, 3].map(number => `<p>• Новость ${number}. <a href="https://news.example/s">[1]</a></p>`).join("\n<p><br></p>\n"),
+    [[1, " 🚀"], [2, ""], [3, " 📉"]].map(([number, emoji]) => `<p>• Новость ${number}.${emoji} <a href="https://news.example/s">[1]</a></p>`).join("\n<p><br></p>\n"),
     "<p>⚠ ДЕМО: вымышленные примеры, не реальные новости.</p>",
   ].join("\n")))
   assert.ok(html.includes("<p><br></p>\n<p><b>📰 Значимые инфоповоды</b></p>\n<p><br></p>\n<p><code>DEMO-04</code>"))
