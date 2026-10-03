@@ -52,11 +52,10 @@ function candidateHeading (coin, demo) {
 function candidateBlock (coin, demo) {
   const summary = coin.socialSignificant === true ? coin.summary : coin.technicalSummary
   const observation = telegramText(summary?.observation, 1_200)
-  const caveat = observation ? telegramText(summary?.caveat, 720) : ""
   const explanation = observation
     || telegramText(coin.socialSignificant === true ? coin.explanation : coin.technicalExplanation, 1_200)
     || (coin.socialSignificant === true ? telegramText(coin.socialReason, 320) : "")
-  return [candidateHeading(coin, demo), explanation, caveat ? `<b>Оговорка:</b> ${caveat}` : ""].filter(Boolean).join("\n")
+  return [candidateHeading(coin, demo), explanation].filter(Boolean).join("\n")
 }
 
 function briefItemText (value) {

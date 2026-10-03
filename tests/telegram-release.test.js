@@ -136,7 +136,7 @@ test("invalid snapshots and candidate lists are rejected", () => {
   }
 })
 
-test("structured summaries use social prose only for explicit significance, without mixing explanations or raw evidence", () => {
+test("structured summaries use social prose only for explicit significance, without caveats or raw evidence", () => {
   for (const socialSignificant of [true, false, null, "true"]) {
     const report = deepFreeze(fixture([coin("TEST", {
       topRank: 1, socialSignificant,
@@ -149,7 +149,7 @@ test("structured summaries use social prose only for explicit significance, with
     const text = visibleText(buildTelegramRelease(report).richMessage.html)
     const expected = socialSignificant === true ? "SOCIAL" : "TECH"
     assert.ok(text.includes(`${expected}-OBSERVATION`))
-    assert.ok(text.includes(`${expected}-CAVEAT`))
+    assert.doesNotMatch(text, /CAVEAT|Оговорка:/u)
     assert.ok(!text.includes(socialSignificant === true ? "TECH-" : "SOCIAL-"))
     assert.doesNotMatch(text, /PRIVATE-/u)
   }
@@ -312,14 +312,14 @@ test("every rendered field is escaped without exposing private source details", 
   const unsafe = "<script>alert(\"x\")</script>&"
   const escaped = "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;"
   const report = fixture([coin(`symbol ${unsafe}`, {
-    topRank: 1, name: `name ${unsafe}`, technicalSummary: { observation: `observation ${unsafe}`, caveat: `caveat ${unsafe}` },
+    topRank: 1, name: `name ${unsafe}`, technicalSummary: { observation: `observation ${unsafe}` },
     information: { news: { error: "PRIVATE-ERROR" } },
   })], { marketBrief: brief({
     items: [{ title: `title ${unsafe}`, text: `news ${unsafe}`, sourceIds: ["s"] }], warning: `warning ${unsafe}`,
     sources: [{ id: "s", url: "https://news.example/?a=1&b=2" }],
   }) })
   const { html } = buildTelegramRelease(report).richMessage
-  for (const field of ["symbol", "name", "observation", "caveat", "title", "news", "warning"]) {
+  for (const field of ["symbol", "name", "observation", "title", "news", "warning"]) {
     assert.ok(html.includes(`${field} ${escaped}`))
   }
   assert.doesNotMatch(html, /<script\b|PRIVATE-/iu)
