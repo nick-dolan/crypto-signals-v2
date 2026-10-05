@@ -273,7 +273,7 @@ test("CLI 11 → 12 works with only steps 1–2 and the registry, leaving main o
     await runPeerRadarAnalysisStep({ callAgent: async (prompt, message) => {
       const input = JSON.parse(message)
       return JSON.stringify({ schemaVersion: 1, asOf: input.asOf, observations: input.candidates.map(candidate => ({
-        baseCurrencyId: candidate.coin.baseCurrencyId, verdict: "watch", explanation: "Прямой сосед вырос при слабой реакции кандидата", caveats: ["Это наблюдение, не прогноз"]
+        baseCurrencyId: candidate.coin[input.schema.coin.indexOf("baseCurrencyId")], verdict: "watch", explanation: "Прямой сосед вырос при слабой реакции кандидата", caveats: ["Это наблюдение, не прогноз"]
       })) })
     } })
   `], { cwd: directory, timeout: 10_000 })

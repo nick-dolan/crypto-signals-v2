@@ -77,7 +77,7 @@ function selectCandidate (candidate, index) {
   }
 }
 
-function buildPeerRadarPayload (scan) {
+function buildPeerRadarFacts (scan) {
   if (
     !isObject(scan) || scan.schemaVersion !== 1
     || scan.timeframe !== "1h" || !isArray(scan.candidates)
@@ -130,12 +130,45 @@ function buildPeerRadarPayload (scan) {
   return payload
 }
 
+function compactValues (source, fields) {
+  return fields.map(field => isFinite(source[field])
+    ? Number(source[field].toFixed(3)) || 0
+    : source[field])
+}
+
+function buildPeerRadarPayload (facts) {
+  const payload = {
+    schemaVersion: 2,
+    asOf: facts.asOf,
+    timeframe: facts.timeframe,
+    schema: {
+      coin: ["baseCurrencyId", "symbol", "name"],
+      coverage: ["peerStatus", "peerCount", "availablePeerCount", "benchmarkCoinCount"],
+      leader: [
+        "symbol", "type", "basis", "caveat", "ageHours", "status",
+        "move4hAtr", "marketExcess4hAtr", "relativeVolume4h", "retainedPct",
+        "returnSinceStartPct", "moveSinceStartAtr", "coinReturnSinceStartPct",
+        "coinMoveSinceStartAtr", "coinReaction",
+      ],
+    },
+  }
+
+  return {
+    ...payload,
+    candidates: facts.candidates.map(candidate => ({
+      coin: compactValues(candidate.coin, payload.schema.coin),
+      coverage: compactValues(candidate, payload.schema.coverage),
+      leaders: candidate.leaders.map(leader => compactValues(leader, payload.schema.leader)),
+    })),
+  }
+}
+
 export async function analyzePeerRadar (
   scan,
   systemPrompt,
   { callAgent = callModel } = {},
 ) {
-  const payload = buildPeerRadarPayload(scan)
+  const facts = buildPeerRadarFacts(scan)
 
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Peer radar system prompt is required")
@@ -148,11 +181,12 @@ export async function analyzePeerRadar (
   const modelSettings = getModelSettings("peerRadarAnalysis")
   let analysis = { observations: [] }
 
-  if (payload.candidates.length) {
+  if (facts.candidates.length) {
+    const payload = buildPeerRadarPayload(facts)
     const content = await callAgent(systemPrompt, JSON.stringify(payload), modelSettings)
 
     try {
-      analysis = parsePeerRadarAnalysis(content, payload)
+      analysis = parsePeerRadarAnalysis(content, facts)
     } catch (error) {
       if (error instanceof InvalidPeerRadarAnalysisError) {
         error.response = content
@@ -162,7 +196,7 @@ export async function analyzePeerRadar (
   }
 
   const byId = new Map(analysis.observations.map(observation => [observation.baseCurrencyId, observation]))
-  const { candidates, generatedAt: scanGeneratedAt, ...metadata } = payload
+  const { candidates, generatedAt: scanGeneratedAt, ...metadata } = facts
   const observations = candidates.map(candidate => ({
     ...candidate,
     ...byId.get(candidate.coin.baseCurrencyId),

@@ -190,12 +190,53 @@ test("one registry-selected call receives only whitelisted peer facts and no too
     },
   })
 
-  assert.deepEqual(calls, [{
-    prompt: "Peer-only prompt",
-    payload: expected,
-    options: settings,
-  }])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].prompt, "Peer-only prompt")
+  assert.deepEqual(calls[0].options, settings)
   assert.equal(Object.hasOwn(calls[0].options, "tools"), false)
+  const payload = calls[0].payload
+  assert.deepEqual(Object.keys(payload), ["schemaVersion", "asOf", "timeframe", "schema", "candidates"])
+  assert.equal(payload.schemaVersion, 2)
+  assert.equal(payload.asOf, expected.asOf)
+  assert.equal(payload.timeframe, "1h")
+  assert.deepEqual(payload.schema, {
+    coin: ["baseCurrencyId", "symbol", "name"],
+    coverage: ["peerStatus", "peerCount", "availablePeerCount", "benchmarkCoinCount"],
+    leader: [
+      "symbol", "type", "basis", "caveat", "ageHours", "status", "move4hAtr",
+      "marketExcess4hAtr", "relativeVolume4h", "retainedPct", "returnSinceStartPct",
+      "moveSinceStartAtr", "coinReturnSinceStartPct", "coinMoveSinceStartAtr", "coinReaction",
+    ],
+  })
+  assert.deepEqual(payload.candidates.map(candidate => candidate.coin), [
+    ["coin-0", "COIN0", "Монета 0"],
+    ["coin-1", "COIN1", "Монета 1"],
+  ])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.coverage), [
+    ["available", 2, 2, 10], ["partial", 3, 2, 10],
+  ])
+  assert.deepEqual(payload.candidates[0].leaders[0], [
+    "LEADER0", "competitor", expected.candidates[0].leaders[0].basis, expected.candidates[0].leaders[0].caveat,
+    4, "fresh", 4.125, 2.375, 2.625, 75.758, 3.912, 3.125, 0.1, 0.5, "flat",
+  ])
+  assert.deepEqual(payload.candidates[0].leaders[1], [
+    "LEADER1", "adjacent", expected.candidates[0].leaders[1].basis, expected.candidates[0].leaders[1].caveat,
+    9, "fading", 4.125, 2.375, 2.625, 75.758, 3.912, 3.125, 0.25, 1.25, "rising",
+  ])
+  for (const candidate of payload.candidates) {
+    assert.deepEqual(Object.keys(candidate), ["coin", "coverage", "leaders"])
+    assert.equal(candidate.leaders.length, 2)
+    assert.ok(candidate.leaders.every(leader => isArray(leader) && leader.length === payload.schema.leader.length))
+  }
+  const serialized = JSON.stringify(payload)
+  for (const omitted of [
+    "generatedAt", "snapshotClosedAt", "registryGeneratedAt", "criteria", "candidateCount",
+    "universeCoinCount", "loadedCoinCount", "tradingViewSymbol", "marketSymbol", "detectedAt",
+    "windowStartedAt", "return4hPct", "responseRatio", "gapAtr",
+  ]) {
+    assert.equal(serialized.includes(`"${omitted}"`), false, omitted)
+  }
+  assert.doesNotMatch(serialized, /CRYPTO:|BINANCE:|leader-0|leader-1/)
   assert.deepEqual(report, {
     schemaVersion: expected.schemaVersion,
     asOf: expected.asOf,
@@ -298,11 +339,12 @@ test("exact source facts survive JSON, remain detached and are never recomputed 
   const report = await analyzePeerRadar(scan, "Peer-only prompt", {
     callAgent: async (_, message) => {
       const received = JSON.parse(message)
-      assert.deepEqual(received, scan)
-      received.coverage.available = 999
-      received.candidates[0].coin.name = "Agent cannot replace facts"
-      received.candidates[0].leaders[0].gapAtr = 999
-      received.candidates[0].leaders[0].status = "fading"
+      assert.equal(received.schemaVersion, 2)
+      assert.equal(received.candidates[0].leaders[0][received.schema.leader.indexOf("retainedPct")], 75.758)
+      received.candidates[0].coverage[received.schema.coverage.indexOf("availablePeerCount")] = 999
+      received.candidates[0].coin[received.schema.coin.indexOf("name")] = "Agent cannot replace facts"
+      received.candidates[0].leaders[0][received.schema.leader.indexOf("moveSinceStartAtr")] = 999
+      received.candidates[0].leaders[0][received.schema.leader.indexOf("status")] = "fading"
       return JSON.stringify(response)
     },
   })
@@ -329,6 +371,80 @@ test("exact source facts survive JSON, remain detached and are never recomputed 
   report.coverage.available = 0
   report.criteria.lag = "Report edit"
   assert.equal(JSON.stringify(scan), before)
+})
+
+test("rounded peer values preserve authoritative boundary states and full report precision", async () => {
+  const scan = createScan(1)
+  Object.assign(scan.candidates[0].leaders[0], {
+    ageHours: 4.000001,
+    status: "fading",
+    retainedPct: 50.000001,
+    coinReturnSinceStartPct: -0.000001,
+    coinMoveSinceStartAtr: 0.500001,
+    coinReaction: "rising",
+  })
+  Object.assign(scan.candidates[0].leaders[1], {
+    coinMoveSinceStartAtr: -0.500001,
+    coinReaction: "falling",
+  })
+  const before = structuredClone(scan)
+  const report = await analyzePeerRadar(scan, "Peer-only prompt", {
+    callAgent: async (_, message) => {
+      const payload = JSON.parse(message)
+      const [first, second] = payload.candidates[0].leaders
+        .map(values => Object.fromEntries(payload.schema.leader.map((field, index) => [field, values[index]])))
+      assert.equal(first.ageHours, 4)
+      assert.equal(first.status, "fading")
+      assert.equal(first.retainedPct, 50)
+      assert.equal(first.coinMoveSinceStartAtr, 0.5)
+      assert.equal(first.coinReaction, "rising")
+      assert.equal(second.coinMoveSinceStartAtr, -0.5)
+      assert.equal(second.coinReaction, "falling")
+      assert.equal(first.coinReturnSinceStartPct, 0)
+      assert.equal(Object.is(first.coinReturnSinceStartPct, -0), false)
+      return JSON.stringify(createResponse(scan))
+    },
+  })
+
+  assert.deepEqual(report.observations[0].leaders, before.candidates[0].leaders)
+  assert.deepEqual(scan, before)
+})
+
+test("repeated leader symbols retain separate pair benchmarks, episodes and candidate reactions", async () => {
+  const scan = createScan(3)
+  Object.assign(scan.candidates[1].leaders[0], {
+    marketExcess4hAtr: 2.87654321,
+    coinMoveSinceStartAtr: -0.987654321,
+    coinReaction: "falling",
+  })
+  Object.assign(scan.candidates[2].leaders[0], {
+    detectedAt: "2026-09-24T08:00:00.000Z",
+    windowStartedAt: "2026-09-24T04:00:00.000Z",
+    ageHours: 1,
+    move4hAtr: 2.654321,
+    moveSinceStartAtr: 3.987654321,
+  })
+  const report = await analyzePeerRadar(scan, "Peer-only prompt", {
+    callAgent: async (_, message) => {
+      const payload = JSON.parse(message)
+      assert.deepEqual(payload.candidates.map(candidate => candidate.coin[payload.schema.coin.indexOf("baseCurrencyId")]), [
+        "coin-0", "coin-1", "coin-2",
+      ])
+      assert.deepEqual(payload.candidates.map(candidate => candidate.leaders.length), [2, 2, 2])
+      const leaders = payload.candidates.map(candidate => Object.fromEntries(
+        payload.schema.leader.map((field, index) => [field, candidate.leaders[0][index]]),
+      ))
+      assert.deepEqual(leaders.map(leader => leader.symbol), ["LEADER0", "LEADER0", "LEADER0"])
+      assert.deepEqual(leaders.map(leader => leader.ageHours), [4, 4, 1])
+      assert.deepEqual(leaders.map(leader => leader.marketExcess4hAtr), [2.375, 2.877, 2.375])
+      assert.deepEqual(leaders.map(leader => leader.coinMoveSinceStartAtr), [0.5, -0.988, -0.75])
+      assert.deepEqual(leaders.map(leader => leader.move4hAtr), [4.125, 4.125, 2.654])
+      assert.deepEqual(leaders.map(leader => leader.moveSinceStartAtr), [3.125, 3.125, 3.988])
+      return JSON.stringify(createResponse(scan))
+    },
+  })
+
+  assert.deepEqual(report.observations.map(observation => observation.leaders), [0, 2, 1].map(index => scan.candidates[index].leaders))
 })
 
 test("invalid response is preserved on the error without fallback or retry", async () => {
@@ -500,7 +616,13 @@ test("injected step prepares the complete radar with exact facts in tmp only", a
       callAgent: async (prompt, message, options) => {
         calls += 1
         assert.equal(prompt, ${JSON.stringify(systemPrompt)})
-        assert.deepEqual(JSON.parse(message), ${JSON.stringify(scan)})
+        const payload = JSON.parse(message)
+        assert.equal(payload.schemaVersion, 2)
+        assert.equal(payload.asOf, ${JSON.stringify(scan.asOf)})
+        assert.deepEqual(payload.candidates.map(candidate => candidate.coin[payload.schema.coin.indexOf("baseCurrencyId")]),
+          ${JSON.stringify(scan.candidates.map(candidate => candidate.coin.baseCurrencyId))})
+        assert.equal(payload.candidates[0].leaders[0][payload.schema.leader.indexOf("retainedPct")], 75.758)
+        assert.equal(Object.hasOwn(payload, "criteria"), false)
         assert.deepEqual(options, ${JSON.stringify(getModelSettings("peerRadarAnalysis"))})
         return ${JSON.stringify(JSON.stringify(response))}
       },
