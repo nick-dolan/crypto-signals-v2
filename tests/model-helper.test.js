@@ -33,30 +33,29 @@ test("model registry contains exactly five tasks with Russian descriptions", () 
   }
 })
 
-test("candidate context uses the SDK while market brief keeps the unofficial client", async (context) => {
+test("candidate context and market brief use the SDK", async (context) => {
   const clients = {
     callSdk: context.mock.fn(async () => "sdk response"),
-    callUnofficial: context.mock.fn(async () => "unofficial response"),
+    callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
   }
 
-  for (const [task, provider, client, response] of [
-    ["candidateContext", "copilot-sdk", "callSdk", "sdk response"],
-    ["marketBrief", "copilot-unofficial", "callUnofficial", "unofficial response"],
-  ]) {
+  for (const task of ["candidateContext", "marketBrief"]) {
     const settings = getModelSettings(task)
-    assert.deepEqual(settings, { provider, model: "gemini-3.7-flash", reasoningEffort: "medium" })
-    assert.equal(await callModel("system", "user", settings, clients), response)
-    assert.deepEqual(clients[client].mock.calls[0].arguments, [
+    assert.deepEqual(settings, {
+      provider: "copilot-sdk", model: "gemini-3.7-flash", reasoningEffort: "medium",
+    })
+    assert.equal(await callModel("system", "user", settings, clients), "sdk response")
+    assert.deepEqual(clients.callSdk.mock.calls.at(-1).arguments, [
       "system", "user", {
         model: settings.model,
         reasoningEffort: settings.reasoningEffort,
-        ...(provider === "copilot-sdk" ? { tools: [] } : {}),
+        tools: [],
       },
     ])
   }
 
-  assert.equal(clients.callSdk.mock.callCount(), 1)
-  assert.equal(clients.callUnofficial.mock.callCount(), 1)
+  assert.equal(clients.callSdk.mock.callCount(), 2)
+  assert.equal(clients.callUnofficial.mock.callCount(), 0)
 })
 
 test("model settings return fresh objects without descriptions and reflect registry edits", () => {

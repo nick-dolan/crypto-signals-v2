@@ -24,7 +24,7 @@
     "description": "Интерпретация отставания монет от выросших соседей."
   },
   "marketBrief": {
-    "provider": "copilot-unofficial",
+    "provider": "copilot-sdk",
     "model": "gemini-3.7-flash",
     "reasoningEffort": "medium",
     "description": "Короткая сводка главных событий крипторынка."
