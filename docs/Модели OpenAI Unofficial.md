@@ -63,4 +63,4 @@ console.log(text)
 JS
 ```
 
-Возвращает строку; tools не поддерживает. В `models-in-use.json` и `model-helper.js` пока не подключено — используем прямой вызов. Лимиты подписки сохраняются, перехода на платный API нет.
+Возвращает строку; tools не поддерживает. Для задач без tools в `models-in-use.json` задаём `provider: "openai-unofficial"`, `model` и `reasoningEffort`. Лимиты подписки сохраняются, перехода на платный API нет.

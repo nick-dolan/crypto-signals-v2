@@ -1,6 +1,7 @@
 import modelsInUse from "../../models-in-use.json" with { type: "json" }
 import { callCopilotWithTools } from "../api/copilot/chat.js"
 import { callUnofficialCopilot } from "../api/copilot-unofficial/chat.js"
+import { callUnofficialOpenAI } from "../api/openai-unofficial/chat.js"
 import { isObject, isString } from "./utils.typed.js"
 
 export function getModelSettings (task, registry = modelsInUse) {
@@ -13,8 +14,8 @@ export function getModelSettings (task, registry = modelsInUse) {
 
   const { provider, model, reasoningEffort } = entry
 
-  if (!["copilot-sdk", "copilot-unofficial"].includes(provider)) {
-    throw new Error(`${label}: provider must be "copilot-sdk" or "copilot-unofficial"`)
+  if (!["copilot-sdk", "copilot-unofficial", "openai-unofficial"].includes(provider)) {
+    throw new Error(`${label}: provider must be "copilot-sdk", "copilot-unofficial" or "openai-unofficial"`)
   }
 
   if (!isString(model) || !model.trim()) {
@@ -32,18 +33,23 @@ export async function callModel (
   systemPrompt,
   userMessage,
   { provider, model, reasoningEffort, tools = [] } = {},
-  { callSdk = callCopilotWithTools, callUnofficial = callUnofficialCopilot } = {},
+  {
+    callSdk = callCopilotWithTools,
+    callUnofficial = callUnofficialCopilot,
+    callOpenAI = callUnofficialOpenAI,
+  } = {},
 ) {
   if (provider === "copilot-sdk") {
     return callSdk(systemPrompt, userMessage, { model, reasoningEffort, tools })
   }
 
-  if (provider === "copilot-unofficial") {
+  if (["copilot-unofficial", "openai-unofficial"].includes(provider)) {
     if (tools.length > 0) {
-      throw new Error("copilot-unofficial does not support tools; use copilot-sdk")
+      throw new Error(`${provider} does not support tools; use copilot-sdk`)
     }
 
-    return callUnofficial(systemPrompt, userMessage, { model, reasoningEffort })
+    const call = provider === "openai-unofficial" ? callOpenAI : callUnofficial
+    return call(systemPrompt, userMessage, { model, reasoningEffort })
   }
 
   throw new Error(`Unknown model provider: ${provider}`)

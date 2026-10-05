@@ -18,8 +18,8 @@
     "description": "Дополнение технической картины новостями и Twitter, оценка значимости инфоповодов."
   },
   "peerRadarAnalysis": {
-    "provider": "copilot-sdk",
-    "model": "gpt-6-luna",
+    "provider": "openai-unofficial",
+    "model": "gpt-6.1-sol",
     "reasoningEffort": "high",
     "description": "Интерпретация отставания монет от выросших соседей."
   },

@@ -141,7 +141,7 @@ test("empty peer scan skips the agent and retains complete coverage metadata", a
   assert.equal(report.snapshotClosedAt, scan.snapshotClosedAt)
   assert.equal(report.timeframe, "1h")
   assert.deepEqual(report.analysis, {
-    source: `github-${settings.provider}`,
+    source: "openai-unofficial",
     model: settings.model,
     reasoningEffort: settings.reasoningEffort,
     callCount: 0,
@@ -252,7 +252,7 @@ test("one registry-selected call receives only whitelisted peer facts and no too
     generatedAt: report.generatedAt,
     analysisStatus: "complete",
     analysis: {
-      source: `github-${settings.provider}`,
+      source: "openai-unofficial",
       model: settings.model,
       reasoningEffort: settings.reasoningEffort,
       callCount: 1,
@@ -266,32 +266,38 @@ test("one registry-selected call receives only whitelisted peer facts and no too
   })
 })
 
-test("peer radar follows registry provider and model edits with reasoning disabled", async (t) => {
-  const original = modelsInUse.peerRadarAnalysis
-  t.after(() => {
-    modelsInUse.peerRadarAnalysis = original
-  })
-  modelsInUse.peerRadarAnalysis = {
-    ...original,
-    provider: original.provider === "copilot-sdk" ? "copilot-unofficial" : "copilot-sdk",
-    model: "configured-peer-model",
-    reasoningEffort: null,
-  }
-  const settings = getModelSettings("peerRadarAnalysis")
-  const scan = createScan(1)
-  const callAgent = t.mock.fn(async () => JSON.stringify(createResponse(scan)))
-  const report = await analyzePeerRadar(scan, "Peer-only prompt", { callAgent })
+for (const [provider, source] of [
+  ["copilot-sdk", "github-copilot-sdk"],
+  ["copilot-unofficial", "github-copilot-unofficial"],
+  ["openai-unofficial", "openai-unofficial"],
+]) {
+  test(`peer radar follows ${provider} registry edits with reasoning disabled`, async (t) => {
+    const original = modelsInUse.peerRadarAnalysis
+    t.after(() => {
+      modelsInUse.peerRadarAnalysis = original
+    })
+    modelsInUse.peerRadarAnalysis = {
+      ...original,
+      provider,
+      model: "configured-peer-model",
+      reasoningEffort: null,
+    }
+    const settings = getModelSettings("peerRadarAnalysis")
+    const scan = createScan(1)
+    const callAgent = t.mock.fn(async () => JSON.stringify(createResponse(scan)))
+    const report = await analyzePeerRadar(scan, "Peer-only prompt", { callAgent })
 
-  assert.equal(callAgent.mock.callCount(), 1)
-  assert.deepEqual(callAgent.mock.calls[0].arguments[2], settings)
-  assert.equal(report.analysisStatus, "complete")
-  assert.deepEqual(report.analysis, {
-    source: `github-${settings.provider}`,
-    model: settings.model,
-    reasoningEffort: settings.reasoningEffort,
-    callCount: 1,
+    assert.equal(callAgent.mock.callCount(), 1)
+    assert.deepEqual(callAgent.mock.calls[0].arguments[2], settings)
+    assert.equal(report.analysisStatus, "complete")
+    assert.deepEqual(report.analysis, {
+      source,
+      model: settings.model,
+      reasoningEffort: settings.reasoningEffort,
+      callCount: 1,
+    })
   })
-})
+}
 
 test("all candidates are analyzed once with watch first and stable scan order within verdicts", async () => {
   const scan = createScan(8)

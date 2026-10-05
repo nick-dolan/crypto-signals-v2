@@ -61,6 +61,26 @@ test("candidate context and market brief use the SDK", async (context) => {
   assert.equal(clients.callUnofficial.mock.callCount(), 0)
 })
 
+test("peer radar selects GPT-6.1 Sol high through the OpenAI subscription wrapper", async (context) => {
+  const settings = getModelSettings("peerRadarAnalysis")
+  assert.deepEqual(settings, {
+    provider: "openai-unofficial", model: "gpt-6.1-sol", reasoningEffort: "high",
+  })
+  const clients = {
+    callSdk: context.mock.fn(() => assert.fail("Unexpected SDK invocation")),
+    callUnofficial: context.mock.fn(() => assert.fail("Unexpected Copilot invocation")),
+    callOpenAI: context.mock.fn(async () => "openai response"),
+  }
+
+  assert.equal(await callModel("system", "user", settings, clients), "openai response")
+  assert.deepEqual(clients.callOpenAI.mock.calls[0].arguments, [
+    "system", "user", { model: "gpt-6.1-sol", reasoningEffort: "high" },
+  ])
+  assert.equal(clients.callOpenAI.mock.callCount(), 1)
+  assert.equal(clients.callSdk.mock.callCount(), 0)
+  assert.equal(clients.callUnofficial.mock.callCount(), 0)
+})
+
 test("model settings return fresh objects without descriptions and reflect registry edits", () => {
   const registry = { coinDescription: createSettings() }
   const first = getModelSettings("coinDescription", registry)
@@ -89,8 +109,8 @@ test("model settings return fresh objects without descriptions and reflect regis
   })
 })
 
-test("model settings allow null reasoning for either provider", () => {
-  for (const provider of ["copilot-sdk", "copilot-unofficial"]) {
+test("model settings allow null reasoning for any provider", () => {
+  for (const provider of ["copilot-sdk", "copilot-unofficial", "openai-unofficial"]) {
     assert.deepEqual(getModelSettings("candidateContext", {
       candidateContext: createSettings({ provider, reasoningEffort: null }),
     }), { provider, model: "custom-model", reasoningEffort: null })
@@ -146,20 +166,31 @@ for (const [provider, client, options] of [
     model: "future-unofficial-model",
     reasoningEffort: "arbitrary-unofficial-reasoning",
   }],
+  ["openai-unofficial", "callOpenAI", {
+    model: "future-openai-model",
+    reasoningEffort: "arbitrary-openai-reasoning",
+  }],
 ]) {
   test(`${provider} receives exactly the prompts and supported options`, async (context) => {
     const clients = {
       callSdk: context.mock.fn(async () => "sdk response"),
       callUnofficial: context.mock.fn(async () => "unofficial response"),
+      callOpenAI: context.mock.fn(async () => "openai response"),
     }
     const response = await callModel("system prompt", "user message", { provider, ...options }, clients)
 
-    assert.equal(response, client === "callSdk" ? "sdk response" : "unofficial response")
+    assert.equal(response, {
+      callSdk: "sdk response",
+      callUnofficial: "unofficial response",
+      callOpenAI: "openai response",
+    }[client])
     assert.equal(clients[client].mock.callCount(), 1)
     assert.deepEqual(clients[client].mock.calls[0].arguments, [
       "system prompt", "user message", options,
     ])
-    assert.equal(clients[client === "callSdk" ? "callUnofficial" : "callSdk"].mock.callCount(), 0)
+    for (const [name, call] of Object.entries(clients)) {
+      assert.equal(call.mock.callCount(), name === client ? 1 : 0)
+    }
 
     if (provider === "copilot-sdk") {
       assert.equal(clients.callSdk.mock.calls[0].arguments[2].tools, options.tools)
@@ -171,9 +202,10 @@ test("routing preserves null reasoning and defaults to empty SDK tools", async (
   const clients = {
     callSdk: context.mock.fn(async () => "sdk response"),
     callUnofficial: context.mock.fn(async () => "unofficial response"),
+    callOpenAI: context.mock.fn(async () => "openai response"),
   }
 
-  for (const provider of ["copilot-sdk", "copilot-unofficial"]) {
+  for (const provider of ["copilot-sdk", "copilot-unofficial", "openai-unofficial"]) {
     await callModel("system", "user", { provider, model: "custom-model", reasoningEffort: null }, clients)
   }
 
@@ -183,8 +215,12 @@ test("routing preserves null reasoning and defaults to empty SDK tools", async (
   assert.deepEqual(clients.callUnofficial.mock.calls[0].arguments, [
     "system", "user", { model: "custom-model", reasoningEffort: null },
   ])
+  assert.deepEqual(clients.callOpenAI.mock.calls[0].arguments, [
+    "system", "user", { model: "custom-model", reasoningEffort: null },
+  ])
   assert.equal(clients.callSdk.mock.callCount(), 1)
   assert.equal(clients.callUnofficial.mock.callCount(), 1)
+  assert.equal(clients.callOpenAI.mock.callCount(), 1)
 })
 
 test("unofficial routing accepts empty tools without forwarding them", async (context) => {
@@ -204,18 +240,21 @@ test("unofficial routing accepts empty tools without forwarding them", async (co
   assert.equal(callSdk.mock.callCount(), 0)
 })
 
-test("unsupported providers and unofficial tools fail before invoking either client", async (context) => {
+test("unsupported providers and unofficial tools fail before invoking any client", async (context) => {
   const clients = {
     callSdk: context.mock.fn(() => assert.fail("Unexpected SDK invocation")),
     callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
+    callOpenAI: context.mock.fn(() => assert.fail("Unexpected OpenAI invocation")),
   }
 
-  await assert.rejects(callModel("system", "user", {
-    provider: "copilot-unofficial",
-    model: "custom-model",
-    reasoningEffort: null,
-    tools: [{ name: "read_coin" }],
-  }, clients), /copilot-unofficial.*tools/)
+  for (const provider of ["copilot-unofficial", "openai-unofficial"]) {
+    await assert.rejects(callModel("system", "user", {
+      provider,
+      model: "custom-model",
+      reasoningEffort: null,
+      tools: [{ name: "read_coin" }],
+    }, clients), new RegExp(`${provider}.*tools`))
+  }
   await assert.rejects(callModel("system", "user", {
     provider: "other-provider",
     tools: [{ name: "read_coin" }],
@@ -226,18 +265,26 @@ test("unsupported providers and unofficial tools fail before invoking either cli
   )
   assert.equal(clients.callSdk.mock.callCount(), 0)
   assert.equal(clients.callUnofficial.mock.callCount(), 0)
+  assert.equal(clients.callOpenAI.mock.callCount(), 0)
 })
 
-for (const provider of ["copilot-sdk", "copilot-unofficial"]) {
+for (const [provider, client] of [
+  ["copilot-sdk", "callSdk"],
+  ["copilot-unofficial", "callUnofficial"],
+  ["openai-unofficial", "callOpenAI"],
+]) {
   test(`${provider} errors propagate without retry or fallback`, async (context) => {
     const error = new Error("Client failure")
     const failingClient = context.mock.fn(async () => {
       throw error
     })
     const unusedClient = context.mock.fn(() => assert.fail("Unexpected fallback"))
-    const clients = provider === "copilot-sdk"
-      ? { callSdk: failingClient, callUnofficial: unusedClient }
-      : { callSdk: unusedClient, callUnofficial: failingClient }
+    const clients = {
+      callSdk: unusedClient,
+      callUnofficial: unusedClient,
+      callOpenAI: unusedClient,
+      [client]: failingClient,
+    }
 
     await assert.rejects(
       callModel("system", "user", { provider, model: "custom-model", reasoningEffort: null }, clients),

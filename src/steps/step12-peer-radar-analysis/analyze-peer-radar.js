@@ -208,7 +208,9 @@ export async function analyzePeerRadar (
     generatedAt: new Date().toISOString(),
     analysisStatus: candidates.length ? "complete" : "skipped_no_candidates",
     analysis: {
-      source: `github-${modelSettings.provider}`,
+      source: modelSettings.provider === "openai-unofficial"
+        ? "openai-unofficial"
+        : `github-${modelSettings.provider}`,
       model: modelSettings.model,
       reasoningEffort: modelSettings.reasoningEffort,
       callCount: candidates.length ? 1 : 0,
