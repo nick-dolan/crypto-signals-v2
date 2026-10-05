@@ -33,6 +33,32 @@ test("model registry contains exactly five tasks with Russian descriptions", () 
   }
 })
 
+test("candidate context uses the SDK while market brief keeps the unofficial client", async (context) => {
+  const clients = {
+    callSdk: context.mock.fn(async () => "sdk response"),
+    callUnofficial: context.mock.fn(async () => "unofficial response"),
+  }
+
+  for (const [task, provider, client, response] of [
+    ["candidateContext", "copilot-sdk", "callSdk", "sdk response"],
+    ["marketBrief", "copilot-unofficial", "callUnofficial", "unofficial response"],
+  ]) {
+    const settings = getModelSettings(task)
+    assert.deepEqual(settings, { provider, model: "gemini-3.7-flash", reasoningEffort: "medium" })
+    assert.equal(await callModel("system", "user", settings, clients), response)
+    assert.deepEqual(clients[client].mock.calls[0].arguments, [
+      "system", "user", {
+        model: settings.model,
+        reasoningEffort: settings.reasoningEffort,
+        ...(provider === "copilot-sdk" ? { tools: [] } : {}),
+      },
+    ])
+  }
+
+  assert.equal(clients.callSdk.mock.callCount(), 1)
+  assert.equal(clients.callUnofficial.mock.callCount(), 1)
+})
+
 test("model settings return fresh objects without descriptions and reflect registry edits", () => {
   const registry = { coinDescription: createSettings() }
   const first = getModelSettings("coinDescription", registry)

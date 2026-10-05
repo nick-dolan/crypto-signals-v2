@@ -2,47 +2,7 @@ import "dotenv/config"
 import { homedir } from "node:os"
 import path from "node:path"
 import { CopilotClient } from "@github/copilot-sdk"
-import { isArray, isString } from "../../helpers/utils.typed.js"
-
-export function resolveCopilotModel (models, requestedModel, reasoningEffort) {
-  if (!isArray(models)) {
-    throw new Error("Copilot model list is unavailable")
-  }
-
-  const requested = isString(requestedModel) ? requestedModel.trim() : ""
-  const selected = models.find(model => (
-    model.id === requested || model.name === requested
-  )) ?? models.find(model => (
-    model.id.toLowerCase() === requested.toLowerCase()
-    || model.name.toLowerCase() === requested.toLowerCase()
-  ))
-
-  if (!selected) {
-    throw new Error(`Copilot model is unavailable for this account: ${requested}`)
-  }
-
-  if (selected.policy && selected.policy.state !== "enabled") {
-    throw new Error(
-      `Copilot model ${selected.name} is ${selected.policy.state} for this account`,
-    )
-  }
-
-  if (reasoningEffort && !selected.capabilities?.supports?.reasoningEffort) {
-    throw new Error(`Copilot model ${selected.name} does not support reasoning effort`)
-  }
-
-  if (
-    reasoningEffort
-    && isArray(selected.supportedReasoningEfforts)
-    && !selected.supportedReasoningEfforts.includes(reasoningEffort)
-  ) {
-    throw new Error(
-      `Copilot model ${selected.name} does not support reasoning effort ${reasoningEffort}`,
-    )
-  }
-
-  return selected
-}
+import { isString } from "../../helpers/utils.typed.js"
 
 async function sendCopilotRequest (
   systemPrompt,
@@ -58,18 +18,13 @@ async function sendCopilotRequest (
   try {
     await client.start()
 
-    const selectedModel = resolveCopilotModel(
-      await client.listModels(),
-      model,
-      reasoningEffort,
-    )
     const hasTools = tools.length > 0
 
-    console.log(`Calling ${selectedModel.name} via GitHub Copilot SDK...`)
+    console.log(`Calling ${model} via GitHub Copilot SDK...`)
 
     const session = await client.createSession({
       clientName: "crypto-signals-v2",
-      model: selectedModel.id,
+      model,
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(hasTools
         ? {

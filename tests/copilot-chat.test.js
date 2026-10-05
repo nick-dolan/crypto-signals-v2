@@ -1,58 +1,58 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { CopilotClient } from "@github/copilot-sdk"
 
-import { resolveCopilotModel } from "../src/api/copilot/chat.js"
+import { callCopilot } from "../src/api/copilot/chat.js"
 
-function createModel (overrides = {}) {
-  return {
-    id: "gpt-5.6-sol",
-    name: "GPT-5.6 Sol",
-    capabilities: {
-      supports: {
-        vision: true,
-        reasoningEffort: true,
-      },
-      limits: {
-        max_context_window_tokens: 272_000,
-      },
-    },
-    policy: {
-      state: "enabled",
-      terms: "",
-    },
-    supportedReasoningEfforts: ["low", "medium", "high"],
-    ...overrides,
-  }
+function mockClient (context) {
+  const start = context.mock.method(CopilotClient.prototype, "start", async () => {})
+  const stop = context.mock.method(CopilotClient.prototype, "stop", async () => [])
+  const listModels = context.mock.method(CopilotClient.prototype, "listModels", () => {
+    assert.fail("Model IDs must be passed directly without listModels()")
+  })
+  const sendAndWait = context.mock.fn(async () => ({ data: { content: "OK" } }))
+  const createSession = context.mock.method(CopilotClient.prototype, "createSession", async () => ({ sendAndWait }))
+
+  return { start, stop, listModels, createSession, sendAndWait }
 }
 
-test("Copilot model resolver uses the runtime model ID and supported reasoning", () => {
-  const model = createModel()
+for (const [model, reasoningEffort] of [
+  ["gemini-3.7-flash", "medium"],
+  ["gpt-6-luna", "low"],
+  ["gpt-6.1-sol", "high"],
+  ["future-model", null],
+]) {
+  test(`Copilot passes ${model} and reasoning directly to the SDK`, async (context) => {
+    const client = mockClient(context)
 
-  assert.equal(
-    resolveCopilotModel([model], "GPT-5.6 Sol", "medium"),
-    model,
-  )
-  assert.equal(
-    resolveCopilotModel([model], "gpt-5.6-sol", "medium"),
-    model,
-  )
-})
+    assert.equal(await callCopilot("system", "user", { model, reasoningEffort }), "OK")
 
-test("Copilot model resolver rejects unavailable model settings", () => {
-  assert.throws(
-    () => resolveCopilotModel([], "GPT-5.6 Sol", "medium"),
-    /unavailable/,
+    assert.equal(client.start.mock.callCount(), 1)
+    assert.equal(client.listModels.mock.callCount(), 0)
+    assert.equal(client.createSession.mock.callCount(), 1)
+    const [sessionSettings] = client.createSession.mock.calls[0].arguments
+    assert.equal(sessionSettings.model, model)
+    assert.equal(sessionSettings.reasoningEffort, reasoningEffort ?? undefined)
+    assert.deepEqual(sessionSettings.availableTools, [])
+    assert.equal(sessionSettings.systemMessage.content, "system")
+    assert.deepEqual(client.sendAndWait.mock.calls[0].arguments, [{ prompt: "user" }, 10 * 60 * 1000])
+    assert.equal(client.stop.mock.callCount(), 1)
+  })
+}
+
+test("Copilot propagates SDK model errors and stops the client", async (context) => {
+  const client = mockClient(context)
+  const error = new Error("Model is not available")
+  client.createSession.mock.mockImplementation(async () => {
+    throw error
+  })
+
+  await assert.rejects(
+    callCopilot("system", "user", { model: "unsupported-model", reasoningEffort: "medium" }),
+    thrown => thrown === error,
   )
-  assert.throws(
-    () => resolveCopilotModel([
-      createModel({ policy: { state: "disabled", terms: "" } }),
-    ], "GPT-5.6 Sol", "medium"),
-    /disabled/,
-  )
-  assert.throws(
-    () => resolveCopilotModel([
-      createModel({ supportedReasoningEfforts: ["low"] }),
-    ], "GPT-5.6 Sol", "medium"),
-    /does not support reasoning effort medium/,
-  )
+
+  assert.equal(client.listModels.mock.callCount(), 0)
+  assert.equal(client.sendAndWait.mock.callCount(), 0)
+  assert.equal(client.stop.mock.callCount(), 1)
 })
