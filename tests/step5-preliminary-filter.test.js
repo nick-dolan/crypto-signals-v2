@@ -157,7 +157,7 @@ test("non-predictive divergence flags remain diagnostic without nominating or cr
   assert.deepEqual(diagnostic.selection.triggerSignals, [])
 })
 
-for (const flag of ["coiling", "attention_ahead", "laggard", "resilient", "squeeze_fuel"]) {
+for (const flag of ["coiling", "squeeze_fuel"]) {
   test(`preliminary shortlist preserves ${flag} as a nominating divergence`, () => {
     const result = buildPreliminaryShortlist([
       createProfile("candidate", { features: { divergences: { [flag]: true } } }),
@@ -170,7 +170,7 @@ for (const flag of ["coiling", "attention_ahead", "laggard", "resilient", "squee
   })
 }
 
-test("preliminary shortlist represents all six active axes", () => {
+test("preliminary shortlist preserves all six axes when candidates have market evidence", () => {
   const profiles = [
     createProfile("compression", {
       features: { volatilityCompression: { squeeze_age_hours: 4 } },
@@ -192,7 +192,10 @@ test("preliminary shortlist represents all six active axes", () => {
       },
     }),
     createProfile("social", {
-      features: { social: { interactions_acceleration_3h: 0.25 } },
+      features: {
+        social: { interactions_acceleration_3h: 0.25 },
+        divergences: { coiling: true },
+      },
     }),
     createProfile("relative", {
       features: {
@@ -200,6 +203,7 @@ test("preliminary shortlist represents all six active axes", () => {
           corr_btc_change_24h_vs_7d: -0.3,
           residual_z_30d: 1,
         },
+        divergences: { coiling: true },
       },
     }),
     createProfile("narrative", {
@@ -209,6 +213,7 @@ test("preliminary shortlist represents all six active axes", () => {
           category_breadth: 0.6,
           coin_leads_category: -0.01,
         },
+        divergences: { coiling: true },
       },
     }),
   ]
@@ -227,8 +232,75 @@ test("preliminary shortlist represents all six active axes", () => {
     const candidate = candidateById(result, baseCurrencyId)
 
     assert.ok(candidate)
-    assert.deepEqual(candidate.selection.selectedBy, [axisName])
+    assert.deepEqual(candidate.selection.selectedBy, [
+      ...(["social", "relativeStrength", "narrative"].includes(axisName) ? ["divergences"] : []),
+      axisName,
+    ])
     assert.deepEqual(candidate.selection.activeAxes, [axisName])
+  }
+})
+
+test("social and context cannot qualify candidates without market evidence, even together", () => {
+  const social = { interactions_acceleration_3h: 0.5, social_minus_price_z_3h: 2 }
+  const relativeStrength = { corr_btc_change_24h_vs_7d: -0.4, residual_z_30d: 2 }
+  const breadthNarrative = {
+    category_momentum_4h: 0.02,
+    category_breadth: 0.8,
+    coin_leads_category: -0.02,
+  }
+  const divergences = { attention_ahead: true, laggard: true, resilient: true }
+  const result = buildPreliminaryShortlist([
+    createProfile("social", { features: { social } }),
+    createProfile("relative", { features: { relativeStrength } }),
+    createProfile("narrative", { features: { breadthNarrative } }),
+    ...Object.keys(divergences).map(flag => createProfile(flag, {
+      features: { divergences: { [flag]: true } },
+    })),
+    createProfile("combined", { features: { social, relativeStrength, breadthNarrative, divergences } }),
+  ])
+
+  assert.equal(result.candidateCount, 0)
+  assert.equal(result.excludedCoinCount, 7)
+  assert.equal(result.filter.divergenceNominatedCoinCount, 4)
+  assert.equal(result.filter.nominatedCoinCountByAxis.social, 2)
+  assert.equal(result.filter.nominatedCoinCountByAxis.relativeStrength, 2)
+  assert.equal(result.filter.nominatedCoinCountByAxis.narrative, 2)
+})
+
+test("social and context can nominate candidates with market evidence outside core top five", () => {
+  const compressionProfiles = Array.from({ length: 5 }, (_, index) => createProfile(
+    `compression-${index}`,
+    { features: { volatilityCompression: { squeeze_age_hours: 12 } } },
+  ))
+  const supportingFeatures = [
+    ["social", { social: { interactions_acceleration_3h: 0.5 } }, "social"],
+    ["relative", {
+      relativeStrength: { corr_btc_change_24h_vs_7d: -0.4, residual_z_30d: 2 },
+    }, "relativeStrength"],
+    ["narrative", {
+      breadthNarrative: { category_momentum_4h: 0.02, category_breadth: 0.8, coin_leads_category: -0.02 },
+    }, "narrative"],
+    ...["attention_ahead", "laggard", "resilient"].map(flag => [
+      flag, { divergences: { [flag]: true } }, "divergences",
+    ]),
+  ]
+  const result = buildPreliminaryShortlist([
+    ...compressionProfiles,
+    ...supportingFeatures.map(([baseCurrencyId, features]) => createProfile(baseCurrencyId, {
+      features: { volatilityCompression: { squeeze_age_hours: 4 }, ...features },
+    })),
+  ])
+
+  assert.equal(result.candidateCount, 11)
+  assert.equal(result.filter.nominatedCoinCountByAxis.compression, 5)
+
+  for (const [baseCurrencyId, , selectionReason] of supportingFeatures) {
+    const candidate = candidateById(result, baseCurrencyId)
+
+    assert.ok(candidate)
+    assert.deepEqual(candidate.selection.selectedBy, [selectionReason])
+    assert.ok(candidate.selection.activeAxes.includes("compression"))
+    assert.deepEqual(candidate.selection.setupSignals, ["volatilityCompression"])
   }
 })
 
@@ -425,7 +497,7 @@ test("preliminary shortlist excludes late pumps and dumps before nomination", ()
 })
 
 test("preliminary shortlist orders role combinations before context", () => {
-  const divergence = { divergences: { attention_ahead: true } }
+  const divergence = { divergences: { coiling: true, attention_ahead: true } }
   const result = buildPreliminaryShortlist([
     createProfile("weak", { features: divergence }),
     createProfile("context", {
@@ -468,7 +540,7 @@ test("preliminary shortlist orders role combinations before context", () => {
 test("preliminary shortlist applies the limit after signal priority", () => {
   const weakProfiles = Array.from({ length: 60 }, (_, index) => createProfile(
     `weak-${String(index).padStart(2, "0")}`,
-    { features: { divergences: { attention_ahead: true } } },
+    { features: { divergences: { coiling: true } } },
   ))
   const strongProfile = createProfile("zz-strong", {
     features: {
@@ -490,6 +562,26 @@ test("preliminary shortlist applies the limit after signal priority", () => {
   assert.equal(result.candidates[0].coin.baseCurrencyId, "zz-strong")
   assert.ok(candidateById(result, "weak-58"))
   assert.equal(candidateById(result, "weak-59"), undefined)
+})
+
+test("rejected social and context candidates do not consume the shortlist limit", () => {
+  const socialProfiles = Array.from({ length: 60 }, (_, index) => createProfile(
+    `social-${index}`,
+    {
+      features: {
+        social: { interactions_acceleration_3h: 0.5 },
+        divergences: { attention_ahead: true, resilient: true },
+      },
+    },
+  ))
+  const result = buildPreliminaryShortlist([
+    ...socialProfiles,
+    createProfile("quiet", { features: { divergences: { coiling: true } } }),
+  ])
+
+  assert.deepEqual(result.candidates.map(candidate => candidate.coin.baseCurrencyId), ["quiet"])
+  assert.equal(result.filter.nominatedBeforeLimit, 1)
+  assert.equal(result.filter.limitApplied, false)
 })
 
 for (const flag of ["range_pressure_up", "range_pressure_down", "short_squeeze_setup", "long_squeeze_setup"]) {

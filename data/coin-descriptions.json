@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-03T16:24:16.388Z",
+  "generatedAt": "2026-10-05T14:25:22.279Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-03T16:23:58.621Z"
+    "sourceGeneratedAt": "2026-10-05T14:24:26.946Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 264,
+  "coinCount": 268,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3878,6 +3878,62 @@
         {
           "url": "https://www.coingecko.com/en/coins/o1-exchange",
           "checkedAt": "2026-10-03T16:24:12.575Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCAP7",
+      "symbol": "CAP",
+      "name": "Cap",
+      "description": "Cap — платформа для доходности в долларах США, частного кредитования и финансовых гарантий. CoinGecko связывает токен CAP с проектом Cap; официальный сайт описывает платформу, но не объясняет назначение токена.",
+      "sources": [
+        {
+          "url": "https://www.cap.app/",
+          "checkedAt": "2026-10-05T14:24:39.656Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/cap-4",
+          "checkedAt": "2026-10-05T14:24:43.187Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCRLC",
+      "symbol": "RLC",
+      "name": "iExec RLC",
+      "description": "iExec — экосистема децентрализованных конфиденциальных вычислений: она позволяет запускать приложения с использованием защищённых данных и распределённых вычислительных ресурсов. Токен RLC используется для оплаты запусков приложений, доступа к защищённым данным и конфиденциальных вычислений.",
+      "sources": [
+        {
+          "url": "https://docs.iex.ec/get-started/overview/rlc",
+          "checkedAt": "2026-10-05T14:24:54.443Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCEDUO",
+      "symbol": "EDU",
+      "name": "Open Campus",
+      "description": "Open Campus — децентрализованный образовательный протокол для преподавателей, создателей контента, родителей и учащихся, позволяющий создавать, распространять и монетизировать образовательные материалы. EDU — токен управления DAO Open Campus и нативный газовый токен EDU Chain.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/edu-coin",
+          "checkedAt": "2026-10-05T14:25:05.944Z"
+        },
+        {
+          "url": "https://userdocs.opencampus.xyz/tokens/usdedu/tokenomics/overview",
+          "checkedAt": "2026-10-05T14:25:07.069Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCH",
+      "symbol": "C",
+      "name": "Chainbase",
+      "description": "Chainbase строит Hyperdata Network, которая преобразует данные блокчейнов в структурированные и пригодные для обработки ИИ данные. Токен $C используется для доступа к этим данным, стимулирования участников, обеспечения безопасности обработки данных через AVS, управления протоколом и расчётов в экосистеме.",
+      "sources": [
+        {
+          "url": "https://docs.chainbase.com/network/introduction/tokenomics",
+          "checkedAt": "2026-10-05T14:25:20.625Z"
         }
       ]
     }

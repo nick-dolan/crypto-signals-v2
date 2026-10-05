@@ -236,6 +236,14 @@ function evaluateProfile (profile) {
     triggerSignals,
     contextSignals,
     activeAxes,
+    hasMarketEvidence: axes.compression.active
+      || axes.volumeOrderFlow.active
+      || axes.derivatives.active
+      || freshQuietBreakout
+      || divergences.coiling === true
+      || divergences.squeeze_fuel === true
+      || rangePressure
+      || directionalSqueeze,
     priority: {
       setupAndTrigger: Number(
         setupSignals.length > 0 && triggerSignals.length > 0,
@@ -367,6 +375,7 @@ export function buildPreliminaryShortlist (profiles) {
     .filter(evaluation => selectionReasonsById.has(
       evaluation.profile.coin.baseCurrencyId,
     ))
+    .filter(evaluation => evaluation.hasMarketEvidence)
     .sort(comparePriority)
   const selected = nominated.slice(0, 60)
   const candidates = selected.map((evaluation, index) => ({
