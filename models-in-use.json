@@ -19,7 +19,7 @@
   },
   "peerRadarAnalysis": {
     "provider": "copilot-sdk",
-    "model": "gpt-6.1-sol",
+    "model": "gpt-6-luna",
     "reasoningEffort": "high",
     "description": "Интерпретация отставания монет от выросших соседей."
   },
