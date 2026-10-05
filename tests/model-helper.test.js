@@ -40,7 +40,7 @@ test("candidate context and market brief use the SDK", async (context) => {
   }
 
   for (const [task, model] of [
-    ["candidateContext", "gemini-3.7-flash"],
+    ["candidateContext", "gpt-6-luna"],
     ["marketBrief", "gpt-6-luna"],
   ]) {
     const settings = getModelSettings(task)

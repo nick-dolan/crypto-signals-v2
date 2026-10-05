@@ -13,7 +13,7 @@
   },
   "candidateContext": {
     "provider": "copilot-sdk",
-    "model": "gemini-3.7-flash",
+    "model": "gpt-6-luna",
     "reasoningEffort": "medium",
     "description": "Дополнение технической картины новостями и Twitter, оценка значимости инфоповодов."
   },
