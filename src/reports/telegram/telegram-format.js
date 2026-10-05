@@ -43,10 +43,6 @@ export function signalText (signal) {
   return separator > 0 && signal.slice(0, separator).includes("=") ? signal.slice(separator + 2) : signal
 }
 
-export function telegramSection (heading, blocks) {
-  return [heading, ...blocks].filter(Boolean).map(block => `<p>${block.replace(/\n/g, "<br>")}</p>`).join("\n")
-}
-
 export function telegramRichMessage (html, media) {
   // Only trusted builder HTML: decode text once, excluding tags and link attributes.
   const text = html.replace(/<[^>]*>/gu, "")

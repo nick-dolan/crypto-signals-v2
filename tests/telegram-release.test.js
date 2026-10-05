@@ -5,7 +5,7 @@ import test, { beforeEach } from "node:test"
 
 import { isArray, isObject } from "../src/helpers/utils.typed.js"
 import { buildTelegramRelease, selectTelegramCandidates } from "../src/reports/telegram/build-telegram-release.js"
-import { reportTime, reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramSection, telegramText } from "../src/reports/telegram/telegram-format.js"
+import { reportTime, reportTitleTime, signalText, telegramLink, telegramRichMessage, telegramText } from "../src/reports/telegram/telegram-format.js"
 
 beforeEach((t) => {
   const requests = [[globalThis, "fetch"], [http, "request"], [http, "get"], [https, "request"], [https, "get"]]
@@ -118,13 +118,90 @@ test("release keeps every selected coin, binds media to safe unique paths and do
   assert.deepEqual(report, before)
 })
 
+test("release HTML preserves section order, item spacing, collage and warning placement", () => {
+  const report = fixture([
+    coin("TOP-A", { topRank: 1 }),
+    coin("TOP-B", { topRank: 2 }),
+    coin("NEWS-A", { socialSignificant: true, socialSentiment: "positive" }),
+    coin("NEWS-B", { socialSignificant: true, socialSentiment: "negative" }),
+  ], { demo: true, marketBrief: brief({
+    items: [
+      { title: "Событие A", text: "Первая новость.", sentiment: "bullish", sourceIds: ["a"] },
+      { title: "Пропущено", text: " " },
+      { text: "Вторая новость.", sentiment: "bearish", sourceIds: ["a"] },
+    ],
+    sources: [{ id: "a", url: "https://news.example/a" }],
+    warning: "Неполные данные.",
+  }) })
+  assert.equal(buildTelegramRelease(report).richMessage.html, [
+    "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
+    "<tg-collage><img src=\"tg://photo?id=card_1\"/><img src=\"tg://photo?id=card_2\"/><img src=\"tg://photo?id=card_3\"/><img src=\"tg://photo?id=card_4\"/></tg-collage>",
+    "<p><b>Монеты под наблюдением</b></p>",
+    "<p><br></p>",
+    "<p><b>TOP-A</b> · <b>Монета TOP-A</b><br>Техническое наблюдение.</p>",
+    "<p><br></p>",
+    "<p><b>TOP-B</b> · <b>Монета TOP-B</b><br>Техническое наблюдение.</p>",
+    "<p><br></p>",
+    "<p><b>📰 Значимые инфоповоды</b></p>",
+    "<p><br></p>",
+    "<p><b>NEWS-A</b> · <b>Монета NEWS-A</b><br>Обогащённое наблюдение.</p>",
+    "<p><br></p>",
+    "<p><b>NEWS-B</b> · <b>Монета NEWS-B</b><br>Обогащённое наблюдение.</p>",
+    "<p><br></p>",
+    "<p><b>Новости за последние 6 часов</b></p>",
+    "<p><br></p>",
+    "<p>• <b>Событие A</b><br>Первая новость. 🚀 <a href=\"https://news.example/a\">[1]</a></p>",
+    "<p><br></p>",
+    "<p>• Вторая новость. 📉 <a href=\"https://news.example/a\">[1]</a></p>",
+    "<p>⚠ Неполные данные.</p>",
+  ].join("\n"))
+})
+
+test("single-candidate HTML has no collage, extra separators or empty explanation line", () => {
+  for (const section of ["top", "news"]) {
+    const report = fixture([coin("ONLY", {
+      name: null, technicalExplanation: "", explanation: "",
+      topRank: section === "top" ? 1 : null,
+      socialSignificant: section === "news", socialSentiment: "positive",
+    })])
+    assert.equal(buildTelegramRelease(report).richMessage.html, [
+      "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
+      "<img src=\"tg://photo?id=card_1\"/>",
+      "<p><b>Монеты под наблюдением</b></p>",
+      "<p><br></p>",
+      ...(section === "news"
+        ? [
+            "<p>Агент не выделил убедительных ранних кандидатов.</p>",
+            "<p><br></p>",
+            "<p><b>📰 Значимые инфоповоды</b></p>",
+            "<p><br></p>",
+          ]
+        : []),
+      "<p><b>ONLY</b></p>",
+      "<p><br></p>",
+      "<p><b>Новости</b></p>",
+      "<p><br></p>",
+      "<p>Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий.</p>",
+    ].join("\n"))
+  }
+})
+
 test("empty releases invent neither candidates nor media", () => {
   const release = buildTelegramRelease(fixture())
   assert.deepEqual(release.candidates, [])
   assert.deepEqual(release.richMessage.media, [])
   assert.equal(release.eligibleCount, 0)
-  assert.doesNotMatch(release.richMessage.html, /tg:\/\/photo/u)
-  assert.ok(visibleText(release.richMessage.html).length > 0)
+  assert.equal(release.richMessage.html, [
+    "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
+    "<p><br></p>",
+    "<p><b>Монеты под наблюдением</b></p>",
+    "<p><br></p>",
+    "<p>Агент не выделил убедительных ранних кандидатов.</p>",
+    "<p><br></p>",
+    "<p><b>Новости</b></p>",
+    "<p><br></p>",
+    "<p>Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий.</p>",
+  ].join("\n"))
 })
 
 test("invalid snapshots and candidate lists are rejected", () => {
@@ -355,7 +432,7 @@ test("rich message limits count decoded Unicode characters, not bytes or markup"
     assert.doesNotThrow(() => telegramRichMessage(`<p>${unit.repeat(32_768)}</p>`, []))
     assert.throws(() => telegramRichMessage(`<p>${unit.repeat(32_769)}</p>`, []), /32768/u)
   }
-  const html = telegramSection("Заголовок", ["я".repeat(5_000)])
+  const html = `<p>Заголовок</p>\n<p>${"я".repeat(5_000)}</p>`
   assert.ok(visibleText(html).includes("я".repeat(5_000)))
   assert.doesNotThrow(() => telegramRichMessage(html, []))
   const report = fixture(Array.from({ length: 30 }, (_, index) => coin(`LONG-${index}`, {
