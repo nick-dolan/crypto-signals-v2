@@ -25,6 +25,7 @@ Thumbs.db
 
 output/
 .copilot-token.json
+.openai-token.json
 
 .pnpm-store
 
