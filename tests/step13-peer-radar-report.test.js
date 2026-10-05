@@ -89,6 +89,20 @@ test("matching peer report is embedded intact, without requiring membership in m
   assert.equal(result.data.observations[0].leaders[0].coinReturnSinceStartPct, -0.00123456789)
 })
 
+test("peer reports preserve changed model settings and disabled reasoning", async () => {
+  const radar = createRadar()
+  radar.analysis = {
+    source: "github-copilot-unofficial",
+    model: "configured-peer-model",
+    reasoningEffort: null,
+    callCount: 1,
+  }
+  const result = await readPeerRadarReport(radar.asOf, { readJson: reader(radar, scanFor(radar)) })
+
+  assert.equal(result.status, "available")
+  assert.deepEqual(result.data.analysis, radar.analysis)
+})
+
 test("step 12 is self-contained when the step 11 file is not present", async () => {
   const radar = createRadar()
   assert.equal((await readPeerRadarReport(radar.asOf, { readJson: reader(radar) })).status, "available")
@@ -177,6 +191,9 @@ for (const [name, change] of [
   }],
   ["analysis status", radar => radar.analysisStatus = "skipped_no_candidates"],
   ["analysis metadata", radar => radar.analysis = null],
+  ["missing reasoning", radar => delete radar.analysis.reasoningEffort],
+  ["blank reasoning", radar => radar.analysis.reasoningEffort = " "],
+  ["invalid reasoning", radar => radar.analysis.reasoningEffort = 42],
   ["criteria", radar => radar.criteria = null],
   ["wrong ID", radar => radar.observations[0].baseCurrencyId = "DIFFERENT"],
   ["coin metadata", radar => radar.observations[0].coin = null],

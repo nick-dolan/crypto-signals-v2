@@ -20,7 +20,7 @@ function validBrief (data) {
     || (data.warning !== null && !isString(data.warning))
     || !isArray(data.sources) || !isArray(data.coverage) || data.coverage.length !== channels.length
     || !channels.every(channel => data.coverage.some(item => item?.source === channel))
-    || !isObject(data.analysis) || data.analysis.model !== "gemini-3.7-flash"
+    || !isObject(data.analysis) || !isString(data.analysis.model) || !data.analysis.model.trim()
   ) {
     return false
   }

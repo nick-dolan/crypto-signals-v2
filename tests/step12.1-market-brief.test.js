@@ -6,6 +6,8 @@ import path from "node:path"
 import test, { beforeEach } from "node:test"
 import { promisify } from "node:util"
 
+import modelsInUse from "../models-in-use.json" with { type: "json" }
+import { getModelSettings } from "../src/helpers/model-helper.js"
 import { buildMarketBrief } from "../src/steps/step12.1-market-brief/build-market-brief.js"
 import { collectMarketSources } from "../src/steps/step12.1-market-brief/collect-market-sources.js"
 import { InvalidMarketBriefError, parseMarketBrief } from "../src/steps/step12.1-market-brief/parse-market-brief.js"
@@ -54,7 +56,8 @@ function build (overrides = {}) {
   })
 }
 
-test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup and retained alternative details", async () => {
+test("builds one compact grounded digest with a six-hour cutoff, dedup and retained alternative details", async () => {
+  const settings = getModelSettings("marketBrief")
   let calls = 0
   const original = collection()
   const result = await build({
@@ -65,7 +68,7 @@ test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup an
     callAgent: async (prompt, message, options) => {
       calls += 1
       assert.equal(prompt, "System prompt")
-      assert.deepEqual(options, { model: "gemini-3.7-flash", reasoningEffort: "medium" })
+      assert.deepEqual(options, settings)
       const payload = JSON.parse(message)
       assert.equal(payload.asOf, original.asOf)
       assert.equal(Date.parse(payload.asOf) - Date.parse(payload.from), 6 * 60 * 60 * 1_000)
@@ -92,10 +95,46 @@ test("builds one compact grounded Gemini digest with a six-hour cutoff, dedup an
   assert.equal(Object.hasOwn(result, "paragraphs"), false)
   assert.deepEqual(result.sources, original.sources)
   assert.deepEqual(original, collection())
-  assert.equal(result.analysis.callCount, 1)
-  assert.equal(result.analysis.groupCount, 2)
-  assert.equal(result.analysis.status, "complete")
+  assert.deepEqual(result.analysis, {
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
+    callCount: 1,
+    groupCount: 2,
+    status: "complete",
+    error: null,
+  })
   assert.ok(Date.parse(result.generatedAt))
+})
+
+test("market brief follows registry edits and remains readable with a changed model", async (t) => {
+  const original = modelsInUse.marketBrief
+  t.after(() => {
+    modelsInUse.marketBrief = original
+  })
+  modelsInUse.marketBrief = {
+    ...original,
+    provider: original.provider === "copilot-sdk" ? "copilot-unofficial" : "copilot-sdk",
+    model: "configured-brief-model",
+    reasoningEffort: null,
+  }
+  const settings = getModelSettings("marketBrief")
+  const callAgent = t.mock.fn(async () => JSON.stringify(response()))
+  const brief = await build({ callAgent })
+
+  assert.equal(callAgent.mock.callCount(), 1)
+  assert.deepEqual(callAgent.mock.calls[0].arguments[2], settings)
+  assert.equal(brief.status, "available")
+  assert.deepEqual(brief.analysis, {
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
+    callCount: 1,
+    groupCount: 2,
+    status: "complete",
+    error: null,
+  })
+  assert.strictEqual(await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief }), brief)
 })
 
 test("a correction does not acquire contradictory earlier versions as supporting citations", async () => {
@@ -132,7 +171,7 @@ test("an empty Twitter page with broken pagination is unavailable, not a healthy
       fetchNews: async () => ({ items: [] }),
       fetchTweets: async () => ({ tweets: [], has_next_page: true, next_cursor: "" }),
     }),
-    callAgent: async () => assert.fail("Gemini must not run without publications"),
+    callAgent: async () => assert.fail("Agent must not run without publications"),
   })
   assert.equal(result.status, "unavailable")
   assert.equal(result.coverage[1].status, "partial")
@@ -163,13 +202,13 @@ test("ordinary collection limits remain metadata, not failure warnings, includin
 })
 
 for (const failed of [false, true]) {
-  test(`empty input skips Gemini and distinguishes ${failed ? "unavailable" : "empty"}`, async () => {
+  test(`empty input skips the agent and distinguishes ${failed ? "unavailable" : "empty"}`, async () => {
     const input = collection()
     input.sources = []
     input.coverage = input.coverage.map(source => ({ ...source, status: failed ? "failed" : "empty", fetchedCount: 0 }))
     const result = await build({
       collectSources: async () => input,
-      callAgent: async () => assert.fail("Gemini must not run without publications"),
+      callAgent: async () => assert.fail("Agent must not run without publications"),
     })
     assert.equal(result.schemaVersion, 5)
     assert.equal(result.status, failed ? "unavailable" : "empty")
@@ -179,7 +218,7 @@ for (const failed of [false, true]) {
   })
 }
 
-test("Gemini may return no items without filling a quota; partial coverage remains partial", async () => {
+test("the model may return no items without filling a quota; partial coverage remains partial", async () => {
   const result = await build({ callAgent: async () => JSON.stringify(response([])) })
   assert.equal(result.status, "empty")
   assert.equal(result.analysis.status, "complete")
@@ -413,6 +452,21 @@ test("report reader accepts the matching market snapshot with a distinct news cu
   assert.strictEqual(result, brief)
   assert.equal(result.from, collection().from)
   assert.equal(result.asOf, collection().asOf)
+})
+
+test("report reader rejects missing, blank and non-string saved models", async () => {
+  const original = await build()
+
+  for (const model of [undefined, null, "", " \n\t ", 42, false, [], {}]) {
+    const brief = structuredClone(original)
+    brief.analysis.model = model
+    const result = await readMarketBriefReport(brief.marketAsOf, { readJson: async () => brief })
+
+    assert.equal(result.status, "unavailable")
+    assert.deepEqual(result.items, [])
+    assert.deepEqual(result.sources, [])
+    assert.ok(result.warning)
+  }
 })
 
 test("report reader preserves valid v1 day-long event briefs and validates their original citations", async () => {

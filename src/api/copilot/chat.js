@@ -116,7 +116,7 @@ async function sendCopilotRequest (
 export async function callCopilot (
   systemPrompt,
   userMessage,
-  { model = "GPT-5.6 Sol", reasoningEffort = "medium" } = {},
+  { model, reasoningEffort } = {},
 ) {
   return sendCopilotRequest(systemPrompt, userMessage, {
     model,
@@ -129,8 +129,8 @@ export async function callCopilotWithTools (
   systemPrompt,
   userMessage,
   {
-    model = "GPT-5.6 Sol",
-    reasoningEffort = "medium",
+    model,
+    reasoningEffort,
     tools = [],
   } = {},
 ) {

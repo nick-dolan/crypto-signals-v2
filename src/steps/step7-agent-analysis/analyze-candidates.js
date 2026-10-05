@@ -1,4 +1,4 @@
-import { callCopilotWithTools } from "../../api/copilot/chat.js"
+import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { isString } from "../../helpers/utils.typed.js"
 import { createCoinHistoryTool, validateAgentInputs } from "./create-coin-history-tool.js"
 import {
@@ -11,7 +11,7 @@ export async function analyzeCandidates (
   shortlist,
   systemPrompt,
   {
-    callAgent = callCopilotWithTools,
+    callAgent = callModel,
     readCoinData,
   } = {},
 ) {
@@ -30,8 +30,7 @@ export async function analyzeCandidates (
     ? [createCoinHistoryTool(payload, shortlist, { readCoinData })]
     : []
   const content = await callAgent(systemPrompt, JSON.stringify(payload), {
-    model: "GPT-6.1 Sol",
-    reasoningEffort: "high",
+    ...getModelSettings("candidateAnalysis"),
     tools,
   })
 

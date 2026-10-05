@@ -6,6 +6,8 @@ import path from "node:path"
 import test from "node:test"
 import { promisify } from "node:util"
 
+import modelsInUse from "../models-in-use.json" with { type: "json" }
+import { getModelSettings } from "../src/helpers/model-helper.js"
 import { isArray, isFinite, isObject } from "../src/helpers/utils.typed.js"
 import { analyzePeerRadar } from "../src/steps/step12-peer-radar-analysis/analyze-peer-radar.js"
 import {
@@ -118,6 +120,7 @@ function runInjectedStep (directory, body) {
 }
 
 test("empty peer scan skips the agent and retains complete coverage metadata", async () => {
+  const settings = getModelSettings("peerRadarAnalysis")
   const scan = createScan(0)
   const report = await analyzePeerRadar(scan, "Peer-only prompt", {
     callAgent: async () => assert.fail("An empty peer scan must not call an agent"),
@@ -138,16 +141,17 @@ test("empty peer scan skips the agent and retains complete coverage metadata", a
   assert.equal(report.snapshotClosedAt, scan.snapshotClosedAt)
   assert.equal(report.timeframe, "1h")
   assert.deepEqual(report.analysis, {
-    source: "github-copilot-sdk",
-    model: "GPT-6.1 Sol",
-    reasoningEffort: "high",
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
     callCount: 0,
   })
   assert.ok(isFinite(Date.parse(report.generatedAt)))
   assert.equal(Object.hasOwn(report, "candidates"), false)
 })
 
-test("one GPT-6.1 Sol high call receives only whitelisted peer facts and no tools", async () => {
+test("one registry-selected call receives only whitelisted peer facts and no tools", async () => {
+  const settings = getModelSettings("peerRadarAnalysis")
   const expected = createScan()
   expected.registryGeneratedAt = "2026-09-23T07:00:00.000Z"
   const scan = structuredClone(expected)
@@ -189,7 +193,7 @@ test("one GPT-6.1 Sol high call receives only whitelisted peer facts and no tool
   assert.deepEqual(calls, [{
     prompt: "Peer-only prompt",
     payload: expected,
-    options: { model: "GPT-6.1 Sol", reasoningEffort: "high" },
+    options: settings,
   }])
   assert.equal(Object.hasOwn(calls[0].options, "tools"), false)
   assert.deepEqual(report, {
@@ -207,9 +211,9 @@ test("one GPT-6.1 Sol high call receives only whitelisted peer facts and no tool
     generatedAt: report.generatedAt,
     analysisStatus: "complete",
     analysis: {
-      source: "github-copilot-sdk",
-      model: "GPT-6.1 Sol",
-      reasoningEffort: "high",
+      source: `github-${settings.provider}`,
+      model: settings.model,
+      reasoningEffort: settings.reasoningEffort,
       callCount: 1,
     },
     observationCount: expected.candidateCount,
@@ -218,6 +222,33 @@ test("one GPT-6.1 Sol high call receives only whitelisted peer facts and no tool
       ...candidate,
       ...response.observations[index],
     })),
+  })
+})
+
+test("peer radar follows registry provider and model edits with reasoning disabled", async (t) => {
+  const original = modelsInUse.peerRadarAnalysis
+  t.after(() => {
+    modelsInUse.peerRadarAnalysis = original
+  })
+  modelsInUse.peerRadarAnalysis = {
+    ...original,
+    provider: original.provider === "copilot-sdk" ? "copilot-unofficial" : "copilot-sdk",
+    model: "configured-peer-model",
+    reasoningEffort: null,
+  }
+  const settings = getModelSettings("peerRadarAnalysis")
+  const scan = createScan(1)
+  const callAgent = t.mock.fn(async () => JSON.stringify(createResponse(scan)))
+  const report = await analyzePeerRadar(scan, "Peer-only prompt", { callAgent })
+
+  assert.equal(callAgent.mock.callCount(), 1)
+  assert.deepEqual(callAgent.mock.calls[0].arguments[2], settings)
+  assert.equal(report.analysisStatus, "complete")
+  assert.deepEqual(report.analysis, {
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
+    callCount: 1,
   })
 })
 
@@ -470,7 +501,7 @@ test("injected step prepares the complete radar with exact facts in tmp only", a
         calls += 1
         assert.equal(prompt, ${JSON.stringify(systemPrompt)})
         assert.deepEqual(JSON.parse(message), ${JSON.stringify(scan)})
-        assert.deepEqual(options, { model: "GPT-6.1 Sol", reasoningEffort: "high" })
+        assert.deepEqual(options, ${JSON.stringify(getModelSettings("peerRadarAnalysis"))})
         return ${JSON.stringify(JSON.stringify(response))}
       },
     })

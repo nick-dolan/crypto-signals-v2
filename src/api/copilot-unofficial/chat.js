@@ -25,7 +25,7 @@ function extractText (data) {
 export async function callUnofficialCopilot (
   systemPrompt,
   userMessage,
-  { model = "gemini-3.7-flash", reasoningEffort = "medium" } = {},
+  { model, reasoningEffort } = {},
 ) {
   const session = await getUnofficialCopilotSession()
   const url = `${session.baseUrl.replace(/\/$/, "")}/chat/completions`

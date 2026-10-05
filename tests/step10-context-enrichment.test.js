@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import modelsInUse from "../models-in-use.json" with { type: "json" }
+import { getModelSettings } from "../src/helpers/model-helper.js"
 import { isNaN } from "../src/helpers/utils.typed.js"
 import { enrichTopCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-top-candidates-with-context.js"
 import {
@@ -69,7 +71,8 @@ function createStructuredResponse (overrides = {}) {
   }
 }
 
-test("uses one sequential Gemini call per candidate and adds explanations and social assessments", async () => {
+test("uses one sequential agent call per candidate and adds explanations and social assessments", async () => {
+  const settings = getModelSettings("candidateContext")
   const input = createInput()
   const before = structuredClone(input)
   const calls = []
@@ -109,10 +112,7 @@ test("uses one sequential Gemini call per candidate and adds explanations and so
 
   assert.equal(maximumActiveCallCount, 1)
   assert.equal(calls.length, 2)
-  assert.deepEqual(calls.map(call => call.options), [
-    { model: "gemini-3.7-flash", reasoningEffort: "medium" },
-    { model: "gemini-3.7-flash", reasoningEffort: "medium" },
-  ])
+  assert.deepEqual(calls.map(call => call.options), [settings, settings])
   assert.deepEqual(calls[0], {
     systemPrompt: "System prompt",
     message: {
@@ -122,14 +122,14 @@ test("uses one sequential Gemini call per candidate and adds explanations and so
       news: input.candidates[0].news,
       twitter: input.candidates[0].twitter,
     },
-    options: { model: "gemini-3.7-flash", reasoningEffort: "medium" },
+    options: settings,
   })
   assert.equal(result.schemaVersion, 8)
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
   assert.deepEqual(result.contextEnrichment, {
-    source: "github-copilot-unofficial",
-    model: "gemini-3.7-flash",
-    reasoningEffort: "medium",
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
     candidateCallCount: 2,
   })
   assert.equal(
@@ -156,6 +156,33 @@ test("uses one sequential Gemini call per candidate and adds explanations and so
     }
   }
   assert.deepEqual(input, before)
+})
+
+test("context enrichment follows registry provider and model edits with reasoning disabled", async (t) => {
+  const original = modelsInUse.candidateContext
+  t.after(() => {
+    modelsInUse.candidateContext = original
+  })
+  modelsInUse.candidateContext = {
+    ...original,
+    provider: original.provider === "copilot-sdk" ? "copilot-unofficial" : "copilot-sdk",
+    model: "configured-context-model",
+    reasoningEffort: null,
+  }
+  const settings = getModelSettings("candidateContext")
+  const input = createInput()
+  input.candidates = input.candidates.slice(0, 1)
+  const callAgent = t.mock.fn(async () => JSON.stringify(createResponse()))
+  const result = await enrichTopCandidatesWithContext(input, "System prompt", { callAgent })
+
+  assert.equal(callAgent.mock.callCount(), 1)
+  assert.deepEqual(callAgent.mock.calls[0].arguments[2], settings)
+  assert.deepEqual(result.contextEnrichment, {
+    source: `github-${settings.provider}`,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
+    candidateCallCount: 1,
+  })
 })
 
 test("uses assessment arguments for a trending coin without a top explanation", async () => {

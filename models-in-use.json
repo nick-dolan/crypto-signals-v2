@@ -1,0 +1,32 @@
+{
+  "coinDescription": {
+    "provider": "copilot-sdk",
+    "model": "GPT-5.6 Sol",
+    "reasoningEffort": "medium",
+    "description": "Исследование и краткое описание новых монет по проверенным источникам."
+  },
+  "candidateAnalysis": {
+    "provider": "copilot-sdk",
+    "model": "GPT-6.1 Sol",
+    "reasoningEffort": "high",
+    "description": "Оценка вероятности сильного движения и выбор основных кандидатов."
+  },
+  "candidateContext": {
+    "provider": "copilot-unofficial",
+    "model": "gemini-3.7-flash",
+    "reasoningEffort": "medium",
+    "description": "Дополнение технической картины новостями и Twitter, оценка значимости инфоповодов."
+  },
+  "peerRadarAnalysis": {
+    "provider": "copilot-sdk",
+    "model": "GPT-6.1 Sol",
+    "reasoningEffort": "high",
+    "description": "Интерпретация отставания монет от выросших соседей."
+  },
+  "marketBrief": {
+    "provider": "copilot-unofficial",
+    "model": "gemini-3.7-flash",
+    "reasoningEffort": "medium",
+    "description": "Короткая сводка главных событий крипторынка."
+  }
+}

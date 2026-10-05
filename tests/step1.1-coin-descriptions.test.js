@@ -5,6 +5,8 @@ import path from "node:path"
 import test, { beforeEach } from "node:test"
 import { setImmediate } from "node:timers/promises"
 
+import modelsInUse from "../models-in-use.json" with { type: "json" }
+import { getModelSettings } from "../src/helpers/model-helper.js"
 import { describeCoin } from "../src/steps/step1.1-coin-descriptions/describe-coin.js"
 import { updateCoinDescriptions } from "../src/steps/step1.1-coin-descriptions/update-coin-descriptions.js"
 
@@ -703,7 +705,7 @@ test("step 1.1 propagates save errors rather than reporting an unsaved addition 
   assert.deepEqual(registry, before)
 })
 
-test("describeCoin gives the SDK only identity, optional CG identity and seeds, never CG description or keys", async (t) => {
+test("describeCoin gives the agent only identity, optional CG identity and seeds, never CG description or keys", async (t) => {
   const previousEnvironment = process.env
   process.env = { TAVILY_API_KEY: "fake-tavily-secret", COINGECKO_API_KEY: "fake-cg-secret", GITHUB_TOKEN: "fake-github-secret" }
   t.after(() => {
@@ -750,11 +752,35 @@ test("describeCoin gives the SDK only identity, optional CG identity and seeds, 
     coingecko: { id: "bitcoin", symbol: "btc", name: "Bitcoin" },
     seedUrls: ["https://project.example.com/about", "https://www.coingecko.com/en/coins/bitcoin"],
   })
+  assert.deepEqual(options, { ...getModelSettings("coinDescription"), tools: options.tools })
   assert.deepEqual(options.tools.map(tool => tool.name), ["search_coin_sources", "read_coin_source"])
   assert.equal(dependencies.requestTavily.mock.callCount(), 2)
   assert.deepEqual(calls(dependencies.requestTavily)[1][1].urls, ["https://project.example.com/about"])
   assert.doesNotMatch(JSON.stringify([calls(dependencies.callAgent), calls(dependencies.requestTavily)]), /CG_DESCRIPTION|CG_TRANSLATION|CG_CATEGORY|CANDIDATE_|fake-.*secret|apiKey|api_key/)
   assert.deepEqual({ coin, details }, before)
+})
+
+test("describeCoin follows registry edits while retaining SDK research tools", async (t) => {
+  const original = modelsInUse.coinDescription
+  t.after(() => {
+    modelsInUse.coinDescription = original
+  })
+  modelsInUse.coinDescription = {
+    ...original,
+    provider: "copilot-sdk",
+    model: "configured-description-model",
+    reasoningEffort: "low",
+  }
+  const settings = getModelSettings("coinDescription")
+  const dependencies = createDependencies(t)
+  const result = await describeCoin(createCoin("BTC"), null, "System prompt", dependencies)
+
+  assert.equal(dependencies.callAgent.mock.callCount(), 1)
+  const options = calls(dependencies.callAgent)[0][2]
+  assert.deepEqual(options, { ...settings, tools: options.tools })
+  assert.deepEqual(options.tools.map(tool => tool.name), ["search_coin_sources", "read_coin_source"])
+  assert.equal(result.description, JSON.parse(createAnswer("XTVCBTC")).description)
+  assert.equal(result.sources.length, 1)
 })
 
 test("describeCoin rejects guessed source-1 without a successful read, even after search or a failed read", async (t) => {

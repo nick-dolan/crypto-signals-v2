@@ -1,4 +1,4 @@
-import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
+import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { isFinite, isString } from "../../helpers/utils.typed.js"
 import { collectMarketSources } from "./collect-market-sources.js"
 import { deduplicateMarketSources } from "./deduplicate-market-sources.js"
@@ -33,7 +33,7 @@ export async function buildMarketBrief (systemPrompt, {
   marketAsOf = null,
   referenceTimestamp = Math.floor(Date.now() / 1_000),
   collectSources = collectMarketSources,
-  callAgent = callUnofficialCopilot,
+  callAgent = callModel,
 } = {}) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Market brief system prompt is required")
@@ -41,6 +41,7 @@ export async function buildMarketBrief (systemPrompt, {
   if (marketAsOf !== null && (!isString(marketAsOf) || !isFinite(Date.parse(marketAsOf)))) {
     throw new Error("Market brief marketAsOf must be a timestamp or null")
   }
+  const modelSettings = getModelSettings("marketBrief")
   const collection = await collectSources({ referenceTimestamp })
   const groups = deduplicateMarketSources(collection.sources)
   const incomplete = collection.coverage.some(source => ["partial", "failed"].includes(source.status))
@@ -54,9 +55,9 @@ export async function buildMarketBrief (systemPrompt, {
     warning: failed ? "Не все источники удалось загрузить." : null,
     items: [],
     analysis: {
-      source: "github-copilot-unofficial",
-      model: "gemini-3.7-flash",
-      reasoningEffort: "medium",
+      source: `github-${modelSettings.provider}`,
+      model: modelSettings.model,
+      reasoningEffort: modelSettings.reasoningEffort,
       callCount: 0,
       groupCount: groups.length,
       status: "skipped_no_sources",
@@ -73,19 +74,16 @@ export async function buildMarketBrief (systemPrompt, {
 
   output.analysis.callCount = 1
   try {
-    const response = await callAgent(systemPrompt, JSON.stringify(agentPayload(collection, groups)), {
-      model: "gemini-3.7-flash",
-      reasoningEffort: "medium",
-    })
+    const response = await callAgent(systemPrompt, JSON.stringify(agentPayload(collection, groups)), modelSettings)
     const items = parseMarketBrief(response, collection.asOf, collection.sources)
     output.items = items
     output.status = incomplete ? "partial" : items.length ? "available" : "empty"
     output.analysis.status = "complete"
   } catch (error) {
     output.status = "unavailable"
-    output.warning = "Не удалось сформировать сводку Gemini. Собранные источники сохранены; основной анализ не изменён."
+    output.warning = "Не удалось сформировать сводку. Собранные источники сохранены; основной анализ не изменён."
     output.analysis.status = "failed"
-    output.analysis.error = error instanceof InvalidMarketBriefError ? error.message : "Запрос к Gemini не выполнен"
+    output.analysis.error = error instanceof InvalidMarketBriefError ? error.message : "Запрос к модели не выполнен"
   }
   output.generatedAt = new Date().toISOString()
   return output

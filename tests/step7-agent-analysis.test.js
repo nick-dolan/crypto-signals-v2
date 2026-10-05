@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises"
 import test from "node:test"
 import vm from "node:vm"
 
+import modelsInUse from "../models-in-use.json" with { type: "json" }
+import { getModelSettings } from "../src/helpers/model-helper.js"
 import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
 import { parseAgentAnalysis } from "../src/steps/step7-agent-analysis/parse-agent-analysis.js"
 
@@ -485,7 +487,7 @@ test("malformed grouped payload is rejected before calling the agent", async () 
   }), /schema length/)
 })
 
-test("candidate analysis uses GPT-6.1 Sol with high reasoning and one safe tool", async () => {
+test("candidate analysis uses registry settings and one safe tool", async () => {
   const payload = createPayload()
   const shortlist = createShortlist()
   const expected = createAnalysis()
@@ -516,10 +518,34 @@ test("candidate analysis uses GPT-6.1 Sol with high reasoning and one safe tool"
   }
   assert.equal(captured.systemPrompt, "system prompt")
   assert.equal(captured.userMessage, JSON.stringify(payload))
-  assert.equal(captured.options.model, "GPT-6.1 Sol")
-  assert.equal(captured.options.reasoningEffort, "high")
+  assert.deepEqual(captured.options, {
+    ...getModelSettings("candidateAnalysis"),
+    tools: captured.options.tools,
+  })
   assert.equal(captured.options.tools.length, 1)
   assert.equal(captured.options.tools[0].name, "get_coin_history")
+})
+
+test("candidate analysis follows registry edits while retaining its SDK history tool", async (t) => {
+  const original = modelsInUse.candidateAnalysis
+  t.after(() => {
+    modelsInUse.candidateAnalysis = original
+  })
+  modelsInUse.candidateAnalysis = {
+    ...original,
+    provider: "copilot-sdk",
+    model: "configured-analysis-model",
+    reasoningEffort: "low",
+  }
+  const settings = getModelSettings("candidateAnalysis")
+  const callAgent = t.mock.fn(async () => JSON.stringify(createAgentResponse()))
+  const result = await analyzeCandidates(createPayload(), createShortlist(), "System prompt", { callAgent })
+
+  assert.equal(callAgent.mock.callCount(), 1)
+  const options = callAgent.mock.calls[0].arguments[2]
+  assert.deepEqual(options, { ...settings, tools: options.tools })
+  assert.deepEqual(options.tools.map(tool => tool.name), ["get_coin_history"])
+  assert.equal(result.candidateCount, createPayload().candidateCount)
 })
 
 test("candidate analysis exposes one invalid response without retrying", async () => {

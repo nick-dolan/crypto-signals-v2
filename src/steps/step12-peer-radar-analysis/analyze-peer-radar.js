@@ -1,4 +1,4 @@
-import { callCopilot } from "../../api/copilot/chat.js"
+import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { isArray, isFinite, isFunction, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { InvalidPeerRadarAnalysisError, parsePeerRadarAnalysis } from "./parse-peer-radar-analysis.js"
 
@@ -133,7 +133,7 @@ function buildPeerRadarPayload (scan) {
 export async function analyzePeerRadar (
   scan,
   systemPrompt,
-  { callAgent = callCopilot } = {},
+  { callAgent = callModel } = {},
 ) {
   const payload = buildPeerRadarPayload(scan)
 
@@ -145,13 +145,11 @@ export async function analyzePeerRadar (
     throw new Error("Peer radar agent must be a function")
   }
 
+  const modelSettings = getModelSettings("peerRadarAnalysis")
   let analysis = { observations: [] }
 
   if (payload.candidates.length) {
-    const content = await callAgent(systemPrompt, JSON.stringify(payload), {
-      model: "GPT-6.1 Sol",
-      reasoningEffort: "high",
-    })
+    const content = await callAgent(systemPrompt, JSON.stringify(payload), modelSettings)
 
     try {
       analysis = parsePeerRadarAnalysis(content, payload)
@@ -176,9 +174,9 @@ export async function analyzePeerRadar (
     generatedAt: new Date().toISOString(),
     analysisStatus: candidates.length ? "complete" : "skipped_no_candidates",
     analysis: {
-      source: "github-copilot-sdk",
-      model: "GPT-6.1 Sol",
-      reasoningEffort: "high",
+      source: `github-${modelSettings.provider}`,
+      model: modelSettings.model,
+      reasoningEffort: modelSettings.reasoningEffort,
       callCount: candidates.length ? 1 : 0,
     },
     observationCount: observations.length,

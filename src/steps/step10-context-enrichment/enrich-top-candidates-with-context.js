@@ -1,5 +1,5 @@
 import { omit } from "radash"
-import { callUnofficialCopilot } from "../../api/copilot-unofficial/chat.js"
+import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
 import { formatCoinSummary } from "../step7-agent-analysis/coin-summary.js"
@@ -64,14 +64,12 @@ async function enrichCandidate (
   candidate,
   systemPrompt,
   callAgent,
+  modelSettings,
 ) {
   const content = await callAgent(
     systemPrompt,
     buildUserMessage(asOf, candidate),
-    {
-      model: "gemini-3.7-flash",
-      reasoningEffort: "medium",
-    },
+    modelSettings,
   )
   let enrichment
 
@@ -109,7 +107,7 @@ async function enrichCandidate (
 export async function enrichTopCandidatesWithContext (
   input,
   systemPrompt,
-  { callAgent = callUnofficialCopilot } = {},
+  { callAgent = callModel } = {},
 ) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Context enrichment system prompt is required")
@@ -120,6 +118,7 @@ export async function enrichTopCandidatesWithContext (
   }
 
   const { asOf, candidates } = validateInput(input)
+  const modelSettings = getModelSettings("candidateContext")
   const enrichedCandidates = []
 
   for (const candidate of candidates) {
@@ -128,6 +127,7 @@ export async function enrichTopCandidatesWithContext (
       candidate,
       systemPrompt,
       callAgent,
+      modelSettings,
     ))
   }
 
@@ -136,9 +136,9 @@ export async function enrichTopCandidatesWithContext (
     schemaVersion: 8,
     generatedAt: new Date().toISOString(),
     contextEnrichment: {
-      source: "github-copilot-unofficial",
-      model: "gemini-3.7-flash",
-      reasoningEffort: "medium",
+      source: `github-${modelSettings.provider}`,
+      model: modelSettings.model,
+      reasoningEffort: modelSettings.reasoningEffort,
       candidateCallCount: enrichedCandidates.length,
     },
     candidates: enrichedCandidates,

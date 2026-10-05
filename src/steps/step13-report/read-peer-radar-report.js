@@ -49,7 +49,8 @@ function isRadarReport (data) {
     || ![data.asOf, data.snapshotClosedAt, data.generatedAt, data.scanGeneratedAt].every(isTimestamp)
     || Date.parse(data.snapshotClosedAt) !== Date.parse(data.asOf) + 3_600_000
     || (data.registryGeneratedAt !== null && !isTimestamp(data.registryGeneratedAt))
-    || !hasFields(data.analysis, ["source", "model", "reasoningEffort"])
+    || !hasFields(data.analysis, ["source", "model"])
+    || (data.analysis.reasoningEffort !== null && !isText(data.analysis.reasoningEffort))
     || !hasFields(data.criteria, ["impulse", "lag", "reaction"])
     || !isObject(data.coverage)
     || !["available", "partial", "no_peers", "insufficient_data", "not_covered", "unreviewed", "unavailable"]
