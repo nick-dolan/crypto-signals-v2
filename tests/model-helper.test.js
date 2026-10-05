@@ -39,10 +39,13 @@ test("candidate context and market brief use the SDK", async (context) => {
     callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
   }
 
-  for (const task of ["candidateContext", "marketBrief"]) {
+  for (const [task, model] of [
+    ["candidateContext", "gemini-3.7-flash"],
+    ["marketBrief", "gpt-6-luna"],
+  ]) {
     const settings = getModelSettings(task)
     assert.deepEqual(settings, {
-      provider: "copilot-sdk", model: "gemini-3.7-flash", reasoningEffort: "medium",
+      provider: "copilot-sdk", model, reasoningEffort: "medium",
     })
     assert.equal(await callModel("system", "user", settings, clients), "sdk response")
     assert.deepEqual(clients.callSdk.mock.calls.at(-1).arguments, [
