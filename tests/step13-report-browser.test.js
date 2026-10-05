@@ -2856,6 +2856,31 @@ test("source markup is literal text, unsafe URLs and tweet IDs never create acti
   assert.ok(nodes.every(node => !["A", "IMG", "SCRIPT", "IFRAME"].includes(node.tagName)))
 })
 
+test("compact market context keeps breadth and derived stable rotation visible without replacing legacy missing values", () => {
+  for (const legacy of [false, true]) {
+    const report = createReport()
+    report.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
+    report.marketContext = {
+      btcRotation4hPct: 0.123, ethRotation4hPct: -0.017, altsRotation4hPct: -0.025,
+      ...(legacy ? { breadth4h: null, stablesRotation4hPct: null } : {}),
+    }
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+    const cards = byId("market-summary").children
+
+    assert.equal(cards[0].children[1].textContent, legacy ? "Нет данных" : "20%")
+    assert.equal(cards[4].children[1].textContent, legacy ? "Нет данных" : "-0,081 п.п.")
+    assert.deepEqual(report, before)
+  }
+
+  for (const missing of [null, undefined]) {
+    const report = createReport()
+    report.marketContext = { btcRotation4hPct: 0.123, ethRotation4hPct: missing, altsRotation4hPct: -0.025 }
+    const { byId } = runReport(report)
+    assert.equal(byId("market-summary").children[4].children[1].textContent, "Нет данных")
+  }
+})
+
 for (const [status, change4hPct, breadth4h, label, icon, change, breadth] of [
   ["up", 1.25, 0.6, "Преобладает рост", "↑", "+1,25%", "60%"],
   ["down", -2.5, 0.2, "Преобладает снижение", "↓", "-2,5%", "20%"],

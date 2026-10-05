@@ -40,7 +40,7 @@ function getActiveFlags (...groups) {
 
 function createCoinGeckoContext (coingecko) {
   if (!isString(coingecko?.id) || !coingecko.id.trim() || coingecko.isTrending !== true) {
-    return [null, null, null]
+    return [null, null]
   }
 
   if (
@@ -50,7 +50,7 @@ function createCoinGeckoContext (coingecko) {
     throw new Error("Agent payload CoinGecko trendingCategories must be an array of non-empty category names")
   }
 
-  return [coingecko.id, true, coingecko.trendingCategories]
+  return [true, coingecko.trendingCategories]
 }
 
 function createPeerLeader (leader) {
@@ -59,8 +59,6 @@ function createPeerLeader (leader) {
     type: leader.type,
     basis: leader.basis,
     caveat: leader.caveat,
-    detectedAt: leader.detectedAt,
-    windowStartedAt: leader.windowStartedAt,
     ageHours: leader.ageHours,
     status: leader.status,
     return4hPct: roundScaledNullable(leader.return4h, 100),
@@ -77,19 +75,16 @@ function createPeerLeader (leader) {
 function createPeerContext (peerContext) {
   return [
     peerContext?.status ?? "unavailable",
-    peerContext?.registryGeneratedAt ?? null,
     peerContext?.peerCount ?? null,
     peerContext?.availablePeerCount ?? null,
     peerContext?.benchmarkCoinCount ?? null,
-    peerContext?.freshLeaderCount ?? null,
-    peerContext?.fadingLeaderCount ?? null,
     roundScaledNullable(peerContext?.coinReturn4h ?? null, 100),
     roundNullable(peerContext?.coinMove4hAtr ?? null),
     peerContext?.leaders?.map(createPeerLeader) ?? null,
   ]
 }
 
-function createCandidate (profile, index) {
+function createCandidate (profile) {
   const { coin, context, features } = profile
   const volatility = features.volatilityCompression
   const lifecycle = features.movementLifecycle
@@ -133,7 +128,6 @@ function createCandidate (profile, index) {
   return {
     symbol: coin.symbol,
     name: coin.name,
-    selectionRank: index + 1,
     profile: [
       coin.rank,
       roundNumber(context.atr24hPct * 100),
@@ -148,9 +142,8 @@ function createCandidate (profile, index) {
       volatility.squeeze_age_hours,
     ],
     lifecycle: [
-      roundNumber(lifecycle.prior_runup_atr_72h),
+      roundNumber(lifecycle.prior_runup_atr_72h - lifecycle.prior_drawdown_atr_72h),
       roundNumber(lifecycle.max_24h_runup_last_7d_atr),
-      roundNumber(lifecycle.prior_drawdown_atr_72h),
       roundNumber(lifecycle.max_24h_drawdown_last_7d_atr),
       roundNumber(lifecycle.range_position_7d),
       roundNumber(lifecycle.distance_to_previous_high_atr),
@@ -175,7 +168,6 @@ function createCandidate (profile, index) {
       roundNumber(derivatives.oi_acceleration_4h * 100),
       roundNumber(derivatives.oi_change_4h_z_30d),
       roundNumber(derivatives.oi_level_percentile_90d),
-      derivatives.oi_up_while_rv_down,
       derivatives.funding_rate,
       roundNumber(derivatives.funding_percentile_90d),
       roundNumber(derivatives.funding_minus_oi_z_4h),
@@ -215,7 +207,6 @@ function createCandidate (profile, index) {
       context.categoryStatus,
       normalizeToAtr(narrative.category_momentum_4h, context.atr24hPct),
       roundNullable(narrative.category_breadth),
-      normalizeToAtr(narrative.coin_leads_category, context.atr24hPct),
     ],
     peerContext: createPeerContext(profile.peerContext),
     coingecko: createCoinGeckoContext(coin.coingecko),
@@ -247,14 +238,14 @@ export function buildAgentPayload (shortlist) {
   validateShortlist(shortlist)
 
   const payload = {
-    schemaVersion: 12,
+    schemaVersion: 13,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
     candidateOrder: "От наиболее приоритетного кандидата к наименее приоритетному",
     candidateCount: shortlist.candidateCount,
+    peerRegistryGeneratedAt: shortlist.candidates[0]?.peerContext?.registryGeneratedAt ?? null,
     marketContext: {
-      breadth4h: roundNumber(shortlist.marketContext.breadth),
       altMarketBackground: shortlist.marketContext.altMarketBackground ?? null,
       btcRotation4hPct: roundNumber(
         shortlist.marketContext.segmentRotation.btc * 100,
@@ -265,38 +256,32 @@ export function buildAgentPayload (shortlist) {
       altsRotation4hPct: roundNumber(
         shortlist.marketContext.segmentRotation.alts * 100,
       ),
-      stablesRotation4hPct: roundNumber(
-        shortlist.marketContext.segmentRotation.stables * 100,
-      ),
       stablecap24hPct: roundNumber(shortlist.marketContext.stablecapChange * 100),
     },
     marketDefinitions: {
-      breadth4h: "Доля монет вселенной с положительной доходностью за 4 часа",
-      altMarketBackground: "Фон альтрынка за 4ч на asOf, рассчитанный на шаге 4: change4hPct — изменение капитализации TOTAL3ES (без BTC, ETH и стейблкоинов), %; breadth4h — доля растущих монет всей вселенной, 0–1. status: up при change4hPct > 0 и breadth4h > 0.55; down при change4hPct < 0 и breadth4h < 0.45; mixed — остальные сочетания; unavailable — недостаточно данных, причина в warning. Значения не округлены. Это эвристика среза, не прогноз и не вероятность; не считай её и исходную ширину рынка независимыми сигналами",
+      altMarketBackground: "Фон альтрынка за 4ч: change4hPct — изменение капитализации TOTAL3ES без BTC, ETH и стейблкоинов, %; breadth4h — доля растущих монет всей вселенной, 0–1. status: up при change4hPct > 0 и breadth4h > 0.55; down при change4hPct < 0 и breadth4h < 0.45; mixed — иначе; unavailable — недостаточно данных, причина в warning. Неокруглённая эвристика среза, не прогноз; статус и ширина не независимые сигналы",
       btcRotation4hPct: "Изменение доли BTC в общей капитализации за 4 часа, п.п.",
       ethRotation4hPct: "Изменение доли ETH в общей капитализации за 4 часа, п.п.",
       altsRotation4hPct: "Изменение доли остальных альткоинов за 4 часа, п.п.",
-      stablesRotation4hPct: "Изменение доли стейблкоинов за 4 часа, п.п.",
       stablecap24hPct: "Изменение капитализации стейблкоинов за 24 часа, %",
     },
     conventions: {
       rounding: "Числа округлены до трёх знаков после запятой; fundingRate, altMarketBackground и ageHours peer-событий передаются без округления",
-      flags: "Флаги рассчитаны до округления. Не пересчитывай их по округлённым полям и не считай независимыми подтверждениями поверх исходных метрик",
+      flags: "Флаги рассчитаны до округления; не пересчитывай пороги по округлённым значениям",
       zScore: "Положительный z-score выше собственной нормы, отрицательный — ниже",
       percentile: "Перцентиль находится в диапазоне 0–1",
-      sustainedStrength: "Контекст относительной силы, рассчитанный на шаге 4 до предварительного отбора. Peers — другие монеты всей вселенной, сама монета исключена; минимум 3 peers. Используется вся доступная OHLCV-история с непересекающимися историческими окнами. Медвежье окно 4h: строго > 55% peers падают и TOTAL3ES снижается; бычье: > 55% peers растут и TOTAL3ES растёт. sustainedStatus рассчитан до округления: не пересчитывай его по округлённым полям. Покрытие, повторяемость и остальные горизонты учтены в scores и статусе, но отдельно не передаются. Scores 0–100 — эвристики, не вероятности события",
-      peerContext: "Контекст прямых связей из справочника, только 1-hop без транзитивности. Лидеры рассчитаны на шаге 4 по всей загруженной вселенной до предварительного отбора, включая поздние монеты и не попавшие в shortlist. Benchmark исключает кандидата и всех его прямых соседей; минимум 3 монеты с полными наблюдениями. Покрытие требует полной сезонной истории объёма и 17 подряд оцениваемых часов; пропуски означают недоступность, не отсутствие события. Событие требует одновременно положительного роста за 4ч >= 2.5 собственного ATR, замороженного до начала окна, excess над медианой доходностей benchmark >= 1 того же ATR и сезонного USD-объёма за 4ч >= 1.5 медианы аналогичных 4ч окон предыдущих 30 дней. Это не вероятность, не прогноз направления и не самостоятельные Setup/Trigger; не меняет shortlist и не отменяет late_pump/late_dump. laggard/categoryContext и peerContext могут описывать одно событие; несколько соседей не гарантируют независимых подтверждений, например VET/VTHO. При partial ноль наблюдаемых лидеров не означает, что вся группа тиха; null не отрицательный сигнал",
-      peerEpisodes: "detectedAt — закрытие свечи первого срабатывания, windowStartedAt — закрытие свечи в начале исходного 4ч окна. Это фактические времена закрытия, а asOf — метка открытия последней завершённой свечи: закрытие среза = asOf + 1ч. ageHours измерен по завершённым часам от первого срабатывания до закрытия среза. Старт не обновляется на каждом максимуме; новый эпизод разрешён только после 4 полных подряд часов без qualifying-trigger. return4hPct, move4hAtr, marketExcess4hAtr и relativeVolume4h заморожены на первом срабатывании. Передаются только живые события возраста <= 12ч с удержанием >= 50% пикового подъёма; спад ниже 50% инвалидирует эпизод, который не оживает на отскоке без нового эпизода. fresh — ageHours <= 4, fading — 4 < ageHours <= 12. Возраст, статусы и counts уже рассчитаны; не пересчитывай их по округлённым значениям",
-      coingecko: "Только trending-монеты CoinGecko, сопоставленные с существующей TV-вселенной по coin_id через Binance USDT perpetual; без coin_id совпадение пропускается, без угадывания тикеров и fuzzy-сопоставления. Trending — поисковое внимание, не цена, направление или ранний вход; не самостоятельные Setup/Trigger и не повод обходить late_pump/late_dump или позднюю фазу по Lifecycle. Категории CoinGecko не являются TV-категориями из categoryContext",
-      null: "Для category/social/altMarketBackground/sustainedStrength метрика недоступна; для event-only Lifecycle соответствующая тихая база или пробой за 7 дней не обнаружены. Для peerContext неизвестное покрытие или недоступная оценка не являются отрицательным сигналом; null и [] у peerLeaders не взаимозаменяемы. Для coingecko нет подтверждённого совпадения: это не доказывает отсутствие тренда, возможны несопоставленная монета или отсутствие coin_id; false не используется. Это не ноль; insufficient_data у sustainedStatus не означает слабость, доступные компоненты сохраняются",
+      rotation: "Ротация стейблкоинов за 4ч равна минус сумме ротаций BTC, ETH и alts до округления; это изменение доли, не stablecap24hPct",
+      peerRegistryGeneratedAt: "Общее время создания справочника связей; метаданные, не рыночное событие или признак кандидата",
+      sustainedStrength: "Peers — другие монеты всей вселенной до отбора, сама монета исключена; минимум 3 peers. Вся доступная OHLCV-история, непересекающиеся исторические окна. Медвежье окно 4h: строго > 55% peers падают и TOTAL3ES снижается; бычье: > 55% peers растут и TOTAL3ES растёт. Scores 0–100 — эвристики, не вероятности; покрытие и непереданные компоненты уже учтены в scores и статусе",
+      peerContext: "Прямые связи 1-hop без транзитивности; лидеры всей загруженной вселенной до отбора, включая поздние монеты. Benchmark исключает кандидата и всех его прямых соседей; минимум 3 монеты с полными наблюдениями. Событие: рост за 4ч >= 2.5 собственного ATR до окна, excess над медианой benchmark >= 1 того же ATR и сезонный USD-объём за 4ч >= 1.5 медианы аналогичных окон предыдущих 30 дней",
+      null: "Недоступные данные и insufficient_data не являются нулём или контрсигналом; доступные компоненты сохраняются. В event-only Lifecycle null означает отсутствие подходящей тихой базы или пробоя за 7 дней. Особый смысл null и [] для peerLeaders и CoinGecko указан в definitions",
     },
     schema: {
       profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
       volatility: ["rvRatio", "bbPctile", "atrPctile", "rangeStreak", "squeezeAge"],
       lifecycle: [
-        "priorRunupAtr72h",
+        "priorMoveAtr72h",
         "max24hRunupLast7dAtr",
-        "priorDrawdownAtr72h",
         "max24hDrawdownLast7dAtr",
         "rangePosition7d",
         "distanceToHigh24hAtr",
@@ -315,7 +300,6 @@ export function buildAgentPayload (shortlist) {
         "oiAccel4hPct",
         "oiZ",
         "oiLevelPctile",
-        "quietOi",
         "fundingRate",
         "fundingPctile",
         "fundingMinusOiZ4h",
@@ -350,25 +334,21 @@ export function buildAgentPayload (shortlist) {
         "sustainedUpParticipationRate",
         "sustainedExcess24hPct",
       ],
-      categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+      categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth"],
       peerContext: [
         "peerStatus",
-        "peerRegistryGeneratedAt",
         "peerCount",
         "peerAvailableCount",
         "peerBenchmarkCoinCount",
-        "peerFreshLeaderCount",
-        "peerFadingLeaderCount",
         "peerCoinReturn4hPct",
         "peerCoinMove4hAtr",
         "peerLeaders",
       ],
-      coingecko: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
+      coingecko: ["coingeckoTrending", "coingeckoTrendingCategories"],
     },
     definitions: {
       symbol: "Тикер монеты",
       name: "Название монеты",
-      selectionRank: "Приоритет предварительного отбора, не готовый ответ",
       rank: "Место по глобальной капитализации; меньше означает крупнее",
       atrPct: "Средний true range последних 24 часовых свечей в процентах от текущей цены; это средний часовой диапазон, а не диапазон суток",
       marketCapB: "Рыночная капитализация, млрд USD",
@@ -380,9 +360,8 @@ export function buildAgentPayload (shortlist) {
       atrPctile: "Setup: перцентиль ATR24h / close в полном скользящем окне 90 дней",
       rangeStreak: "Setup: часов подряд диапазон (high - low) / close не превышает свою 30-дневную медиану",
       squeezeAge: "Setup: часов подряд RV ratio < 0.75, Bollinger percentile <= 0.2 и ATR percentile <= 0.2",
-      priorRunupAtr72h: "Lifecycle: положительный рост close за 72 часа до последних 4 часов / ATR в начале окна",
+      priorMoveAtr72h: "Lifecycle: знаковое изменение close за 72 часа до последних 4 часов / ATR в начале окна; плюс — рост, минус — снижение",
       max24hRunupLast7dAtr: "Lifecycle: максимальный положительный рост close за 24 часа среди окон последних 7 дней, завершившихся до последних 4 часов, / ATR в начале каждого окна",
-      priorDrawdownAtr72h: "Lifecycle: положительная величина снижения close за 72 часа до последних 4 часов / ATR в начале окна",
       max24hDrawdownLast7dAtr: "Lifecycle: максимальная положительная величина снижения close за 24 часа среди окон последних 7 дней, завершившихся до последних 4 часов, / ATR в начале каждого окна",
       rangePosition7d: "Lifecycle: положение текущего close внутри диапазона high/low за 7 дней; 0 соответствует минимуму, 1 — максимуму",
       distanceToHigh24hAtr: "Range: (максимум high предыдущих 24 часов без текущей свечи - текущий close) / ATR24h предыдущей свечи; 0 — граница, минус — цена уже выше неё",
@@ -403,14 +382,13 @@ export function buildAgentPayload (shortlist) {
       oiAccel4hPct: "Derivatives: ускорение 4-часового изменения Open Interest, п.п.",
       oiZ: "Derivatives: z-score изменения Open Interest за 4 часа относительно 30 дней",
       oiLevelPctile: "Setup: перцентиль текущего уровня Open Interest в полном скользящем окне 90 дней, 0–1; это уровень позиций, а не z-score их прироста и не величина плеча",
-      quietOi: "Setup: Open Interest растёт за 12 часов, пока реализованная волатильность сжата",
       fundingRate: "Derivatives: текущая знаковая ставка из TradingView Funding_Rate в исходной шкале источника, без округления, масштабирования или годового пересчёта; плюс — лонги платят шортам, минус — шорты платят лонгам",
       fundingPctile: "Derivatives: перцентиль Funding Rate в полном скользящем окне 90 дней",
       fundingMinusOiZ4h: "Derivatives: z30d(изменение Funding Rate за 4h) минус z30d(изменение OI за 4h); плюс означает более сильный сдвиг funding",
       premiumZ: "Derivatives: z30d исходного Premium TradingView, уже относительного отклонения futures от index; без повторного деления на цену",
       liqImbalance: "Context: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long. Не показывает величину или аномальность ликвидаций и сам по себе не является триггером",
       crowdVsTop: "Context: позиционирование обычных аккаунтов относительно top traders; плюс означает более long-настроенную толпу",
-      socialStatus: "available при наличии всех четырёх полных social-рядов и шести рассчитанных признаков; иначе unavailable для всего Social-блока",
+      socialStatus: "available — все четыре social-ряда и шесть признаков доступны; unavailable — весь Social-блок недоступен, не контрсигнал",
       socialDominanceZ: "Trigger: z-score доли внимания к монете за 30 дней",
       interactionsZ: "Trigger: z-score логарифма social-взаимодействий за 30 дней",
       socialAccel3hPct: "Trigger: изменение взаимодействий последних 3 часов к предыдущим 3 часам, %",
@@ -423,29 +401,24 @@ export function buildAgentPayload (shortlist) {
       residualLogReturn4hPct: "Context: 100 × [log-return монеты за 4h - beta7d × log-return BTC за 4h]",
       residualZ: "Context: z-score 4-часовой residual log-return за 30 дней",
       rsVsAlts12hPct: "Context: доходность монеты сверх широкого альткоин-сегмента за 12 часов, п.п.",
-      sustainedStatus: "Context: persistent — историческая и текущая сила с преимуществом за 7 дней; emerging — текущая сила без всех условий устойчивости; fading — историческая сила без текущей; neutral — критерии силы не выполнены. insufficient_data — любой score недоступен или блок отсутствует; имеет приоритет. Готовый статус учитывает повторяемость и все текущие горизонты на шаге 4, не восстанавливай его по сокращённому набору. Не сигнал входа и не прогноз направления",
-      sustainedHistoryScore: "Context: историческая эвристика 0–100 = 100 × среднее долей побед при падении рынка, участия в росте, суточного и недельного преимущества над peers; не вероятность. Доступна при >= 28 суточных, >= 4 недельных, >= 12 медвежьих и >= 12 бычьих окон",
-      sustainedCurrentScore: "Context: текущая эвристика 0–100 = 100 × средний поперечный ранг доходности среди peers за 4h, 12h, 24h и 168h; доля уступающих peers плюс половина доли равных. Не вероятность; null при недоступности любого горизонта",
+      sustainedStatus: "Context: persistent — историческая и текущая сила с преимуществом за 7 дней; emerging — текущая сила без всех условий устойчивости; fading — историческая сила без текущей; neutral — критерии силы не выполнены. insufficient_data — любой score недоступен или блок отсутствует; имеет приоритет. Статус учитывает непереданные компоненты, не восстанавливай его по сокращённому набору",
+      sustainedHistoryScore: "Context: 100 × среднее долей побед при падении рынка, участия в росте, суточного и недельного преимущества над peers. Доступна при >= 28 суточных, >= 4 недельных, >= 12 медвежьих и >= 12 бычьих окон",
+      sustainedCurrentScore: "Context: 100 × средний поперечный ранг доходности среди peers за 4h, 12h, 24h и 168h; доля уступающих peers плюс половина доли равных. null при недоступности любого горизонта",
       sustainedDownWinRate: "Context: доля медвежьих окон 4h, когда simple return монеты строго выше медианы peers, 0–1; может означать лишь меньшее падение, не рост",
       sustainedDownPositiveRate: "Context: доля медвежьих окон 4h с положительной simple return самой монеты, 0–1; отличает рост от меньшего падения",
       sustainedDownExcessMedianPct: "Context: медиана разницы simple return монеты и медианы peers на медвежьих окнах 4h, п.п. (исходная разница × 100)",
       sustainedUpParticipationRate: "Context: доля бычьих окон 4h, когда simple return монеты положительна и не ниже медианы peers, 0–1",
       sustainedExcess24hPct: "Context: simple return монеты минус медиана simple return peers за последние 24h, п.п. (исходная разница × 100)",
-      categoryMoveAtr: "Narrative: медианная simple return peer-монет категории за 4h / ATR монеты; сама монета исключена, знак показывает направление",
+      categoryMoveAtr: "Narrative: медианная simple return peer-монет категории за 4h / текущий ATR монеты; сама монета исключена. Преимущество кандидата в ATR ≈ peerCoinReturn4hPct / atrPct − categoryMoveAtr; минус означает отставание, возможна погрешность округления",
       categoryBreadth: "Narrative: доля peer-монет в направлении медианы категории, чьё 4-часовое движение сильнее предыдущего непересекающегося окна",
-      coinLeadAtr: "Narrative: [simple return монеты за 4h - медиана peer-монет] / ATR; отрицательное значение означает отставание",
       peerStatus: "Context: unavailable — нет справочника или блока в старом профиле; not_covered — монеты нет в справочнике; unreviewed — исследование связей не подтверждено; no_peers — монета проверена без связей; insufficient_data — нет оцениваемых соседей или достаточного benchmark; partial — оценена лишь часть известных соседей; available — оценены все известные соседи. Статус готовый, не пересчитывай",
-      peerRegistryGeneratedAt: "Context: время создания справочника связей, не время рыночного события; null — справочник недоступен",
       peerCount: "Context: число всех прямых связей, включая недоступных сейчас соседей; null при неизвестном покрытии, 0 при no_peers",
       peerAvailableCount: "Context: число прямых соседей, по которым можно проверить событие сейчас, не число лидеров; null при неизвестном покрытии",
       peerBenchmarkCoinCount: "Context: число загруженных монет вне кандидата и всех его прямых соседей, не только вне доступных; для оценки нужно минимум 3 монеты benchmark; null при неизвестном покрытии",
-      peerFreshLeaderCount: "Context: число наблюдаемых живых событий fresh возраста <= 4ч; 0 при no_peers, null при неизвестном покрытии или insufficient_data. При partial учитывает только проверенные данные, 0 не означает тишину всей группы",
-      peerFadingLeaderCount: "Context: число наблюдаемых живых событий fading возраста > 4ч и <= 12ч; 0 при no_peers, null при неизвестном покрытии или insufficient_data. Это возраст события, не прогноз; при partial учитывает только проверенные данные",
       peerCoinReturn4hPct: "Context: собственная simple return КАНДИДАТА за последние 4ч, % (исходная fraction × 100); null — нет данных",
       peerCoinMove4hAtr: "Context: знаковое движение КАНДИДАТА за последние 4ч в его собственном ATR, замороженном до начала этого окна; безразмерное, не процент и не прогноз",
-      peerLeaders: "Context: массив живых событий прямых соседей — значение одной колонки, без дополнительных колонок или вложенных evidence-путей. null — неизвестное покрытие или insufficient_data; [] — no_peers либо нет наблюдаемых живых событий среди проверенных соседей. symbol — тикер лидера; type/basis/caveat — тип, основание и оговорка связи. detectedAt/windowStartedAt — фактические закрытия свечей первого срабатывания и начала исходного 4ч окна (закрытие среза = asOf + 1ч); ageHours/status — готовые возраст и fresh/fading. return4hPct — рост ЛИДЕРА за исходные 4ч, %; move4hAtr — этот рост в его ATR до окна; marketExcess4hAtr — [return лидера - медиана return benchmark] в том же ATR; relativeVolume4h — сезонный USD-объём исходных 4ч к медиане аналогичных окон за предыдущие 30 дней. Эти четыре метрики заморожены на первом срабатывании, не описывают последние 4ч. retainedPct = 100 × (текущий close - начальный close) / (максимальный close с начала события - начальный close), удержание пикового подъёма в %. returnSinceStartPct — текущая simple return ЛИДЕРА от начала его исходного окна, %. coinReturnSinceStartPct — реакция КАНДИДАТА на том же интервале, %; coinMoveSinceStartAtr — та же реакция в собственном ATR КАНДИДАТА до начала окна. Все *Pct переведены из fraction × 100, ATR безразмерны; null у реакции кандидата — нет данных, не отсутствие реакции",
-      coingeckoId: "Context: точный CoinGecko id подтверждённой trending-монеты, сопоставленной с Binance USDT perpetual существующей TV-вселенной; null — нет подтверждённого совпадения",
-      coingeckoTrending: "Context: true — монета есть в CoinGecko trending по поисковому вниманию; null — нет подтверждённого совпадения, не доказательство отсутствия тренда. false не используется",
+      peerLeaders: "Context: полный массив живых событий прямых соседей; null — неизвестное покрытие или insufficient_data, [] — нет наблюдаемых событий. При partial это не доказывает тишину всей группы. symbol/type/basis/caveat — лидер и связь. ageHours — завершённые часы от первого срабатывания до закрытия среза (asOf + 1ч); status: fresh до 4ч включительно, fading до 12ч. Переданы события с удержанием >= 50% пикового подъёма. return4hPct — рост ЛИДЕРА за исходные 4ч, %; move4hAtr — рост в его ATR до окна; marketExcess4hAtr — преимущество над медианой benchmark в том же ATR; relativeVolume4h — USD-объём исходных 4ч / медиана аналогичных окон за предыдущие 30 дней. Эти четыре метрики заморожены при первом срабатывании. retainedPct = 100 × (нынешний close − начальный close) / (максимальный close с начала события − начальный close). returnSinceStartPct — нынешняя доходность ЛИДЕРА от начала исходного окна; coinReturnSinceStartPct и coinMoveSinceStartAtr — реакция КАНДИДАТА на том же интервале в % и собственном ATR КАНДИДАТА до окна. Не путай её с последними 4ч; null реакции — нет данных",
+      coingeckoTrending: "Context: true — подтверждённое CoinGecko trending по поисковому вниманию; null — нет подтверждённого сопоставления, не доказательство отсутствия тренда. false не используется",
       coingeckoTrendingCategories: "Context: массив названий пересечения категорий монеты CoinGecko с trending-категориями CoinGecko, не TV-категории. [] — у подтверждённой trending-монеты нет пересечений, не отсутствие данных; null — нет подтверждённого совпадения",
       flags: "Только активные true-паттерны Divergence и Lifecycle; недоступность category-зависимого laggard показывает categoryStatus",
     },
@@ -470,7 +443,7 @@ export function buildAgentPayload (shortlist) {
 
   const { fields, candidates } = decodeAgentPayload(payload)
 
-  if (Object.keys(payload.definitions).length !== fields.length + 1) {
+  if (Object.keys(payload.definitions).length !== fields.length) {
     throw new Error("Agent payload schema and definitions have different lengths")
   }
 

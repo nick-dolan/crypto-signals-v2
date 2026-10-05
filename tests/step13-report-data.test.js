@@ -470,12 +470,23 @@ test("preserves technical explanations through report assembly and context enric
   assert.deepEqual([report, sources, context], before)
 })
 
-test("top summaries survive steps 7 through 13 while non-top news summaries use assessment arguments in step 10", async () => {
+test("schema 13 summaries and evidence survive steps 7 through 13, including non-top news context", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
-  input.payload.schemaVersion = 12
-  input.payload.schema.coingecko = ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"]
-  input.payload.candidates.forEach((candidate) => {
-    candidate.coingecko = [null, candidate.symbol === "SOL", null]
+  input.payload.schemaVersion = 13
+  input.payload.marketContext = {
+    altMarketBackground: { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null },
+  }
+  input.payload.schema.lifecycle = ["priorMoveAtr72h"]
+  input.payload.schema.derivatives = ["oiChange12hPct"]
+  input.payload.schema.coingecko = ["coingeckoTrending", "coingeckoTrendingCategories"]
+  delete input.payload.definitions.quietOi
+  input.payload.definitions.oiChange12hPct = "Прирост OI за двенадцать часов"
+  input.payload.definitions.priorMoveAtr72h = "Предыдущее движение со знаком"
+  input.payload.candidates.forEach((candidate, index) => {
+    delete candidate.selectionRank
+    candidate.lifecycle = [[-2.5, 1.25, null][index]]
+    candidate.derivatives = [0]
+    candidate.coingecko = [candidate.symbol === "SOL" ? true : null, candidate.symbol === "SOL" ? [] : null]
   })
   input.shortlist.candidates.forEach(({ coin }) => {
     coin.tradingViewSymbol = `CRYPTO:${coin.symbol}USD`
@@ -495,8 +506,8 @@ test("top summaries survive steps 7 through 13 while non-top news summaries use 
       symbol,
       movementProbability,
       estimateConfidence,
-      drivers: [{ fields: ["volumeZ"], text: "объём начинает оживать" }],
-      counterSignals: [{ fields: ["quietOi"], text: "накопление позиций не подтверждено" }],
+      drivers: [{ fields: ["volumeZ", "priorMoveAtr72h"], text: "объём оценивается с учётом предыдущего движения" }],
+      counterSignals: [{ fields: ["oiChange12hPct"], text: "накопление позиций не подтверждено" }],
     })),
   }
   let analysisCallCount = 0
@@ -571,6 +582,12 @@ test("top summaries survive steps 7 through 13 while non-top news summaries use 
   }
   assert.deepEqual(result.coins.map(coin => coin.topRank), [1, null, null])
   assert.equal(result.candidateCount, 3)
+  assert.deepEqual(result.altMarketBackground, input.payload.marketContext.altMarketBackground)
+  assert.deepEqual(result.coins.map(coin => coin.features.priorMoveAtr72h), [-2.5, 1.25, null])
+  assert.deepEqual(result.coins.map(coin => coin.features.coingeckoTrending), [null, true, null])
+  assert.deepEqual(result.coins.map(coin => coin.features.coingeckoTrendingCategories), [null, [], null])
+  assert.ok(result.coins.every(coin => !Object.hasOwn(coin.features, "selectionRank")))
+  assert.equal(result.coins[0].drivers[0], "volumeZ=0.1 и priorMoveAtr72h=-2.5: объём оценивается с учётом предыдущего движения")
   for (const [index, coin] of result.coins.entries()) {
     assert.deepEqual(coin.technicalSummary, index === 0 ? response.topCandidates[0].technicalSummary : undefined)
     assert.equal(Object.hasOwn(coin, "technicalSummary"), index === 0)

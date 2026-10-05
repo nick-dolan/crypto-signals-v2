@@ -126,6 +126,15 @@
   }
 
   function renderSummary () {
+    const marketContext = { breadth4h: report.altMarketBackground?.breadth4h, ...report.marketContext }
+    if (!Object.hasOwn(marketContext, "stablesRotation4hPct")) {
+      const rotations = ["btcRotation4hPct", "ethRotation4hPct", "altsRotation4hPct"]
+        .map(key => marketContext[key])
+      marketContext.stablesRotation4hPct = rotations.every(isFinite)
+        ? -rotations.reduce((sum, value) => sum + value, 0)
+        : null
+    }
+
     byId("as-of").dateTime = report.asOf
     byId("as-of").textContent = time(report.asOf)
     byId("coverage").textContent = `${report.candidateCount} оценено / ${report.universeCoinCount} монет во вселенной`
@@ -143,7 +152,7 @@
       ["stablecap24hPct", "Капитализация стейблов · 24h", 1, "%"],
     ].map(([key, label, multiplier, suffix]) => {
       const card = element("div", "market-card")
-      const value = report.marketContext?.[key]
+      const value = marketContext[key]
       card.title = report.marketDefinitions?.[key] ?? ""
       card.append(
         element("span", "metric-label", label),

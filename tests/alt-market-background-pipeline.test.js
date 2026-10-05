@@ -60,7 +60,7 @@ for (const [name, altMarketBackground] of [
     assert.equal(payload.asOf, featureMetrics.asOf)
     assert.equal(payload.candidateCount, 0)
     assert.deepEqual(payload.candidates, [])
-    assert.equal(payload.marketContext.breadth4h, 0.55)
+    assert.equal(Object.hasOwn(payload.marketContext, "breadth4h"), false)
     assert.deepEqual(payload.marketContext.altMarketBackground, expectedBackground)
 
     const sourceWindow = { from: "2026-09-15T09:10:00.000Z", asOf: featureMetrics.generatedAt }

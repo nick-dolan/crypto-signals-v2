@@ -26,7 +26,8 @@ export function decodeAgentPayload (payload) {
     throw new Error("Step 6 candidates must be an array")
   }
 
-  const candidateKeys = ["symbol", "name", "selectionRank", ...groups.map(([group]) => group), "flags"]
+  const orderFields = payload.schemaVersion >= 13 ? [] : ["selectionRank"]
+  const candidateKeys = ["symbol", "name", ...orderFields, ...groups.map(([group]) => group), "flags"]
   const candidates = payload.candidates.map((candidate, index) => {
     if (
       !isObject(candidate)
@@ -45,7 +46,7 @@ export function decodeAgentPayload (payload) {
       }
     }
 
-    if (!isSafeInteger(candidate.selectionRank) || candidate.selectionRank < 1) {
+    if (orderFields.length > 0 && (!isSafeInteger(candidate.selectionRank) || candidate.selectionRank < 1)) {
       throw new Error(`Step 6 candidate ${index} contains an invalid selectionRank`)
     }
 
@@ -53,7 +54,6 @@ export function decodeAgentPayload (payload) {
       throw new Error(`Step 6 candidate ${index} flags must be an array`)
     }
 
-    // selectionRank describes input order, not an additional market feature or evidence.
     return {
       symbol: candidate.symbol,
       name: candidate.name,

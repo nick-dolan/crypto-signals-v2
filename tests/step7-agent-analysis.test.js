@@ -152,6 +152,51 @@ test("agent analysis parser inserts exact payload values into evidence", () => {
   )
 })
 
+test("schema 13 evidence preserves signed moves, compact peers and nested market context without removed fields", () => {
+  const payload = createPayload()
+  payload.schemaVersion = 13
+  payload.peerRegistryGeneratedAt = "2026-08-30T09:00:00.000Z"
+  payload.marketContext = {
+    altMarketBackground: { status: "down", change4hPct: -1.5, breadth4h: 0.199, warning: null },
+  }
+  payload.schema.lifecycle = ["priorMoveAtr72h"]
+  payload.schema.peerContext = ["peerStatus", "peerLeaders"]
+  const leaders = [{ symbol: "VET", ageHours: 2, status: "fresh", retainedPct: 80.125 }]
+  payload.candidates.forEach((candidate, index) => {
+    delete candidate.selectionRank
+    candidate.lifecycle = [index === 0 ? -2.5 : null]
+    candidate.peerContext = index === 0 ? ["partial", leaders] : ["no_peers", []]
+  })
+  const response = createAgentResponse()
+  response.assessments[0].drivers = [{
+    fields: ["priorMoveAtr72h", "peerStatus", "peerLeaders"],
+    text: "Предыдущее падение и соседи учитываются отдельно от собственного триггера",
+  }]
+  response.assessments[0].counterSignals = [{
+    fields: ["altMarketBackground"], text: "Рыночный фон ограничивает уверенность",
+  }]
+  response.assessments[1].drivers = [{ fields: ["priorMoveAtr72h", "peerLeaders"], text: "Пустые связи не заполняют пробелы истории" }]
+  const before = structuredClone(payload)
+  const result = parseAgentAnalysis(JSON.stringify(response), payload)
+
+  assert.deepEqual(result.assessments[0].drivers, [
+    `priorMoveAtr72h=-2.5 и peerStatus=partial и peerLeaders=${JSON.stringify(leaders)}: Предыдущее падение и соседи учитываются отдельно от собственного триггера`,
+  ])
+  assert.deepEqual(result.assessments[0].counterSignals, [
+    `altMarketBackground=${JSON.stringify(payload.marketContext.altMarketBackground)}: Рыночный фон ограничивает уверенность`,
+  ])
+  assert.deepEqual(result.assessments[1].drivers, ["priorMoveAtr72h=null и peerLeaders=[]: Пустые связи не заполняют пробелы истории"])
+  assert.deepEqual(payload, before)
+
+  for (const field of [
+    "selectionRank", "priorRunupAtr72h", "priorDrawdownAtr72h", "quietOi", "coinLeadAtr", "coingeckoId",
+    "peerRegistryGeneratedAt", "peerFreshLeaderCount", "peerFadingLeaderCount", "breadth4h", "stablesRotation4hPct",
+  ]) {
+    response.assessments[0].drivers[0].fields = [field]
+    assert.throws(() => parseAgentAnalysis(JSON.stringify(response), payload), /references unknown field/)
+  }
+})
+
 test("structured analysis normalizes only top summaries and derives their legacy explanations in one agent call", async () => {
   const response = createStructuredAgentResponse()
   response.topCandidates = [response.topCandidates[0]]

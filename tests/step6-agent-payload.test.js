@@ -232,6 +232,7 @@ test("agent payload groups the original fields in the approved order, including 
   const payload = buildAgentPayload(createShortlist([]))
 
   assert.equal(payload.candidateCount, 0)
+  assert.equal(payload.peerRegistryGeneratedAt, null)
   assert.deepEqual(payload.candidates, [])
   assert.deepEqual(decodeAgentPayload(payload).candidates, [])
   assert.deepEqual(Object.keys(payload.schema), [
@@ -242,9 +243,8 @@ test("agent payload groups the original fields in the approved order, including 
     profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
     volatility: ["rvRatio", "bbPctile", "atrPctile", "rangeStreak", "squeezeAge"],
     lifecycle: [
-      "priorRunupAtr72h",
+      "priorMoveAtr72h",
       "max24hRunupLast7dAtr",
-      "priorDrawdownAtr72h",
       "max24hDrawdownLast7dAtr",
       "rangePosition7d",
       "distanceToHigh24hAtr",
@@ -263,7 +263,6 @@ test("agent payload groups the original fields in the approved order, including 
       "oiAccel4hPct",
       "oiZ",
       "oiLevelPctile",
-      "quietOi",
       "fundingRate",
       "fundingPctile",
       "fundingMinusOiZ4h",
@@ -298,13 +297,12 @@ test("agent payload groups the original fields in the approved order, including 
       "sustainedUpParticipationRate",
       "sustainedExcess24hPct",
     ],
-    categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth", "coinLeadAtr"],
+    categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth"],
     peerContext: [
-      "peerStatus", "peerRegistryGeneratedAt", "peerCount", "peerAvailableCount",
-      "peerBenchmarkCoinCount", "peerFreshLeaderCount", "peerFadingLeaderCount",
+      "peerStatus", "peerCount", "peerAvailableCount", "peerBenchmarkCoinCount",
       "peerCoinReturn4hPct", "peerCoinMove4hAtr", "peerLeaders",
     ],
-    coingecko: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
+    coingecko: ["coingeckoTrending", "coingeckoTrendingCategories"],
   })
 })
 
@@ -314,19 +312,20 @@ test("agent payload creates documented grouped candidates without changing marke
   const payload = buildAgentPayload(shortlist)
   const { fields, candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 12)
+  assert.equal(payload.schemaVersion, 13)
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
   assert.equal(new Set(fields).size, fields.length)
   assert.equal(fields.includes("selectionRank"), false)
   assert.equal(Object.hasOwn(values, "selectionRank"), false)
-  assert.equal(Object.keys(payload.definitions).length, fields.length + 1)
-  assert.deepEqual(Object.keys(payload.definitions).sort(), [...fields, "selectionRank"].sort())
+  assert.equal(Object.keys(payload.definitions).length, fields.length)
+  assert.deepEqual(Object.keys(payload.definitions).sort(), [...fields].sort())
   assert.deepEqual(Object.keys(payload.candidates[0]), [
-    "symbol", "name", "selectionRank", ...Object.keys(payload.schema), "flags",
+    "symbol", "name", ...Object.keys(payload.schema), "flags",
   ])
-  assert.equal(payload.candidates[0].selectionRank, 1)
+  assert.equal(Object.hasOwn(payload.candidates[0], "selectionRank"), false)
+  assert.equal(payload.peerRegistryGeneratedAt, null)
   for (const [group, names] of Object.entries(payload.schema)) {
     assert.ok(isArray(payload.candidates[0][group]), group)
     assert.equal(payload.candidates[0][group].length, names.length, group)
@@ -334,12 +333,10 @@ test("agent payload creates documented grouped candidates without changing marke
   assert.deepEqual(shortlist, before)
   assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))), { fields, candidates: [values] })
   assert.deepEqual(payload.marketContext, {
-    breadth4h: 0.489,
     altMarketBackground: { status: "mixed", change4hPct: -1.23456789, breadth4h: 0.48858, warning: null },
     btcRotation4hPct: 0.06,
     ethRotation4hPct: 0.011,
     altsRotation4hPct: 0.01,
-    stablesRotation4hPct: -0.081,
     stablecap24hPct: -0.023,
   })
   assert.deepEqual(values, {
@@ -356,9 +353,8 @@ test("agent payload creates documented grouped candidates without changing marke
     atrPctile: 0.235,
     rangeStreak: 3,
     squeezeAge: 8,
-    priorRunupAtr72h: 1.235,
+    priorMoveAtr72h: 1.235,
     max24hRunupLast7dAtr: 2.346,
-    priorDrawdownAtr72h: 0,
     max24hDrawdownLast7dAtr: 1.457,
     rangePosition7d: 0.877,
     distanceToHigh24hAtr: -0.123,
@@ -379,7 +375,6 @@ test("agent payload creates documented grouped candidates without changing marke
     oiAccel4hPct: 0.678,
     oiZ: 1.268,
     oiLevelPctile: 0.877,
-    quietOi: true,
     fundingRate: -0.0000123456789,
     fundingPctile: 0.912,
     fundingMinusOiZ4h: -1.235,
@@ -410,18 +405,13 @@ test("agent payload creates documented grouped candidates without changing marke
     sustainedExcess24hPct: 3.457,
     categoryMoveAtr: 1.458,
     categoryBreadth: 0.667,
-    coinLeadAtr: -0.486,
     peerStatus: "unavailable",
-    peerRegistryGeneratedAt: null,
     peerCount: null,
     peerAvailableCount: null,
     peerBenchmarkCoinCount: null,
-    peerFreshLeaderCount: null,
-    peerFadingLeaderCount: null,
     peerCoinReturn4hPct: null,
     peerCoinMove4hAtr: null,
     peerLeaders: null,
-    coingeckoId: null,
     coingeckoTrending: null,
     coingeckoTrendingCategories: null,
     flags: ["coiling", "resilient", "fresh_quiet_breakout"],
@@ -441,6 +431,15 @@ test("agent payload creates documented grouped candidates without changing marke
     "setupSignals",
     "triggerSignals",
     "contextSignals",
+    "selectionRank",
+    "priorRunupAtr72h",
+    "priorDrawdownAtr72h",
+    "quietOi",
+    "coinLeadAtr",
+    "coingeckoId",
+    "peerFreshLeaderCount",
+    "peerFadingLeaderCount",
+    "stablesRotation4hPct",
   ]) {
     assert.equal(serialized.includes(`"${excluded}"`), false)
   }
@@ -462,18 +461,16 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
   const { candidates } = decodeAgentPayload(payload)
 
   assert.deepEqual(payload.candidates.map(candidate => candidate.coingecko), [
-    ["solana", true, ["Layer 1 (L1)", "Smart Contract Platform"]],
-    [null, null, null],
-    [null, null, null],
-    ["binancecoin", true, []],
+    [true, ["Layer 1 (L1)", "Smart Contract Platform"]],
+    [null, null],
+    [null, null],
+    [true, []],
   ])
   assert.deepEqual(
     candidates.map(candidate => payload.schema.coingecko.map(field => candidate[field])),
     payload.candidates.map(candidate => candidate.coingecko),
   )
-  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
-    ["SOL", 1], ["BTC", 2], ["ETH", 3], ["BNB", 4],
-  ])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["SOL", "BTC", "ETH", "BNB"])
   assert.equal(candidates[0].category, "layer-1")
 
   const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
@@ -490,7 +487,7 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
           movementProbability: 0.25,
           estimateConfidence: "medium",
           drivers: [{
-            fields: ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"],
+            fields: ["coingeckoTrending", "coingeckoTrendingCategories"],
             text: "Поисковое внимание само по себе не подтверждает начало сильного движения",
           }],
           counterSignals: [],
@@ -502,10 +499,10 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
 
   assert.deepEqual(analysis.assessments.map(assessment => assessment.symbol), ["SOL", "BTC", "ETH", "BNB"])
   assert.deepEqual(analysis.assessments.map(assessment => assessment.drivers[0]), [
-    "coingeckoId=solana и coingeckoTrending=true и coingeckoTrendingCategories=[\"Layer 1 (L1)\",\"Smart Contract Platform\"]: Поисковое внимание само по себе не подтверждает начало сильного движения",
-    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
-    "coingeckoId=null и coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
-    "coingeckoId=binancecoin и coingeckoTrending=true и coingeckoTrendingCategories=[]: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoTrending=true и coingeckoTrendingCategories=[\"Layer 1 (L1)\",\"Smart Contract Platform\"]: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoTrending=null и coingeckoTrendingCategories=null: Поисковое внимание само по себе не подтверждает начало сильного движения",
+    "coingeckoTrending=true и coingeckoTrendingCategories=[]: Поисковое внимание само по себе не подтверждает начало сильного движения",
   ])
   assert.deepEqual(shortlist, before)
 })
@@ -519,7 +516,7 @@ test("agent payload never infers CoinGecko matches or emits false trending statu
     { id: "solana", isTrending: false, trendingCategories: [] },
   ]) {
     const payload = buildAgentPayload(createShortlist([createCandidate("SOL", { coin: { coingecko } })]))
-    assert.deepEqual(payload.candidates[0].coingecko, [null, null, null])
+    assert.deepEqual(payload.candidates[0].coingecko, [null, null])
   }
 })
 
@@ -566,7 +563,7 @@ test("CoinGecko context leaves selection, late-move exclusions and existing payl
   const baselinePayload = buildAgentPayload(createShortlist(baselineSelection.candidates))
   assert.deepEqual({
     ...payload,
-    candidates: payload.candidates.map(candidate => ({ ...candidate, coingecko: [null, null, null] })),
+    candidates: payload.candidates.map(candidate => ({ ...candidate, coingecko: [null, null] })),
   }, baselinePayload)
   assert.deepEqual(profiles, before)
 })
@@ -712,7 +709,7 @@ for (const [status, historyScore, currentScore, downWinRate] of [
   })
 }
 
-test("agent payload keeps shortlist order and separates selection rank from market rank", () => {
+test("agent payload keeps shortlist order without selection rank and preserves market rank", () => {
   const shortlist = createShortlist([
     createCandidate("ZETA", { coin: { rank: 50 } }),
     createCandidate("ALPHA", { coin: { rank: 1 } }),
@@ -722,11 +719,26 @@ test("agent payload keeps shortlist order and separates selection rank from mark
   const payload = buildAgentPayload(shortlist)
   const { candidates } = decodeAgentPayload(payload)
 
-  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
-    ["ZETA", 1], ["ALPHA", 2], ["MID", 3],
-  ])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["ZETA", "ALPHA", "MID"])
+  assert.ok(payload.candidates.every(candidate => !Object.hasOwn(candidate, "selectionRank")))
   assert.deepEqual(candidates.map(candidate => candidate.symbol), ["ZETA", "ALPHA", "MID"])
   assert.deepEqual(candidates.map(candidate => candidate.rank), [50, 1, 5])
+  assert.deepEqual(shortlist, before)
+})
+
+test("signed prior movement preserves upward, downward and flat history without negative zero", () => {
+  const shortlist = createShortlist([
+    createCandidate("UP", { features: { movementLifecycle: { prior_runup_atr_72h: 1.23456, prior_drawdown_atr_72h: 0 } } }),
+    createCandidate("DOWN", { features: { movementLifecycle: { prior_runup_atr_72h: 0, prior_drawdown_atr_72h: 1.23456 } } }),
+    createCandidate("FLAT", { features: { movementLifecycle: { prior_runup_atr_72h: 0, prior_drawdown_atr_72h: 0 } } }),
+    createCandidate("TINY", { features: { movementLifecycle: { prior_runup_atr_72h: 0, prior_drawdown_atr_72h: 0.0001 } } }),
+  ])
+  const before = structuredClone(shortlist)
+  const payload = buildAgentPayload(shortlist)
+  const { candidates } = decodeAgentPayload(payload)
+
+  assert.deepEqual(candidates.map(candidate => candidate.priorMoveAtr72h), [1.235, -1.235, 0, 0])
+  assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))).candidates, candidates)
   assert.deepEqual(shortlist, before)
 })
 
@@ -769,7 +781,6 @@ test("agent payload preserves order and nullable metrics", () => {
   assert.equal(rows[1].categoryStatus, "not_applicable")
   assert.equal(rows[1].categoryMoveAtr, null)
   assert.equal(rows[1].categoryBreadth, null)
-  assert.equal(rows[1].coinLeadAtr, null)
   assert.equal(rows[1].preBreakoutSqueezeAge, null)
   assert.equal(rows[1].squeezeEndedHoursAgo, null)
   assert.equal(rows[1].breakoutAgeHours, null)
@@ -988,9 +999,7 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
   const shortlist = JSON.parse(JSON.stringify({ ...createShortlist([]), ...selection }))
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
   assert.equal(payload.candidateCount, 2)
-  assert.deepEqual(payload.candidates.map(candidate => [candidate.symbol, candidate.selectionRank]), [
-    ["FIRST", 1], ["SECOND", 2],
-  ])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["FIRST", "SECOND"])
   assert.equal(shortlist.candidates[0].features.sustainedStrength.peer_count, 4)
   assert.equal(getSustainedValues(payload).sustainedCurrentScore, 91.235)
 
@@ -1063,7 +1072,8 @@ test("legacy profiles without peer context remain candidates with unavailable co
     const payload = buildAgentPayload(createShortlist([candidate]))
 
     assert.equal(payload.candidateCount, 1)
-    assert.deepEqual(payload.candidates[0].peerContext, ["unavailable", null, null, null, null, null, null, null, null, null])
+    assert.deepEqual(payload.candidates[0].peerContext, ["unavailable", null, null, null, null, null, null])
+    assert.equal(payload.peerRegistryGeneratedAt, null)
     assert.deepEqual(candidate, before)
   }
 })
@@ -1092,10 +1102,10 @@ test("peer context preserves unknown coverage, no peers and insufficient data wi
     const { candidates: [values] } = decodeAgentPayload(JSON.parse(JSON.stringify(payload)))
 
     assert.deepEqual(payload.candidates[0].peerContext, [
-      peerContext.status, peerContext.registryGeneratedAt, peerContext.peerCount,
-      peerContext.availablePeerCount, peerContext.benchmarkCoinCount,
-      peerContext.freshLeaderCount, peerContext.fadingLeaderCount, 1.235, 0.235, peerContext.leaders,
+      peerContext.status, peerContext.peerCount, peerContext.availablePeerCount,
+      peerContext.benchmarkCoinCount, 1.235, 0.235, peerContext.leaders,
     ])
+    assert.equal(payload.peerRegistryGeneratedAt, peerContext.registryGeneratedAt)
     assert.equal(values.peerStatus, peerContext.status)
     assert.deepEqual(values.peerLeaders, peerContext.leaders)
     assert.deepEqual(shortlist, before)
@@ -1114,16 +1124,15 @@ test("peer leaders keep frozen event metrics, candidate reaction, metadata and n
   const { candidates: [values] } = decodeAgentPayload(payload)
 
   assert.equal(values.peerStatus, "partial")
+  assert.equal(payload.peerRegistryGeneratedAt, "2026-08-30T10:00:00.000Z")
   assert.deepEqual(payload.candidates[0].peerContext.slice(0, -1), [
-    "partial", "2026-08-30T10:00:00.000Z", 3, 2, 17, 1, 1, 1.235, 0.235,
+    "partial", 3, 2, 17, 1.235, 0.235,
   ])
   assert.deepEqual(values.peerLeaders[0], {
     symbol: "VET",
     type: "adjacent",
     basis: "Экосистема: связанные токены",
     caveat: "Не независимое подтверждение",
-    detectedAt: "2026-08-31T08:00:00.000Z",
-    windowStartedAt: "2026-08-31T04:00:00.000Z",
     ageHours: 2,
     status: "fresh",
     return4hPct: 3.123,
@@ -1138,15 +1147,27 @@ test("peer leaders keep frozen event metrics, candidate reaction, metadata and n
   assert.deepEqual(values.peerLeaders[1], {
     ...values.peerLeaders[0],
     symbol: "VTHO",
-    detectedAt: "2026-08-31T02:00:00.000Z",
-    windowStartedAt: "2026-08-30T22:00:00.000Z",
     ageHours: 8,
     status: "fading",
     coinReturnSinceStartPct: null,
     coinMoveSinceStartAtr: null,
   })
-  assert.doesNotMatch(JSON.stringify(payload.candidates), /baseCurrencyId|XTVC|marketSymbol|https?:\/\/|"sources"|"raw"/)
+  assert.doesNotMatch(JSON.stringify(payload.candidates), /baseCurrencyId|XTVC|marketSymbol|https?:\/\/|"sources"|"raw"|detectedAt|windowStartedAt|peerRegistryGeneratedAt/)
   assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))), decodeAgentPayload(payload))
+  assert.deepEqual(shortlist, before)
+})
+
+test("shared peer registry metadata is sent once across multiple candidates", () => {
+  const shortlist = createShortlist(["SOL", "ETH"].map(symbol => ({
+    ...createCandidate(symbol),
+    peerContext: createPeerContext(),
+  })))
+  const before = structuredClone(shortlist)
+  const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
+
+  assert.equal(payload.peerRegistryGeneratedAt, "2026-08-30T10:00:00.000Z")
+  assert.equal(JSON.stringify(payload).split("2026-08-30T10:00:00.000Z").length - 1, 1)
+  assert.ok(decodeAgentPayload(payload).candidates.every(candidate => !Object.hasOwn(candidate, "peerRegistryGeneratedAt")))
   assert.deepEqual(shortlist, before)
 })
 
@@ -1164,8 +1185,7 @@ test("peer event age and status are not recalculated from rounded metrics or can
   const [values] = decodeAgentPayload(payload).candidates
 
   assert.equal(values.peerStatus, "available")
-  assert.equal(values.peerFreshLeaderCount, 0)
-  assert.equal(values.peerFadingLeaderCount, 1)
+  assert.equal(values.peerLeaders.length, 1)
   assert.equal(values.peerCoinReturn4hPct, null)
   assert.equal(values.peerCoinMove4hAtr, null)
   assert.equal(values.peerLeaders[0].ageHours, 4.000001)
@@ -1265,8 +1285,8 @@ test("peer schema supports an empty shortlist through step 7 with no history too
     readCoinData: async () => assert.fail("Empty shortlist must not load history"),
   })
 
-  assert.equal(payload.schemaVersion, 12)
-  assert.equal(payload.schema.peerContext.length, 10)
+  assert.equal(payload.schemaVersion, 13)
+  assert.equal(payload.schema.peerContext.length, 7)
   assert.equal(analysis.candidateCount, 0)
   assert.deepEqual(analysis.assessments, [])
   assert.deepEqual(analysis.topCandidates, [])
