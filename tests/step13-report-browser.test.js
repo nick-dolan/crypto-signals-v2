@@ -192,6 +192,7 @@ function runReport (report, {
       ? {
           ColorType: { Solid: "solid" },
           CrosshairMode: { Normal: 0 },
+          TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
           CandlestickSeries: "Candlestick",
           HistogramSeries: "Histogram",
           LineSeries: "Line",
@@ -218,9 +219,9 @@ function click (node, target = node) {
   return node.listeners.get("click")({ target })
 }
 
-function createReport (symbols = ["COTI"]) {
+function createReport (symbols = ["COTI"], asOf = "2026-09-15T09:00:00.000Z") {
   const report = {
-    asOf: "2026-09-15T09:00:00.000Z",
+    asOf,
     reportCreatedAt: "2026-09-15T11:37:42.123Z",
     timeframe: "1h",
     objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
@@ -500,8 +501,8 @@ test("v3 shows all five news in saved importance order as a list with ten access
         assert.ok(link.title.includes(detail))
         assert.ok(!node.textContent.includes(detail))
       }
-      assert.match(link.title, /2026.*UTC/)
-      assert.ok(link.title.includes(source.publishedAt.slice(11, 16)))
+      assert.match(link.title, /2026.*UTC\+3$/)
+      assert.ok(link.title.includes(new Date(Date.parse(source.publishedAt) + 10_800_000).toISOString().slice(11, 16)))
       assert.ok(!link.title.includes(source.text))
       assert.equal(link.attributes.get("aria-label"), `Источник ${index * 2 + sourceIndex + 1}: ${link.title}`)
     }
@@ -618,8 +619,8 @@ test("v2 market brief shows two short paragraphs with compact, globally numbered
         assert.ok(link.title.includes(detail))
         assert.ok(!node.textContent.includes(detail))
       }
-      assert.match(link.title, /2026.*UTC/)
-      assert.ok(link.title.includes(source.publishedAt.slice(11, 16)))
+      assert.match(link.title, /2026.*UTC\+3$/)
+      assert.ok(link.title.includes(new Date(Date.parse(source.publishedAt) + 10_800_000).toISOString().slice(11, 16)))
       assert.ok(!link.title.includes(source.text))
       assert.equal(link.attributes.get("aria-label"), `Источник ${link.textContent.slice(1, -1)}: ${link.title}`)
     }
@@ -702,9 +703,9 @@ test("market brief keeps its actual news window in metadata, including legacy 24
       addMarketBrief(report, schemaVersion).marketAsOf = marketAsOf
       const { byId } = runReport(report)
       assert.match(byId("market-brief").title, schemaVersion === 1
-        ? /Окно публикаций: 14.*2026.*13:20 UTC — 15.*2026.*13:20 UTC/
-        : /Окно публикаций: 15.*2026.*07:20 UTC — 15.*2026.*13:20 UTC/)
-      assert.doesNotMatch(byId("market-brief").title, /6 час|24 час|09:00|11:37|13:22/)
+        ? /Окно публикаций: 14.*2026.*16:20 UTC\+3 — 15.*2026.*16:20 UTC\+3$/
+        : /Окно публикаций: 15.*2026.*10:20 UTC\+3 — 15.*2026.*16:20 UTC\+3$/)
+      assert.doesNotMatch(byId("market-brief").title, /6 час|24 час|12:00|14:37|16:22/)
       assert.doesNotMatch(byId("market-brief-paragraphs").textContent, /Окно публикаций|UTC/)
       assert.equal(byId("as-of").dateTime, report.asOf)
     }
@@ -827,8 +828,8 @@ test("v3 empty and failed states suppress saved items but retain the actual non-
     assert.equal(briefEntries(byId).length, visible ? 5 : 0)
     assert.equal(byId("market-brief-empty").hidden, visible)
     assert.equal(byId("market-brief-note").hidden, status !== "failed")
-    assert.match(byId("market-brief").title, /Окно публикаций: 15.*2026.*08:47 UTC — 15.*2026.*14:31 UTC/)
-    assert.doesNotMatch(byId("market-brief").title, /6 час|09:00|11:37|13:22/)
+    assert.match(byId("market-brief").title, /Окно публикаций: 15.*2026.*11:47 UTC\+3 — 15.*2026.*17:31 UTC\+3$/)
+    assert.doesNotMatch(byId("market-brief").title, /6 час|12:00|14:37|16:22/)
   }
 })
 
@@ -1188,7 +1189,7 @@ test("all radar lines use the same exact close anchor and common 1/3/7-day windo
     assert.deepEqual(peerDays.map(item => item.attributes.get("aria-pressed")), peerDays.map(item => String(item === button)))
     charts.forEach((chart, index) => {
       assert.deepEqual(chart.ranges, [{ from, to }])
-      assert.match(chart.options.localization.timeFormatter(to), /15 сент\. 2026 г\., 10:00 UTC · закрытие/)
+      assert.match(chart.options.localization.timeFormatter(to), /15 сент\. 2026 г\., 13:00 UTC\+3 · закрытие$/)
       const members = [data.observations[index].coin, ...data.observations[index].leaders]
       members.forEach((member, lineIndex) => {
         const history = histories[member.baseCurrencyId]
@@ -1206,13 +1207,13 @@ test("all radar lines use the same exact close anchor and common 1/3/7-day windo
         }
       })
       assert.equal(peerPart(cards[index], "warning").hidden, true)
-      assert.match(peerPart(cards[index], "peer-chart-time").textContent, /10:00 UTC.*% \(не ATR\)/)
+      assert.match(peerPart(cards[index], "peer-chart-time").textContent, /13:00 UTC\+3.*% \(не ATR\)/)
       hoverChart(chart, from)
       assert.ok(peerPart(cards[index], "peer-chart-legend").children.every(item => item.textContent.endsWith(" · 0%")))
       assert.ok(peerPart(cards[index], "peer-chart-time").textContent.includes(chart.options.localization.timeFormatter(from).split(" · ")[0]))
       chart.crosshair({})
     })
-    assert.match(byId("peer-radar-range-note").textContent, /Общая база \(0%\):.*10:00 UTC → срез:.*10:00 UTC/)
+    assert.match(byId("peer-radar-range-note").textContent, /Общая база \(0%\):.*13:00 UTC\+3 → срез:.*13:00 UTC\+3$/)
   }
   assert.equal(browser.charts[0].removed, false)
   assert.equal(browser.days[2].attributes.get("aria-pressed"), "true")
@@ -1232,7 +1233,7 @@ test("missing exact anchors disable only that coin, including omitted slots, wit
   const card = byId("peer-radar-observations").children[0]
   let chart = radarCharts(browser).at(-1)
   assert.deepEqual(chart.series.map(series => series.options.title), ["Лидер LEADER"])
-  assert.match(peerPart(card, "warning").textContent, /OUTSIDE: Нет цены закрытия на общей базе 14 сент\. 2026 г\., 10:00 UTC — линия отключена/)
+  assert.match(peerPart(card, "warning").textContent, /OUTSIDE: Нет цены закрытия на общей базе 14 сент\. 2026 г\., 13:00 UTC\+3 — линия отключена/)
   assert.equal(peerPart(card, "peer-chart-legend").children[0].dataset.disabled, "true")
   assert.match(peerPart(card, "peer-chart-legend").children[0].textContent, /Линия отключена: нет общей базы/)
   assert.equal(peerPart(card, "peer-chart-legend").children[1].dataset.disabled, "false")
@@ -1240,7 +1241,7 @@ test("missing exact anchors disable only that coin, including omitted slots, wit
   click(peerDays[1])
   chart = radarCharts(browser).at(-1)
   assert.ok(chart.series.every(series => series.options.title === "Кандидат OUTSIDE"))
-  assert.match(peerPart(card, "warning").textContent, /LEADER: Нет цены закрытия на общей базе 12 сент\. 2026 г\., 10:00 UTC — линия отключена/)
+  assert.match(peerPart(card, "warning").textContent, /LEADER: Нет цены закрытия на общей базе 12 сент\. 2026 г\., 13:00 UTC\+3 — линия отключена/)
   assert.equal(peerPart(card, "peer-chart-legend").children[0].dataset.disabled, "false")
   assert.equal(peerPart(card, "peer-chart-legend").children[1].dataset.disabled, "true")
   click(peerDays[2])
@@ -1483,9 +1484,9 @@ test("peer radar renders independent watch and limited observations with snapsho
   assert.deepEqual(byId("peer-radar-counts").children.map(node => node.textContent), [
     "Наблюдений: 2", "Обратить внимание: 1", "Ограниченная интерпретация: 1",
   ])
-  assert.match(byId("peer-radar-time").textContent, /Срез закрыт: 15 сент\. 2026 г\., 10:00 UTC/)
-  assert.match(byId("peer-radar-time").textContent, /Анализ выпущен: 15 сент\. 2026 г\., 10:08:09 UTC/)
-  assert.doesNotMatch(byId("peer-radar-time").textContent, /09:00|11:37/)
+  assert.match(byId("peer-radar-time").textContent, /Срез закрыт: 15 сент\. 2026 г\., 13:00 UTC\+3/)
+  assert.match(byId("peer-radar-time").textContent, /Анализ выпущен: 15 сент\. 2026 г\., 13:08:09 UTC\+3$/)
+  assert.doesNotMatch(byId("peer-radar-time").textContent, /12:00|14:37/)
   const cards = byId("peer-radar-observations").children
   assert.equal(cards.length, 2)
   for (const [index, verdict] of ["Обратить внимание", "Ограниченная интерпретация"].entries()) {
@@ -1619,7 +1620,7 @@ test("peer radar exposes partial and unknown coverage without treating no_peers 
   assert.equal(byId("peer-radar-warning").textContent, report.peerRadar.warning)
   assert.equal(byId("peer-radar-warning").hidden, false)
   assert.equal(byId("peer-radar-method").open, false)
-  assert.match(byId("peer-radar-provenance").textContent, /asOf \(открытие\):.*09:00 UTC.*Скан шага 11 выпущен:.*10:02 UTC/)
+  assert.match(byId("peer-radar-provenance").textContent, /asOf \(открытие\):.*12:00 UTC\+3.*Скан шага 11 выпущен:.*13:02 UTC\+3/)
   assert.match(byId("peer-radar-provenance").textContent, /Справочник: время выпуска не указано/)
   assert.match(byId("peer-radar-analysis").textContent, /Источник анализа: copilot.*Модель: test-model.*Усилие рассуждения: high.*Вызовов: 1/)
   assert.deepEqual(byId("peer-radar-criteria").children.map(node => node.children[1].textContent), Object.values(data.criteria))
@@ -1644,9 +1645,9 @@ test("each peer leader keeps actual signed returns, own ATR and reaction separat
   const values = metrics => metrics.children.map(node => node.children[1].textContent)
   assert.equal(leaders.length, 2)
   assert.equal(leaders[0].children[0].textContent, "LEADER · Конкурент")
-  assert.match(leaders[0].textContent, /Свежий импульс \(fresh\) · Возраст с обнаружения: 4 ч · Обнаружен:.*06:00 UTC/)
+  assert.match(leaders[0].textContent, /Свежий импульс \(fresh\) · Возраст с обнаружения: 4 ч · Обнаружен:.*09:00 UTC\+3/)
   assert.match(leaders[0].textContent, /Связь по справочнику: Близкий продукт.*Оговорка связи: Разные масштабы бизнеса/)
-  assert.match(leaders[0].children.find(node => node.className === "peer-current-window").textContent, /02:00 UTC →.*10:00 UTC/)
+  assert.match(leaders[0].children.find(node => node.className === "peer-current-window").textContent, /05:00 UTC\+3 →.*13:00 UTC\+3$/)
   assert.equal(leaders[0].children.find(node => node.className === "peer-reaction").textContent, "Реакция OUTSIDE на этом интервале: Снижение (falling)")
   const current = leaders[0].children.find(node => node.className === "peer-metrics")
   assert.deepEqual(values(current), ["+5%", "-1,25%", "+2,5 ATR", "-0,75 ATR", "3,25 ATR", "50%", "-0,3×"])
@@ -1655,11 +1656,11 @@ test("each peer leader keeps actual signed returns, own ATR and reaction separat
   const frozen = leaders[0].children.find(node => node.tagName === "DETAILS")
   assert.equal(frozen.open, false)
   assert.equal(frozen.children[0].textContent, "Исходный импульс · 4ч (зафиксирован)")
-  assert.match(frozen.textContent, /02:00 UTC →.*06:00 UTC.*не текущая доходность/)
+  assert.match(frozen.textContent, /05:00 UTC\+3 →.*09:00 UTC\+3.*не текущая доходность/)
   assert.deepEqual(values(frozen.children.find(node => node.className === "peer-metrics")), ["+9%", "+4,5 ATR", "+2 ATR", "2,4×"])
   assert.equal(leaders[1].children[0].textContent, "ADJACENT · Смежный сосед")
   assert.match(leaders[1].textContent, /Затухающий импульс \(fading\) · Возраст с обнаружения: 6 ч/)
-  assert.match(leaders[1].children.find(node => node.className === "peer-current-window").textContent, /00:00 UTC →.*10:00 UTC/)
+  assert.match(leaders[1].children.find(node => node.className === "peer-current-window").textContent, /03:00 UTC\+3 →.*13:00 UTC\+3$/)
   assert.equal(leaders[1].children.find(node => node.className === "peer-reaction").textContent, "Реакция OUTSIDE на этом интервале: Рост (rising)")
   assert.deepEqual(values(leaders[1].children.find(node => node.className === "peer-metrics")), ["+6%", "+8,5%", "+3 ATR", "+1,2 ATR", "1,8 ATR", "80%", "0,4×"])
   assert.match(limited.textContent, /Реакция LIMITED на этом интервале: Слабая \(flat\)/)
@@ -1863,7 +1864,7 @@ test("coin descriptions and compact source links follow selection and clear when
   assert.equal(byId("coin-description").hidden, false)
   assert.deepEqual(links().map(link => link.textContent), ["example.com", "CoinGecko"])
   assert.deepEqual(links().map(link => link.href), descriptions.XTVCCOTI.sources.map(source => source.url))
-  assert.match(links()[0].title, /Проверено:.*2026.*UTC/)
+  assert.match(links()[0].title, /Проверено: 25 сент\. 2026 г\., 12:00 UTC\+3$/)
   assert.equal(links()[1].title, undefined)
   assert.ok(links().every(link => link.target === "_blank" && link.rel === "noopener noreferrer"))
   assert.equal(peerPart(section(), "coin-description-sources").children[0].textContent, "Источники:")
@@ -2382,6 +2383,145 @@ function createBinanceApi (report) {
   }
 }
 
+test("main and peer axes share fixed UTC+3 ticks and crosshairs across day, month and year rollover", () => {
+  const report = createReport(["COTI"], "2026-12-31T22:00:00.000Z")
+  const data = addPeerRadar(report, ["OUTSIDE"])
+  const histories = addPeerHistories(report)
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const { byId } = browser
+  const main = browser.charts[0]
+  click(byId("peer-radar-tab"))
+  const peer = radarCharts(browser)[0]
+  const card = byId("peer-radar-observations").children[0]
+  assert.ok(isFunction(main.options.timeScale.tickMarkFormatter))
+  assert.equal(peer.options.timeScale.tickMarkFormatter, main.options.timeScale.tickMarkFormatter)
+
+  for (const [timestamp, ticks, label] of [
+    ["2026-09-15T09:07:08.000Z", ["2026", "сент.", "15", "12:07", "12:07:08"], "15 сент. 2026 г., 12:07"],
+    ["2026-12-31T20:59:58.000Z", ["2026", "дек.", "31", "23:59", "23:59:58"], "31 дек. 2026 г., 23:59"],
+    ["2026-12-31T21:00:01.000Z", ["2027", "янв.", "1", "00:00", "00:00:01"], "01 янв. 2027 г., 00:00"],
+    ["2026-12-31T22:07:08.000Z", ["2027", "янв.", "1", "01:07", "01:07:08"], "01 янв. 2027 г., 01:07"],
+    ["2026-01-31T22:07:08.000Z", ["2026", "февр.", "1", "01:07", "01:07:08"], "01 февр. 2026 г., 01:07"],
+  ]) {
+    const utc = Date.parse(timestamp) / 1_000
+    for (const [chart, suffix] of [[main, ""], [peer, " · закрытие"]]) {
+      ticks.forEach((expected, tickMarkType) => {
+        assert.equal(chart.options.timeScale.tickMarkFormatter(utc, tickMarkType, "en-US"), expected)
+      })
+      assert.equal(chart.options.localization.timeFormatter(utc), `${label} UTC+3${suffix}`)
+    }
+  }
+
+  for (const [hours, label] of [
+    [-2, "31 дек. 2026 г., 23:00"], [-1, "01 янв. 2027 г., 00:00"], [0, "01 янв. 2027 г., 01:00"],
+  ]) {
+    hoverChart(main, chartTime(report, hours))
+    hoverChart(peer, chartTime(report, hours))
+    assert.equal(byId("chart-legend").children[0].textContent, `${label} UTC+3`)
+    assert.equal(peerPart(card, "peer-chart-time").textContent, `Закрытие: ${label} UTC+3 · изменение цены, % (не ATR)`)
+  }
+  hoverChart(main)
+  hoverChart(peer)
+  assert.equal(byId("chart-legend").children[0].textContent, "01 янв. 2027 г., 01:00 UTC+3")
+  assert.match(peerPart(card, "peer-chart-time").textContent, /^Закрытие: 01 янв\. 2027 г\., 02:00 UTC\+3/)
+  assert.equal(byId("peer-radar-range-note").textContent, "Общая база (0%): 31 дек. 2026 г., 02:00 UTC+3 → срез: 01 янв. 2027 г., 02:00 UTC+3")
+
+  assert.deepEqual(main.ranges, [{ from: chartTime(report, -167), to: chartTime(report) }])
+  assert.deepEqual(chartSeries(main, "Candlestick").data, before.coins[0].history.candles)
+  for (const [type, key] of [["Candlestick", "candles"], ["Histogram", "volume"], ["Line", "openInterest"]]) {
+    assert.deepEqual(chartSeries(main, type).data.map(point => point.time), before.coins[0].history[key].map(point => point.time))
+  }
+  const to = Date.parse(data.snapshotClosedAt) / 1_000
+  const from = to - 86_400
+  assert.deepEqual(peer.ranges, [{ from, to }])
+  for (const [index, member] of [data.observations[0].coin, ...data.observations[0].leaders].entries()) {
+    assert.deepEqual(peer.series[index].data.map(point => point.time), histories[member.baseCurrencyId].points.filter(point => point.time >= from).map(point => point.time))
+  }
+  assert.equal(byId("report-data").textContent, JSON.stringify(before))
+  assert.deepEqual(report, before)
+})
+
+test("snapshot metadata, publication windows and source tooltips use UTC+3 at the new year without changing JSON", () => {
+  const report = createReport(["COTI"], "2026-12-31T22:00:00.000Z")
+  const brief = addMarketBrief(report, 5)
+  const information = addInformation(report)
+  for (const key of ["news", "twitter"]) {
+    report.informationSources[key] = { from: "2026-12-31T20:45:00.000Z", asOf: "2026-12-31T22:45:00.000Z" }
+  }
+  Object.assign(brief, report.informationSources.news)
+  brief.sources[0].publishedAt = "2026-12-31T22:30:00.000Z"
+  information.news.items[0].publishedAt = brief.sources[0].publishedAt
+  information.news.items.push({ ...information.news.items[0], publishedAt: null, published: Date.parse(brief.sources[0].publishedAt) / 1_000 })
+  information.twitter.tweets[0].createdAt = "2026-12-31T22:50:00.000Z"
+  const data = addPeerRadar(report, ["OUTSIDE"])
+  Object.assign(data, { generatedAt: "2026-12-31T23:08:09.000Z", scanGeneratedAt: "2026-12-31T23:02:00.000Z", registryGeneratedAt: "2026-12-31T22:15:00.000Z" })
+  Object.assign(data.observations[0].leaders[0], { windowStartedAt: "2026-12-31T18:00:00.000Z", detectedAt: report.asOf })
+  for (const description of Object.values(addDescriptions(report))) {
+    description.sources[0].checkedAt = "2026-12-31T22:35:00.000Z"
+  }
+  const before = structuredClone(report)
+  const { byId } = runReport(report)
+
+  assert.equal(byId("as-of").textContent, "01 янв. 2027 г., 01:00")
+  assert.equal(byId("as-of").dateTime, before.asOf)
+  assert.match(byId("alt-market-as-of").textContent, /^Срез 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  assert.match(byId("report-time-note").textContent, /^Срез отчёта: 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  assert.match(byId("candle-time-note").textContent, /Время на графике — UTC\+3.*закрыта 01 янв\. 2027 г\., 02:00 UTC\+3\.$/)
+  assert.equal(byId("peer-radar-time").textContent, "Срез закрыт: 01 янв. 2027 г., 02:00 UTC+3 · Анализ выпущен: 01 янв. 2027 г., 02:08:09 UTC+3")
+  assert.match(byId("peer-radar-provenance").textContent, /asOf \(открытие\): 01 янв\. 2027 г\., 01:00 UTC\+3.*Скан шага 11 выпущен: 01 янв\. 2027 г\., 02:02 UTC\+3.*Справочник: 01 янв\. 2027 г\., 01:15 UTC\+3$/)
+  for (const key of ["news", "twitter"]) {
+    assert.equal(byId(`${key}-window`).textContent, "Окно публикаций: 31 дек. 2026 г., 23:45 — 01 янв. 2027 г., 01:45 UTC+3.")
+  }
+  assert.equal(byId("market-brief").title, "Окно публикаций: 31 дек. 2026 г., 23:45 UTC+3 — 01 янв. 2027 г., 01:45 UTC+3")
+  const citation = briefEntries(byId)[0].children.at(-1).children[0]
+  assert.ok(citation.title.endsWith("01 янв. 2027 г., 01:30 UTC+3"))
+  assert.equal(citation.attributes.get("aria-label"), `Источник 1: ${citation.title}`)
+  for (const article of byId("news-items").children) {
+    assert.equal(peerPart(article, "source-meta").textContent, "Crypto News · 01 янв. 2027 г., 01:30 UTC+3")
+  }
+  assert.equal(peerPart(byId("twitter-items"), "source-meta").textContent, "01 янв. 2027 г., 01:50 UTC+3")
+  const card = byId("peer-radar-observations").children[0]
+  const leader = peerPart(card, "peer-leader")
+  assert.match(leader.textContent, /Обнаружен: 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  assert.equal(peerPart(leader, "peer-current-window").textContent, "Текущий интервал: 31 дек. 2026 г., 21:00 UTC+3 → 01 янв. 2027 г., 02:00 UTC+3")
+  assert.match(peerPart(leader, "peer-original").textContent, /Окно обнаружения: 31 дек\. 2026 г\., 21:00 UTC\+3 → 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  for (const section of [byId("coin-description"), peerPart(card, "coin-description")]) {
+    assert.equal(descendants(section).find(node => node.title).title, "Проверено: 01 янв. 2027 г., 01:35 UTC+3")
+  }
+  assert.equal(byId("report-data").textContent, JSON.stringify(before))
+  assert.deepEqual(report, before)
+})
+
+test("update, current OI and source transition labels use UTC+3 while candle times, ranges and the report marker stay UTC", async () => {
+  const report = createReport(["COTI"], "2026-12-31T22:00:00.000Z")
+  const before = structuredClone(report)
+  const result = createUpdate(report, report.coins[0], 2)
+  result.oiSourceFrom = chartTime(report, 2)
+  const browser = runReport(report, { updateChartHistory: async () => result })
+  const { byId } = browser
+  const embedded = byId("report-data").textContent
+  await click(byId("update-chart"))
+  const chart = browser.charts.at(-1)
+
+  assert.match(byId("chart-update-status").textContent, /Обновлено 01 янв\. 2027 г\., 03:30:00 UTC\+3.*формируются.*Текущий OI: снимок 01 янв\. 2027 г\., 03:29:59 UTC\+3, не закрытие часа/)
+  assert.match(byId("chart-source").textContent, /Свечи и объём: TradingView → Binance с 01 янв\. 2027 г\., 02:00 UTC\+3\. OI: TradingView → Binance с 01 янв\. 2027 г\., 03:00 UTC\+3\./)
+  assert.match(byId("report-time-note").textContent, /^Срез отчёта: 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  assert.equal(chart.options.localization.timeFormatter(result.formingTime), "01 янв. 2027 г., 03:00 UTC+3")
+  hoverChart(chart, result.formingTime)
+  assert.equal(byId("chart-legend").children[0].textContent, "01 янв. 2027 г., 03:00 UTC+3")
+  assert.deepEqual(chartSeries(chart, "Candlestick").data, result.history.candles)
+  assert.deepEqual(chartSeries(chart, "Line").data, result.history.openInterest)
+  assert.deepEqual(chartSeries(chart, "Histogram").data.map(({ time, value }) => ({ time, value })), result.history.volume)
+  assert.deepEqual(chart.ranges, [{ from: chartTime(report, -165), to: chartTime(report, 2) }])
+  assert.equal(chartMarkers(browser)[0].time, chartTime(report))
+  assert.equal(browser.updateCalls[0].asOf, before.asOf)
+  assert.equal(byId("as-of").dateTime, before.asOf)
+  assert.equal(byId("report-data").textContent, embedded)
+  assert.deepEqual(JSON.parse(embedded), before)
+  assert.deepEqual(report, before)
+})
+
 test("initializes the first ranked top candidate, hourly whitespace grid and seven-day range", () => {
   const report = createReport(["PLAIN", "SECOND", "FIRST"])
   report.coins[0].topRank = null
@@ -2586,8 +2726,8 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
     }
     assert.equal(byId("analysis-source").textContent, "Архивный анализ с инфофоном")
     assert.equal(byId("context-generated"), null)
-    assert.match(byId("news-window").textContent, /10:45/)
-    assert.match(byId("twitter-window").textContent, /11:00/)
+    assert.match(byId("news-window").textContent, /13:45.*13:45 UTC\+3\.$/)
+    assert.match(byId("twitter-window").textContent, /14:00.*14:00 UTC\+3\.$/)
     assert.equal(byId("as-of").dateTime, report.asOf)
     assert.equal(byId("news-count").textContent, "1")
     assert.equal(byId("twitter-count").textContent, "1")
@@ -2595,9 +2735,9 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
     assert.equal(byId("twitter-items").children.length, 1)
     assert.equal(byId("news-status").hidden, true)
     assert.equal(byId("twitter-status").hidden, true)
-    assert.match(byId("news-items").textContent, /Crypto News.*10:30/)
+    assert.match(byId("news-items").textContent, /Crypto News.*13:30 UTC\+3/)
     assert.match(byId("news-items").textContent, /Полный сохранённый текст\nВторой абзац/)
-    assert.match(byId("twitter-items").textContent, /@researcher.*10:50/)
+    assert.match(byId("twitter-items").textContent, /@researcher.*13:50 UTC\+3/)
     assert.match(byId("twitter-items").textContent, /Лайки: 12.*Репосты: 3.*Просмотры: 456/)
     const links = [...descendants(byId("news-items")), ...descendants(byId("twitter-items"))].filter(node => node.tagName === "A")
     assert.deepEqual(links.map(link => link.href), ["https://example.com/news", "https://www.tradingview.com/news/story/", "https://x.com/i/status/1234567890123456789"])
@@ -2986,8 +3126,8 @@ for (const [status, change4hPct, breadth4h, label, icon, change, breadth] of [
     assert.equal(browser.byId("alt-market-change").textContent, change)
     assert.equal(browser.byId("alt-market-breadth").textContent, breadth)
     assert.equal(browser.byId("alt-market-warning").hidden, status !== "unavailable")
-    assert.match(browser.byId("alt-market-as-of").textContent, /09:00 UTC.*не меняется при Update chart/)
-    assert.doesNotMatch(browser.byId("alt-market-as-of").textContent, /11:37/)
+    assert.match(browser.byId("alt-market-as-of").textContent, /12:00 UTC\+3.*не меняется при Update chart/)
+    assert.doesNotMatch(browser.byId("alt-market-as-of").textContent, /14:37/)
     assert.equal(browser.updateCalls.length, 0)
     assert.equal(browser.directRequests.length, 0)
   })
@@ -3183,7 +3323,7 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   assert.ok(api.requests.every(call => call.url.origin === "https://fapi.binance.com" && call.options.credentials === "omit"))
   assert.ok(api.requests.filter(call => call.url.searchParams.has("symbol"))
     .every(call => call.url.searchParams.get("symbol") === "RAYSOLUSDT"))
-  assert.match(browser.byId("chart-update-status").textContent, /Обновлено.*14:20:00.*формируются.*14:19:59.*не закрытие часа/)
+  assert.match(browser.byId("chart-update-status").textContent, /Обновлено.*17:20:00 UTC\+3.*формируются.*17:19:59 UTC\+3.*не закрытие часа/)
   assert.match(browser.byId("chart-source").textContent, /TradingView → Binance.*OI.*базовом активе/)
   assert.match(browser.byId("last-price-label").textContent, /незакрытая свеча/)
   assert.equal(browser.byId("chart-update-error").hidden, true)
@@ -3390,7 +3530,7 @@ test("the report marker stays at the saved asOf, never at HTML creation or eithe
   const browser = runReport(report, { updateChartHistory: async () => updates.shift() })
   const hour = chartTime(report)
   assert.equal(browser.markers.length, 0)
-  assert.match(browser.byId("report-time-note").textContent, /09:00/)
+  assert.match(browser.byId("report-time-note").textContent, /12:00 UTC\+3/)
   assert.notEqual(hour, Math.floor(Date.parse(report.reportCreatedAt) / 3_600_000) * 3_600)
 
   for (const end of [5, 8]) {
@@ -3400,7 +3540,7 @@ test("the report marker stays at the saved asOf, never at HTML creation or eithe
     assert.equal(markers[0].time, hour)
     assert.equal(markers[0].text, "Отчёт")
     assert.notEqual(markers[0].time, chartTime(report, end))
-    assert.match(browser.byId("report-time-note").textContent, /09:00.*Отметка «Отчёт»/)
+    assert.match(browser.byId("report-time-note").textContent, /12:00 UTC\+3.*Отметка «Отчёт»/)
     const count = browser.markers.length
     click(browser.days.find(day => day.dataset.days === "7"))
     assert.equal(browser.markers.length, count)
@@ -3451,7 +3591,7 @@ test("a legacy report without reportCreatedAt still marks its saved asOf", async
   await click(browser.byId("update-chart"))
   assert.equal(chartMarkers(browser).length, 1)
   assert.equal(chartMarkers(browser)[0].time, chartTime(report))
-  assert.match(browser.byId("report-time-note").textContent, /Срез отчёта.*09:00/)
+  assert.match(browser.byId("report-time-note").textContent, /Срез отчёта.*12:00 UTC\+3/)
   assert.equal(browser.byId("chart-update-error").hidden, true)
 })
 
@@ -3783,7 +3923,7 @@ for (const value of [22, 0, undefined]) {
     const expected = value === undefined ? "OI —" : `OI ${value}`
     assert.equal(oiLegend(browser.byId), expected)
     assert.equal(browser.byId("chart-legend").children.at(-2).textContent, "Объём 17")
-    assert.match(browser.byId("chart-legend").children[0].textContent, /11:00/)
+    assert.match(browser.byId("chart-legend").children[0].textContent, /14:00 UTC\+3/)
     assert.match(browser.byId("last-price-label").textContent, /последняя закрытая свеча/)
     assert.match(browser.byId("chart-update-status").textContent, /Текущая свеча недоступна.*Текущий OI: снимок/)
     assert.deepEqual(chartSeries(chart, "Candlestick").data.at(-1), { time: chartTime(report, 3) })

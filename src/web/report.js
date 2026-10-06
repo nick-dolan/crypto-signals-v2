@@ -46,7 +46,7 @@
 
   function time (timestamp, seconds = false) {
     return new Intl.DateTimeFormat("ru-RU", {
-      timeZone: "UTC",
+      timeZone: "Etc/GMT-3",
       year: "numeric",
       month: "short",
       day: "2-digit",
@@ -54,6 +54,19 @@
       minute: "2-digit",
       second: seconds ? "2-digit" : undefined,
     }).format(new Date(timestamp))
+  }
+
+  function tickTime (timestamp, tickMarkType) {
+    return new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Etc/GMT-3",
+      ...{
+        [LightweightCharts.TickMarkType.Year]: { year: "numeric" },
+        [LightweightCharts.TickMarkType.Month]: { month: "short" },
+        [LightweightCharts.TickMarkType.DayOfMonth]: { day: "numeric" },
+        [LightweightCharts.TickMarkType.Time]: { hour: "2-digit", minute: "2-digit" },
+        [LightweightCharts.TickMarkType.TimeWithSeconds]: { hour: "2-digit", minute: "2-digit", second: "2-digit" },
+      }[tickMarkType],
+    }).format(new Date(timestamp * 1_000))
   }
 
   function confidence (value) {
@@ -121,7 +134,7 @@
     byId("alt-market-breadth").textContent = background.breadth4h == null
       ? "Нет данных"
       : `${number(background.breadth4h * 100, 2)}%`
-    byId("alt-market-as-of").textContent = `Срез ${time(report.asOf)} UTC · фон не меняется при Update chart`
+    byId("alt-market-as-of").textContent = `Срез ${time(report.asOf)} UTC+3 · фон не меняется при Update chart`
     byId("alt-market-warning").textContent = background.warning ?? ""
     byId("alt-market-warning").hidden = !background.warning
   }
@@ -149,7 +162,7 @@
       byId("probability-heading").textContent = "P роста"
       byId("drivers-heading").textContent = "Поддерживает рост"
     }
-    byId("candle-time-note").textContent = `Время на графике — UTC, по открытию свечи. Последняя свеча среза закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC.`
+    byId("candle-time-note").textContent = `Время на графике — UTC+3, по открытию свечи. Последняя свеча среза закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC+3.`
 
     renderAltMarketBackground()
     byId("market-summary").replaceChildren(...[
@@ -327,7 +340,7 @@
   function publicationTime (timestamp) {
     if (timestamp != null) {
       try {
-        return `${time(timestamp)} UTC`
+        return `${time(timestamp)} UTC+3`
       } catch {
         // A malformed publication date should not hide the saved text.
       }
@@ -591,7 +604,7 @@
           return isFinite(close) && close > 0 && isFinite(value) ? { time, value } : { time }
         })
     if (disabled) {
-      warnings.push(`Нет цены закрытия на общей базе ${time(from * 1_000)} UTC — линия отключена, другая точка не подставляется.`)
+      warnings.push(`Нет цены закрытия на общей базе ${time(from * 1_000)} UTC+3 — линия отключена, другая точка не подставляется.`)
     } else {
       const missing = points.filter(point => point.value == null).length
       if (missing) {
@@ -611,7 +624,7 @@
   }
 
   function renderPeerLegend (state, lines, timestamp) {
-    state.timestamp.textContent = `Закрытие: ${time(timestamp * 1_000)} UTC · изменение цены, % (не ATR)`
+    state.timestamp.textContent = `Закрытие: ${time(timestamp * 1_000)} UTC+3 · изменение цены, % (не ATR)`
     state.legend.replaceChildren(...lines.map((line) => {
       const item = element("span")
       item.setAttribute("role", "listitem")
@@ -644,7 +657,7 @@
     disposePeerCharts()
     const to = Date.parse(report.peerRadar.data.snapshotClosedAt) / 1_000
     const from = to - peerDays * 86_400
-    byId("peer-radar-range-note").textContent = `Общая база (0%): ${time(from * 1_000)} UTC → срез: ${time(to * 1_000)} UTC`
+    byId("peer-radar-range-note").textContent = `Общая база (0%): ${time(from * 1_000)} UTC+3 → срез: ${time(to * 1_000)} UTC+3`
     for (const state of peerCards) {
       const lines = [state.observation.coin, ...state.observation.leaders].map((member, index) => peerLine(member, index, from, to))
       const warnings = lines.filter(line => line.warning).map(line => `${line.symbol}: ${line.warning}`)
@@ -666,8 +679,11 @@
           },
           grid: { vertLines: { color: "#192332" }, horzLines: { color: "#25303f" } },
           rightPriceScale: { borderColor: "#25303f" },
-          timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#25303f", lockVisibleTimeRangeOnResize: true },
-          localization: { locale: "ru-RU", timeFormatter: timestamp => `${time(timestamp * 1_000)} UTC · закрытие` },
+          timeScale: {
+            timeVisible: true, secondsVisible: false, borderColor: "#25303f", lockVisibleTimeRangeOnResize: true,
+            tickMarkFormatter: tickTime,
+          },
+          localization: { locale: "ru-RU", timeFormatter: timestamp => `${time(timestamp * 1_000)} UTC+3 · закрытие` },
         })
         for (const line of lines.filter(line => !line.disabled)) {
           // Whitespace alone does not stop LineSeries bridging a missing hour.
@@ -740,7 +756,7 @@
       ["Обратить внимание", data.watchCount],
       ["Ограниченная интерпретация", data.observationCount - data.watchCount],
     ].map(([label, count]) => element("span", "badge", `${label}: ${number(count, 0)}`)))
-    byId("peer-radar-time").textContent = `Срез закрыт: ${publicationTime(data.snapshotClosedAt)} · Анализ выпущен: ${time(data.generatedAt, true)} UTC`
+    byId("peer-radar-time").textContent = `Срез закрыт: ${publicationTime(data.snapshotClosedAt)} · Анализ выпущен: ${time(data.generatedAt, true)} UTC+3`
     byId("peer-radar-coverage").textContent = `Загружено ${number(data.loadedCoinCount, 0)} / ${number(data.universeCoinCount, 0)} монет · Частичное покрытие: ${number(data.coverage.partial, 0)} · Неизвестные связи: ${number(data.coverage.not_covered + data.coverage.unreviewed + data.coverage.unavailable, 0)} · Без соседей: ${number(data.coverage.no_peers, 0)} (не ошибка)`
     byId("peer-radar-coverage-counts").replaceChildren(...[
       ["available", "Полное покрытие"], ["partial", "Частичное покрытие"], ["no_peers", "Без соседей"],
@@ -804,7 +820,7 @@
 
   function renderSource (key, source, items, renderItem) {
     const window = report.informationSources[key]
-    byId(`${key}-window`).textContent = `Окно публикаций: ${time(window.from)} — ${time(window.asOf)} UTC.`
+    byId(`${key}-window`).textContent = `Окно публикаций: ${time(window.from)} — ${time(window.asOf)} UTC+3.`
     byId(`${key}-count`).textContent = source.status === "failed" ? "ошибка" : String(items.length)
     const status = byId(`${key}-status`)
     status.hidden = source.status !== "failed" && (key === "news" || items.length > 0)
@@ -966,17 +982,17 @@
       ? "Загружаем свечи, объём и OI выбранной монеты с Binance…"
       : state.data
         ? [
-            `Обновлено ${time(state.data.updatedAt, true)} UTC.`,
+            `Обновлено ${time(state.data.updatedAt, true)} UTC+3.`,
             state.data.limitReached
               ? "Достигнут лимит: 7 дней после среза отчёта. Пропуски возможны — обновление можно повторить."
-              : `${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC, не закрытие часа.` : "Текущий OI недоступен."}`,
+              : `${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC+3, не закрытие часа.` : "Текущий OI недоступен."}`,
           ].join(" ")
         : "Сохранённый срез. Максимум 7 дней (168 часовых свечей) после среза отчёта. Обновление — только по кнопке, без пересчёта анализа."
     byId("chart-source").textContent = state.data
-      ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC.`} OI в базовом активе; небольшие различия источников возможны.`
+      ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC+3. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC+3.`} OI в базовом активе; небольшие различия источников возможны.`
       : "Источник графика: сохранённые данные TradingView."
     byId("report-time-note").textContent = [
-      `Срез отчёта: ${time(report.asOf)} UTC — время открытия последней закрытой свечи.`,
+      `Срез отчёта: ${time(report.asOf)} UTC+3 — время открытия последней закрытой свечи.`,
       reportMarkerTime(chartHistory(coin)) == null
         ? "Свеча среза недоступна — отметка не подменяется другим временем."
         : "Отметка «Отчёт» при обновлении привязана к этой свече, а не ко времени создания HTML.",
@@ -1023,7 +1039,7 @@
 
   function renderLegend (timestamp, candle, volume, openInterest, precision) {
     byId("chart-legend").replaceChildren(...[
-      ["", `${time(timestamp * 1_000)} UTC`],
+      ["", `${time(timestamp * 1_000)} UTC+3`],
       ["O", number(candle?.open, precision)],
       ["H", number(candle?.high, precision)],
       ["L", number(candle?.low, precision)],
@@ -1097,8 +1113,11 @@
           horzLine: { color: "#7288a4", labelBackgroundColor: "#2a405e" },
         },
         rightPriceScale: { borderColor: "#25303f", minimumWidth: 78, scaleMargins: { top: 0.12, bottom: 0.12 } },
-        timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#25303f", lockVisibleTimeRangeOnResize: true },
-        localization: { locale: "ru-RU", timeFormatter: timestamp => `${time(timestamp * 1_000)} UTC` },
+        timeScale: {
+          timeVisible: true, secondsVisible: false, borderColor: "#25303f", lockVisibleTimeRangeOnResize: true,
+          tickMarkFormatter: tickTime,
+        },
+        localization: { locale: "ru-RU", timeFormatter: timestamp => `${time(timestamp * 1_000)} UTC+3` },
       })
       const candles = chart.addSeries(LightweightCharts.CandlestickSeries, {
         upColor: "#52d3a1",

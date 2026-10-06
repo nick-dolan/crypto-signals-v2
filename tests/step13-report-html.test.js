@@ -9,6 +9,15 @@ function scripts (html) {
     .map(([, attributes, content]) => ({ attributes, content }))
 }
 
+test("all three template timezone labels are fixed UTC+3", async () => {
+  const html = await renderReportHtml({ coins: [] })
+  const text = html.replace(/\s+/g, " ")
+
+  assert.match(text, /Сохранённый срез · UTC\+3<\/span>/)
+  assert.match(text, /\/ свечи 1h · UTC\+3<\/span>/)
+  assert.match(text, /фактическое закрытие часовой свечи, UTC\+3\./)
+})
+
 test("report embeds its data, executable browser scripts and chart license without external assets", async () => {
   const report = { asOf: "2026-09-15T09:00:00.000Z", reportCreatedAt: "2026-09-15T11:05:12.345Z", coins: [] }
   const html = await renderReportHtml(report)
@@ -65,7 +74,6 @@ test("report embeds its data, executable browser scripts and chart license witho
     ["1", "true"], ["3", "false"], ["7", "false"],
   ])
   assert.match(text, /изменение цены закрытия в процентах, не сигнал в ATR/)
-  assert.match(text, /фактическое закрытие часовой свечи, UTC/)
   assert.match(text, /пропуски часов не соединяются/)
   assert.match(text, /Только сохранённые данные, без сетевых запросов и обновлений/)
   assert.match(text, /Радар соседей/)
