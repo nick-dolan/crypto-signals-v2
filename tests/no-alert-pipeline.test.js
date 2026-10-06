@@ -2,12 +2,12 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import test from "node:test"
 
-import { enrichCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-candidates-with-context.js"
+import { enrichCandidatesWithContext } from "../src/steps/step8-context-enrichment/enrich-candidates-with-context.js"
 import { addReportContext } from "../src/steps/step13-report/add-report-context.js"
 import { buildReportData } from "../src/steps/step13-report/build-report-data.js"
 import { renderReportHtml } from "../src/reports/render-report-html.js"
-import { enrichCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-candidates-with-news.js"
-import { enrichCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
+import { enrichCandidatesWithNews } from "../src/steps/step6-news-enrichment/enrich-candidates-with-news.js"
+import { enrichCandidatesWithTwitter } from "../src/steps/step7-twitter-enrichment/enrich-candidates-with-twitter.js"
 
 function createHistory (coin, asOf) {
   const asOfTimestamp = Date.parse(asOf) / 1_000

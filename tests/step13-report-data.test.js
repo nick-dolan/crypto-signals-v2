@@ -4,10 +4,10 @@ import test from "node:test"
 
 import { addReportContext } from "../src/steps/step13-report/add-report-context.js"
 import { buildReportData } from "../src/steps/step13-report/build-report-data.js"
-import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
-import { enrichCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-candidates-with-news.js"
-import { enrichCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
-import { enrichCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-candidates-with-context.js"
+import { analyzeCandidates } from "../src/steps/step10-agent-analysis/analyze-candidates.js"
+import { enrichCandidatesWithNews } from "../src/steps/step6-news-enrichment/enrich-candidates-with-news.js"
+import { enrichCandidatesWithTwitter } from "../src/steps/step7-twitter-enrichment/enrich-candidates-with-twitter.js"
+import { enrichCandidatesWithContext } from "../src/steps/step8-context-enrichment/enrich-candidates-with-context.js"
 
 function createHistory (coin, asOf) {
   const asOfTimestamp = Date.parse(asOf) / 1_000
@@ -673,47 +673,47 @@ test("rejects ambiguous schemas, malformed groups and missing coin metadata", as
   for (const [name, change, message] of [
     ["missing schema", (input) => {
       delete input.payload.schema
-    }, /Step 6 schema/],
+    }, /Step 9 schema/],
     ["positional schema", (input) => {
       input.payload.schema = ["symbol", "volumeZ"]
-    }, /Step 6 schema/],
+    }, /Step 9 schema/],
     ["invalid schema group", (input) => {
       input.payload.schema.volume = null
-    }, /Step 6 schema/],
+    }, /Step 9 schema/],
     ["duplicate field within group", (input) => {
       input.payload.schema.volume.push("volumeZ")
-    }, /Step 6 schema/],
+    }, /Step 9 schema/],
     ["duplicate field across groups", (input) => {
       input.payload.schema.social[0] = "volumeZ"
-    }, /Step 6 schema/],
+    }, /Step 9 schema/],
     ...["symbol", "name", "selectionRank", "flags"].map(field => [
       `reserved ${field} field`, (input) => {
         input.payload.schema.volume[0] = field
-      }, /Step 6 schema/,
+      }, /Step 9 schema/,
     ]),
     ...[null, "", "  ", 1].map(field => [
       `invalid field ${String(field)}`, (input) => {
         input.payload.schema.volume[0] = field
-      }, /Step 6 schema/,
+      }, /Step 9 schema/,
     ]),
     ["short group", (input) => {
       input.payload.candidates[0].volume.pop()
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["long group", (input) => {
       input.payload.candidates[0].volume.push(1)
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["invalid group", (input) => {
       input.payload.candidates[0].volume = null
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["missing group", (input) => {
       delete input.payload.candidates[0].volume
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["extra group", (input) => {
       input.payload.candidates[0].unknown = []
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["positional candidate", (input) => {
       input.payload.candidates[0] = [0.1, "COTI", "Payload COTI", false, ["coiling"], null]
-    }, /Step 6 candidate.*schema length/],
+    }, /Step 9 candidate.*schema length/],
     ["shortlist metadata", (input) => {
       delete input.shortlist.candidates[0].coin.marketSymbol
     }, /coin metadata/],
@@ -731,7 +731,7 @@ test("rejects missing candidate metadata", async (t) => {
     await t.test(field, async () => {
       const input = createInput()
       delete input.payload.candidates[0][field]
-      await assert.rejects(build(input), /Step 6 candidate/)
+      await assert.rejects(build(input), /Step 9 candidate/)
     })
   }
 })
@@ -747,7 +747,7 @@ test("rejects invalid candidate metadata", async (t) => {
       await t.test(`${field}: ${String(value)}`, async () => {
         const input = createInput()
         input.payload.candidates[0][field] = value
-        await assert.rejects(build(input), /Step 6 candidate/)
+        await assert.rejects(build(input), /Step 9 candidate/)
       })
     }
   }
@@ -854,7 +854,7 @@ test("growth payload rejects stale or mismatched analysis before reading history
     input.payload.schemaVersion = 14
     input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
     Object.assign(input.analysis, fields)
-    await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /growth analysis must use schemaVersion 3 or 4 and match the step 6 objective/)
+    await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /growth analysis must use schemaVersion 3 or 4 and match the step 9 objective/)
   }
 })
 

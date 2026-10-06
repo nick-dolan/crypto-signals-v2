@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { decodeAgentPayload } from "../src/steps/step6-agent-payload/agent-payload-format.js"
+import { decodeAgentPayload } from "../src/steps/step9-agent-payload/agent-payload-format.js"
 
 function createPayload () {
   return {
@@ -137,7 +137,7 @@ test("schema group names cannot overwrite candidate metadata", () => {
   for (const group of ["symbol", "name", "selectionRank", "flags", " "]) {
     const payload = createPayload()
     payload.schema[group] = ["volumeZ"]
-    assert.throws(() => decodeAgentPayload(payload), /Step 6 schema/)
+    assert.throws(() => decodeAgentPayload(payload), /Step 9 schema/)
   }
 })
 

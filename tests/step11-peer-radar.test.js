@@ -259,7 +259,7 @@ test("CLI 11 → 12 works with only steps 1–2 and the registry, leaving main o
     ["tmp/step1-crypto-universe.json", input.sourceUniverse],
     ["tmp/step2-data-bootstrap.json", { coinCount: input.coinData.length }],
     ["data/coin-peers.json", input.coinPeers],
-    ["tmp/step7-agent-analysis.json", { untouched: true, topCandidates: [] }],
+    ["tmp/step10-agent-analysis.json", { untouched: true, topCandidates: [] }],
     ...input.coinData.map(data => [`tmp/step2-data-bootstrap/${data.coin.baseCurrencyId}/data.json`, data]),
   ].map(([filename, data]) => writeJson(filename, data)))
   await fs.mkdir(path.join(directory, "reports"))
@@ -281,7 +281,7 @@ test("CLI 11 → 12 works with only steps 1–2 and the registry, leaving main o
   assert.equal(report.observationCount, 1)
   assert.equal(report.watchCount, 1)
   assert.deepEqual(report.observations[0].leaders, scan.candidates[0].leaders)
-  assert.deepEqual(await readJson("tmp/step7-agent-analysis.json"), { untouched: true, topCandidates: [] })
+  assert.deepEqual(await readJson("tmp/step10-agent-analysis.json"), { untouched: true, topCandidates: [] })
   assert.equal(await fs.readFile(path.join(directory, "reports", "main.html"), "utf8"), "Unchanged main report")
   assert.deepEqual(await fs.readdir(path.join(directory, "reports")), ["main.html"])
 

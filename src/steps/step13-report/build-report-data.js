@@ -2,8 +2,8 @@ import { omit } from "radash"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
-import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
-import { formatCoinSummary, readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
+import { decodeAgentPayload } from "../step9-agent-payload/agent-payload-format.js"
+import { formatCoinSummary, readCoinSummary } from "../step10-agent-analysis/coin-summary.js"
 
 function indexBySymbol (items, symbolOf, label) {
   if (!isArray(items)) {
@@ -36,23 +36,23 @@ function validateReportInputs (analysis, payload, shortlist) {
     || payload.timeframe !== "1h"
     || shortlist.timeframe !== "1h"
   ) {
-    throw new Error("Steps 5, 6 and 7 must use the same closed hourly snapshot (asOf, 1h)")
+    throw new Error("Steps 5, 9 and 10 must use the same closed hourly snapshot (asOf, 1h)")
   }
 
   if (payload.schemaVersion >= 14 && (![3, 4].includes(analysis.schemaVersion) || analysis.objective !== payload.objective)) {
-    throw new Error("Step 7 growth analysis must use schemaVersion 3 or 4 and match the step 6 objective")
+    throw new Error("Step 10 growth analysis must use schemaVersion 3 or 4 and match the step 9 objective")
   }
 
   const { candidates } = decodeAgentPayload(payload)
-  const rowsBySymbol = indexBySymbol(candidates, candidate => candidate.symbol, "Step 6 candidates")
+  const rowsBySymbol = indexBySymbol(candidates, candidate => candidate.symbol, "Step 9 candidates")
   const shortlistBySymbol = indexBySymbol(shortlist.candidates, item => item?.coin?.symbol, "Step 5 candidates")
-  const assessmentsBySymbol = indexBySymbol(analysis.assessments, item => item?.symbol, "Step 7 assessments")
-  const topBySymbol = indexBySymbol(analysis.topCandidates, item => item?.symbol, "Step 7 top candidates")
+  const assessmentsBySymbol = indexBySymbol(analysis.assessments, item => item?.symbol, "Step 10 assessments")
+  const topBySymbol = indexBySymbol(analysis.topCandidates, item => item?.symbol, "Step 10 top candidates")
 
   for (const [step, input, bySymbol] of [
     [5, shortlist, shortlistBySymbol],
-    [6, payload, rowsBySymbol],
-    [7, analysis, assessmentsBySymbol],
+    [9, payload, rowsBySymbol],
+    [10, analysis, assessmentsBySymbol],
   ]) {
     if (input.candidateCount !== bySymbol.size) {
       throw new Error(`Step ${step} candidate count does not match its candidates`)
@@ -70,11 +70,11 @@ function validateReportInputs (analysis, payload, shortlist) {
     bySymbol.size !== assessmentsBySymbol.size
     || [...assessmentsBySymbol.keys()].some(symbol => !bySymbol.has(symbol))
   ))) {
-    throw new Error("Steps 5, 6 and 7 candidate sets do not match")
+    throw new Error("Steps 5, 9 and 10 candidate sets do not match")
   }
 
   if ([...topBySymbol.keys()].some(symbol => !assessmentsBySymbol.has(symbol))) {
-    throw new Error("Step 7 top candidates must belong to assessments")
+    throw new Error("Step 10 top candidates must belong to assessments")
   }
 
   for (const { coin } of shortlistBySymbol.values()) {

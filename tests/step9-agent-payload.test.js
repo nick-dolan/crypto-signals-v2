@@ -4,9 +4,9 @@ import test from "node:test"
 
 import { isArray } from "../src/helpers/utils.typed.js"
 import { buildPreliminaryShortlist } from "../src/steps/step5-preliminary-filter/build-preliminary-shortlist.js"
-import { decodeAgentPayload } from "../src/steps/step6-agent-payload/agent-payload-format.js"
-import { buildAgentPayload } from "../src/steps/step6-agent-payload/build-agent-payload.js"
-import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
+import { decodeAgentPayload } from "../src/steps/step9-agent-payload/agent-payload-format.js"
+import { buildAgentPayload } from "../src/steps/step9-agent-payload/build-agent-payload.js"
+import { analyzeCandidates } from "../src/steps/step10-agent-analysis/analyze-candidates.js"
 
 function createCandidate (symbol, overrides = {}) {
   const features = {
@@ -477,7 +477,7 @@ test("agent payload creates documented grouped candidates without changing marke
   }
 })
 
-test("CoinGecko context passes JSON, validation and step 7 evidence without changing candidate order", async () => {
+test("CoinGecko context passes JSON, validation and step 10 evidence without changing candidate order", async () => {
   const shortlist = createShortlist([
     createCandidate("SOL", {
       coin: { coingecko: { id: "solana", isTrending: true, trendingCategories: ["Layer 1 (L1)", "Smart Contract Platform"] } },
@@ -979,7 +979,7 @@ test("agent payload rejects missing or non-finite new core metrics with a rerun 
   }
 })
 
-test("sustained strength passes steps 5 → 6 → 7 without changing selection or peer benchmarks", async () => {
+test("sustained strength passes steps 5 → 9 → 10 without changing selection or peer benchmarks", async () => {
   const profiles = [
     createCandidate("FIRST", { features: { sustainedStrength: { peer_count: 4 } } }),
     createCandidate("SECOND", {
@@ -1231,7 +1231,7 @@ test("peer event age and status are not recalculated from rounded metrics or can
   assert.deepEqual(values.flags, ["coiling", "resilient", "fresh_quiet_breakout"])
 })
 
-test("peer context passes steps 5 → 6 → 7 without changing selection or discarding non-shortlisted leaders", async () => {
+test("peer context passes steps 5 → 9 → 10 without changing selection or discarding non-shortlisted leaders", async () => {
   const profiles = [
     {
       ...createCandidate("SOL"),
@@ -1310,7 +1310,7 @@ test("peer context passes steps 5 → 6 → 7 without changing selection or disc
   assert.deepEqual(profiles, before)
 })
 
-test("peer schema supports an empty shortlist through step 7 with no history tools", async () => {
+test("peer schema supports an empty shortlist through step 10 with no history tools", async () => {
   const shortlist = createShortlist([])
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
   const analysis = await analyzeCandidates(payload, shortlist, "system prompt", {
@@ -1476,6 +1476,6 @@ test("information context rejects broken windows and invalid status or sentiment
   ]) {
     const context = createInformationContext(shortlist)
     Object.assign(context.candidates[0], changes)
-    assert.throws(() => buildAgentPayload(shortlist, context), /Step 10 SOL/)
+    assert.throws(() => buildAgentPayload(shortlist, context), /Step 8 SOL/)
   }
 })

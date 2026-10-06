@@ -34,17 +34,17 @@ function indexCandidates (candidates, label) {
 }
 
 function validateSourceWindow (sources, context, key) {
-  const from = getTimestamp(sources?.[key]?.from, `Step 9 ${key}.from`)
-  const asOf = getTimestamp(sources?.[key]?.asOf, `Step 9 ${key}.asOf`)
-  const contextFrom = getTimestamp(context?.[key]?.from, `Step 10 ${key}.from`)
-  const contextAsOf = getTimestamp(context?.[key]?.asOf, `Step 10 ${key}.asOf`)
+  const from = getTimestamp(sources?.[key]?.from, `Step 7 ${key}.from`)
+  const asOf = getTimestamp(sources?.[key]?.asOf, `Step 7 ${key}.asOf`)
+  const contextFrom = getTimestamp(context?.[key]?.from, `Step 8 ${key}.from`)
+  const contextAsOf = getTimestamp(context?.[key]?.asOf, `Step 8 ${key}.asOf`)
 
   if (from > asOf || contextFrom > contextAsOf) {
     throw new Error(`${key} source window must have from <= asOf`)
   }
 
   if (from !== contextFrom || asOf !== contextAsOf) {
-    throw new Error(`Step 9 and step 10 ${key} source windows do not match`)
+    throw new Error(`Step 7 and step 8 ${key} source windows do not match`)
   }
 }
 
@@ -62,13 +62,13 @@ export function addReportContext (report, sources, context) {
   const asOf = getTimestamp(report?.asOf, "Report asOf")
 
   if (
-    asOf !== getTimestamp(sources?.asOf, "Step 9 asOf")
-    || asOf !== getTimestamp(context?.asOf, "Step 10 asOf")
+    asOf !== getTimestamp(sources?.asOf, "Step 7 asOf")
+    || asOf !== getTimestamp(context?.asOf, "Step 8 asOf")
   ) {
-    throw new Error("Report, step 9 and step 10 market snapshots do not match")
+    throw new Error("Report, step 7 and step 8 market snapshots do not match")
   }
 
-  getTimestamp(context.generatedAt, "Step 10 generatedAt")
+  getTimestamp(context.generatedAt, "Step 8 generatedAt")
   validateSourceWindow(sources, context, "newsEnrichment")
   validateSourceWindow(sources, context, "twitterEnrichment")
 
@@ -77,10 +77,10 @@ export function addReportContext (report, sources, context) {
   }
 
   const reportCandidates = indexCandidates(report.coins, "Report")
-  const sourcesBySymbol = indexCandidates(sources.candidates, "Step 9")
-  const contextBySymbol = indexCandidates(context.candidates, "Step 10")
+  const sourcesBySymbol = indexCandidates(sources.candidates, "Step 7")
+  const contextBySymbol = indexCandidates(context.candidates, "Step 8")
 
-  for (const [label, bySymbol] of [["Step 9", sourcesBySymbol], ["Step 10", contextBySymbol]]) {
+  for (const [label, bySymbol] of [["Step 7", sourcesBySymbol], ["Step 8", contextBySymbol]]) {
     if (bySymbol.size !== reportCandidates.size || [...reportCandidates.keys()].some(symbol => !bySymbol.has(symbol))) {
       throw new Error(`${label} candidate set does not match the report`)
     }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import test from "node:test"
 
-import { createCoinHistoryTool } from "../src/steps/step7-agent-analysis/create-coin-history-tool.js"
+import { createCoinHistoryTool } from "../src/steps/step10-agent-analysis/create-coin-history-tool.js"
 
 function createInput () {
   const latestTime = 1_800_000_000

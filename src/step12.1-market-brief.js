@@ -11,11 +11,11 @@ export async function runMarketBriefStep ({ buildBrief = buildMarketBrief } = {}
   // A failed rerun must not leave a previous digest looking like a fresh result.
   await fs.rm(path.resolve("tmp", "step12.1-market-brief.json"), { force: true })
   const [analysis, systemPrompt] = await Promise.all([
-    readTmpJson("step7-agent-analysis.json"),
+    readTmpJson("step10-agent-analysis.json"),
     fs.readFile(new URL("./prompts/market-brief.md", import.meta.url), "utf8"),
   ])
   const output = await buildBrief(systemPrompt, {
-    marketAsOf: getRequiredString(analysis.asOf, "Step 7 asOf"),
+    marketAsOf: getRequiredString(analysis.asOf, "Step 10 asOf"),
   })
   const outputPath = await writeTmpJson("step12.1-market-brief.json", output)
   console.log(`✓ Market brief: ${output.items.length} news items from ${output.sources.length} publications (${output.status}) in ${outputPath}`)

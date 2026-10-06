@@ -2250,7 +2250,7 @@ function addInformation (report, coin = report.coins[0]) {
     twitter: { from: "2026-09-14T11:00:00.000Z", asOf: "2026-09-15T11:00:00.000Z" },
     contextGeneratedAt: "2026-09-15T11:05:00.000Z",
   }
-  coin.explanation = [coin.topRank == null ? "" : "Исходная оценка.", "Дополненное объяснение из шага 10."].filter(Boolean).join(" ")
+  coin.explanation = [coin.topRank == null ? "" : "Исходная оценка.", "Дополненное объяснение из шага 8."].filter(Boolean).join(" ")
   coin.information = {
     news: {
       status: "available", error: null,
@@ -2582,7 +2582,7 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
     assert.equal(byId("explanation").hidden, false)
     assert.equal(byId("explanation").textContent, report.coins[0].explanation)
     if (topRank == null) {
-      assert.equal(byId("explanation").textContent, "Дополненное объяснение из шага 10.")
+      assert.equal(byId("explanation").textContent, "Дополненное объяснение из шага 8.")
     }
     assert.equal(byId("analysis-source").textContent, "Архивный анализ с инфофоном")
     assert.match(byId("context-generated").textContent, /11:05/)
@@ -2814,7 +2814,7 @@ test("switching from a top or trending coin to a plain non-top clears source dat
       assert.equal(byId(`${key}-details`).open, false)
     }
     assert.equal(byId("context-generated").textContent, "")
-    assert.equal(byId("analysis-source").textContent, "Анализ шага 7")
+    assert.equal(byId("analysis-source").textContent, "Анализ шага 10")
     assert.equal(byId("explanation").textContent, report.coins[2].explanation)
     assert.equal(byId("explanation").hidden, true)
     selectCoin(browser, symbol)
@@ -2928,7 +2928,7 @@ test("legacy reports and empty candidate lists show an unavailable background wi
     assert.equal(byId("alt-market-change").textContent, "Нет данных")
     assert.equal(byId("alt-market-breadth").textContent, "Нет данных")
     assert.match(byId("alt-market-warning").textContent, /не рассчитан/)
-    assert.match(byId("alt-market-warning").textContent, /шаги 4–6/)
+    assert.match(byId("alt-market-warning").textContent, /шаги 4–9/)
     assert.equal(byId("no-candidates").hidden, symbols.length > 0)
   }
 })

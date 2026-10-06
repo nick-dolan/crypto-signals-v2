@@ -657,7 +657,7 @@ test("standalone step saves a brief and removes obsolete output before a failed 
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "market-brief-step-"))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
   await fs.mkdir(path.join(directory, "tmp"))
-  await fs.writeFile(path.join(directory, "tmp", "step7-agent-analysis.json"), JSON.stringify({ asOf: "2026-09-29T11:00:00.000Z" }))
+  await fs.writeFile(path.join(directory, "tmp", "step10-agent-analysis.json"), JSON.stringify({ asOf: "2026-09-29T11:00:00.000Z" }))
   const brief = await build()
   await promisify(execFile)(process.execPath, ["--input-type=module", "--eval", `
     import assert from "node:assert/strict"

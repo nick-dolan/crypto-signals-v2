@@ -11,8 +11,8 @@ for (const failedSteps of [
   ["step1.1-coin-descriptions.js"],
   ["step11-peer-radar.js"],
   ["step12-peer-radar-analysis.js"],
-  ["step7-agent-analysis.js"],
-  ["step1.1-coin-descriptions.js", "step7-agent-analysis.js"],
+  ["step10-agent-analysis.js"],
+  ["step1.1-coin-descriptions.js", "step10-agent-analysis.js"],
   ["step12.1-market-brief.js"],
   ["step11-peer-radar.js", "step12.1-market-brief.js"],
   ["step1.1-coin-descriptions.js", "step12.1-market-brief.js"],
@@ -34,8 +34,8 @@ for (const failedSteps of [
     for (const filename of [
       "step1-crypto-universe.js", "step1.1-coin-descriptions.js", "step2-data-bootstrap.js",
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
-      "step5-preliminary-filter.js", "step6-agent-payload.js", "step7-agent-analysis.js",
-      "step8-news-enrichment.js", "step9-twitter-enrichment.js", "step10-context-enrichment.js",
+      "step5-preliminary-filter.js", "step6-news-enrichment.js", "step7-twitter-enrichment.js",
+      "step8-context-enrichment.js", "step9-agent-payload.js", "step10-agent-analysis.js",
       "step11-peer-radar.js", "step12-peer-radar-analysis.js", "step12.1-market-brief.js", "step13-report.js",
       "step14-telegram.js",
     ]) {
@@ -57,11 +57,11 @@ for (const failedSteps of [
       "step1-crypto-universe.js", "step1.1-coin-descriptions.js", "step2-data-bootstrap.js",
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
       "step5-preliminary-filter.js",
-      "step8-news-enrichment.js", "step9-twitter-enrichment.js", "step10-context-enrichment.js",
-      "step6-agent-payload.js", "step7-agent-analysis.js",
+      "step6-news-enrichment.js", "step7-twitter-enrichment.js", "step8-context-enrichment.js",
+      "step9-agent-payload.js", "step10-agent-analysis.js",
     ])
 
-    if (failedSteps.includes("step7-agent-analysis.js")) {
+    if (failedSteps.includes("step10-agent-analysis.js")) {
       assert.equal(order.length, 12)
       await assert.rejects(fs.access(path.join(directory, "reports", "main.parquet")), { code: "ENOENT" })
       return

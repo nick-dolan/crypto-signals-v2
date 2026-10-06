@@ -3,7 +3,7 @@ import "dotenv/config"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { isString } from "./helpers/utils.typed.js"
-import { enrichCandidatesWithTwitter } from "./steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
+import { enrichCandidatesWithTwitter } from "./steps/step7-twitter-enrichment/enrich-candidates-with-twitter.js"
 
 async function runTwitterEnrichmentStep () {
   const apiKey = process.env.TWITTERAPI_IO_KEY
@@ -12,9 +12,9 @@ async function runTwitterEnrichmentStep () {
     throw new Error("TWITTERAPI_IO_KEY is not set in .env")
   }
 
-  const input = await readTmpJson("step8-news-enrichment.json")
+  const input = await readTmpJson("step6-news-enrichment.json")
   const output = await enrichCandidatesWithTwitter(input)
-  const outputPath = await writeTmpJson("step9-twitter-enrichment.json", output)
+  const outputPath = await writeTmpJson("step7-twitter-enrichment.json", output)
   const tweetCount = output.candidates.reduce((total, candidate) => (
     total + candidate.twitter.tweets.length
   ), 0)
@@ -31,4 +31,4 @@ async function runTwitterEnrichmentStep () {
   }
 }
 
-await runStep("step9-twitter-enrichment.js", runTwitterEnrichmentStep)
+await runStep("step7-twitter-enrichment.js", runTwitterEnrichmentStep)

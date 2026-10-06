@@ -1,11 +1,11 @@
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
-import { enrichCandidatesWithNews } from "./steps/step8-news-enrichment/enrich-candidates-with-news.js"
+import { enrichCandidatesWithNews } from "./steps/step6-news-enrichment/enrich-candidates-with-news.js"
 
 async function runNewsEnrichmentStep () {
   const shortlist = await readTmpJson("step5-preliminary-filter.json")
   const output = await enrichCandidatesWithNews(shortlist)
-  const outputPath = await writeTmpJson("step8-news-enrichment.json", output)
+  const outputPath = await writeTmpJson("step6-news-enrichment.json", output)
   const uniqueArticleCount = new Set(output.candidates.flatMap(candidate => (
     candidate.news.items.map(item => item.id)
   ))).size
@@ -22,4 +22,4 @@ async function runNewsEnrichmentStep () {
   }
 }
 
-await runStep("step8-news-enrichment.js", runNewsEnrichmentStep)
+await runStep("step6-news-enrichment.js", runNewsEnrichmentStep)

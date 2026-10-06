@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { isNaN } from "../src/helpers/utils.typed.js"
-import { enrichCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
+import { enrichCandidatesWithTwitter } from "../src/steps/step7-twitter-enrichment/enrich-candidates-with-twitter.js"
 
 function createInput () {
   return {
@@ -280,13 +280,13 @@ test("default queries keep the pipeline start boundary when collection runs late
   assert.equal(result.twitterEnrichment.asOf, new Date(1_800_000_000_000).toISOString())
 })
 
-test("validates the step 8 input and Twitter dependencies", async () => {
+test("validates the step 6 input and Twitter dependencies", async () => {
   await assert.rejects(
     enrichCandidatesWithTwitter({}, {
       fetchPage: async () => ({}),
       wait: async () => {},
     }),
-    /Step 8 enrichment candidates are required/,
+    /Step 6 enrichment candidates are required/,
   )
 
   const input = createInput()

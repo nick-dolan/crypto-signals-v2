@@ -3,7 +3,7 @@ import { defineTool } from "@github/copilot-sdk"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { isArray, isError, isFinite, isInt, isObject } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
-import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
+import { decodeAgentPayload } from "../step9-agent-payload/agent-payload-format.js"
 
 function normalizeNumber (value) {
   if (!isFinite(value)) {
@@ -18,7 +18,7 @@ function getCandidateSymbols (payload) {
   const symbols = candidates.map(candidate => candidate.symbol)
 
   if (payload.candidateCount !== symbols.length) {
-    throw new Error("Step 6 candidate count does not match its candidates")
+    throw new Error("Step 9 candidate count does not match its candidates")
   }
 
   return symbols
@@ -34,15 +34,15 @@ export function validateAgentInputs (payload, shortlist) {
     || shortlistedCoins.length !== symbols.length
     || shortlistedCoins.some((coin, index) => coin?.symbol !== symbols[index])
   ) {
-    throw new Error("Step 5 candidates do not match the step 6 agent payload")
+    throw new Error("Step 5 candidates do not match the step 9 agent payload")
   }
 
   if (shortlist.asOf !== payload.asOf || shortlist.timeframe !== payload.timeframe) {
-    throw new Error("Step 5 and step 6 use different market snapshots")
+    throw new Error("Step 5 and step 9 use different market snapshots")
   }
 
   if (new Set(symbols).size !== symbols.length) {
-    throw new Error("Step 6 agent payload contains duplicate symbols")
+    throw new Error("Step 9 agent payload contains duplicate symbols")
   }
 
   return { symbols, shortlistedCoins }

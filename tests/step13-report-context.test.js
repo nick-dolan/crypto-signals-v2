@@ -56,7 +56,7 @@ function createInput () {
       explanation: coin.explanation,
       movementProbability: 0.99,
       estimateConfidence: "low",
-      drivers: ["Не брать из шага 9"],
+      drivers: ["Не брать из шага 7"],
       news: {
         status: "available",
         error: null,
@@ -113,7 +113,7 @@ function createInput () {
       socialSentiment: "bullish",
       movementProbability: 0.01,
       estimateConfidence: "high",
-      drivers: ["Не брать из шага 10"],
+      drivers: ["Не брать из шага 8"],
       counterSignals: [],
       topRank: 99,
       history: { candles: [] },

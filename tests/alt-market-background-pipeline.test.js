@@ -19,7 +19,7 @@ for (const [name, altMarketBackground] of [
   }],
   ["legacy missing metric becomes null", undefined],
 ]) {
-  test(`CLI steps 5 → 6 → 13: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
+  test(`CLI steps 5 → 9 → 13: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "alt-market-background-pipeline-"))
     context.after(() => fs.rm(directory, { recursive: true, force: true }))
     await fs.mkdir(path.join(directory, "tmp"))
@@ -64,16 +64,16 @@ for (const [name, altMarketBackground] of [
       twitterEnrichment: sourceWindow,
     }
     await Promise.all([
-      writeJson("step7-agent-analysis.json", {
+      writeJson("step10-agent-analysis.json", {
         schemaVersion: 3,
         objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
         asOf: featureMetrics.asOf, candidateCount: 0, assessments: [], topCandidates: [],
       }),
-      writeJson("step9-twitter-enrichment.json", sources),
-      writeJson("step10-context-enrichment.json", { ...sources, generatedAt: featureMetrics.generatedAt }),
+      writeJson("step7-twitter-enrichment.json", sources),
+      writeJson("step8-context-enrichment.json", { ...sources, generatedAt: featureMetrics.generatedAt }),
     ])
-    await run("step6-agent-payload.js")
-    const payload = await readJson("step6-agent-payload.json")
+    await run("step9-agent-payload.js")
+    const payload = await readJson("step9-agent-payload.json")
     assert.equal(payload.asOf, featureMetrics.asOf)
     assert.equal(payload.candidateCount, 0)
     assert.deepEqual(payload.candidates, [])

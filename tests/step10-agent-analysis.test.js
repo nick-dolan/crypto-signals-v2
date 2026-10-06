@@ -5,8 +5,8 @@ import vm from "node:vm"
 
 import modelsInUse from "../models-in-use.json" with { type: "json" }
 import { getModelSettings } from "../src/helpers/model-helper.js"
-import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
-import { parseAgentAnalysis } from "../src/steps/step7-agent-analysis/parse-agent-analysis.js"
+import { analyzeCandidates } from "../src/steps/step10-agent-analysis/analyze-candidates.js"
+import { parseAgentAnalysis } from "../src/steps/step10-agent-analysis/parse-agent-analysis.js"
 
 function createPayload () {
   return {
@@ -734,7 +734,7 @@ test("candidate analysis requires market symbols before calling Copilot", async 
   )
 })
 
-test("candidate analysis rejects mismatched step 5 and step 6 snapshots", async () => {
+test("candidate analysis rejects mismatched step 5 and step 9 snapshots", async () => {
   const shortlist = createShortlist()
   shortlist.asOf = "2026-08-31T08:00:00.000Z"
 

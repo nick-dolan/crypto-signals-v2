@@ -2,12 +2,12 @@ import fs from "node:fs/promises"
 
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
-import { enrichCandidatesWithContext } from "./steps/step10-context-enrichment/enrich-candidates-with-context.js"
-import { InvalidContextEnrichmentError } from "./steps/step10-context-enrichment/parse-context-enrichment.js"
+import { enrichCandidatesWithContext } from "./steps/step8-context-enrichment/enrich-candidates-with-context.js"
+import { InvalidContextEnrichmentError } from "./steps/step8-context-enrichment/parse-context-enrichment.js"
 
 async function runContextEnrichmentStep () {
   const [input, systemPrompt] = await Promise.all([
-    readTmpJson("step9-twitter-enrichment.json"),
+    readTmpJson("step7-twitter-enrichment.json"),
     fs.readFile(
       new URL("./prompts/candidate-context-enrichment.md", import.meta.url),
       "utf8",
@@ -20,7 +20,7 @@ async function runContextEnrichmentStep () {
   } catch (error) {
     if (error instanceof InvalidContextEnrichmentError) {
       const invalidOutputPath = await writeTmpJson(
-        "step10-context-enrichment.invalid.json",
+        "step8-context-enrichment.invalid.json",
         {
           symbol: error.symbol,
           error: error.message,
@@ -34,11 +34,11 @@ async function runContextEnrichmentStep () {
     throw error
   }
 
-  const outputPath = await writeTmpJson("step10-context-enrichment.json", output)
+  const outputPath = await writeTmpJson("step8-context-enrichment.json", output)
 
   console.log(
     `✓ Summarized news and Twitter for ${output.candidates.length} preliminary candidates in ${outputPath}`,
   )
 }
 
-await runStep("step10-context-enrichment.js", runContextEnrichmentStep)
+await runStep("step8-context-enrichment.js", runContextEnrichmentStep)

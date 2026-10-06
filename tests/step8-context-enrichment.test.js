@@ -3,8 +3,8 @@ import test from "node:test"
 
 import { getModelSettings } from "../src/helpers/model-helper.js"
 import modelsInUse from "../models-in-use.json" with { type: "json" }
-import { enrichCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-candidates-with-context.js"
-import { InvalidContextEnrichmentError, parseContextEnrichment } from "../src/steps/step10-context-enrichment/parse-context-enrichment.js"
+import { enrichCandidatesWithContext } from "../src/steps/step8-context-enrichment/enrich-candidates-with-context.js"
+import { InvalidContextEnrichmentError, parseContextEnrichment } from "../src/steps/step8-context-enrichment/parse-context-enrichment.js"
 
 function createInput () {
   return {
@@ -274,7 +274,7 @@ test("retains event timing after the market cutoff for the main analysis", async
 })
 
 test("validates input candidates, source arrays, statuses, prompt and agent", async () => {
-  await assert.rejects(enrichCandidatesWithContext({}, "Prompt"), /Step 9 enrichment candidates are required/)
+  await assert.rejects(enrichCandidatesWithContext({}, "Prompt"), /Step 7 enrichment candidates are required/)
   await assert.rejects(enrichCandidatesWithContext(createInput(), ""), /system prompt is required/)
   await assert.rejects(enrichCandidatesWithContext(createInput(), "Prompt", { callAgent: null }), /agent must be a function/)
   for (const source of ["news", "twitter"]) {

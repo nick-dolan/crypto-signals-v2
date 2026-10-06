@@ -15,11 +15,11 @@ export async function runReportStep ({ createStore = createReportStore } = {}) {
   // A failed rerun must not leave a previous report as the input to step 14.
   await fs.rm("tmp/step13-report.json", { force: true })
   const [analysis, payload, shortlist, sources, context] = await Promise.all([
-    readTmpJson("step7-agent-analysis.json"),
-    readTmpJson("step6-agent-payload.json"),
+    readTmpJson("step10-agent-analysis.json"),
+    readTmpJson("step9-agent-payload.json"),
     readTmpJson("step5-preliminary-filter.json"),
-    readTmpJson("step9-twitter-enrichment.json"),
-    readTmpJson("step10-context-enrichment.json"),
+    readTmpJson("step7-twitter-enrichment.json"),
+    readTmpJson("step8-context-enrichment.json"),
   ])
   const [peerRadar, marketBrief] = await Promise.all([
     readPeerRadarReport(analysis.asOf),

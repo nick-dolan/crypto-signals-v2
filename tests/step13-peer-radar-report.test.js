@@ -249,17 +249,17 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
       asOf: radar.asOf, timeframe: "1h", candidateCount: 1, universeCoinCount: 8,
       candidates: [{ coin: { baseCurrencyId: "MAIN", symbol: "MAIN", name: "Main coin", marketSymbol: "BINANCE:MAINUSDT.P" } }],
     },
-    "step6-agent-payload.json": {
+    "step9-agent-payload.json": {
       schemaVersion: 12, asOf: radar.asOf, timeframe: "1h", candidateCount: 1, objective: "Main objective",
       marketContext: {}, marketDefinitions: {}, definitions: {}, flagDefinitions: {}, schema: { volume: ["volumeZ"] },
       candidates: [{ symbol: "MAIN", name: "Main coin", selectionRank: 1, flags: [], volume: [1.5] }],
     },
-    "step7-agent-analysis.json": {
+    "step10-agent-analysis.json": {
       asOf: radar.asOf, candidateCount: 1, topCandidates: [],
       assessments: [{ symbol: "MAIN", movementProbability: 0.6, estimateConfidence: "medium", drivers: ["Main driver"], counterSignals: [] }],
     },
-    "step9-twitter-enrichment.json": sources,
-    "step10-context-enrichment.json": {
+    "step7-twitter-enrichment.json": sources,
+    "step8-context-enrichment.json": {
       ...sources,
       generatedAt: radar.generatedAt,
       candidates: [{

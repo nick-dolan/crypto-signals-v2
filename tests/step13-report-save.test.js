@@ -30,14 +30,14 @@ async function prepareInputs (t, empty = false) {
       asOf, timeframe: "1h", candidateCount: candidates.length, universeCoinCount: 250,
       candidates: empty ? [] : [{ coin }],
     },
-    "step6-agent-payload.json": {
+    "step9-agent-payload.json": {
       schemaVersion: 10, asOf, timeframe: "1h", candidateCount: candidates.length,
       objective: "P(сильное движение в следующие 4–12 часов)",
       marketContext: { breadth4h: 0.5 }, marketDefinitions: { breadth4h: "Ширина" },
       schema: { volume: ["volumeZ"] }, definitions: { volumeZ: "Аномалия объёма" }, flagDefinitions: {},
       candidates: empty ? [] : [{ symbol: coin.symbol, name: coin.name, selectionRank: 1, volume: [2.5], flags: [] }],
     },
-    "step7-agent-analysis.json": {
+    "step10-agent-analysis.json": {
       schemaVersion: 3, asOf, candidateCount: candidates.length,
       objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
       topCandidates: empty ? [] : [{ symbol: coin.symbol, explanation: candidates[0].explanation }],
@@ -49,10 +49,10 @@ async function prepareInputs (t, empty = false) {
             drivers: ["Объём"], counterSignals: [], tradingViewUrl: "https://www.tradingview.com/",
           }],
     },
-    "step9-twitter-enrichment.json": {
+    "step7-twitter-enrichment.json": {
       asOf, newsEnrichment: window, twitterEnrichment: window, candidates,
     },
-    "step10-context-enrichment.json": {
+    "step8-context-enrichment.json": {
       asOf, generatedAt: "2026-09-26T12:00:00.000Z", newsEnrichment: window, twitterEnrichment: window,
       candidates: candidates.map(({ symbol }) => ({
         symbol, newsStatus: "available", twitterStatus: "empty",
@@ -242,7 +242,7 @@ test("inconsistent inputs clear the previous receipt before creating another arc
   const directory = await prepareInputs(t, true)
   await runStep(directory)
   const previous = await readReceipt(directory)
-  const filename = path.join(directory, "tmp", "step6-agent-payload.json")
+  const filename = path.join(directory, "tmp", "step9-agent-payload.json")
   const payload = JSON.parse(await fs.readFile(filename, "utf8"))
   payload.asOf = "2026-09-26T10:00:00.000Z"
   await fs.writeFile(filename, JSON.stringify(payload))

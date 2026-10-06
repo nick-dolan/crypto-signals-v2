@@ -8,34 +8,34 @@ import {
 
 function validateInput (input) {
   if (!isObject(input) || !isArray(input.candidates)) {
-    throw new Error("Step 9 enrichment candidates are required")
+    throw new Error("Step 7 enrichment candidates are required")
   }
 
-  const asOf = getRequiredString(input.asOf, "Step 9 asOf")
+  const asOf = getRequiredString(input.asOf, "Step 7 asOf")
   const symbols = new Set()
   const candidates = input.candidates.map((candidate, index) => {
     const symbol = getRequiredString(
       candidate?.symbol,
-      `Step 9 enrichment candidate ${index} symbol`,
+      `Step 7 enrichment candidate ${index} symbol`,
     )
 
     const normalizedSymbol = symbol.toUpperCase()
 
     if (symbols.has(normalizedSymbol)) {
-      throw new Error(`Step 9 enrichment candidates contain duplicate symbol ${normalizedSymbol}`)
+      throw new Error(`Step 7 enrichment candidates contain duplicate symbol ${normalizedSymbol}`)
     }
 
     if (!isObject(candidate.news) || !isArray(candidate.news.items)) {
-      throw new Error(`Step 9 enrichment candidate ${symbol} news are required`)
+      throw new Error(`Step 7 enrichment candidate ${symbol} news are required`)
     }
 
     if (!isObject(candidate.twitter) || !isArray(candidate.twitter.tweets)) {
-      throw new Error(`Step 9 enrichment candidate ${symbol} twitter data are required`)
+      throw new Error(`Step 7 enrichment candidate ${symbol} twitter data are required`)
     }
 
     for (const source of ["news", "twitter"]) {
       if (!["available", "empty", "failed"].includes(candidate[source].status)) {
-        throw new Error(`Step 9 enrichment candidate ${symbol} ${source} status is invalid`)
+        throw new Error(`Step 7 enrichment candidate ${symbol} ${source} status is invalid`)
       }
     }
 

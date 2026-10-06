@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { isNaN } from "../src/helpers/utils.typed.js"
-import { enrichCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-candidates-with-news.js"
+import { enrichCandidatesWithNews } from "../src/steps/step6-news-enrichment/enrich-candidates-with-news.js"
 
 function createShortlist () {
   return {

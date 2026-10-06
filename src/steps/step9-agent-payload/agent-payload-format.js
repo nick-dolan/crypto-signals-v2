@@ -2,7 +2,7 @@ import { isArray, isObject, isSafeInteger, isString } from "../../helpers/utils.
 
 export function decodeAgentPayload (payload) {
   if (!isObject(payload?.schema)) {
-    throw new Error("Step 6 schema must define named groups of columns; regenerate step 6 for older payloads")
+    throw new Error("Step 9 schema must define named groups of columns; regenerate step 9 for older payloads")
   }
 
   const groups = Object.entries(payload.schema)
@@ -13,17 +13,17 @@ export function decodeAgentPayload (payload) {
     || !isArray(fields)
     || fields.some(field => !isString(field) || !field.trim())
   ))) {
-    throw new Error("Step 6 schema must define named groups of non-empty column names")
+    throw new Error("Step 9 schema must define named groups of non-empty column names")
   }
 
   const fields = ["symbol", "name", ...groups.flatMap(([, columns]) => columns), "flags"]
 
   if (new Set(fields).size !== fields.length || fields.includes("selectionRank")) {
-    throw new Error("Step 6 schema must contain unique column names without reserved metadata")
+    throw new Error("Step 9 schema must contain unique column names without reserved metadata")
   }
 
   if (!isArray(payload.candidates)) {
-    throw new Error("Step 6 candidates must be an array")
+    throw new Error("Step 9 candidates must be an array")
   }
 
   const orderFields = payload.schemaVersion >= 13 ? [] : ["selectionRank"]
@@ -37,21 +37,21 @@ export function decodeAgentPayload (payload) {
         !isArray(candidate[group]) || candidate[group].length !== columns.length
       ))
     ) {
-      throw new Error(`Step 6 candidate ${index} groups must match the schema length and keys`)
+      throw new Error(`Step 9 candidate ${index} groups must match the schema length and keys`)
     }
 
     for (const field of ["symbol", "name"]) {
       if (!isString(candidate[field]) || !candidate[field].trim()) {
-        throw new Error(`Step 6 candidate ${index} contains an invalid ${field}`)
+        throw new Error(`Step 9 candidate ${index} contains an invalid ${field}`)
       }
     }
 
     if (orderFields.length > 0 && (!isSafeInteger(candidate.selectionRank) || candidate.selectionRank < 1)) {
-      throw new Error(`Step 6 candidate ${index} contains an invalid selectionRank`)
+      throw new Error(`Step 9 candidate ${index} contains an invalid selectionRank`)
     }
 
     if (!isArray(candidate.flags)) {
-      throw new Error(`Step 6 candidate ${index} flags must be an array`)
+      throw new Error(`Step 9 candidate ${index} flags must be an array`)
     }
 
     return {

@@ -592,7 +592,7 @@ for (const field of ["extra", "movementProbability", "leaders"]) {
 test("standalone empty step prepares tmp data without archiving or touching other pipeline files", async (context) => {
   const scan = createScan(0)
   const directory = await prepareStepDirectory(context, scan)
-  await fs.writeFile(path.join(directory, "tmp", "step7-agent-analysis.json"), "main analysis sentinel")
+  await fs.writeFile(path.join(directory, "tmp", "step10-agent-analysis.json"), "main analysis sentinel")
   await fs.mkdir(path.join(directory, "reports"))
   await fs.writeFile(path.join(directory, "reports", "main-report.html"), "main report sentinel")
 
@@ -606,7 +606,7 @@ test("standalone empty step prepares tmp data without archiving or touching othe
   assert.equal(output.analysisStatus, "skipped_no_candidates")
   assert.equal(output.analysis.callCount, 0)
 
-  assert.equal(await fs.readFile(path.join(directory, "tmp", "step7-agent-analysis.json"), "utf8"), "main analysis sentinel")
+  assert.equal(await fs.readFile(path.join(directory, "tmp", "step10-agent-analysis.json"), "utf8"), "main analysis sentinel")
   assert.equal(await fs.readFile(path.join(directory, "reports", "main-report.html"), "utf8"), "main report sentinel")
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "tmp", "step11-peer-radar.json"), "utf8")), scan)
 })

@@ -1,5 +1,5 @@
 import { isArray, isError, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
-import { decodeAgentPayload } from "../step6-agent-payload/agent-payload-format.js"
+import { decodeAgentPayload } from "../step9-agent-payload/agent-payload-format.js"
 import { formatCoinSummary, readCoinSummary } from "./coin-summary.js"
 
 export class InvalidCopilotAnalysisError extends Error {
@@ -131,11 +131,11 @@ function readAgentPayload (payload) {
   try {
     decoded = decodeAgentPayload(payload)
   } catch (error) {
-    invalidAnalysis(isError(error) ? error.message : "step 6 payload is incomplete")
+    invalidAnalysis(isError(error) ? error.message : "step 9 payload is incomplete")
   }
 
   if (payload.candidateCount !== decoded.candidates.length) {
-    invalidAnalysis("step 6 payload contains invalid candidates")
+    invalidAnalysis("step 9 payload contains invalid candidates")
   }
 
   return decoded

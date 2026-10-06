@@ -102,7 +102,7 @@
   function renderAltMarketBackground () {
     const background = report.altMarketBackground ?? {
       status: "unavailable", change4hPct: null, breadth4h: null,
-      warning: "В этом отчёте фон альтрынка не рассчитан. Выполните шаги 4–6 и пересоздайте HTML для того же среза.",
+      warning: "В этом отчёте фон альтрынка не рассчитан. Выполните шаги 4–9 и пересоздайте HTML для того же среза.",
     }
     const status = ["up", "down", "mixed"].includes(background.status) ? background.status : "unavailable"
     const [label, icon] = {
@@ -838,7 +838,7 @@
     byId("information-panel").hidden = !coin.information
     byId("analysis-source").textContent = growthObjective
       ? "Рыночные данные и инфофон"
-      : byId("information-panel").hidden ? "Анализ шага 7" : "Архивный анализ с инфофоном"
+      : byId("information-panel").hidden ? "Анализ шага 10" : "Архивный анализ с инфофоном"
     if (byId("information-panel").hidden) {
       return
     }

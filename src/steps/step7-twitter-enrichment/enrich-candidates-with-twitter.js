@@ -133,21 +133,21 @@ async function fetchRecentTweets (
 
 function validateInput (input) {
   if (!isObject(input) || !isArray(input.candidates)) {
-    throw new Error("Step 8 enrichment candidates are required")
+    throw new Error("Step 6 enrichment candidates are required")
   }
 
-  getRequiredString(input.asOf, "Step 8 asOf")
+  getRequiredString(input.asOf, "Step 6 asOf")
 
   const symbols = new Set()
 
   return input.candidates.map((candidate, index) => {
     const symbol = getRequiredString(
       candidate?.symbol,
-      `Step 8 enrichment candidate ${index} symbol`,
+      `Step 6 enrichment candidate ${index} symbol`,
     ).toUpperCase()
 
     if (symbols.has(symbol)) {
-      throw new Error(`Step 8 enrichment candidates contain duplicate symbol ${symbol}`)
+      throw new Error(`Step 6 enrichment candidates contain duplicate symbol ${symbol}`)
     }
 
     symbols.add(symbol)
