@@ -987,10 +987,12 @@
               ? "Достигнут лимит: 7 дней после среза отчёта. Пропуски возможны — обновление можно повторить."
               : `${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC+3, не закрытие часа.` : "Текущий OI недоступен."}`,
           ].join(" ")
-        : "Сохранённый срез. Максимум 7 дней (168 часовых свечей) после среза отчёта. Обновление — только по кнопке, без пересчёта анализа."
+        : ""
+    byId("chart-update-status").hidden = !state.pending && !state.data
     byId("chart-source").textContent = state.data
       ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC+3. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC+3.`} OI в базовом активе; небольшие различия источников возможны.`
-      : "Источник графика: сохранённые данные TradingView."
+      : ""
+    byId("chart-source").hidden = !state.data
     byId("report-time-note").textContent = [
       `Срез отчёта: ${time(report.asOf)} UTC+3 — время открытия последней закрытой свечи.`,
       reportMarkerTime(chartHistory(coin)) == null

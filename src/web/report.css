@@ -793,7 +793,7 @@ table {
     overflow-wrap: anywhere;
 }
 
-.chart-update-notes p+p {
+.chart-update-notes p:not([hidden])~p:not([hidden]) {
     margin-top: 4px;
 }
 

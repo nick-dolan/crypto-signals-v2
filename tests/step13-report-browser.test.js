@@ -2322,6 +2322,13 @@ function selectCoin (browser, symbol) {
   return click(browser.byId("candidate-rows"), row)
 }
 
+function assertHiddenChartNotes (byId) {
+  for (const id of ["chart-update-status", "chart-source"]) {
+    assert.equal(byId(id).textContent, "")
+    assert.equal(byId(id).hidden, true)
+  }
+}
+
 function chartSeries (chart, type) {
   return chart.series.find(series => series.type === type)
 }
@@ -3277,11 +3284,9 @@ test("startup, coin selection, periods, search and sorting never call the update
   assert.equal(browser.markers.length, 0)
   assert.equal(browser.byId("update-chart").disabled, false)
   assert.equal(browser.byId("update-chart").attributes.get("aria-busy"), "false")
-  assert.match(browser.byId("chart-update-status").textContent, /Сохранённый срез/)
-  assert.match(browser.byId("chart-update-status").textContent, /Максимум 7 дней \(168 часовых свечей\) после среза отчёта/)
+  assertHiddenChartNotes(browser.byId)
   assert.match(browser.byId("update-chart").attributes.get("title"), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта/)
   assert.match(template.match(/<footer class="page-footer">([\s\S]*?)<\/footer>/)[1].replace(/\s+/g, " "), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта; повторные нажатия не продлевают окно/)
-  assert.match(browser.byId("chart-source").textContent, /сохранённые данные TradingView/)
 })
 
 test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-hour refresh has no duplicates", async () => {
@@ -3386,8 +3391,7 @@ test("the limit status allows gap recovery and stays coin-local without claiming
   assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data.find(point => point.time === chartTime(report, 40)), { time: chartTime(report, 40) })
 
   selectCoin(browser, "SOL")
-  assert.match(byId("chart-update-status").textContent, /Сохранённый срез.*Максимум 7 дней/)
-  assert.doesNotMatch(byId("chart-update-status").textContent, /Достигнут лимит/)
+  assertHiddenChartNotes(byId)
   assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).time, chartTime(report))
   selectCoin(browser, "COTI")
   assert.equal(byId("chart-update-status").textContent, status)
@@ -3608,6 +3612,8 @@ test("loading disables Update and suppresses duplicate handlers while keeping th
   assert.equal(button.attributes.get("aria-busy"), "true")
   assert.equal(button.textContent, "Обновление…")
   assert.match(browser.byId("chart-update-status").textContent, /Загружаем свечи, объём и OI/)
+  assert.equal(browser.byId("chart-update-status").hidden, false)
+  assert.equal(browser.byId("chart-source").hidden, true)
   assert.equal(browser.charts.at(-1), original)
   assert.equal(original.removed, false)
   // Dispatch directly even though the button is disabled: the handler must also guard duplicates.
@@ -3621,6 +3627,8 @@ test("loading disables Update and suppresses duplicate handlers while keeping th
   assert.equal(button.disabled, false)
   assert.equal(button.attributes.get("aria-busy"), "false")
   assert.equal(button.textContent, "Update chart")
+  assert.equal(browser.byId("chart-update-status").hidden, false)
+  assert.equal(browser.byId("chart-source").hidden, false)
   assert.equal(browser.charts.length, 2)
   assert.equal(original.removed, true)
   assert.deepEqual(browser.charts.at(-1).ranges.at(-1), { from: chartTime(report, 5 - 167), to: chartTime(report, 5) })
@@ -3637,7 +3645,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   await click(browser.byId("update-chart"))
   selectCoin(browser, "SOL")
   assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.length, 168)
-  assert.match(browser.byId("chart-update-status").textContent, /Сохранённый срез/)
+  assertHiddenChartNotes(browser.byId)
   assert.equal(chartMarkers(browser).length, 0)
   await click(browser.byId("update-chart"))
   assert.equal(browser.updateCalls[1].previous, null)
@@ -3646,6 +3654,8 @@ test("coin switches reuse independent caches, pass the correct previous result, 
     selectCoin(browser, symbol)
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, result.history.candles)
     assert.match(browser.byId("chart-update-status").textContent, /Обновлено/)
+    assert.equal(browser.byId("chart-update-status").hidden, false)
+    assert.equal(browser.byId("chart-source").hidden, false)
     assert.equal(chartMarkers(browser)[0].time, chartTime(report))
   }
   assert.equal(browser.updateCalls.length, 2)
@@ -3661,8 +3671,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   assert.equal(reloaded.directRequests.length, 0)
   assert.equal(reloaded.markers.length, 0)
   assert.deepEqual(chartSeries(reloaded.charts[0], "Candlestick").data, report.coins[0].history.candles)
-  assert.match(reloaded.byId("chart-update-status").textContent, /Сохранённый срез/)
-  assert.match(reloaded.byId("chart-source").textContent, /сохранённые данные TradingView/)
+  assertHiddenChartNotes(reloaded.byId)
   assert.equal(reloaded.byId("chart-update-error").hidden, true)
   assert.deepEqual(reloaded.days.map(day => day.attributes.get("aria-pressed")), ["false", "false", "true"])
 })
@@ -3807,6 +3816,8 @@ for (const cached of [false, true]) {
       assert.equal(browser.updateCalls.at(-1).previous, cached ? result : null)
       assert.equal(browser.byId("chart-update-error").hidden, true)
       assert.equal(browser.byId("update-chart").disabled, true)
+      assert.equal(browser.byId("chart-update-status").hidden, false)
+      assert.equal(browser.byId("chart-source").hidden, !cached)
       controlled.requests.at(-1).reject(new Error(message))
       await pending
 
@@ -3818,6 +3829,8 @@ for (const cached of [false, true]) {
       assert.equal(browser.markers.length, markerCount)
       assert.equal(browser.byId("chart-legend").textContent, legend)
       assert.equal(browser.byId("chart-source").textContent, source)
+      assert.equal(browser.byId("chart-update-status").hidden, !cached)
+      assert.equal(browser.byId("chart-source").hidden, !cached)
       assert.equal(browser.byId("chart").hidden, false)
       assert.equal(browser.byId("chart-update-error").hidden, false)
       assert.ok(browser.byId("chart-update-error").textContent.startsWith(message))
@@ -3838,6 +3851,8 @@ for (const cached of [false, true]) {
     assert.equal(browser.charts.length, count + 1)
     assert.equal(previous.removed, true)
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, recovered.history.candles)
+    assert.equal(browser.byId("chart-update-status").hidden, false)
+    assert.equal(browser.byId("chart-source").hidden, false)
     assert.equal(browser.byId("chart-update-error").hidden, true)
     assert.equal(browser.byId("update-chart").disabled, false)
     assert.equal(browser.updateCalls.length, cached ? 4 : 3)
