@@ -2569,7 +2569,7 @@ test("an empty candidate list renders its empty states without creating a chart"
 })
 
 for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending", null, true], ["top and trending", 1, true]]) {
-  test(`${label} candidates show enriched explanations, news, tweets and their independent collection times once`, () => {
+  test(`${label} candidates show enriched explanations, news, tweets and their source windows once`, () => {
     const report = createReport()
     report.coins[0].topRank = topRank
     report.coins[0].features.coingeckoTrending = trending
@@ -2585,7 +2585,7 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
       assert.equal(byId("explanation").textContent, "Дополненное объяснение из шага 8.")
     }
     assert.equal(byId("analysis-source").textContent, "Архивный анализ с инфофоном")
-    assert.match(byId("context-generated").textContent, /11:05/)
+    assert.equal(byId("context-generated"), null)
     assert.match(byId("news-window").textContent, /10:45/)
     assert.match(byId("twitter-window").textContent, /11:00/)
     assert.equal(byId("as-of").dateTime, report.asOf)
@@ -2617,6 +2617,8 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
 }
 
 for (const [sentiment, label] of [
+  ["bullish", "Бычий инфоповод"],
+  ["bearish", "Медвежий инфоповод"],
   ["positive", "Позитивный инфоповод"],
   ["negative", "Негативный инфоповод"],
   ["mixed", "Смешанный инфоповод"],
@@ -2659,7 +2661,13 @@ for (const [sentiment, label] of [
       assert.equal(byId("top-rank").hidden, coin.topRank == null)
       assert.equal(byId("information-panel").hidden, false)
       assert.equal(byId("social-reason").hidden, false)
-      assert.equal(byId("social-reason").textContent, title)
+      assert.equal(byId("social-reason").textContent, coin.socialReason)
+      const informationIndicator = byId("social-reason").children[0]
+      assert.equal(informationIndicator.className, "social-indicator")
+      assert.equal(informationIndicator.dataset.sentiment, sentiment)
+      assert.equal(informationIndicator.title, title)
+      assert.deepEqual([...informationIndicator.attributes], [...indicator.attributes])
+      assert.equal(informationIndicator.children[0].children[0].attributes.get("d"), svg.children[0].attributes.get("d"))
     }
     assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
     assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
@@ -2696,20 +2704,25 @@ test("switching coins replaces the social reason and clears it for unknown, lega
   const browser = runReport(report)
   const { byId } = browser
 
-  for (const [symbol, text] of [
-    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
-    ["TRENDING", "Негативный инфоповод: Взлом протокола"],
-    ["QUIET", "Только повторяющиеся упоминания"],
-    ["UNKNOWN", ""],
-    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
-    ["LEGACY", ""],
-    ["TRENDING", "Негативный инфоповод: Взлом протокола"],
-    ["PLAIN", ""],
-    ["TOP", "Позитивный инфоповод: Новое партнёрство"],
+  for (const [symbol, text, sentiment] of [
+    ["TOP", "Новое партнёрство", "positive"],
+    ["TRENDING", "Взлом протокола", "negative"],
+    ["QUIET", "Только повторяющиеся упоминания", null],
+    ["UNKNOWN", "", null],
+    ["TOP", "Новое партнёрство", "positive"],
+    ["LEGACY", "", null],
+    ["TRENDING", "Взлом протокола", "negative"],
+    ["PLAIN", "", null],
+    ["TOP", "Новое партнёрство", "positive"],
   ]) {
     selectCoin(browser, symbol)
     assert.equal(byId("social-reason").textContent, text)
     assert.equal(byId("social-reason").hidden, !text)
+    const indicators = descendants(byId("social-reason")).filter(node => node.className === "social-indicator")
+    assert.deepEqual(indicators.map(node => node.dataset.sentiment), sentiment ? [sentiment] : [])
+    if (!text) {
+      assert.deepEqual(byId("social-reason").children, [])
+    }
     assert.equal(byId("information-panel").hidden, symbol === "PLAIN")
   }
   assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
@@ -2726,11 +2739,62 @@ test("social reason markup stays literal in the tooltip, accessible name and inf
 
   assert.equal(indicator.title, `Негативный инфоповод: ${unsafe}`)
   assert.equal(indicator.attributes.get("aria-label"), indicator.title)
-  assert.equal(byId("social-reason").textContent, indicator.title)
-  assert.deepEqual(byId("social-reason").children, [])
+  assert.equal(byId("social-reason").textContent, unsafe)
+  assert.deepEqual(descendants(byId("social-reason")).map(node => node.tagName), ["SPAN", "SVG", "PATH", "SPAN"])
+  assert.equal(byId("social-reason").children[0].title, indicator.title)
+  assert.equal(byId("social-reason").children[0].attributes.get("aria-label"), indicator.title)
+  assert.equal(byId("social-reason").children[1].textContent, unsafe)
+  assert.deepEqual(byId("social-reason").children[1].children, [])
   assert.deepEqual(descendants(indicator).map(node => node.tagName), ["SVG", "PATH"])
   assert.equal(indicator.attributes.has("onerror"), false)
   assert.equal(indicator.children[0].attributes.has("onload"), false)
+})
+
+for (const [status, hasNews, visible] of [
+  ["empty", false, true],
+  ["available", false, true],
+  ["available", true, false],
+  ["failed", false, false],
+  ["failed", true, false],
+]) {
+  test(`news caveat describes only a successful empty search (${status}, ${hasNews ? "with news" : "no news"})`, () => {
+    const report = createReport()
+    const news = addInformation(report).news
+    Object.assign(news, { status, error: status === "failed" ? "Rate limit" : null, items: hasNews ? news.items : [] })
+    report.coins[0].contextCaveat = "Выборка новостей пуста, что не доказывает отсутствия событий. Твиты ограничены и опубликованы после рыночного среза."
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+
+    assert.equal(byId("context-caveat").hidden, !visible)
+    assert.equal(byId("context-caveat").textContent, visible ? "Выборка новостей пуста, что не доказывает отсутствия событий." : "")
+    assert.deepEqual(byId("context-caveat").children, [])
+    if (status === "failed") {
+      assert.equal(byId("news-status").hidden, false)
+      assert.match(byId("news-status").textContent, /Ошибка загрузки: Rate limit/)
+    }
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+    assert.deepEqual(report, before)
+  })
+}
+
+test("switching coins clears the empty-news caveat for populated, failed and unenriched sources", () => {
+  const report = createReport(["EMPTY", "AVAILABLE", "FAILED", "PLAIN"])
+  report.coins.slice(0, 3).forEach((coin) => {
+    addInformation(report, coin)
+    coin.contextCaveat = "Полная оговорка остаётся в данных для анализа."
+  })
+  report.coins[0].information.news = { status: "empty", error: null, items: [] }
+  report.coins[2].information.news = { status: "failed", error: "Offline", items: [] }
+  const before = structuredClone(report)
+  const browser = runReport(report)
+
+  for (const symbol of ["EMPTY", "AVAILABLE", "EMPTY", "FAILED", "PLAIN", "EMPTY"]) {
+    selectCoin(browser, symbol)
+    assert.equal(browser.byId("context-caveat").hidden, symbol !== "EMPTY")
+    assert.equal(browser.byId("context-caveat").textContent, symbol === "EMPTY" ? "Выборка новостей пуста, что не доказывает отсутствия событий." : "")
+  }
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
 })
 
 test("empty searches and failed sources have distinct messages, while missing article text stays visible", () => {
@@ -2813,7 +2877,7 @@ test("switching from a top or trending coin to a plain non-top clears source dat
       assert.equal(byId(`${key}-status`).hidden, true)
       assert.equal(byId(`${key}-details`).open, false)
     }
-    assert.equal(byId("context-generated").textContent, "")
+    assert.equal(byId("context-generated"), null)
     assert.equal(byId("analysis-source").textContent, "Анализ шага 10")
     assert.equal(byId("explanation").textContent, report.coins[2].explanation)
     assert.equal(byId("explanation").hidden, true)
@@ -3013,7 +3077,7 @@ test("social indicators preserve top selection, sorting, filtering and movement 
   byId("search").listeners.get("input")()
   assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["ADA"])
   assert.equal(byId("coin-symbol").textContent, "SOL")
-  assert.equal(byId("social-reason").textContent, "Смешанный инфоповод: Событие SOL")
+  assert.equal(byId("social-reason").textContent, "Событие SOL")
   assert.equal(byId("top-rank").hidden, true)
   assert.equal(byId("candidate-count").textContent, "4")
   assert.equal(byId("explanation").textContent, report.coins[1].explanation)
@@ -3638,7 +3702,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
   const unchanged = [
     "as-of", "coverage", "objective", "coin-badges", "market-summary", "top-candidates", "candidate-rows",
     "explanation", "drivers", "counter-signals", "feature-highlights", "feature-rows", "flags", "analysis-source",
-    "information-panel", "context-generated", "news-window", "news-count", "news-status", "news-items", "twitter-window",
+    "information-panel", "social-reason", "news-summary", "twitter-summary", "context-caveat", "news-window", "news-count", "news-status", "news-items", "twitter-window",
     "twitter-count", "twitter-status", "twitter-items",
     "sustained-strength-status", "sustained-strength-history", "sustained-strength-current",
     "coingecko-badge", "coingecko-context", "coingecko-categories", "coingecko-category-status", "coin-description",
@@ -3778,9 +3842,12 @@ test("growth reports label the probability correctly and show context without re
   assert.equal(byId("news-summary").textContent, `Новости: ${coin.newsSummary}`)
   assert.deepEqual(byId("news-summary").children, [])
   assert.equal(byId("twitter-summary").textContent, `Twitter: ${coin.twitterSummary}`)
-  assert.equal(byId("context-caveat").textContent, coin.contextCaveat)
-  assert.match(byId("context-generated").textContent, /Учтён в основной оценке роста/)
-  assert.equal(byId("social-reason").textContent, "Бычий инфоповод: Обновление сети.")
+  assert.equal(byId("context-caveat").textContent, "")
+  assert.equal(byId("context-caveat").hidden, true)
+  assert.equal(byId("context-generated"), null)
+  assert.equal(byId("social-reason").textContent, coin.socialReason)
+  assert.equal(byId("social-reason").children[0].dataset.sentiment, "bullish")
+  assert.equal(byId("social-reason").children[0].title, "Бычий инфоповод: Обновление сети.")
   click(byId("candidate-rows"), byId("candidate-rows").children[1])
   for (const id of ["news-summary", "twitter-summary", "context-caveat"]) {
     assert.equal(byId(id).textContent, "")
@@ -3788,14 +3855,22 @@ test("growth reports label the probability correctly and show context without re
   }
 })
 
-test("general background displays tone without manufacturing a significant event indicator", () => {
-  for (const [socialSentiment, label] of [["bullish", "Бычий"], ["bearish", "Медвежий"], ["neutral", "Нейтральный"]]) {
+test("general background displays a tone icon without manufacturing a significant sidebar event indicator", () => {
+  for (const [socialSentiment, label] of [["bullish", "Бычий"], ["bearish", "Медвежий"], ["mixed", "Смешанный"], ["neutral", "Нейтральный"]]) {
     const report = createReport()
     addInformation(report)
     Object.assign(report.coins[0], { socialSignificant: false, socialSentiment, socialReason: "Обсуждение без нового события." })
+    const before = structuredClone(report)
     const { byId } = runReport(report)
-    assert.equal(byId("social-reason").textContent, `${label} фон: Обсуждение без нового события.`)
+    assert.equal(byId("social-reason").textContent, report.coins[0].socialReason)
+    const indicators = descendants(byId("social-reason")).filter(node => node.className === "social-indicator")
+    assert.equal(indicators.length, 1)
+    assert.equal(indicators[0].dataset.sentiment, socialSentiment)
+    assert.equal(indicators[0].title, `${label} фон: Обсуждение без нового события.`)
+    assert.equal(indicators[0].attributes.get("aria-label"), indicators[0].title)
     assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+    assert.deepEqual(report, before)
   }
 })
 

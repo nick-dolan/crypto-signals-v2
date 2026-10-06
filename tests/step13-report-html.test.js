@@ -39,6 +39,7 @@ test("report embeds its data, executable browser scripts and chart license witho
   assert.match(html, /id="coingecko-context"[^>]*aria-labelledby="coingecko-heading"[^>]*hidden/)
   assert.match(html, /Трендовые категории CoinGecko/)
   assert.match(html, /Поисковое внимание, не сигнал роста/)
+  assert.doesNotMatch(html, /id="context-generated"|Инфофон подготовлен|Учтён в основной оценке роста/)
 
   assert.match(html, /aria-labelledby="sustained-strength-heading"/)
   assert.match(html, /Устойчивая сила/)

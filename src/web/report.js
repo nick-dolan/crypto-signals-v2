@@ -824,13 +824,20 @@
       byId(`${key}-status`).textContent = ""
       byId(`${key}-status`).hidden = true
     }
-    byId("context-generated").textContent = ""
-    byId("social-reason").textContent = socialSignalText(coin)
-    byId("social-reason").hidden = !byId("social-reason").textContent
+    const socialReason = byId("social-reason")
+    socialReason.replaceChildren(...[
+      coin.socialReason && [true, false].includes(coin.socialSignificant) && coin.socialSentiment ? createSocialIndicator(coin) : null,
+      coin.socialReason ? element("span", "", coin.socialReason) : null,
+    ].filter(Boolean))
+    socialReason.hidden = !coin.socialReason
+    const news = coin.information?.news
+    const caveat = news && news.status !== "failed" && !news.items.length
+      ? "Выборка новостей пуста, что не доказывает отсутствия событий."
+      : null
     for (const [id, value, label] of [
       ["news-summary", coin.newsSummary, "Новости: "],
       ["twitter-summary", coin.twitterSummary, "Twitter: "],
-      ["context-caveat", coin.contextCaveat, ""],
+      ["context-caveat", caveat, ""],
     ]) {
       byId(id).textContent = value ? `${label}${value}` : ""
       byId(id).hidden = !value
@@ -842,7 +849,7 @@
     if (byId("information-panel").hidden) {
       return
     }
-    byId("context-generated").textContent = `Инфофон подготовлен ${time(report.informationSources.contextGeneratedAt)} UTC.${growthObjective ? " Учтён в основной оценке роста." : ""}`
+
     renderSource("news", coin.information.news, coin.information.news.items, newsItem)
     renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
   }

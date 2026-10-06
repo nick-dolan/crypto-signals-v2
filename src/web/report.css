@@ -1112,6 +1112,10 @@ summary {
     color: #c5d1e1;
 }
 
+.information-panel .social-indicator {
+    margin: 0 6px 0 0;
+}
+
 .article-content {
     margin-top: 12px;
 }
