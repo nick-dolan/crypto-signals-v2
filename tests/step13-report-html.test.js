@@ -40,6 +40,9 @@ test("report embeds its data, executable browser scripts and chart license witho
   assert.match(html, /Трендовые категории CoinGecko/)
   assert.match(html, /Поисковое внимание, не сигнал роста/)
   assert.doesNotMatch(html, /id="context-generated"|Инфофон подготовлен|Учтён в основной оценке роста/)
+  const newsDetails = html.match(/<details id="news-details"[^>]*>([\s\S]*?)<\/details>/)[1]
+  assert.match(newsDetails, /<p id="news-window" class="source-window"><\/p>\s*<p id="context-caveat" class="source-window" hidden><\/p>/)
+  assert.equal([...html.matchAll(/\bid="context-caveat"/g)].length, 1)
 
   assert.match(html, /aria-labelledby="sustained-strength-heading"/)
   assert.match(html, /Устойчивая сила/)

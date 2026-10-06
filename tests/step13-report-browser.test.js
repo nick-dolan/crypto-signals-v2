@@ -2768,15 +2768,33 @@ for (const [status, hasNews, visible] of [
 
     assert.equal(byId("context-caveat").hidden, !visible)
     assert.equal(byId("context-caveat").textContent, visible ? "Выборка новостей пуста, что не доказывает отсутствия событий." : "")
+    assert.equal(byId("context-caveat").attributes.get("class"), "source-window")
     assert.deepEqual(byId("context-caveat").children, [])
+    assert.equal(byId("news-status").hidden, status !== "failed")
     if (status === "failed") {
-      assert.equal(byId("news-status").hidden, false)
       assert.match(byId("news-status").textContent, /Ошибка загрузки: Rate limit/)
+    } else {
+      assert.equal(byId("news-status").textContent, "")
     }
     assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
     assert.deepEqual(report, before)
   })
 }
+
+test("empty news uses a plain caveat without replacing the Twitter empty-search status", () => {
+  const report = createReport()
+  const information = addInformation(report)
+  information.news = { status: "empty", error: null, items: [] }
+  information.twitter = { status: "empty", error: null, tweets: [] }
+  const { byId } = runReport(report)
+
+  assert.equal(byId("context-caveat").hidden, false)
+  assert.equal(byId("context-caveat").textContent, "Выборка новостей пуста, что не доказывает отсутствия событий.")
+  assert.equal(byId("news-status").hidden, true)
+  assert.equal(byId("news-status").textContent, "")
+  assert.equal(byId("twitter-status").hidden, false)
+  assert.equal(byId("twitter-status").textContent, "За сохранённое окно публикаций ничего не найдено.")
+})
 
 test("switching coins clears the empty-news caveat for populated, failed and unenriched sources", () => {
   const report = createReport(["EMPTY", "AVAILABLE", "FAILED", "PLAIN"])
@@ -2809,8 +2827,10 @@ test("empty searches and failed sources have distinct messages, while missing ar
   information.news = { status: "empty", error: null, items: [] }
   information.twitter = { status: "failed", error: "Rate limit", tweets: [] }
   const { byId } = runReport(report)
-  assert.equal(byId("news-status").hidden, false)
-  assert.match(byId("news-status").textContent, /ничего не найдено/)
+  assert.equal(byId("news-status").hidden, true)
+  assert.equal(byId("news-status").textContent, "")
+  assert.equal(byId("context-caveat").hidden, false)
+  assert.equal(byId("context-caveat").textContent, "Выборка новостей пуста, что не доказывает отсутствия событий.")
   assert.match(byId("twitter-status").textContent, /Ошибка загрузки: Rate limit/)
   assert.equal(byId("twitter-count").textContent, "ошибка")
   assert.equal(byId("news-items").children.length, 0)
@@ -2835,8 +2855,10 @@ test("non-top trending coins keep empty searches, failed sources and partial pub
   selectCoin(browser, "TRENDING")
 
   assert.equal(byId("information-panel").hidden, false)
-  assert.equal(byId("news-status").hidden, false)
-  assert.match(byId("news-status").textContent, /ничего не найдено/)
+  assert.equal(byId("news-status").hidden, true)
+  assert.equal(byId("news-status").textContent, "")
+  assert.equal(byId("context-caveat").hidden, false)
+  assert.equal(byId("context-caveat").textContent, "Выборка новостей пуста, что не доказывает отсутствия событий.")
   assert.equal(byId("news-count").textContent, "0")
   assert.equal(byId("news-items").children.length, 0)
   assert.equal(byId("twitter-status").hidden, false)

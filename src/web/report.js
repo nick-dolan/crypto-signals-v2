@@ -807,11 +807,11 @@
     byId(`${key}-window`).textContent = `Окно публикаций: ${time(window.from)} — ${time(window.asOf)} UTC.`
     byId(`${key}-count`).textContent = source.status === "failed" ? "ошибка" : String(items.length)
     const status = byId(`${key}-status`)
-    status.hidden = source.status !== "failed" && items.length > 0
+    status.hidden = source.status !== "failed" && (key === "news" || items.length > 0)
     status.className = source.status === "failed" ? "source-status failed" : "source-status"
     status.textContent = source.status === "failed"
       ? `Ошибка загрузки: ${source.error || "источник недоступен"}`
-      : "За сохранённое окно публикаций ничего не найдено."
+      : key === "news" ? "" : "За сохранённое окно публикаций ничего не найдено."
     byId(`${key}-items`).replaceChildren(...items.map(renderItem))
   }
 
