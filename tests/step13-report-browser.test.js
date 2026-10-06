@@ -3798,3 +3798,20 @@ test("general background displays tone without manufacturing a significant event
     assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
   }
 })
+
+test("every unselected candidate displays the same plain explanation paragraph when the agent selects no tops", () => {
+  const report = createReport(["COTI", "SOL", "MINA"])
+  report.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+  report.coins.forEach((coin) => {
+    coin.topRank = null
+    coin.explanation = `Активность ${coin.symbol} растёт на фоне обновления проекта. Реакция цены пока слаба.`
+  })
+  const { byId } = runReport(report)
+  for (const [index, coin] of report.coins.entries()) {
+    click(byId("candidate-rows"), byId("candidate-rows").children[index])
+    assert.equal(byId("explanation").tagName, "P")
+    assert.equal(byId("explanation").hidden, false)
+    assert.equal(byId("explanation").textContent, coin.explanation)
+    assert.deepEqual(byId("explanation").children, [])
+  }
+})

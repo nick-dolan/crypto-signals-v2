@@ -511,13 +511,14 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
       assert.equal(prompt, systemPrompt)
       assert.deepEqual(JSON.parse(input), payload)
       return JSON.stringify({
-        schemaVersion: 3,
+        schemaVersion: 4,
         asOf: payload.asOf,
         topCandidates: [],
         assessments: candidates.map(({ symbol }) => ({
           symbol,
           movementProbability: 0.25,
           estimateConfidence: "medium",
+          technicalSummary: { observation: "Поисковое внимание дополняет рыночную картину.", caveat: "Самостоятельного подтверждения роста нет." },
           drivers: [{
             fields: ["coingeckoTrending", "coingeckoTrendingCategories"],
             text: "Поисковое внимание само по себе не подтверждает начало сильного движения",
@@ -1037,17 +1038,17 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
 
   const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
   const response = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     asOf: payload.asOf,
     topCandidates: [{
       symbol: "FIRST",
       movementProbability: 0.25,
-      technicalSummary: { observation: "После затишья торговая активность оживает.", caveat: "Подтверждение пока частичное." },
     }],
     assessments: selection.candidates.map(({ coin }) => ({
       symbol: coin.symbol,
       movementProbability: 0.25,
       estimateConfidence: "medium",
+      technicalSummary: { observation: "После затишья торговая активность оживает.", caveat: "Подтверждение пока частичное." },
       drivers: [
         {
           fields: ["sustainedStatus", "sustainedHistoryScore", "sustainedCurrentScore"],
@@ -1089,8 +1090,12 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
     ])
     assert.equal(assessment.movementProbability, 0.25)
     assert.equal(Object.hasOwn(assessment, "directionBias"), false)
+    assert.deepEqual(assessment.technicalSummary, { observation: "После затишья торговая активность оживает.", caveat: "Подтверждение пока частичное." })
+    assert.equal(assessment.explanation, "После затишья торговая активность оживает. Подтверждение пока частичное.")
   }
   assert.deepEqual(analysis.topCandidates[0].drivers, analysis.assessments[0].drivers)
+  assert.deepEqual(analysis.topCandidates[0].technicalSummary, analysis.assessments[0].technicalSummary)
+  assert.equal(analysis.topCandidates[0].explanation, analysis.assessments[0].explanation)
   assert.deepEqual(profiles, before)
 })
 
@@ -1282,13 +1287,14 @@ test("peer context passes steps 5 → 6 → 7 without changing selection or disc
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
       return JSON.stringify({
-        schemaVersion: 3,
+        schemaVersion: 4,
         asOf: payload.asOf,
         topCandidates: [],
         assessments: candidates.map(({ symbol }) => ({
           symbol,
           movementProbability: 0.25,
           estimateConfidence: "medium",
+          technicalSummary: { observation: "Активность связанных монет дополняет рыночную картину.", caveat: "Собственный триггер роста не подтверждён." },
           drivers: [{ fields: ["peerStatus", "peerLeaders"], text: "Активность соседей учитывается только как контекст" }],
           counterSignals: [],
         })),
@@ -1312,7 +1318,7 @@ test("peer schema supports an empty shortlist through step 7 with no history too
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
       assert.deepEqual(options.tools, [])
-      return JSON.stringify({ schemaVersion: 3, asOf: payload.asOf, topCandidates: [], assessments: [] })
+      return JSON.stringify({ schemaVersion: 4, asOf: payload.asOf, topCandidates: [], assessments: [] })
     },
     readCoinData: async () => assert.fail("Empty shortlist must not load history"),
   })
@@ -1371,13 +1377,16 @@ test("information context joins every shortlisted candidate by symbol before ana
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
       return JSON.stringify({
-        schemaVersion: 3,
+        schemaVersion: 4,
         asOf: payload.asOf,
         topCandidates: [],
         assessments: candidates.map(({ symbol }) => ({
           symbol,
           movementProbability: 0.25,
           estimateConfidence: "medium",
+          technicalSummary: symbol === "SOL"
+            ? { observation: "Объявлено важное обновление сети.", caveat: "Обсуждения повторяют одну новость." }
+            : { observation: "Рыночные признаки требуют подтверждения покупками.", caveat: "Новости недоступны, твитов не найдено." },
           drivers: [{ fields: ["newsSummary", "socialSentiment"], text: "Учитывается доступный информационный фон" }],
           counterSignals: [{ fields: ["newsStatus", "contextCaveat"], text: "Покрытие источников ограничивает оценку" }],
         })),
@@ -1389,6 +1398,11 @@ test("information context joins every shortlisted candidate by symbol before ana
   assert.deepEqual(analysis.assessments.map(candidate => candidate.symbol), ["SOL", "ETH"])
   assert.match(analysis.assessments[0].drivers[0], /newsSummary=Проект объявил важное обновление сети\. и socialSentiment=bullish/)
   assert.match(analysis.assessments[1].counterSignals[0], /newsStatus=failed/)
+  assert.deepEqual(analysis.topCandidates, [])
+  assert.deepEqual(analysis.assessments.map(candidate => candidate.explanation), [
+    "Объявлено важное обновление сети. Обсуждения повторяют одну новость.",
+    "Рыночные признаки требуют подтверждения покупками. Новости недоступны, твитов не найдено.",
+  ])
 })
 
 test("empty information context preserves publication windows without inventing candidates", () => {

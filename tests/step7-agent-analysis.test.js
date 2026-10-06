@@ -107,6 +107,20 @@ function createStructuredAgentResponse () {
   }
 }
 
+function createAllCandidateResponse () {
+  const response = createStructuredAgentResponse()
+
+  return {
+    ...response,
+    schemaVersion: 4,
+    topCandidates: response.topCandidates.map(({ symbol, movementProbability }) => ({ symbol, movementProbability })),
+    assessments: response.assessments.map((assessment, index) => ({
+      ...assessment,
+      technicalSummary: response.topCandidates[index].technicalSummary,
+    })),
+  }
+}
+
 function createAnalysis () {
   const analysis = createAgentResponse()
 
@@ -125,12 +139,12 @@ test("analysis prompt example follows the structured response schema", async () 
   const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
   const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
 
-  assert.equal(example.schemaVersion, 3)
-  assert.deepEqual(Object.keys(example.topCandidates[0]).sort(), ["movementProbability", "symbol", "technicalSummary"])
+  assert.equal(example.schemaVersion, 4)
+  assert.deepEqual(Object.keys(example.topCandidates[0]).sort(), ["movementProbability", "symbol"])
   assert.deepEqual(Object.keys(example.assessments[0]).sort(), [
-    "counterSignals", "drivers", "estimateConfidence", "movementProbability", "symbol",
+    "counterSignals", "drivers", "estimateConfidence", "movementProbability", "symbol", "technicalSummary",
   ])
-  assert.deepEqual(Object.keys(example.topCandidates[0].technicalSummary).sort(), ["caveat", "observation"])
+  assert.deepEqual(Object.keys(example.assessments[0].technicalSummary).sort(), ["caveat", "observation"])
 })
 
 test("agent analysis parser rejects a direction forecast as an extra field", () => {
@@ -153,9 +167,8 @@ test("growth analysis uses information evidence and preserves the combined expla
   payload.schema.informationContext = ["newsSummary", "twitterSummary", "socialSentiment"]
   payload.candidates[0].informationContext = ["Обновление V2: запущено в сети.", "Разработчики подтвердили запуск.", "bullish"]
   payload.candidates[1].informationContext = [null, null, null]
-  const response = createStructuredAgentResponse()
-  response.schemaVersion = 3
-  response.topCandidates[0].technicalSummary.observation = "Покупки оживают после выхода обновления V2. Это поддерживает сценарий роста."
+  const response = createAllCandidateResponse()
+  response.assessments[0].technicalSummary.observation = "Покупки оживают после выхода обновления V2. Это поддерживает сценарий роста."
   response.assessments[0].drivers = [{
     fields: ["volumeZ", "newsSummary", "socialSentiment"],
     text: "Свежий запуск сопровождается оживлением торговой активности",
@@ -168,12 +181,72 @@ test("growth analysis uses information evidence and preserves the combined expla
   })
 
   assert.equal(result.objective, payload.objective)
-  assert.equal(result.schemaVersion, 3)
-  assert.equal(result.topCandidates[0].explanation, response.topCandidates[0].technicalSummary.observation)
+  assert.equal(result.schemaVersion, 4)
+  assert.equal(result.topCandidates[0].explanation, response.assessments[0].technicalSummary.observation)
   assert.deepEqual(result.assessments[0].drivers, [
     "volumeZ=1.4 и newsSummary=\"Обновление V2: запущено в сети.\" и socialSentiment=bullish: Свежий запуск сопровождается оживлением торговой активности",
   ])
-  assert.throws(() => parseAgentAnalysis(JSON.stringify(createStructuredAgentResponse()), payload), /growth analysis requires schemaVersion 3/)
+  assert.throws(() => parseAgentAnalysis(JSON.stringify(createStructuredAgentResponse()), payload), /growth analysis requires schemaVersion 4/)
+})
+
+test("one analysis call explains every candidate with the existing paragraph style regardless of top selection", async () => {
+  for (const selected of [[], [0], [0, 1]]) {
+    const response = createAllCandidateResponse()
+    response.topCandidates = selected.map(index => response.topCandidates[index])
+    response.assessments[1].technicalSummary = {
+      observation: "После относительно спокойного периода усилились покупки и приток новых позиций. Свежий всплеск объёма и внимания сопровождает давление на верхнюю границу диапазона.",
+      caveat: "Пробой ещё не подтверждён, а последний час не продолжил рост; обсуждения в основном спекулятивны.",
+    }
+    let calls = 0
+    const result = await analyzeCandidates(createPayload(), createShortlist(), "System prompt", {
+      callAgent: async () => {
+        calls += 1
+        return JSON.stringify(response)
+      },
+    })
+
+    assert.equal(calls, 1)
+    assert.equal(result.assessments.length, 2)
+    for (const [index, assessment] of result.assessments.entries()) {
+      assert.deepEqual(assessment.technicalSummary, response.assessments[index].technicalSummary)
+      assert.equal(assessment.explanation, Object.values(assessment.technicalSummary).filter(Boolean).join(" "))
+    }
+    for (const top of result.topCandidates) {
+      const assessment = result.assessments.find(item => item.symbol === top.symbol)
+      assert.deepEqual(top.technicalSummary, assessment.technicalSummary)
+      assert.equal(top.explanation, assessment.explanation)
+    }
+  }
+})
+
+test("all 50 candidate assessments retain summaries even with no selected top", () => {
+  const payload = createPayload()
+  payload.candidates = Array.from({ length: 50 }, (_, index) => ({
+    ...payload.candidates[0], symbol: `COIN${index}`, selectionRank: index + 1,
+  }))
+  payload.candidateCount = payload.candidates.length
+  const response = createAllCandidateResponse()
+  response.topCandidates = []
+  response.assessments = payload.candidates.map(({ symbol }) => ({ ...response.assessments[0], symbol }))
+  const analysis = parseAgentAnalysis(JSON.stringify(response), payload)
+
+  assert.equal(analysis.assessments.length, 50)
+  assert.deepEqual(analysis.assessments.map(item => item.symbol), payload.candidates.map(item => item.symbol))
+  assert.ok(analysis.assessments.every(item => item.explanation === "После затишья торговая активность начинает оживать."))
+})
+
+test("schema 4 requires a valid summary for every assessment and rejects duplicated top prose", () => {
+  for (const value of [undefined, null, {}, { observation: "", caveat: null }, { observation: "volumeZ слабый.", caveat: null }]) {
+    const response = createAllCandidateResponse()
+    response.topCandidates = []
+    response.assessments[1].technicalSummary = value
+    assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /assessment.*(unexpected structure|technicalSummary)/)
+  }
+  for (const field of ["technicalSummary", "explanation"]) {
+    const response = createAllCandidateResponse()
+    response.topCandidates[0][field] = "Не дублировать объяснение."
+    assert.throws(() => parseAgentAnalysis(JSON.stringify(response), createPayload()), /top candidate.*unexpected structure/)
+  }
 })
 
 test("agent analysis parser inserts exact payload values into evidence", () => {
@@ -321,7 +394,7 @@ test("summary schema keeps top selection validation and accepts legacy responses
     response => response.topCandidates.push(response.topCandidates[0]),
     response => response.topCandidates[0].movementProbability = 0.9,
     response => response.topCandidates[0].explanation = "Не дублировать текст.",
-    response => response.schemaVersion = 4,
+    response => response.schemaVersion = 5,
   ]) {
     const response = createStructuredAgentResponse()
     change(response)

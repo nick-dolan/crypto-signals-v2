@@ -39,8 +39,8 @@ function validateReportInputs (analysis, payload, shortlist) {
     throw new Error("Steps 5, 6 and 7 must use the same closed hourly snapshot (asOf, 1h)")
   }
 
-  if (payload.schemaVersion >= 14 && (analysis.schemaVersion !== 3 || analysis.objective !== payload.objective)) {
-    throw new Error("Step 7 growth analysis must use schemaVersion 3 and match the step 6 objective")
+  if (payload.schemaVersion >= 14 && (![3, 4].includes(analysis.schemaVersion) || analysis.objective !== payload.objective)) {
+    throw new Error("Step 7 growth analysis must use schemaVersion 3 or 4 and match the step 6 objective")
   }
 
   const { candidates } = decodeAgentPayload(payload)
@@ -226,11 +226,15 @@ export async function buildReportData (
     const { coin } = shortlistBySymbol.get(assessment.symbol)
     const row = rowsBySymbol.get(assessment.symbol)
     const top = topBySymbol.get(assessment.symbol)
-    const summary = top?.technicalSummary === undefined ? assessment.technicalSummary : top.technicalSummary
-    const technicalSummary = summary === undefined ? undefined : readCoinSummary(summary, `${coin.symbol} technicalSummary`)
-    const explanation = isString(top?.explanation)
-      ? top.explanation
-      : top && technicalSummary ? formatCoinSummary(technicalSummary) : ""
+    const summary = analysis.schemaVersion === 4 || top?.technicalSummary === undefined
+      ? assessment.technicalSummary
+      : top.technicalSummary
+    const technicalSummary = summary === undefined && analysis.schemaVersion !== 4
+      ? undefined
+      : readCoinSummary(summary, `${coin.symbol} technicalSummary`)
+    const explanation = analysis.schemaVersion === 4
+      ? formatCoinSummary(technicalSummary)
+      : isString(top?.explanation) ? top.explanation : top && technicalSummary ? formatCoinSummary(technicalSummary) : ""
 
     coins.push({
       ...omit(assessment, ["directionBias"]),

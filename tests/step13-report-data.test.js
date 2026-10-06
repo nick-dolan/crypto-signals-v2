@@ -469,16 +469,14 @@ test("all candidates receive information before analysis and keep its final asse
     candidate.informationContext = input.payload.schema.informationContext.map(field => information[field])
   })
   const response = {
-    schemaVersion: 3, asOf: input.payload.asOf,
-    topCandidates: [{
-      symbol: "COTI", movementProbability: 0.1,
+    schemaVersion: 4, asOf: input.payload.asOf,
+    topCandidates: [{ symbol: "COTI", movementProbability: 0.1 }],
+    assessments: input.analysis.assessments.map(({ symbol, movementProbability, estimateConfidence }) => ({
+      symbol, movementProbability, estimateConfidence,
       technicalSummary: {
         observation: "Обновление сети поддерживает оживление торговой активности.",
         caveat: "Накопление позиций пока не подтверждено.",
       },
-    }],
-    assessments: input.analysis.assessments.map(({ symbol, movementProbability, estimateConfidence }) => ({
-      symbol, movementProbability, estimateConfidence,
       drivers: [{ fields: ["volumeZ", "newsSummary"], text: "рост объёма поддержан обновлением сети" }],
       counterSignals: [{ fields: ["oiChange12hPct"], text: "накопление позиций не подтверждено" }],
     })),
@@ -501,7 +499,7 @@ test("all candidates receive information before analysis and keep its final asse
   assert.deepEqual(sources.candidates.map(candidate => candidate.symbol), ["COTI", "SOL", "MINA"])
   assert.deepEqual(result.coins.map(coin => coin.topRank), [1, null, null])
   assert.equal(result.objective, input.payload.objective)
-  assert.deepEqual(result.coins[0].summary, response.topCandidates[0].technicalSummary)
+  assert.deepEqual(result.coins[0].summary, response.assessments[0].technicalSummary)
   assert.equal(result.coins[0].explanation, input.analysis.topCandidates[0].explanation)
   assert.match(result.coins[0].drivers[0], /Обновление|обновление/)
   for (const [index, coin] of result.coins.entries()) {
@@ -509,6 +507,8 @@ test("all candidates receive information before analysis and keep its final asse
       assert.deepEqual(coin[key], input.analysis.assessments[index][key])
     }
     assert.deepEqual(coin.information.news, sources.candidates[index].news)
+    assert.deepEqual(coin.summary, response.assessments[index].technicalSummary)
+    assert.equal(coin.explanation, "Обновление сети поддерживает оживление торговой активности. Накопление позиций пока не подтверждено.")
     assert.equal(coin.newsSummary, context.candidates[index].newsSummary)
     assert.equal(coin.socialSentiment, "bullish")
   }
@@ -854,6 +854,68 @@ test("growth payload rejects stale or mismatched analysis before reading history
     input.payload.schemaVersion = 14
     input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
     Object.assign(input.analysis, fields)
-    await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /growth analysis must use schemaVersion 3 and match the step 6 objective/)
+    await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /growth analysis must use schemaVersion 3 or 4 and match the step 6 objective/)
   }
+})
+
+for (const withTop of [true, false]) {
+  test(`schema 4 report formats every assessment as one paragraph ${withTop ? "with" : "without"} selected tops`, async () => {
+    const input = createInput(["COTI", "SOL", "MINA"])
+    input.analysis.schemaVersion = 4
+    input.analysis.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+    input.payload.schemaVersion = 14
+    input.payload.objective = input.analysis.objective
+    input.payload.candidates.forEach(candidate => delete candidate.selectionRank)
+    input.analysis.assessments.forEach((assessment, index) => {
+      assessment.technicalSummary = {
+        observation: `Активность ${assessment.symbol} растёт на фоне обновления проекта.`,
+        caveat: index === 1 ? null : "Реакция цены пока слаба.",
+      }
+      assessment.explanation = "Не использовать несогласованный сохранённый текст."
+    })
+    input.analysis.topCandidates = withTop
+      ? [{ symbol: "MINA", technicalSummary: { observation: "Устаревшее резюме топа.", caveat: null }, explanation: "Устаревшее объяснение топа." }]
+      : []
+    const before = structuredClone([input.analysis, input.payload, input.shortlist])
+    const report = await build(input)
+    assert.deepEqual(report.coins.map(coin => coin.topRank), [null, null, withTop ? 1 : null])
+    for (const [index, coin] of report.coins.entries()) {
+      const summary = input.analysis.assessments[index].technicalSummary
+      assert.deepEqual(coin.technicalSummary, summary)
+      assert.deepEqual(coin.summary, summary)
+      assert.equal(coin.explanation, [summary.observation, summary.caveat].filter(Boolean).join(" "))
+      assert.equal(coin.technicalExplanation, coin.explanation)
+      assert.doesNotMatch(coin.explanation, /\n|Устаревшее|несогласованный/)
+    }
+    assert.deepEqual([input.analysis, input.payload, input.shortlist], before)
+  })
+}
+
+test("schema 4 requires a valid assessment summary even when the top has one", async () => {
+  for (const withTop of [true, false]) {
+    for (const technicalSummary of [undefined, null, {}, { observation: "", caveat: null }, { observation: "Текст.", caveat: "" }]) {
+      const input = createInput()
+      input.analysis.schemaVersion = 4
+      input.analysis.assessments[0].technicalSummary = technicalSummary
+      input.analysis.topCandidates = withTop
+        ? [{ symbol: "COTI", technicalSummary: { observation: "Не заменять пропущенное резюме.", caveat: null } }]
+        : []
+      await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /COTI technicalSummary/)
+    }
+  }
+})
+
+test("saved schema 3 growth analysis can still rebuild without inventing non-top explanations", async () => {
+  const input = createInput(["COTI", "SOL"])
+  input.payload.schemaVersion = 14
+  input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+  input.payload.candidates.forEach(candidate => delete candidate.selectionRank)
+  input.analysis.schemaVersion = 3
+  input.analysis.objective = input.payload.objective
+  input.analysis.topCandidates = [input.analysis.topCandidates[0]]
+  input.analysis.topCandidates[0].technicalSummary = { observation: "Архивное наблюдение.", caveat: null }
+  const report = await build(input)
+  assert.equal(report.coins[0].explanation, "Выбор COTI")
+  assert.equal(report.coins[1].explanation, "")
+  assert.deepEqual(report.coins[0].summary, { observation: "Архивное наблюдение.", caveat: null })
 })

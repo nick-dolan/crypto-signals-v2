@@ -114,6 +114,17 @@ function assertReadableExplanation (explanation, fields, label, allowEventNumber
   }
 }
 
+function normalizeSummary (candidate, fields, label, allowEventNumbers) {
+  try {
+    candidate.technicalSummary = readCoinSummary(candidate.technicalSummary, label)
+  } catch (error) {
+    invalidAnalysis(error.message)
+  }
+
+  candidate.explanation = formatCoinSummary(candidate.technicalSummary)
+  assertReadableExplanation(candidate.explanation, fields, label, allowEventNumbers)
+}
+
 function readAgentPayload (payload) {
   let decoded
 
@@ -151,12 +162,12 @@ export function parseAgentAnalysis (content, payload) {
     "response",
   )
 
-  if (![1, 2, 3].includes(analysis.schemaVersion)) {
-    invalidAnalysis("schemaVersion must equal 1, 2 or 3")
+  if (![1, 2, 3, 4].includes(analysis.schemaVersion)) {
+    invalidAnalysis("schemaVersion must equal 1, 2, 3 or 4")
   }
 
-  if (payload.schemaVersion >= 14 && analysis.schemaVersion !== 3) {
-    invalidAnalysis("growth analysis requires schemaVersion 3")
+  if (payload.schemaVersion >= 14 && analysis.schemaVersion !== 4) {
+    invalidAnalysis("growth analysis requires schemaVersion 4 with summaries for every candidate")
   }
 
   if (analysis.asOf !== payload.asOf) {
@@ -181,6 +192,7 @@ export function parseAgentAnalysis (content, payload) {
         "estimateConfidence",
         "drivers",
         "counterSignals",
+        ...(analysis.schemaVersion === 4 ? ["technicalSummary"] : []),
       ],
       `assessment ${index}`,
     )
@@ -216,6 +228,10 @@ export function parseAgentAnalysis (content, payload) {
     if (assessment.drivers.length + assessment.counterSignals.length === 0) {
       invalidAnalysis(`assessment ${assessment.symbol} must explain its estimate`)
     }
+
+    if (analysis.schemaVersion === 4) {
+      normalizeSummary(assessment, explanationFields, `assessment ${assessment.symbol} technicalSummary`, true)
+    }
   })
 
   if (!isArray(analysis.topCandidates) || analysis.topCandidates.length > Math.min(5, symbols.length)) {
@@ -238,9 +254,11 @@ export function parseAgentAnalysis (content, payload) {
   analysis.topCandidates.forEach((candidate, index) => {
     assertExactKeys(
       candidate,
-      analysis.schemaVersion >= 2
-        ? ["symbol", "movementProbability", "technicalSummary"]
-        : ["symbol", "movementProbability", "explanation"],
+      analysis.schemaVersion === 4
+        ? ["symbol", "movementProbability"]
+        : analysis.schemaVersion >= 2
+          ? ["symbol", "movementProbability", "technicalSummary"]
+          : ["symbol", "movementProbability", "explanation"],
       `top candidate ${index}`,
     )
 
@@ -253,17 +271,11 @@ export function parseAgentAnalysis (content, payload) {
       invalidAnalysis(`top candidate ${index} does not match assessments`)
     }
 
-    if (analysis.schemaVersion >= 2) {
-      const label = `top candidate ${candidate.symbol} technicalSummary`
-
-      try {
-        candidate.technicalSummary = readCoinSummary(candidate.technicalSummary, label)
-      } catch (error) {
-        invalidAnalysis(error.message)
-      }
-
-      candidate.explanation = formatCoinSummary(candidate.technicalSummary)
-      assertReadableExplanation(candidate.explanation, explanationFields, label, analysis.schemaVersion === 3)
+    if (analysis.schemaVersion === 4) {
+      candidate.technicalSummary = expected.technicalSummary
+      candidate.explanation = expected.explanation
+    } else if (analysis.schemaVersion >= 2) {
+      normalizeSummary(candidate, explanationFields, `top candidate ${candidate.symbol} technicalSummary`, analysis.schemaVersion === 3)
     } else {
       assertReadableExplanation(candidate.explanation, explanationFields, `top candidate ${candidate.symbol}`)
     }
