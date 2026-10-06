@@ -5,9 +5,9 @@ import test from "node:test"
 import { addReportContext } from "../src/steps/step13-report/add-report-context.js"
 import { buildReportData } from "../src/steps/step13-report/build-report-data.js"
 import { analyzeCandidates } from "../src/steps/step7-agent-analysis/analyze-candidates.js"
-import { enrichTopCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-top-candidates-with-news.js"
-import { enrichTopCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-top-candidates-with-twitter.js"
-import { enrichTopCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-top-candidates-with-context.js"
+import { enrichCandidatesWithNews } from "../src/steps/step8-news-enrichment/enrich-candidates-with-news.js"
+import { enrichCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
+import { enrichCandidatesWithContext } from "../src/steps/step10-context-enrichment/enrich-candidates-with-context.js"
 
 function createHistory (coin, asOf) {
   const asOfTimestamp = Date.parse(asOf) / 1_000
@@ -422,188 +422,97 @@ test("accepts an empty candidate set without reading any raw files", async () =>
   assert.deepEqual(report.coins, [])
 })
 
-test("preserves technical explanations through report assembly and context enrichment", async () => {
+test("all candidates receive information before analysis and keep its final assessment in the report", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
-  input.analysis.topCandidates = [input.analysis.topCandidates[0]]
-  input.analysis.topCandidates[0].explanation = "  Объём COTI растёт.\nOI без подтверждения.  "
-  input.payload.schemaVersion = 11
-  input.payload.schema.coingecko = ["coingeckoId", "coingeckoTrending", "coingeckoTrendingCategories"]
-  input.payload.candidates.forEach((candidate) => {
-    candidate.coingecko = [null, candidate.symbol === "SOL", null]
-  })
-  const report = await build(input)
-  const sources = {
-    asOf: report.asOf,
-    newsEnrichment: { from: report.asOf, asOf: report.asOf },
-    twitterEnrichment: { from: report.asOf, asOf: report.asOf },
-    candidates: report.coins
-      .filter(coin => coin.topRank != null || coin.features.coingeckoTrending === true)
-      .map(({ symbol, explanation }) => ({
-        symbol,
-        explanation,
-        news: { status: "empty", items: [] },
-        twitter: { status: "empty", tweets: [] },
-      })),
-  }
-  const context = {
-    asOf: report.asOf,
-    generatedAt: report.asOf,
-    newsEnrichment: sources.newsEnrichment,
-    twitterEnrichment: sources.twitterEnrichment,
-    candidates: sources.candidates.map(({ symbol, explanation }) => ({
-      symbol,
-      explanation,
-      enrichedExplanation: `Переписанный текст с новостями ${symbol}.`,
-    })),
-  }
-  const before = structuredClone([report, sources, context])
-  const result = addReportContext(report, sources, context)
-
-  assert.deepEqual(result.coins.map(coin => coin.technicalExplanation), [
-    input.analysis.topCandidates[0].explanation, "", "",
-  ])
-  assert.deepEqual(result.coins.map(coin => coin.explanation), [
-    "Переписанный текст с новостями COTI.", "Переписанный текст с новостями SOL.", "",
-  ])
-  assert.deepEqual(result.coins[2], report.coins[2])
-  assert.ok(result.coins.every(coin => !Object.hasOwn(coin, "technicalSummary") && !Object.hasOwn(coin, "summary")))
-  assert.deepEqual([report, sources, context], before)
-})
-
-test("schema 13 summaries and evidence survive steps 7 through 13, including non-top news context", async () => {
-  const input = createInput(["COTI", "SOL", "MINA"])
-  input.payload.schemaVersion = 13
-  input.payload.marketContext = {
-    altMarketBackground: { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null },
-  }
-  input.payload.schema.lifecycle = ["priorMoveAtr72h"]
+  input.payload.schemaVersion = 14
+  input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
   input.payload.schema.derivatives = ["oiChange12hPct"]
-  input.payload.schema.coingecko = ["coingeckoTrending", "coingeckoTrendingCategories"]
+  input.payload.schema.informationContext = ["newsStatus", "newsSummary", "twitterStatus", "twitterSummary", "socialSignificant", "socialReason", "socialSentiment", "contextCaveat"]
+  input.payload.definitions.oiChange12hPct = "Изменение OI"
+  input.payload.definitions.newsSummary = "Краткие новости"
   delete input.payload.definitions.quietOi
-  input.payload.definitions.oiChange12hPct = "Прирост OI за двенадцать часов"
-  input.payload.definitions.priorMoveAtr72h = "Предыдущее движение со знаком"
-  input.payload.candidates.forEach((candidate, index) => {
-    delete candidate.selectionRank
-    candidate.lifecycle = [[-2.5, 1.25, null][index]]
+  input.payload.candidates.forEach((candidate) => {
     candidate.derivatives = [0]
-    candidate.coingecko = [candidate.symbol === "SOL" ? true : null, candidate.symbol === "SOL" ? [] : null]
+    delete candidate.selectionRank
   })
   input.shortlist.candidates.forEach(({ coin }) => {
     coin.tradingViewSymbol = `CRYPTO:${coin.symbol}USD`
-    coin.coingecko = { isTrending: coin.symbol === "SOL" }
+  })
+  const referenceTimestamp = Date.parse(input.payload.asOf) / 1_000
+  const news = await enrichCandidatesWithNews(input.shortlist, {
+    referenceTimestamp,
+    fetchNews: async () => ({ items: [{ title: "Команда запустила обновление сети.", published: referenceTimestamp }] }),
+    fetchStory: async () => assert.fail("No story URL was supplied"),
+  })
+  const sources = await enrichCandidatesWithTwitter(news, {
+    referenceTimestamp,
+    fetchPage: async () => ({ tweets: [], has_next_page: false }),
+    wait: async () => {},
+  })
+  const contextCalls = []
+  const context = await enrichCandidatesWithContext(sources, "System prompt", {
+    callAgent: async (_, message) => {
+      const candidate = JSON.parse(message)
+      contextCalls.push(candidate.symbol)
+      assert.equal(Object.hasOwn(candidate, "movementProbability"), false)
+      assert.equal(Object.hasOwn(candidate, "explanation"), false)
+      return JSON.stringify({
+        schemaVersion: 4, symbol: candidate.symbol,
+        newsSummary: "Команда запустила обновление сети.", twitterSummary: null,
+        contextCaveat: "Реакция цены может быть уже учтена.",
+        socialSignificant: true, socialReason: "Обновление сети.", socialSentiment: "bullish",
+      })
+    },
+  })
+  input.payload.candidates.forEach((candidate) => {
+    const information = context.candidates.find(item => item.symbol === candidate.symbol)
+    candidate.informationContext = input.payload.schema.informationContext.map(field => information[field])
   })
   const response = {
-    schemaVersion: 2,
-    asOf: input.payload.asOf,
+    schemaVersion: 3, asOf: input.payload.asOf,
     topCandidates: [{
       symbol: "COTI", movementProbability: 0.1,
       technicalSummary: {
-        observation: "В COTI торговая активность начинает оживать.",
+        observation: "Обновление сети поддерживает оживление торговой активности.",
         caveat: "Накопление позиций пока не подтверждено.",
       },
     }],
     assessments: input.analysis.assessments.map(({ symbol, movementProbability, estimateConfidence }) => ({
-      symbol,
-      movementProbability,
-      estimateConfidence,
-      drivers: [{ fields: ["volumeZ", "priorMoveAtr72h"], text: "объём оценивается с учётом предыдущего движения" }],
+      symbol, movementProbability, estimateConfidence,
+      drivers: [{ fields: ["volumeZ", "newsSummary"], text: "рост объёма поддержан обновлением сети" }],
       counterSignals: [{ fields: ["oiChange12hPct"], text: "накопление позиций не подтверждено" }],
     })),
   }
   let analysisCallCount = 0
   input.analysis = await analyzeCandidates(input.payload, input.shortlist, "System prompt", {
-    callAgent: async () => {
+    callAgent: async (_, message) => {
       analysisCallCount += 1
+      const received = JSON.parse(message)
+      assert.ok(received.candidates.every(candidate => candidate.informationContext.includes("bullish")))
       return JSON.stringify(response)
     },
   })
-  const beforeInput = structuredClone([input.analysis, input.payload, input.shortlist, input.histories])
-  const referenceTimestamp = Date.parse(input.payload.asOf) / 1_000
-  const news = await enrichTopCandidatesWithNews(input.analysis, input.shortlist, {
-    referenceTimestamp,
-    fetchNews: async ({ symbol }) => ({ items: [{
-      id: symbol,
-      title: symbol === "CRYPTO:SOLUSD" ? "Команда запустила обновление сети." : "Общий ценовой прогноз.",
-      published: referenceTimestamp,
-    }] }),
-    fetchStory: async () => assert.fail("No story URL was supplied"),
-  })
-  const beforeNews = structuredClone(news)
-  const sources = await enrichTopCandidatesWithTwitter(news, {
-    referenceTimestamp,
-    fetchPage: async () => ({ tweets: [], has_next_page: false }),
-    wait: async () => {},
-  })
-  const beforeSources = structuredClone(sources)
-  const contextCalls = []
-  const context = await enrichTopCandidatesWithContext(sources, "System prompt", {
-    callAgent: async (_, message) => {
-      const candidate = JSON.parse(message)
-      contextCalls.push(candidate.symbol)
-      if (candidate.symbol === "COTI") {
-        assert.deepEqual(candidate.technicalSummary, response.topCandidates[0].technicalSummary)
-        assert.equal(candidate.explanation, input.analysis.topCandidates[0].explanation)
-      } else {
-        const assessment = input.analysis.assessments.find(item => item.symbol === candidate.symbol)
-        assert.equal(Object.hasOwn(candidate, "technicalSummary"), false)
-        assert.equal(candidate.explanation, "")
-        assert.deepEqual(candidate.drivers, assessment.drivers)
-        assert.deepEqual(candidate.counterSignals, assessment.counterSignals)
-      }
-      return JSON.stringify({
-        schemaVersion: 3,
-        symbol: candidate.symbol,
-        summary: candidate.symbol === "COTI"
-          ? candidate.technicalSummary
-          : {
-              observation: "Торговая активность оживает; команда сообщила о запуске обновления сети.",
-              caveat: "Накопление позиций пока не подтверждено.",
-            },
-        socialSignificant: candidate.symbol === "SOL",
-        socialReason: candidate.symbol === "SOL" ? "Команда сообщила о запуске обновления сети." : "Есть только общий ценовой прогноз.",
-        socialSentiment: candidate.symbol === "SOL" ? "positive" : null,
-      })
-    },
-  })
   const report = await build(input)
-  const beforeContext = structuredClone([context, report])
+  const before = structuredClone([report, sources, context])
   const result = addReportContext(report, sources, context)
 
   assert.equal(analysisCallCount, 1)
-  assert.deepEqual(contextCalls, ["COTI", "SOL"])
-  assert.equal(context.contextEnrichment.candidateCallCount, 2)
-  assert.ok(input.analysis.assessments.every(assessment => !Object.hasOwn(assessment, "technicalSummary")))
-  assert.deepEqual(sources.candidates.map(candidate => candidate.symbol), ["COTI", "SOL"])
-  for (const stage of [news, sources, context]) {
-    for (const candidate of stage.candidates) {
-      assert.deepEqual(candidate.technicalSummary, candidate.symbol === "COTI" ? response.topCandidates[0].technicalSummary : undefined)
-      assert.equal(Object.hasOwn(candidate, "technicalSummary"), candidate.symbol === "COTI")
-    }
-  }
+  assert.deepEqual(contextCalls, ["COTI", "SOL", "MINA"])
+  assert.deepEqual(sources.candidates.map(candidate => candidate.symbol), ["COTI", "SOL", "MINA"])
   assert.deepEqual(result.coins.map(coin => coin.topRank), [1, null, null])
-  assert.equal(result.candidateCount, 3)
-  assert.deepEqual(result.altMarketBackground, input.payload.marketContext.altMarketBackground)
-  assert.deepEqual(result.coins.map(coin => coin.features.priorMoveAtr72h), [-2.5, 1.25, null])
-  assert.deepEqual(result.coins.map(coin => coin.features.coingeckoTrending), [null, true, null])
-  assert.deepEqual(result.coins.map(coin => coin.features.coingeckoTrendingCategories), [null, [], null])
-  assert.ok(result.coins.every(coin => !Object.hasOwn(coin.features, "selectionRank")))
-  assert.equal(result.coins[0].drivers[0], "volumeZ=0.1 и priorMoveAtr72h=-2.5: объём оценивается с учётом предыдущего движения")
+  assert.equal(result.objective, input.payload.objective)
+  assert.deepEqual(result.coins[0].summary, response.topCandidates[0].technicalSummary)
+  assert.equal(result.coins[0].explanation, input.analysis.topCandidates[0].explanation)
+  assert.match(result.coins[0].drivers[0], /Обновление|обновление/)
   for (const [index, coin] of result.coins.entries()) {
-    assert.deepEqual(coin.technicalSummary, index === 0 ? response.topCandidates[0].technicalSummary : undefined)
-    assert.equal(Object.hasOwn(coin, "technicalSummary"), index === 0)
     for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals"]) {
       assert.deepEqual(coin[key], input.analysis.assessments[index][key])
     }
-    assert.equal(coin.technicalExplanation, index === 0 ? input.analysis.topCandidates[0].explanation : "")
+    assert.deepEqual(coin.information.news, sources.candidates[index].news)
+    assert.equal(coin.newsSummary, context.candidates[index].newsSummary)
+    assert.equal(coin.socialSentiment, "bullish")
   }
-  assert.equal(Object.hasOwn(result.coins[0], "summary"), false)
-  assert.deepEqual(result.coins[1].summary, context.candidates[1].summary)
-  assert.equal(result.coins[1].explanation, `${result.coins[1].summary.observation} ${result.coins[1].summary.caveat}`)
-  assert.deepEqual(result.coins[2], report.coins[2])
-  assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], beforeInput)
-  assert.deepEqual(news, beforeNews)
-  assert.deepEqual(sources, beforeSources)
-  assert.deepEqual([context, report], beforeContext)
+  assert.deepEqual([report, sources, context], before)
 })
 
 test("report prefers top summaries and keeps assessment-only stored fallback without manufacturing structure from legacy prose", async () => {
@@ -931,5 +840,20 @@ test("warns instead of plotting stale, missing or mismatched raw history", async
       assert.equal(report.coins[1].history.warning, null)
       assert.equal(readCount, 2)
     })
+  }
+})
+
+test("growth payload rejects stale or mismatched analysis before reading history", async () => {
+  for (const fields of [
+    {},
+    { schemaVersion: 2 },
+    { schemaVersion: 3 },
+    { schemaVersion: 3, objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)" },
+  ]) {
+    const input = createInput()
+    input.payload.schemaVersion = 14
+    input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+    Object.assign(input.analysis, fields)
+    await assert.rejects(build(input, () => assert.fail("Unexpected history read")), /growth analysis must use schemaVersion 3 and match the step 6 objective/)
   }
 })

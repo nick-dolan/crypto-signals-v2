@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { isNaN } from "../src/helpers/utils.typed.js"
-import { enrichTopCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-top-candidates-with-twitter.js"
+import { enrichCandidatesWithTwitter } from "../src/steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
 
 function createInput () {
   return {
@@ -16,12 +16,12 @@ function createInput () {
     candidates: [
       {
         symbol: "BTC",
-        movementProbability: 0.7,
+        name: "Bitcoin",
         news: { status: "available", items: [{ id: "btc-news" }] },
       },
       {
         symbol: "ETH",
-        movementProbability: 0.6,
+        name: "Ethereum",
         news: { status: "empty", items: [] },
       },
     ],
@@ -52,7 +52,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
   const referenceTimestamp = 1_800_000_000
   const calls = []
   const waits = []
-  const result = await enrichTopCandidatesWithTwitter(createInput(), {
+  const result = await enrichCandidatesWithTwitter(createInput(), {
     referenceTimestamp,
     wait: async milliseconds => waits.push(milliseconds),
     fetchPage: async (query, cursor = "") => {
@@ -101,7 +101,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
     { query: "$ETH since_time:1799913600 until_time:1800000001", cursor: "" },
   ])
   assert.deepEqual(waits, [300, 300])
-  assert.equal(result.schemaVersion, 5)
+  assert.equal(result.schemaVersion, 6)
   assert.equal(result.asOf, createInput().asOf)
   assert.deepEqual(result.newsEnrichment, createInput().newsEnrichment)
   assert.ok(!isNaN(Date.parse(result.generatedAt)))
@@ -148,7 +148,7 @@ test("fetches at most two pages and keeps only the fixed 24-hour window", async 
 
 test("keeps candidate failures isolated", async () => {
   const referenceTimestamp = 1_800_000_000
-  const result = await enrichTopCandidatesWithTwitter(createInput(), {
+  const result = await enrichCandidatesWithTwitter(createInput(), {
     referenceTimestamp,
     wait: async () => {},
     fetchPage: async (query) => {
@@ -190,7 +190,7 @@ test("continues past an empty filtered page and keeps both boundaries of the fix
       const before = structuredClone(input)
       const calls = []
       const waits = []
-      const result = await enrichTopCandidatesWithTwitter(input, {
+      const result = await enrichCandidatesWithTwitter(input, {
         referenceTimestamp,
         wait: async milliseconds => waits.push(milliseconds),
         fetchPage: async (query, cursor = "") => {
@@ -239,7 +239,7 @@ test("does not request another page after the last page or without a usable curs
     const input = createInput()
     input.candidates = [input.candidates[0]]
     let callCount = 0
-    const result = await enrichTopCandidatesWithTwitter(input, {
+    const result = await enrichCandidatesWithTwitter(input, {
       referenceTimestamp: 1_800_000_000,
       wait: async () => assert.fail("No pagination wait expected"),
       fetchPage: async () => {
@@ -265,7 +265,7 @@ test("default queries keep the pipeline start boundary when collection runs late
   })
   context.mock.method(Date, "now", () => 1_800_001_020_000)
   const queries = []
-  const result = await enrichTopCandidatesWithTwitter(createInput(), {
+  const result = await enrichCandidatesWithTwitter(createInput(), {
     wait: async () => {},
     fetchPage: async (query) => {
       queries.push(query)
@@ -282,7 +282,7 @@ test("default queries keep the pipeline start boundary when collection runs late
 
 test("validates the step 8 input and Twitter dependencies", async () => {
   await assert.rejects(
-    enrichTopCandidatesWithTwitter({}, {
+    enrichCandidatesWithTwitter({}, {
       fetchPage: async () => ({}),
       wait: async () => {},
     }),
@@ -293,7 +293,7 @@ test("validates the step 8 input and Twitter dependencies", async () => {
   input.candidates[1].symbol = "btc"
 
   await assert.rejects(
-    enrichTopCandidatesWithTwitter(input, {
+    enrichCandidatesWithTwitter(input, {
       fetchPage: async () => ({}),
       wait: async () => {},
     }),
@@ -301,7 +301,7 @@ test("validates the step 8 input and Twitter dependencies", async () => {
   )
 
   await assert.rejects(
-    enrichTopCandidatesWithTwitter(createInput(), {
+    enrichCandidatesWithTwitter(createInput(), {
       fetchPage: null,
       wait: async () => {},
     }),
@@ -309,11 +309,55 @@ test("validates the step 8 input and Twitter dependencies", async () => {
   )
 
   await assert.rejects(
-    enrichTopCandidatesWithTwitter(createInput(), {
+    enrichCandidatesWithTwitter(createInput(), {
       fetchPage: async () => ({}),
       referenceTimestamp: 0,
       wait: async () => {},
     }),
     /positive Unix timestamp/,
   )
+})
+
+test("reuses the news window when Twitter runs separately later", async (t) => {
+  const input = createInput()
+  input.newsEnrichment.asOf = "2027-01-15T08:00:00.000Z"
+  t.mock.method(Date, "now", () => Date.parse("2027-01-16T08:00:00.000Z"))
+  const queries = []
+  const result = await enrichCandidatesWithTwitter(input, {
+    wait: async () => {},
+    fetchPage: async (query) => {
+      queries.push(query)
+      return { tweets: [] }
+    },
+  })
+  const timestamp = Date.parse(input.newsEnrichment.asOf) / 1_000
+  assert.equal(result.twitterEnrichment.asOf, input.newsEnrichment.asOf)
+  assert.equal(queries[0], `$BTC since_time:${timestamp - 86_400} until_time:${timestamp + 1}`)
+})
+
+test("fetches all candidates sequentially and deduplicates a single page", async () => {
+  const input = createInput()
+  input.candidates = Array.from({ length: 50 }, (_, index) => ({
+    symbol: `COIN${index}`, name: `Project ${index}`, news: { status: "empty", items: [] },
+  }))
+  const waits = []
+  let active = 0
+  let maximum = 0
+  const result = await enrichCandidatesWithTwitter(input, {
+    referenceTimestamp: 1_800_000_000,
+    wait: async milliseconds => waits.push(milliseconds),
+    fetchPage: async () => {
+      active += 1
+      maximum = Math.max(maximum, active)
+      await new Promise(resolve => setImmediate(resolve))
+      active -= 1
+      const tweet = createTweet({ id: "single", timestamp: 1_800_000_000 })
+      return { tweets: [tweet, tweet] }
+    },
+  })
+  assert.equal(maximum, 1)
+  assert.equal(result.candidates.length, 50)
+  assert.deepEqual(waits, Array(49).fill(300))
+  assert.ok(result.candidates.every(candidate => candidate.twitter.recentTweetCount === 1))
+  assert.equal(result.candidates[49].name, "Project 49")
 })

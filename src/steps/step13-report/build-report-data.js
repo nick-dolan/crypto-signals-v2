@@ -39,6 +39,10 @@ function validateReportInputs (analysis, payload, shortlist) {
     throw new Error("Steps 5, 6 and 7 must use the same closed hourly snapshot (asOf, 1h)")
   }
 
+  if (payload.schemaVersion >= 14 && (analysis.schemaVersion !== 3 || analysis.objective !== payload.objective)) {
+    throw new Error("Step 7 growth analysis must use schemaVersion 3 and match the step 6 objective")
+  }
+
   const { candidates } = decodeAgentPayload(payload)
   const rowsBySymbol = indexBySymbol(candidates, candidate => candidate.symbol, "Step 6 candidates")
   const shortlistBySymbol = indexBySymbol(shortlist.candidates, item => item?.coin?.symbol, "Step 5 candidates")
@@ -231,6 +235,7 @@ export async function buildReportData (
     coins.push({
       ...omit(assessment, ["directionBias"]),
       ...(technicalSummary === undefined ? {} : { technicalSummary }),
+      ...(analysis.schemaVersion >= 3 && technicalSummary ? { summary: technicalSummary } : {}),
       explanation,
       technicalExplanation: explanation,
       topRank: top ? analysis.topCandidates.indexOf(top) + 1 : null,
@@ -245,7 +250,7 @@ export async function buildReportData (
   return {
     asOf: analysis.asOf,
     timeframe: "1h",
-    objective: payload.objective,
+    objective: analysis.objective ?? payload.objective,
     candidateCount: analysis.candidateCount,
     universeCoinCount: shortlist.universeCoinCount,
     marketContext: payload.marketContext,

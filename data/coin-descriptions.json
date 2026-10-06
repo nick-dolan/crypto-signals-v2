@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-05T14:25:22.279Z",
+  "generatedAt": "2026-10-06T09:18:12.627Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-05T14:24:26.946Z"
+    "sourceGeneratedAt": "2026-10-06T09:17:55.353Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 268,
+  "coinCount": 269,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3934,6 +3934,22 @@
         {
           "url": "https://docs.chainbase.com/network/introduction/tokenomics",
           "checkedAt": "2026-10-05T14:25:20.625Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBAND",
+      "symbol": "BAND",
+      "name": "Band",
+      "description": "Band — децентрализованный оракул, который передаёт приложениям на блокчейнах реальные данные, например ценовые данные, собранные и обработанные сетью BandChain. BAND — нативный токен экосистемы; на BandChain он используется для стейкинга валидаторами и оплаты газа и запросов данных.",
+      "sources": [
+        {
+          "url": "https://bandprotocol.com/",
+          "checkedAt": "2026-10-06T09:18:04.049Z"
+        },
+        {
+          "url": "https://faq.bandprotocol.com/",
+          "checkedAt": "2026-10-06T09:18:08.726Z"
         }
       ]
     }

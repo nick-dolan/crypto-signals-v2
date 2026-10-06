@@ -140,3 +140,30 @@ test("schema group names cannot overwrite candidate metadata", () => {
     assert.throws(() => decodeAgentPayload(payload), /Step 6 schema/)
   }
 })
+
+test("information context keeps summaries and unknown signals in their named fields", () => {
+  const payload = createPayload()
+  payload.schemaVersion = 14
+  delete payload.candidates[0].selectionRank
+  payload.schema.informationContext = [
+    "newsStatus", "newsSummary", "twitterStatus", "twitterSummary",
+    "socialSignificant", "socialReason", "socialSentiment", "contextCaveat",
+  ]
+  payload.informationSources = {
+    news: { from: "2026-08-30T10:00:00.000Z", asOf: "2026-08-31T10:00:00.000Z" },
+    twitter: { from: "2026-08-30T10:05:00.000Z", asOf: "2026-08-31T10:05:00.000Z" },
+  }
+  for (const informationContext of [
+    ["available", "Объявлен запуск сети.", "available", "Обсуждают запуск.", true, "Официальное объявление.", "bullish", "Повторы одной новости."],
+    ["available", "Публикации повторяют известные сведения.", "empty", null, false, "Существенных событий нет.", "neutral", null],
+    ["failed", null, "empty", null, null, null, null, "Данных недостаточно."],
+  ]) {
+    payload.candidates[0].informationContext = informationContext
+    const before = structuredClone(payload)
+    const decoded = decodeAgentPayload(JSON.parse(JSON.stringify(payload)))
+
+    assert.deepEqual(payload.schema.informationContext.map(field => decoded.candidates[0][field]), informationContext)
+    assert.equal(Object.hasOwn(decoded.candidates[0], "informationSources"), false)
+    assert.deepEqual(payload, before)
+  }
+})

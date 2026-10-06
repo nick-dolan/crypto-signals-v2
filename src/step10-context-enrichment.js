@@ -2,7 +2,7 @@ import fs from "node:fs/promises"
 
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
-import { enrichTopCandidatesWithContext } from "./steps/step10-context-enrichment/enrich-top-candidates-with-context.js"
+import { enrichCandidatesWithContext } from "./steps/step10-context-enrichment/enrich-candidates-with-context.js"
 import { InvalidContextEnrichmentError } from "./steps/step10-context-enrichment/parse-context-enrichment.js"
 
 async function runContextEnrichmentStep () {
@@ -16,7 +16,7 @@ async function runContextEnrichmentStep () {
   let output
 
   try {
-    output = await enrichTopCandidatesWithContext(input, systemPrompt)
+    output = await enrichCandidatesWithContext(input, systemPrompt)
   } catch (error) {
     if (error instanceof InvalidContextEnrichmentError) {
       const invalidOutputPath = await writeTmpJson(
@@ -37,7 +37,7 @@ async function runContextEnrichmentStep () {
   const outputPath = await writeTmpJson("step10-context-enrichment.json", output)
 
   console.log(
-    `✓ Added news and Twitter context to ${output.candidates.length} report candidate explanations in ${outputPath}`,
+    `✓ Summarized news and Twitter for ${output.candidates.length} preliminary candidates in ${outputPath}`,
   )
 }
 

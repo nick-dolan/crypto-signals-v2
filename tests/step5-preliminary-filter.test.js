@@ -558,10 +558,11 @@ test("preliminary shortlist applies the limit after signal priority", () => {
   assert.equal(result.filter.nominatedBeforeLimit, 61)
   assert.equal(result.filter.freshQuietBreakoutNominatedCoinCount, 1)
   assert.equal(result.filter.limitApplied, true)
-  assert.equal(result.candidateCount, 60)
+  assert.equal(result.candidateCount, 50)
+  assert.equal(result.filter.candidateLimit, 50)
   assert.equal(result.candidates[0].coin.baseCurrencyId, "zz-strong")
-  assert.ok(candidateById(result, "weak-58"))
-  assert.equal(candidateById(result, "weak-59"), undefined)
+  assert.ok(candidateById(result, "weak-48"))
+  assert.equal(candidateById(result, "weak-49"), undefined)
 })
 
 test("rejected social and context candidates do not consume the shortlist limit", () => {

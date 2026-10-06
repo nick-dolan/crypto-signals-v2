@@ -2584,7 +2584,7 @@ for (const [label, topRank, trending] of [["top", 1, false], ["non-top trending"
     if (topRank == null) {
       assert.equal(byId("explanation").textContent, "Дополненное объяснение из шага 10.")
     }
-    assert.match(byId("analysis-source").textContent, /шаге 10/)
+    assert.equal(byId("analysis-source").textContent, "Архивный анализ с инфофоном")
     assert.match(byId("context-generated").textContent, /11:05/)
     assert.match(byId("news-window").textContent, /10:45/)
     assert.match(byId("twitter-window").textContent, /11:00/)
@@ -2780,7 +2780,7 @@ test("non-top trending coins keep empty searches, failed sources and partial pub
   assert.equal(byId("twitter-items").children.length, 1)
   assert.match(byId("twitter-items").textContent, /Публикация о монете/)
   assert.equal(byId("explanation").textContent, report.coins[1].explanation)
-  assert.match(byId("analysis-source").textContent, /шаге 10/)
+  assert.equal(byId("analysis-source").textContent, "Архивный анализ с инфофоном")
   assert.deepEqual(report, before)
 })
 
@@ -3756,3 +3756,45 @@ for (const mode of ["download", "website"]) {
     })
   }
 }
+
+test("growth reports label the probability correctly and show context without rewriting the analysis", () => {
+  const report = createReport(["COTI", "SOL"])
+  report.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+  addInformation(report, report.coins[0])
+  const coin = report.coins[0]
+  coin.explanation = "Итоговый анализ учитывает рынок и новости."
+  coin.newsSummary = "Новость <script>остаётся текстом</script>."
+  coin.twitterSummary = "Обсуждение обновления сети."
+  coin.contextCaveat = "Сообщение ещё не подтверждено."
+  Object.assign(coin, { socialSignificant: true, socialReason: "Обновление сети.", socialSentiment: "bullish" })
+  const { byId } = runReport(report)
+
+  assert.equal(byId("report-title").textContent, "Рынок перед ростом")
+  assert.equal(byId("probability-heading").textContent, "P роста")
+  assert.match(byId("coin-badges").textContent, /P роста 80%/)
+  assert.match(byId("top-candidates").textContent, /P роста/)
+  assert.equal(byId("analysis-source").textContent, "Рыночные данные и инфофон")
+  assert.equal(byId("explanation").textContent, coin.explanation)
+  assert.equal(byId("news-summary").textContent, `Новости: ${coin.newsSummary}`)
+  assert.deepEqual(byId("news-summary").children, [])
+  assert.equal(byId("twitter-summary").textContent, `Twitter: ${coin.twitterSummary}`)
+  assert.equal(byId("context-caveat").textContent, coin.contextCaveat)
+  assert.match(byId("context-generated").textContent, /Учтён в основной оценке роста/)
+  assert.equal(byId("social-reason").textContent, "Бычий инфоповод: Обновление сети.")
+  click(byId("candidate-rows"), byId("candidate-rows").children[1])
+  for (const id of ["news-summary", "twitter-summary", "context-caveat"]) {
+    assert.equal(byId(id).textContent, "")
+    assert.equal(byId(id).hidden, true)
+  }
+})
+
+test("general background displays tone without manufacturing a significant event indicator", () => {
+  for (const [socialSentiment, label] of [["bullish", "Бычий"], ["bearish", "Медвежий"], ["neutral", "Нейтральный"]]) {
+    const report = createReport()
+    addInformation(report)
+    Object.assign(report.coins[0], { socialSignificant: false, socialSentiment, socialReason: "Обсуждение без нового события." })
+    const { byId } = runReport(report)
+    assert.equal(byId("social-reason").textContent, `${label} фон: Обсуждение без нового события.`)
+    assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
+  }
+})

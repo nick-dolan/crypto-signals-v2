@@ -20,13 +20,13 @@ test("report embeds its data, executable browser scripts and chart license witho
   assert.match(html, /<meta name="viewport"/)
 
   const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
-  assert.deepEqual([...sortOptions.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value), [
+  assert.deepEqual([...sortOptions.matchAll(/<option\b[^>]*value="([^"]+)"/g)].map(([, value]) => value), [
     "probability", "top", "confidence",
   ])
 
   const candidateTable = html.match(/<table class="candidate-table">([\s\S]*?)<\/table>/)[1]
   assert.match(candidateTable, /<caption\b[^>]*>Кандидаты с вероятностью сильного движения<\/caption>/)
-  assert.deepEqual([...candidateTable.matchAll(/<th scope="col">([^<]+)<\/th>/g)].map(([, label]) => label), [
+  assert.deepEqual([...candidateTable.matchAll(/<th\b[^>]*scope="col">([^<]+)<\/th>/g)].map(([, label]) => label), [
     "Монета", "P движения",
   ])
   assert.doesNotMatch(html, /Уклон|предполагаемым направлением|Направление неясно|Нет оценки направления/)

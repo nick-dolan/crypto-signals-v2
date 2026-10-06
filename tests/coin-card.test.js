@@ -579,3 +579,25 @@ test("data building, SVG rendering and native rasterization do not mutate frozen
   assert.equal(buildCoinCardSvg(report, coin), svg)
   assert.deepEqual({ report, coin }, before)
 })
+
+test("coin card distinguishes growth estimates from archived movement estimates", () => {
+  const { report, coin } = fixture()
+  const legacy = buildCoinCardSvg(report, coin)
+  assert.match(legacy, /Сильное движение · 4–12ч/)
+  assert.match(legacy, /без прогноза направления/)
+  report.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+  Object.assign(coin, { socialSignificant: true, socialSentiment: "bearish" })
+  const current = buildCoinCardSvg(report, coin)
+  assert.match(current, /Сильный рост · 4–12ч/)
+  assert.match(current, /Рост &gt; 2.5 ATR · рынок и инфофон/)
+  assert.match(current, /МЕДВЕЖИЙ ФОН/)
+  assert.doesNotMatch(current, /без прогноза направления/)
+})
+
+test("a neutral background on a coin card does not become a significant event", () => {
+  const { report, coin } = fixture()
+  Object.assign(coin, { socialSignificant: false, socialSentiment: "neutral" })
+  const svg = buildCoinCardSvg(report, coin)
+  assert.match(svg, /НЕЙТРАЛЬНЫЙ ФОН/)
+  assert.doesNotMatch(svg, /ЗНАЧИМЫЙ ИНФОПОВОД/)
+})

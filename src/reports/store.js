@@ -132,7 +132,9 @@ export async function createReportStore ({ directory = path.resolve("reports") }
     async save (report) {
       // Capture at call time, before queued I/O, so later caller mutations cannot change a snapshot.
       const id = randomUUID()
-      const parts = splitReport(JSON.parse(JSON.stringify(report)), id)
+      // DuckDB rejects lone UTF-16 surrogates, which can occur in truncated source text.
+      const snapshot = JSON.parse(JSON.stringify(report, (_, value) => isString(value) ? value.toWellFormed() : value))
+      const parts = splitReport(snapshot, id)
       return enqueue(async () => {
         const staging = await fs.mkdtemp(path.join(directory, `.report-${id}-`))
         const destination = path.join(directory, id)

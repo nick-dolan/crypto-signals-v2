@@ -55,14 +55,6 @@ for (const [name, altMarketBackground] of [
     assert.deepEqual(shortlist.candidates, [])
     assert.deepEqual(shortlist.marketContext, featureMetrics.marketContext)
 
-    await run("step6-agent-payload.js")
-    const payload = await readJson("step6-agent-payload.json")
-    assert.equal(payload.asOf, featureMetrics.asOf)
-    assert.equal(payload.candidateCount, 0)
-    assert.deepEqual(payload.candidates, [])
-    assert.equal(Object.hasOwn(payload.marketContext, "breadth4h"), false)
-    assert.deepEqual(payload.marketContext.altMarketBackground, expectedBackground)
-
     const sourceWindow = { from: "2026-09-15T09:10:00.000Z", asOf: featureMetrics.generatedAt }
     const sources = {
       asOf: featureMetrics.asOf,
@@ -73,11 +65,22 @@ for (const [name, altMarketBackground] of [
     }
     await Promise.all([
       writeJson("step7-agent-analysis.json", {
+        schemaVersion: 3,
+        objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
         asOf: featureMetrics.asOf, candidateCount: 0, assessments: [], topCandidates: [],
       }),
       writeJson("step9-twitter-enrichment.json", sources),
       writeJson("step10-context-enrichment.json", { ...sources, generatedAt: featureMetrics.generatedAt }),
     ])
+    await run("step6-agent-payload.js")
+    const payload = await readJson("step6-agent-payload.json")
+    assert.equal(payload.asOf, featureMetrics.asOf)
+    assert.equal(payload.candidateCount, 0)
+    assert.deepEqual(payload.candidates, [])
+    assert.equal(Object.hasOwn(payload.marketContext, "breadth4h"), false)
+    assert.deepEqual(payload.marketContext.altMarketBackground, expectedBackground)
+    assert.equal(payload.objective, "P(рост > 2.5 ATR в следующие 4–12 часов)")
+
     await assert.rejects(fs.access(path.join(directory, "tmp", "step3-market-context.json")), { code: "ENOENT" })
 
     await run("step13-report.js")

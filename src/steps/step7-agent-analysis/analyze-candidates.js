@@ -47,6 +47,7 @@ export async function analyzeCandidates (
     return {
       schemaVersion: analysis.schemaVersion,
       asOf: analysis.asOf,
+      ...(payload.objective ? { objective: payload.objective } : {}),
       candidateCount: assessments.length,
       topCandidates: analysis.topCandidates.map((candidate) => {
         const assessment = assessmentBySymbol.get(candidate.symbol)

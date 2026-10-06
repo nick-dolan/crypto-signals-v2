@@ -16,8 +16,8 @@
         <div>
             <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/
                     ШАГ 13</span></p>
-            <h1>Рынок перед движением</h1>
-            <p class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12 часов</strong></p>
+            <h1 id="report-title">Рынок перед движением</h1>
+            <p id="report-subtitle" class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12 часов</strong></p>
         </div>
         <div class="snapshot">
             <span class="snapshot-label"><span class="status-dot" aria-hidden="true"></span> Сохранённый срез ·
@@ -90,18 +90,18 @@
                         spellcheck="false">
                     <label for="sort" class="sr-only">Сортировка кандидатов</label>
                     <select id="sort">
-                        <option value="probability">По вероятности движения</option>
+                        <option id="probability-sort" value="probability">По вероятности движения</option>
                         <option value="top" selected>Сначала топ агента</option>
                         <option value="confidence">По уверенности агента</option>
                     </select>
                 </div>
                 <div class="candidate-scroll">
                     <table class="candidate-table">
-                        <caption class="sr-only">Кандидаты с вероятностью сильного движения</caption>
+                        <caption id="candidate-caption" class="sr-only">Кандидаты с вероятностью сильного движения</caption>
                         <thead>
                             <tr>
                                 <th scope="col">Монета</th>
-                                <th scope="col">P движения</th>
+                                <th id="probability-heading" scope="col">P движения</th>
                             </tr>
                         </thead>
                         <tbody id="candidate-rows"></tbody>
@@ -192,7 +192,7 @@
                     <p id="explanation" class="explanation" hidden></p>
                     <div class="signal-columns">
                         <div>
-                            <h3 class="positive">Поддерживает движение</h3>
+                            <h3 id="drivers-heading" class="positive">Поддерживает движение</h3>
                             <ul id="drivers" class="signal-list"></ul>
                         </div>
                         <div>
@@ -204,12 +204,13 @@
                 <section class="panel information-panel" id="information-panel" aria-labelledby="information-heading"
                     hidden>
                     <div class="section-heading">
-                        <h2 id="information-heading">Новости и Twitter</h2><span class="muted">Для выбранных лидеров
-                            ·
-                            до пяти монет</span>
+                        <h2 id="information-heading">Новости и Twitter</h2>
                     </div>
                     <p id="context-generated" class="source-meta"></p>
                     <p id="social-reason" class="source-text" hidden></p>
+                    <p id="news-summary" class="source-text" hidden></p>
+                    <p id="twitter-summary" class="source-text" hidden></p>
+                    <p id="context-caveat" class="source-meta" hidden></p>
                     <details id="news-details" class="source-details">
                         <summary>Новости <span id="news-count" class="count-badge"></span></summary>
                         <p id="news-window" class="source-window"></p>

@@ -457,3 +457,28 @@ test("signal descriptions remove metric evidence without splitting quoted JSON",
   assert.equal(signalText("evidence={\"note\":\"first: second\"}: Причина"), "Причина")
   assert.equal(signalText("Без метрик: обычное пояснение"), "Без метрик: обычное пояснение")
 })
+
+test("new bullish and bearish context selects news while top prose remains the final analysis", () => {
+  const report = fixture([
+    coin("TOP", {
+      topRank: 1, socialSignificant: true, socialSentiment: "bullish",
+      summary: { observation: "Рынок и обновление сети поддерживают рост.", caveat: null },
+      technicalSummary: { observation: "Рынок и обновление сети поддерживают рост.", caveat: null },
+      newsSummary: "Исходная новость.",
+    }),
+    coin("NEWS", { socialSignificant: true, socialSentiment: "bearish", explanation: "", socialReason: "Взлом протокола." }),
+  ], { objective: "P(рост > 2.5 ATR в следующие 4–12 часов)" })
+  const release = buildTelegramRelease(report)
+  assert.deepEqual(release.candidates.map(item => [item.symbol, item.section]), [["TOP", "top"], ["NEWS", "news"]])
+  assert.match(JSON.stringify(release.richMessage), /Рынок и обновление сети поддерживают рост/)
+  assert.match(JSON.stringify(release.richMessage), /Взлом протокола/)
+  assert.doesNotMatch(JSON.stringify(release.richMessage), /Исходная новость/)
+})
+
+test("general bullish background alone does not select an additional Telegram candidate", () => {
+  const selection = selectTelegramCandidates(fixture([
+    coin("TONE", { socialSignificant: false, socialSentiment: "bullish" }),
+    coin("EVENT", { socialSignificant: true, socialSentiment: "bullish" }),
+  ]))
+  assert.deepEqual(selection.candidates.map(item => item.coin.symbol), ["EVENT"])
+})

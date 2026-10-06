@@ -9,7 +9,7 @@ function probability (coin) {
 }
 
 function significantNews (coin) {
-  return coin.socialSignificant === true && ["positive", "negative"].includes(coin.socialSentiment)
+  return coin.socialSignificant === true && ["bullish", "bearish", "positive", "negative"].includes(coin.socialSentiment)
 }
 
 export function selectTelegramCandidates (report) {

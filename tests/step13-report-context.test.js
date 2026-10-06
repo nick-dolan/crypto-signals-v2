@@ -7,7 +7,7 @@ function createInput () {
   const report = {
     asOf: "2026-09-16T07:00:00.000Z",
     timeframe: "1h",
-    objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)",
+    objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
     candidateCount: 7,
     universeCoinCount: 241,
     marketContext: { breadth4h: 0.279 },
@@ -51,7 +51,7 @@ function createInput () {
       lookbackHours: 24,
       maxPagesPerCandidate: 2,
     },
-    candidates: report.coins.filter(coin => coin.topRank != null || coin.features.coingeckoTrending === true).map((coin, index) => ({
+    candidates: report.coins.map((coin, index) => ({
       symbol: coin.symbol,
       explanation: coin.explanation,
       movementProbability: 0.99,
@@ -80,8 +80,8 @@ function createInput () {
       twitter: {
         status: "available",
         error: null,
-        recentTweetCount: [40, 12, 12, 24, 22, 8][index],
-        tweets: Array.from({ length: [40, 12, 12, 24, 22, 8][index] }, (_, tweetIndex) => ({
+        recentTweetCount: [40, 12, 12, 24, 22, 8, 1][index],
+        tweets: Array.from({ length: [40, 12, 12, 24, 22, 8, 1][index] }, (_, tweetIndex) => ({
           id: tweetIndex === 0 ? null : `${coin.symbol}-${tweetIndex}`,
           text: `Обсуждение ${coin.symbol}\n<b>Без изменения текста</b>`,
           createdAt: "2026-09-16T08:50:00.000Z",
@@ -103,8 +103,14 @@ function createInput () {
     twitterEnrichment: structuredClone(sources.twitterEnrichment),
     candidates: sources.candidates.map(candidate => ({
       symbol: candidate.symbol,
-      explanation: candidate.explanation,
-      enrichedExplanation: [candidate.explanation, `Информационный фон ${candidate.symbol}.`].filter(Boolean).join(" "),
+      newsStatus: candidate.news.status,
+      twitterStatus: candidate.twitter.status,
+      newsSummary: `Краткие новости ${candidate.symbol}.`,
+      twitterSummary: `Обсуждение ${candidate.symbol}.`,
+      contextCaveat: "Слух не подтверждён.",
+      socialSignificant: true,
+      socialReason: "Значимое обновление.",
+      socialSentiment: "bullish",
       movementProbability: 0.01,
       estimateConfidence: "high",
       drivers: ["Не брать из шага 10"],
@@ -120,318 +126,6 @@ function createInput () {
 function addContext ({ report, sources, context }) {
   return addReportContext(report, sources, context)
 }
-
-test("joins reordered top and trending coins by symbol without changing assessments, counts, order or inputs", () => {
-  const input = createInput()
-  input.report.coins.reverse()
-  input.sources.candidates.reverse()
-  input.context.candidates = [...input.context.candidates.slice(2), ...input.context.candidates.slice(0, 2)]
-  input.context.candidates[0].enrichedExplanation += "  "
-  const before = structuredClone(input)
-  const result = addContext(input)
-
-  assert.notEqual(result, input.report)
-  assert.notEqual(result.coins, input.report.coins)
-  assert.deepEqual(result, {
-    ...input.report,
-    informationSources: {
-      news: input.sources.newsEnrichment,
-      twitter: input.sources.twitterEnrichment,
-      contextGeneratedAt: input.context.generatedAt,
-    },
-    coins: input.report.coins.map((coin) => {
-      if (coin.topRank == null && coin.features.coingeckoTrending !== true) {
-        return coin
-      }
-
-      const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
-      const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
-
-      return {
-        ...coin,
-        socialSignificant: null,
-        socialReason: null,
-        socialSentiment: null,
-        explanation: context.enrichedExplanation,
-        information: { news: source.news, twitter: source.twitter },
-      }
-    }),
-  })
-
-  assert.deepEqual(input, before)
-})
-
-test("report uses enriched summaries only for significant context and never overwrites technical summaries", () => {
-  for (const socialSignificant of [true, false, null, undefined]) {
-    const input = createInput()
-    input.report.coins.forEach((coin) => {
-      coin.technicalSummary = { observation: `Техническое наблюдение ${coin.symbol}.`, caveat: "Подтверждение неполное." }
-      if (coin.topRank != null || coin.features.coingeckoTrending === true) {
-        coin.summary = { observation: "Устаревшее обогащение.", caveat: null }
-      }
-    })
-    input.sources.candidates.forEach((candidate) => {
-      candidate.technicalSummary = { observation: "Не брать из источников.", caveat: null }
-      candidate.summary = { observation: "Не брать из источников.", caveat: null }
-    })
-    input.context.candidates.forEach((candidate) => {
-      candidate.technicalSummary = { observation: "Не подменять техническое резюме новостями.", caveat: null }
-      candidate.summary = { observation: `Обновление сети ${candidate.symbol}.`, caveat: null }
-      if (socialSignificant !== undefined) {
-        Object.assign(candidate, {
-          socialSignificant,
-          socialReason: "Причина оценки фона.",
-          socialSentiment: socialSignificant ? "positive" : null,
-        })
-      }
-    })
-    const before = structuredClone(input)
-    const result = addContext(input)
-
-    for (const [index, coin] of result.coins.entries()) {
-      const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
-      assert.deepEqual(coin.technicalSummary, input.report.coins[index].technicalSummary)
-      assert.equal(coin.technicalExplanation, input.report.coins[index].technicalExplanation)
-      assert.equal(coin.movementProbability, input.report.coins[index].movementProbability)
-      assert.equal(coin.topRank, input.report.coins[index].topRank)
-      assert.equal(Object.hasOwn(coin, "summary"), socialSignificant === true && Boolean(context))
-      if (context) {
-        assert.equal(coin.explanation, context.enrichedExplanation)
-        if (socialSignificant === true) {
-          assert.deepEqual(coin.summary, context.summary)
-        }
-      } else {
-        assert.deepEqual(coin, input.report.coins[index])
-      }
-    }
-    assert.deepEqual(input, before)
-  }
-})
-
-test("legacy context keeps fallback strings without deriving structured summaries", () => {
-  const input = createInput()
-  input.context.candidates.forEach((candidate) => {
-    Object.assign(candidate, { socialSignificant: true, socialReason: "Значимое обновление.", socialSentiment: "positive" })
-  })
-  const before = structuredClone(input)
-  const result = addContext(input)
-
-  assert.ok(result.coins.every(coin => !Object.hasOwn(coin, "summary") && !Object.hasOwn(coin, "technicalSummary")))
-  assert.equal(result.coins[0].explanation, input.context.candidates[0].enrichedExplanation)
-  assert.equal(result.coins[0].technicalExplanation, input.report.coins[0].technicalExplanation)
-  assert.equal(result.coins[0].socialReason, "Значимое обновление.")
-  assert.deepEqual(input, before)
-})
-
-test("report validates significant summaries for tops and trending coins but does not consume insignificant summaries", () => {
-  for (const symbol of ["XVG", "DOGE"]) {
-    for (const summary of [
-      null, {}, { observation: "", caveat: null }, { observation: "Наблюдение.", caveat: "" },
-      { observation: "я".repeat(301), caveat: null }, { observation: "Наблюдение.", caveat: "я".repeat(181) },
-    ]) {
-      const input = createInput()
-      const candidate = input.context.candidates.find(candidate => candidate.symbol === symbol)
-      Object.assign(candidate, { summary, socialSignificant: true, socialReason: "Событие.", socialSentiment: "positive" })
-      assert.throws(() => addContext(input), /summary/)
-      Object.assign(candidate, { socialSignificant: false, socialSentiment: null })
-      const before = structuredClone(input)
-      const result = addContext(input)
-      assert.equal(Object.hasOwn(result.coins.find(coin => coin.symbol === symbol), "summary"), false)
-      assert.deepEqual(input, before)
-    }
-  }
-})
-
-test("leaves non-top coins without an exact trending flag untouched", () => {
-  for (const features of [undefined, null, {}, { coingeckoTrending: false }, { coingeckoTrending: "true" }, { coingeckoTrending: 1 }]) {
-    const input = createInput()
-    input.report.coins.at(-1).features = features
-    const result = addContext(input)
-
-    assert.deepEqual(result.coins.at(-1), input.report.coins.at(-1))
-    assert.equal(Object.hasOwn(result.coins.at(-1), "information"), false)
-  }
-})
-
-for (const [socialSignificant, socialSentiment, reason] of [
-  [true, "positive", "Позитивное событие"],
-  [true, "negative", "Негативное событие"],
-  [true, "mixed", "Противоречивые события"],
-  [true, "neutral", "Значимое нейтральное событие"],
-  [false, null, "Значимый инфоповод не найден"],
-  [null, null, "Недостаточно данных"],
-  [null, null, null],
-]) {
-  test(`copies step 10 social fields (${socialSignificant}/${socialSentiment}/${reason}) only for the enrichment union`, () => {
-    const input = createInput()
-    input.sources.candidates.reverse().forEach((candidate) => {
-      Object.assign(candidate, { socialSignificant: "ignore step 9", socialReason: 42, socialSentiment: "up" })
-    })
-    input.context.candidates.reverse().forEach((candidate) => {
-      Object.assign(candidate, {
-        socialSignificant, socialSentiment,
-        socialReason: reason == null ? null : ` \n${reason}: ${candidate.symbol}.\t `,
-      })
-    })
-    const before = structuredClone(input)
-    const result = addContext(input)
-
-    assert.equal(result.candidateCount, input.report.candidateCount)
-    assert.equal(result.universeCoinCount, input.report.universeCoinCount)
-    assert.deepEqual(result.coins.map(coin => coin.symbol), input.report.coins.map(coin => coin.symbol))
-    for (const [index, coin] of result.coins.entries()) {
-      assert.equal(coin.technicalExplanation, input.report.coins[index].explanation)
-      const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
-      if (!context) {
-        assert.deepEqual(coin, input.report.coins[index])
-        assert.equal(Object.hasOwn(coin, "socialSignificant"), false)
-        continue
-      }
-      const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
-      assert.deepEqual(coin, {
-        ...input.report.coins[index],
-        socialSignificant, socialSentiment,
-        socialReason: reason == null ? null : `${reason}: ${coin.symbol}.`,
-        explanation: context.enrichedExplanation,
-        information: { news: source.news, twitter: source.twitter },
-      })
-    }
-    assert.deepEqual(input, before)
-  })
-}
-
-test("legacy context stays unknown even when step 9 or the original report has a social signal", () => {
-  const input = createInput()
-  for (const candidate of [...input.sources.candidates, input.report.coins[0]]) {
-    Object.assign(candidate, { socialSignificant: true, socialReason: "Не брать отсюда", socialSentiment: "positive" })
-  }
-  const before = structuredClone(input)
-  const result = addContext(input)
-
-  for (const coin of result.coins.filter(coin => coin.information)) {
-    assert.equal(coin.socialSignificant, null)
-    assert.equal(coin.socialReason, null)
-    assert.equal(coin.socialSentiment, null)
-  }
-  assert.deepEqual(result.coins.at(-1), input.report.coins.at(-1))
-  for (const key of ["socialSignificant", "socialReason", "socialSentiment"]) {
-    assert.equal(Object.hasOwn(result.coins.at(-1), key), false)
-  }
-  assert.deepEqual(input, before)
-})
-
-test("rejects partial or invalid step 10 social fields for both top and non-top trending coins", async (t) => {
-  for (const fields of [
-    { socialSignificant: true },
-    { socialReason: "Причина" },
-    { socialSentiment: "positive" },
-    { socialSignificant: false, socialReason: "Причина" },
-    { socialSignificant: null, socialReason: null },
-    { socialSignificant: "true", socialReason: "Причина", socialSentiment: "positive" },
-    { socialSignificant: 1, socialReason: "Причина", socialSentiment: "positive" },
-    { socialSignificant: undefined, socialReason: null, socialSentiment: null },
-    { socialSignificant: true, socialReason: null, socialSentiment: "positive" },
-    { socialSignificant: true, socialReason: "", socialSentiment: "positive" },
-    { socialSignificant: true, socialReason: " \n ", socialSentiment: "positive" },
-    { socialSignificant: true, socialReason: 42, socialSentiment: "positive" },
-    { socialSignificant: true, socialReason: "Причина", socialSentiment: null },
-    { socialSignificant: true, socialReason: "Причина", socialSentiment: "bullish" },
-    { socialSignificant: true, socialReason: "Причина", socialSentiment: "Positive" },
-    { socialSignificant: false, socialReason: null, socialSentiment: null },
-    { socialSignificant: false, socialReason: "Причина", socialSentiment: "positive" },
-    { socialSignificant: false, socialReason: "Причина", socialSentiment: "neutral" },
-    { socialSignificant: null, socialReason: 42, socialSentiment: null },
-    { socialSignificant: null, socialReason: "Причина", socialSentiment: "neutral" },
-  ]) {
-    for (const symbol of ["XVG", "DOGE"]) {
-      await t.test(`${symbol}: ${JSON.stringify(fields)}`, () => {
-        const input = createInput()
-        Object.assign(input.context.candidates.find(coin => coin.symbol === symbol), fields)
-        assert.throws(() => addContext(input), /socialSignificant|socialReason|socialSentiment/)
-      })
-    }
-  }
-})
-
-test("legacy enrichment direction predictions do not enter the report or change assessments and historical background", () => {
-  const input = createInput()
-  input.report.altMarketBackground = { status: "down", change4hPct: -1.5, breadth4h: 0.2, warning: null }
-  const expected = addContext(input)
-  for (const source of [input.sources, input.context]) {
-    source.candidates.forEach((candidate) => {
-      candidate.directionBias = "up"
-    })
-  }
-  const before = structuredClone(input)
-  const result = addContext(input)
-
-  assert.deepEqual(result, expected)
-  assert.doesNotMatch(JSON.stringify(result), /"directionBias"\s*:/)
-  assert.deepEqual(result.altMarketBackground, input.report.altMarketBackground)
-  for (const [index, coin] of result.coins.entries()) {
-    for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals", "features"]) {
-      assert.deepEqual(coin[key], input.report.coins[index][key])
-    }
-  }
-  assert.deepEqual(input, before)
-})
-
-test("preserves empty and failed containers, errors, partial results and extra metadata", () => {
-  const input = createInput()
-  input.sources.candidates[0].news = { status: "empty", error: null, items: [], recentItemCount: 0 }
-  input.sources.candidates[1].news = { status: "failed", error: "News unavailable", items: [] }
-  input.sources.candidates[0].twitter.status = "failed"
-  input.sources.candidates[0].twitter.error = "Second page unavailable"
-  input.sources.candidates[1].twitter = { status: "empty", error: null, tweets: [], recentTweetCount: 0 }
-  const trending = input.sources.candidates.find(coin => coin.symbol === "DOGE")
-  trending.news.status = "failed"
-  trending.news.error = "Partial news results"
-  trending.twitter = { status: "empty", error: null, tweets: [], recentTweetCount: 0 }
-  const before = structuredClone(input)
-  const result = addContext(input)
-
-  for (const coin of result.coins.filter(coin => coin.topRank != null || coin.features.coingeckoTrending === true)) {
-    const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
-    assert.deepEqual(coin.information.news, source.news)
-    assert.deepEqual(coin.information.twitter, source.twitter)
-  }
-
-  assert.equal(result.coins[0].information.twitter.tweets.length, 40)
-  assert.equal(result.coins.find(coin => coin.symbol === "DOGE").information.news.items.length, 1)
-  assert.deepEqual(input, before)
-})
-
-test("accepts trending-only enrichment when the report has no tops", () => {
-  const input = createInput()
-  input.report.coins = input.report.coins.filter(coin => coin.topRank == null)
-  input.report.candidateCount = input.report.coins.length
-  input.sources.candidates = input.sources.candidates.filter(coin => coin.symbol === "DOGE")
-  input.context.candidates = input.context.candidates.filter(coin => coin.symbol === "DOGE")
-  const result = addContext(input)
-
-  assert.equal(result.candidateCount, 2)
-  assert.equal(result.coins[0].topRank, null)
-  assert.equal(result.coins[0].explanation, "Информационный фон DOGE.")
-  assert.deepEqual(result.coins[0].information.news, input.sources.candidates[0].news)
-  assert.deepEqual(result.coins[1], input.report.coins[1])
-})
-
-test("accepts an empty enrichment union with or without non-top coins", () => {
-  for (const keepCoins of [true, false]) {
-    const input = createInput()
-    input.report.coins = keepCoins
-      ? input.report.coins.map(coin => ({ ...coin, topRank: null, features: { ...coin.features, coingeckoTrending: false } }))
-      : []
-    input.report.candidateCount = input.report.coins.length
-    input.sources.candidates = []
-    input.context.candidates = []
-    const result = addContext(input)
-
-    assert.deepEqual(result.coins, input.report.coins)
-    assert.equal(result.candidateCount, input.report.candidateCount)
-    assert.equal(result.informationSources.contextGeneratedAt, input.context.generatedAt)
-  }
-})
 
 test("keeps source windows independent from the market snapshot and accepts equivalent timestamps", () => {
   const input = createInput()
@@ -471,15 +165,14 @@ test("rejects invalid market or generation timestamps", async (t) => {
   }
 })
 
-test("rejects missing, extra, duplicate or malformed union members in either enrichment input", async (t) => {
+test("rejects missing, extra, duplicate or malformed candidate members in either enrichment input", async (t) => {
   for (const source of ["sources", "context"]) {
     for (const [name, change, message] of [
       ["missing top", candidates => candidates.slice(1), /candidate set/],
       ["missing non-top trending", candidates => candidates.slice(0, -1), /candidate set/],
-      ["extra plain non-top", candidates => [...candidates, { ...candidates[0], symbol: "BTC" }], /candidate set/],
       ["extra outsider", candidates => [...candidates, { ...candidates[0], symbol: "OTHER" }], /candidate set/],
       ["wrong top", candidates => [{ ...candidates[0], symbol: "OTHER" }, ...candidates.slice(1)], /candidate set/],
-      ["wrong non-top trending", candidates => [...candidates.slice(0, -1), { ...candidates.at(-1), symbol: "BTC" }], /candidate set/],
+      ["wrong non-top trending", candidates => [...candidates.slice(0, -1), { ...candidates.at(-1), symbol: "OTHER" }], /candidate set/],
       ["duplicate trending top", candidates => [candidates[0], ...candidates], /duplicate symbol/],
       ["duplicate non-top trending", candidates => [...candidates, candidates.at(-1)], /duplicate symbol/],
       ["missing array", () => undefined, /must be an array/],
@@ -494,7 +187,7 @@ test("rejects missing, extra, duplicate or malformed union members in either enr
   }
 })
 
-test("rejects duplicate report union members", () => {
+test("rejects duplicate report candidate members", () => {
   for (const symbol of ["XVG", "DOGE"]) {
     const input = createInput()
     input.report.coins.push(input.report.coins.find(coin => coin.symbol === symbol))
@@ -536,33 +229,6 @@ test("rejects invalid or mismatched inherited source windows", async (t) => {
   }
 })
 
-test("rejects missing or blank enriched explanations instead of falling back to the original", async (t) => {
-  for (const symbol of ["XVG", "DOGE"]) {
-    for (const value of [undefined, null, "", " \n ", 42, {}]) {
-      await t.test(`${symbol}: ${String(value)}`, () => {
-        const input = createInput()
-        input.context.candidates.find(coin => coin.symbol === symbol).enrichedExplanation = value
-        assert.throws(() => addContext(input), /enrichedExplanation must be a non-empty string/)
-      })
-    }
-  }
-})
-
-test("rejects stale base explanations for tops and trending coins at any joining stage", async (t) => {
-  for (const source of ["report", "sources", "context"]) {
-    for (const symbol of ["XVG", "DOGE"]) {
-      for (const value of [undefined, "Объяснение из другого анализа."]) {
-        await t.test(`${source}: ${symbol}: ${value}`, () => {
-          const input = createInput()
-          const candidates = source === "report" ? input.report.coins : input[source].candidates
-          candidates.find(coin => coin.symbol === symbol).explanation = value
-          assert.throws(() => addContext(input), /base explanation does not match/)
-        })
-      }
-    }
-  }
-})
-
 test("rejects missing containers, invalid statuses and non-array publications", async (t) => {
   for (const [key, itemsKey] of [["news", "items"], ["twitter", "tweets"]]) {
     for (const [name, container] of [
@@ -581,5 +247,106 @@ test("rejects missing containers, invalid statuses and non-array publications", 
         })
       }
     }
+  }
+})
+
+test("joins every assessed candidate by symbol and preserves the authoritative analysis", () => {
+  const input = createInput()
+  input.report.coins.reverse()
+  input.sources.candidates.reverse()
+  input.context.candidates.reverse()
+  for (const coin of input.report.coins) {
+    coin.summary = { observation: `Итоговый анализ ${coin.symbol}.`, caveat: "Риск уже учтён." }
+    coin.technicalSummary = coin.summary
+  }
+  for (const candidate of input.context.candidates) {
+    candidate.summary = { observation: "Не подменять анализ", caveat: null }
+    candidate.enrichedExplanation = "Не подменять объяснение"
+  }
+  const before = structuredClone(input)
+  const result = addContext(input)
+
+  assert.deepEqual(result.coins.map(coin => coin.symbol), input.report.coins.map(coin => coin.symbol))
+  assert.equal(result.candidateCount, 7)
+  for (const [index, coin] of result.coins.entries()) {
+    const original = input.report.coins[index]
+    const source = input.sources.candidates.find(candidate => candidate.symbol === coin.symbol)
+    const context = input.context.candidates.find(candidate => candidate.symbol === coin.symbol)
+    for (const key of ["movementProbability", "estimateConfidence", "drivers", "counterSignals", "summary", "technicalSummary", "explanation", "technicalExplanation", "history", "features", "topRank"]) {
+      assert.deepEqual(coin[key], original[key])
+    }
+    for (const key of ["newsStatus", "twitterStatus", "newsSummary", "twitterSummary", "contextCaveat", "socialSignificant", "socialReason", "socialSentiment"]) {
+      assert.deepEqual(coin[key], context[key])
+    }
+    assert.deepEqual(coin.information, { news: source.news, twitter: source.twitter })
+  }
+  assert.ok(result.coins.find(coin => coin.symbol === "BTC").information)
+  assert.deepEqual(input, before)
+})
+
+test("preserves failed partial sources and distinguishes empty from unavailable context", () => {
+  const input = createInput()
+  input.sources.candidates[0].news.status = "failed"
+  input.sources.candidates[0].news.error = "Partial results"
+  input.sources.candidates[0].twitter = { status: "empty", tweets: [] }
+  Object.assign(input.context.candidates[0], {
+    newsStatus: "failed", twitterStatus: "empty", twitterSummary: null,
+    socialSignificant: null, socialReason: "Данных недостаточно.", socialSentiment: null,
+  })
+  const result = addContext(input)
+  assert.equal(result.coins[0].information.news.items.length, 1)
+  assert.equal(result.coins[0].information.news.error, "Partial results")
+  assert.deepEqual(result.coins[0].information.twitter.tweets, [])
+  assert.equal(result.coins[0].twitterSummary, null)
+  assert.equal(result.coins[0].socialSignificant, null)
+})
+
+test("accepts no candidates only when report and both enrichment sets are empty", () => {
+  const input = createInput()
+  input.report.coins = []
+  input.report.candidateCount = 0
+  input.sources.candidates = []
+  input.context.candidates = []
+  assert.deepEqual(addContext(input).coins, [])
+})
+
+test("rejects context from mismatched source statuses and malformed summaries", () => {
+  for (const key of ["newsStatus", "twitterStatus"]) {
+    const input = createInput()
+    input.context.candidates[0][key] = "empty"
+    assert.throws(() => addContext(input), /status does not match/)
+  }
+  for (const key of ["newsSummary", "twitterSummary", "contextCaveat"]) {
+    for (const value of [undefined, "", " ", 1, {}]) {
+      const input = createInput()
+      input.context.candidates[0][key] = value
+      assert.throws(() => addContext(input), /must be a non-empty string or null/)
+    }
+  }
+})
+
+test("accepts directional and legacy sentiment but rejects malformed social signals", () => {
+  for (const socialSentiment of ["bullish", "bearish", "positive", "negative", "mixed", "neutral"]) {
+    const input = createInput()
+    input.context.candidates[0].socialSentiment = socialSentiment
+    assert.equal(addContext(input).coins[0].socialSentiment, socialSentiment)
+  }
+  for (const fields of [
+    { socialSignificant: "true" }, { socialReason: null }, { socialReason: "" },
+    { socialSentiment: null }, { socialSentiment: "up" }, { socialSignificant: null },
+  ]) {
+    const input = createInput()
+    Object.assign(input.context.candidates[0], fields)
+    assert.throws(() => addContext(input), /socialSignificant|socialReason|socialSentiment/)
+  }
+})
+
+test("insignificant context retains its tone independently and accepts legacy missing tone", () => {
+  for (const socialSentiment of ["bullish", "bearish", "mixed", "neutral", null]) {
+    const input = createInput()
+    Object.assign(input.context.candidates[0], { socialSignificant: false, socialSentiment })
+    const result = addContext(input)
+    assert.equal(result.coins[0].socialSignificant, false)
+    assert.equal(result.coins[0].socialSentiment, socialSentiment)
   }
 })

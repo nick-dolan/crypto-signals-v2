@@ -3,8 +3,11 @@ import { runStep } from "./helpers/run-step-helper.js"
 import { buildAgentPayload } from "./steps/step6-agent-payload/build-agent-payload.js"
 
 async function runAgentPayloadStep () {
-  const shortlist = await readTmpJson("step5-preliminary-filter.json")
-  const payload = buildAgentPayload(shortlist)
+  const [shortlist, context] = await Promise.all([
+    readTmpJson("step5-preliminary-filter.json"),
+    readTmpJson("step10-context-enrichment.json"),
+  ])
+  const payload = buildAgentPayload(shortlist, context)
   const outputPath = await writeTmpJson("step6-agent-payload.json", payload)
 
   console.log(

@@ -1,4 +1,4 @@
-import { isArray, isFinite, isSafeInteger } from "../../helpers/utils.typed.js"
+import { isArray, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 
 function indexHours (items, asOf) {
   return new Map((isArray(items) ? items : [])
@@ -60,6 +60,7 @@ export function buildCoinCardData (report, coin) {
 
   return {
     coin,
+    growthObjective: isString(report.objective) && report.objective.startsWith("P(рост >"),
     demo: report.demo === true,
     asOf,
     // asOf labels the OPEN of the last closed candle, not its closing time.

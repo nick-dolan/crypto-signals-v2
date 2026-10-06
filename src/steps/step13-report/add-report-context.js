@@ -1,7 +1,5 @@
-import { omit } from "radash"
 import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isArray, isFinite, isObject, isString } from "../../helpers/utils.typed.js"
-import { readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 
 function getTimestamp (value, label) {
   if (!isString(value) || !isFinite(Date.parse(value))) {
@@ -78,9 +76,7 @@ export function addReportContext (report, sources, context) {
     throw new Error("Report coins must be an array")
   }
 
-  const reportCandidates = indexCandidates(
-    report.coins.filter(coin => coin.topRank != null || coin.features?.coingeckoTrending === true), "Report",
-  )
+  const reportCandidates = indexCandidates(report.coins, "Report")
   const sourcesBySymbol = indexCandidates(sources.candidates, "Step 9")
   const contextBySymbol = indexCandidates(context.candidates, "Step 10")
 
@@ -91,33 +87,33 @@ export function addReportContext (report, sources, context) {
   }
 
   const coins = report.coins.map((coin) => {
-    if (!reportCandidates.has(coin.symbol)) {
-      return coin
-    }
-
     const sourceCandidate = sourcesBySymbol.get(coin.symbol)
     const contextCandidate = contextBySymbol.get(coin.symbol)
-
-    if (sourceCandidate.explanation !== coin.explanation || contextCandidate.explanation !== coin.explanation) {
-      throw new Error(`${coin.symbol} base explanation does not match the report`)
-    }
-
-    if (!isString(contextCandidate.enrichedExplanation) || !contextCandidate.enrichedExplanation.trim()) {
-      throw new Error(`${coin.symbol} enrichedExplanation must be a non-empty string`)
-    }
 
     validateContainer(sourceCandidate.news, "items", `${coin.symbol} news`)
     validateContainer(sourceCandidate.twitter, "tweets", `${coin.symbol} twitter`)
 
     const socialSignal = readSocialSignal(contextCandidate)
+    const summaries = Object.fromEntries(["newsSummary", "twitterSummary", "contextCaveat"].map((key) => {
+      const value = contextCandidate[key]
+      if (value !== null && (!isString(value) || !value.trim())) {
+        throw new Error(`${coin.symbol} ${key} must be a non-empty string or null`)
+      }
+      return [key, value]
+    }))
+
+    for (const key of ["news", "twitter"]) {
+      if (contextCandidate[`${key}Status`] !== sourceCandidate[key].status) {
+        throw new Error(`${coin.symbol} ${key} status does not match its context`)
+      }
+    }
 
     return {
-      ...omit(coin, ["summary"]),
+      ...coin,
       ...socialSignal,
-      ...(socialSignal.socialSignificant === true && contextCandidate.summary !== undefined
-        ? { summary: readCoinSummary(contextCandidate.summary, `${coin.symbol} summary`) }
-        : {}),
-      explanation: contextCandidate.enrichedExplanation,
+      ...summaries,
+      newsStatus: contextCandidate.newsStatus,
+      twitterStatus: contextCandidate.twitterStatus,
       information: { news: sourceCandidate.news, twitter: sourceCandidate.twitter },
     }
   })

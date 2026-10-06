@@ -38,7 +38,8 @@ async function prepareInputs (t, empty = false) {
       candidates: empty ? [] : [{ symbol: coin.symbol, name: coin.name, selectionRank: 1, volume: [2.5], flags: [] }],
     },
     "step7-agent-analysis.json": {
-      asOf, candidateCount: candidates.length,
+      schemaVersion: 3, asOf, candidateCount: candidates.length,
+      objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
       topCandidates: empty ? [] : [{ symbol: coin.symbol, explanation: candidates[0].explanation }],
       assessments: empty
         ? []
@@ -53,10 +54,10 @@ async function prepareInputs (t, empty = false) {
     },
     "step10-context-enrichment.json": {
       asOf, generatedAt: "2026-09-26T12:00:00.000Z", newsEnrichment: window, twitterEnrichment: window,
-      candidates: candidates.map(({ symbol, explanation }) => ({
-        symbol, explanation, enrichedExplanation: "Объяснение и новости </script>",
-        summary: { observation: "Команда объявила об обновлении проекта.", caveat: null },
-        socialSignificant: true, socialReason: "Обновление проекта", socialSentiment: "positive",
+      candidates: candidates.map(({ symbol }) => ({
+        symbol, newsStatus: "available", twitterStatus: "empty",
+        newsSummary: "Команда объявила об обновлении проекта </script>.", twitterSummary: null, contextCaveat: null,
+        socialSignificant: true, socialReason: "Обновление проекта", socialSentiment: "bullish",
       })),
     },
     "step2-data-bootstrap/COTI--XTVCCOTI/data.json": {
@@ -116,11 +117,12 @@ for (const empty of [false, true]) {
       if (!empty) {
         assert.equal(report.coins[0].features.volumeZ, 2.5)
         assert.equal(report.coins[0].movementProbability, 0.7)
-        assert.equal(report.coins[0].explanation, "Объяснение и новости </script>")
+        assert.equal(report.coins[0].explanation, "Техническое объяснение")
+        assert.equal(report.coins[0].newsSummary, "Команда объявила об обновлении проекта </script>.")
         assert.deepEqual(report.coins[0].technicalSummary, {
           observation: "Объём растёт при сжатии диапазона.", caveat: "Направление не подтверждено.",
         })
-        assert.deepEqual(report.coins[0].summary, { observation: "Команда объявила об обновлении проекта.", caveat: null })
+        assert.deepEqual(report.coins[0].summary, report.coins[0].technicalSummary)
         assert.equal(report.coins[0].socialSignificant, true)
         assert.equal(report.coins[0].information.news.items[0].title, "Новость <script>")
         assert.equal(report.coins[0].history.candles[0].close, 1.5)
@@ -206,7 +208,7 @@ test("step 13 preserves five v5 news items, sources and structured coin summarie
     assert.deepEqual(archived.coins[0].technicalSummary, {
       observation: "Объём растёт при сжатии диапазона.", caveat: "Направление не подтверждено.",
     })
-    assert.deepEqual(archived.coins[0].summary, { observation: "Команда объявила об обновлении проекта.", caveat: null })
+    assert.deepEqual(archived.coins[0].summary, archived.coins[0].technicalSummary)
     const html = await renderReportHtml(archived)
     assert.ok(html.includes("Сохранённая публикация \\u003c/script>"))
     assert.ok(html.includes("Событие 1 \\u003cscript>"))

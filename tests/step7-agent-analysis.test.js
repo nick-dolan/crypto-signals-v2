@@ -125,7 +125,7 @@ test("analysis prompt example follows the structured response schema", async () 
   const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
   const example = JSON.parse(prompt.match(/```json\n([\s\S]*?)\n```/)[1])
 
-  assert.equal(example.schemaVersion, 2)
+  assert.equal(example.schemaVersion, 3)
   assert.deepEqual(Object.keys(example.topCandidates[0]).sort(), ["movementProbability", "symbol", "technicalSummary"])
   assert.deepEqual(Object.keys(example.assessments[0]).sort(), [
     "counterSignals", "drivers", "estimateConfidence", "movementProbability", "symbol",
@@ -143,6 +143,37 @@ test("agent analysis parser rejects a direction forecast as an extra field", () 
       /unexpected structure/,
     )
   }
+})
+
+test("growth analysis uses information evidence and preserves the combined explanation", async () => {
+  const payload = createPayload()
+  payload.schemaVersion = 14
+  payload.candidates.forEach(candidate => delete candidate.selectionRank)
+  payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+  payload.schema.informationContext = ["newsSummary", "twitterSummary", "socialSentiment"]
+  payload.candidates[0].informationContext = ["Обновление V2: запущено в сети.", "Разработчики подтвердили запуск.", "bullish"]
+  payload.candidates[1].informationContext = [null, null, null]
+  const response = createStructuredAgentResponse()
+  response.schemaVersion = 3
+  response.topCandidates[0].technicalSummary.observation = "Покупки оживают после выхода обновления V2. Это поддерживает сценарий роста."
+  response.assessments[0].drivers = [{
+    fields: ["volumeZ", "newsSummary", "socialSentiment"],
+    text: "Свежий запуск сопровождается оживлением торговой активности",
+  }]
+  const result = await analyzeCandidates(payload, createShortlist(), "System prompt", {
+    callAgent: async (_, userMessage) => {
+      assert.deepEqual(JSON.parse(userMessage), payload)
+      return JSON.stringify(response)
+    },
+  })
+
+  assert.equal(result.objective, payload.objective)
+  assert.equal(result.schemaVersion, 3)
+  assert.equal(result.topCandidates[0].explanation, response.topCandidates[0].technicalSummary.observation)
+  assert.deepEqual(result.assessments[0].drivers, [
+    "volumeZ=1.4 и newsSummary=\"Обновление V2: запущено в сети.\" и socialSentiment=bullish: Свежий запуск сопровождается оживлением торговой активности",
+  ])
+  assert.throws(() => parseAgentAnalysis(JSON.stringify(createStructuredAgentResponse()), payload), /growth analysis requires schemaVersion 3/)
 })
 
 test("agent analysis parser inserts exact payload values into evidence", () => {
@@ -290,7 +321,7 @@ test("summary schema keeps top selection validation and accepts legacy responses
     response => response.topCandidates.push(response.topCandidates[0]),
     response => response.topCandidates[0].movementProbability = 0.9,
     response => response.topCandidates[0].explanation = "Не дублировать текст.",
-    response => response.schemaVersion = 3,
+    response => response.schemaVersion = 4,
   ]) {
     const response = createStructuredAgentResponse()
     change(response)

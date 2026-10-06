@@ -12,7 +12,11 @@ import {
   isString,
 } from "../../helpers/utils.typed.js"
 
-function getDefaultReferenceTimestamp () {
+function getDefaultReferenceTimestamp (input) {
+  if (input?.newsEnrichment?.asOf) {
+    return Date.parse(input.newsEnrichment.asOf) / 1_000
+  }
+
   const pipelineStartedAt = Number(process.env.PIPELINE_STARTED_AT)
 
   return isSafeInteger(pipelineStartedAt) && pipelineStartedAt > 0
@@ -111,7 +115,7 @@ async function fetchRecentTweets (
     return {
       query,
       fetchedPageCount: 1,
-      tweets: firstPageTweets,
+      tweets: mergeTweets(firstPageTweets),
     }
   }
 
@@ -198,11 +202,11 @@ async function enrichCandidate (
   }
 }
 
-export async function enrichTopCandidatesWithTwitter (
+export async function enrichCandidatesWithTwitter (
   input,
   {
     fetchPage = fetchTweetPage,
-    referenceTimestamp = getDefaultReferenceTimestamp(),
+    referenceTimestamp = getDefaultReferenceTimestamp(input),
     wait = sleep,
   } = {},
 ) {
@@ -232,7 +236,7 @@ export async function enrichTopCandidatesWithTwitter (
 
   return {
     ...input,
-    schemaVersion: 5,
+    schemaVersion: 6,
     generatedAt: new Date().toISOString(),
     twitterEnrichment: {
       source: "twitterapi.io",

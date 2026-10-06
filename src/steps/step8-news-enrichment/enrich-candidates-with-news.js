@@ -1,4 +1,5 @@
 import { token_sort_ratio as getTitleSimilarity } from "fuzzball"
+import { parallel } from "radash"
 
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
@@ -32,91 +33,35 @@ function mergeStrings (...values) {
     .sort()
 }
 
-function validateInputs (analysis, shortlist) {
-  if (!isObject(analysis) || !isArray(analysis.topCandidates) || !isArray(analysis.assessments)) {
-    throw new Error("Step 7 top candidates and assessments are required")
-  }
-
+function validateInput (shortlist) {
   if (!isObject(shortlist) || !isArray(shortlist.candidates)) {
     throw new Error("Step 5 candidates are required")
   }
 
-  const analysisAsOf = getRequiredString(analysis.asOf, "Step 7 asOf")
-  const shortlistAsOf = getRequiredString(shortlist.asOf, "Step 5 asOf")
+  getRequiredString(shortlist.asOf, "Step 5 asOf")
+  const symbols = new Set()
 
-  if (analysisAsOf !== shortlistAsOf) {
-    throw new Error("Step 5 and step 7 use different market snapshots")
-  }
-
-  const coinBySymbol = new Map()
-
-  shortlist.candidates.forEach((candidate, index) => {
+  return shortlist.candidates.map((candidate, index) => {
     const coin = candidate?.coin
     const symbol = getRequiredString(
       coin?.symbol,
       `Step 5 candidate ${index} symbol`,
     )
 
-    if (coinBySymbol.has(symbol)) {
+    if (symbols.has(symbol.toUpperCase())) {
       throw new Error(`Step 5 candidates contain duplicate symbol ${symbol}`)
     }
 
-    coinBySymbol.set(symbol, {
-      isTrending: coin.coingecko?.isTrending === true,
-      baseCurrencyId: getRequiredString(
-        coin.baseCurrencyId,
-        `Step 5 candidate ${symbol} baseCurrencyId`,
-      ),
+    symbols.add(symbol.toUpperCase())
+    return {
+      symbol,
+      ...(isString(coin.name) && coin.name.trim() ? { name: coin.name.trim() } : {}),
       tradingViewSymbol: getRequiredString(
         coin.tradingViewSymbol,
         `Step 5 candidate ${symbol} tradingViewSymbol`,
       ),
-    })
+    }
   })
-
-  const assessedSymbols = new Set(analysis.assessments.map(assessment => (
-    getRequiredString(assessment?.symbol, "Step 7 assessment symbol")
-  )))
-
-  if (assessedSymbols.size !== analysis.assessments.length) {
-    throw new Error("Step 7 assessments contain duplicate symbols")
-  }
-
-  if ([...assessedSymbols].some(symbol => !coinBySymbol.has(symbol))) {
-    throw new Error("Step 7 assessments must belong to step 5 candidates")
-  }
-
-  const topSymbols = new Set()
-  const topCandidates = analysis.topCandidates.map((candidate, index) => {
-    const symbol = getRequiredString(
-      candidate?.symbol,
-      `Step 7 top candidate ${index} symbol`,
-    )
-    const coin = coinBySymbol.get(symbol)
-
-    if (topSymbols.has(symbol)) {
-      throw new Error(`Step 7 top candidates contain duplicate symbol ${symbol}`)
-    }
-
-    if (!coin) {
-      throw new Error(`Step 7 top candidate ${symbol} is missing from step 5`)
-    }
-
-    if (!assessedSymbols.has(symbol)) {
-      throw new Error(`Step 7 top candidate ${symbol} is missing from assessments`)
-    }
-
-    topSymbols.add(symbol)
-    return { candidate, coin }
-  })
-  const trendingCandidates = analysis.assessments
-    .filter(candidate => !topSymbols.has(candidate.symbol) && coinBySymbol.get(candidate.symbol).isTrending)
-    .map(candidate => ({
-      candidate: { ...candidate, explanation: "" },
-      coin: coinBySymbol.get(candidate.symbol),
-    }))
-
-  return [...topCandidates, ...trendingCandidates]
 }
 
 function normalizeTitle (value) {
@@ -208,7 +153,7 @@ function selectNewsItems (items, referenceTimestamp) {
 }
 
 async function fetchCandidateNews (
-  { candidate, coin },
+  coin,
   referenceTimestamp,
   fetchNews,
 ) {
@@ -217,16 +162,14 @@ async function fetchCandidateNews (
     const selected = selectNewsItems(items, referenceTimestamp)
 
     return {
-      baseCurrencyId: coin.baseCurrencyId,
-      symbol: candidate.symbol,
+      symbol: coin.symbol,
       requestedSymbol: coin.tradingViewSymbol,
       ...selected,
       error: null,
     }
   } catch (error) {
     return {
-      baseCurrencyId: coin.baseCurrencyId,
-      symbol: candidate.symbol,
+      symbol: coin.symbol,
       requestedSymbol: coin.tradingViewSymbol,
       recentItemCount: null,
       uniqueItemCount: null,
@@ -324,8 +267,7 @@ async function enrichArticle (article, fetchStory) {
   }
 }
 
-export async function enrichTopCandidatesWithNews (
-  analysis,
+export async function enrichCandidatesWithNews (
   shortlist,
   {
     fetchNews = fetchTradingViewNews,
@@ -341,26 +283,26 @@ export async function enrichTopCandidatesWithNews (
     throw new Error("News referenceTimestamp must be a positive Unix timestamp")
   }
 
-  const candidates = validateInputs(analysis, shortlist)
-  const candidateNews = await Promise.all(candidates.map(candidate => (
+  const candidates = validateInput(shortlist)
+  const candidateNews = await parallel(5, candidates, candidate => (
     fetchCandidateNews(candidate, referenceTimestamp, fetchNews)
-  )))
+  ))
   const articles = collectArticles(candidateNews)
-  const enrichedArticles = await Promise.all(articles.map(async article => ({
+  const enrichedArticles = await parallel(5, articles, async article => ({
     ids: article.ids,
     item: await enrichArticle(article, fetchStory),
-  })))
+  }))
   const enrichedArticleById = new Map(enrichedArticles.flatMap(({ ids, item }) => (
     [...ids].map(id => [id, item])
   )))
-  const candidateNewsById = new Map(
-    candidateNews.map(result => [result.baseCurrencyId, result]),
+  const newsBySymbol = new Map(
+    candidateNews.map(result => [result.symbol, result]),
   )
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: new Date().toISOString(),
-    asOf: analysis.asOf,
+    asOf: shortlist.asOf,
     newsEnrichment: {
       source: "tradingview",
       asOf: new Date(referenceTimestamp * 1_000).toISOString(),
@@ -368,12 +310,13 @@ export async function enrichTopCandidatesWithNews (
       lookbackHours: 24,
       maxItemsPerCandidate: 3,
     },
-    candidates: candidates.map(({ candidate, coin }) => {
-      const result = candidateNewsById.get(coin.baseCurrencyId)
+    candidates: candidates.map(({ symbol, name }) => {
+      const result = newsBySymbol.get(symbol)
       const items = result.items.map(item => enrichedArticleById.get(item.id))
 
       return {
-        ...candidate,
+        symbol,
+        ...(name ? { name } : {}),
         news: {
           requestedSymbol: result.requestedSymbol,
           status: result.error

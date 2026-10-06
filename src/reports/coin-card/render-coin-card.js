@@ -136,9 +136,11 @@ function renderHeader (data) {
   const badges = [
     coin.topRank != null ? `ТОП ${coin.topRank}` : null,
     coin.features?.coingeckoTrending === true ? "COINGECKO TRENDING" : null,
-    coin.socialSignificant === true
+    [true, false].includes(coin.socialSignificant) && coin.socialSentiment
       ? {
-          positive: "ПОЗИТИВНЫЙ ФОН", negative: "НЕГАТИВНЫЙ ФОН", mixed: "СМЕШАННЫЙ ФОН", neutral: "ЗНАЧИМЫЙ ИНФОПОВОД",
+          positive: "ПОЗИТИВНЫЙ ФОН", negative: "НЕГАТИВНЫЙ ФОН", mixed: "СМЕШАННЫЙ ФОН",
+          neutral: coin.socialSignificant ? "ЗНАЧИМЫЙ ИНФОПОВОД" : "НЕЙТРАЛЬНЫЙ ФОН",
+          bullish: "БЫЧИЙ ФОН", bearish: "МЕДВЕЖИЙ ФОН",
         }[coin.socialSentiment]
       : null,
   ].filter(Boolean)
@@ -161,8 +163,8 @@ function renderHeader (data) {
     ${text(914, 274, percent(data.change24hPct), { size: 34, weight: 700, color: directionColor(data.change24hPct) })}
     <rect x="48" y="302" width="1104" height="80" rx="16" fill="#182641"/>
     ${text(72, 352, probability, { size: 38, weight: 700, color: "#a9c9ff" })}
-    ${text(294, 334, "Сильное движение · 4–12ч", { size: 21, weight: 700 })}
-    ${text(294, 363, "Оценка агента, без прогноза направления", { size: 18, color: "#aab9d0" })}
+    ${text(294, 334, data.growthObjective ? "Сильный рост · 4–12ч" : "Сильное движение · 4–12ч", { size: 21, weight: 700 })}
+    ${text(294, 363, data.growthObjective ? "Рост > 2.5 ATR · рынок и инфофон" : "Оценка агента, без прогноза направления", { size: 18, color: "#aab9d0" })}
     ${text(1128, 334, "Уверенность оценки", { size: 18, color: "#aab9d0", anchor: "end" })}
     ${text(1128, 363, { high: "Высокая", medium: "Средняя", low: "Низкая" }[coin.estimateConfidence] ?? "Нет данных", { size: 23, weight: 700, anchor: "end" })}`
 }

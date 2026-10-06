@@ -428,6 +428,49 @@ test("bounds Twitter pagination, page size and long text without claiming full c
   assert.doesNotMatch(result.warnings.join(" "), /24-hour/)
 })
 
+test("keeps tweet titles well-formed when an emoji crosses the 240-unit boundary", async () => {
+  const result = await collect({
+    fetchTweets: async () => ({ tweets: [
+      tweet("split", { text: `${"a".repeat(239)}🚀 trailing text` }),
+      tweet("complete", { text: `${"a".repeat(238)}🚀 trailing text` }),
+    ] }),
+  })
+  const byUrl = Object.fromEntries(result.sources.map(source => [source.url, source]))
+
+  assert.equal(byUrl["https://x.com/reporter/status/split"].title, "a".repeat(239))
+  assert.equal(byUrl["https://x.com/reporter/status/complete"].title, `${"a".repeat(238)}🚀`)
+  assert.ok(result.sources.every(source => source.title.length <= 240 && source.title.isWellFormed()))
+  assert.ok(result.sources.every(source => source.text.includes("🚀 trailing text")))
+})
+
+test("keeps capped article and tweet bodies well-formed with their full warning prefixes", async () => {
+  for (const partial of [false, true]) {
+    const prefix = `${partial ? "[Partial text]\n" : ""}[Truncated at 6000 characters]\n`
+    const split = `${"a".repeat(6_000 - prefix.length - 1)}🚀${"z".repeat(100)}`
+    const complete = `${"a".repeat(6_000 - prefix.length - 2)}🚀${"z".repeat(100)}`
+    const result = await collect({
+      fetchNews: async () => ({ items: [news("split"), news("complete")] }),
+      fetchStory: async ({ id }) => ({
+        contentStatus: "full", content: id === "split" ? split : complete,
+        unknownContentNodeTypes: partial ? ["unsupported"] : [],
+      }),
+      fetchTweets: async () => ({ tweets: [
+        tweet("split", { text: split, isTruncated: partial }),
+        tweet("complete", { text: complete, isTruncated: partial }),
+      ] }),
+    })
+
+    assert.equal(result.sources.length, 4)
+    for (const source of result.sources) {
+      assert.equal(source.text, source.url.endsWith("/split")
+        ? prefix + "a".repeat(6_000 - prefix.length - 1)
+        : `${prefix}${"a".repeat(6_000 - prefix.length - 2)}🚀`)
+      assert.ok(source.text.length <= 6_000)
+      assert.ok(source.text.isWellFormed())
+    }
+  }
+})
+
 for (const next_cursor of ["", "same-page"]) {
   test(`stops safely on ${next_cursor ? "repeated" : "missing"} Twitter cursors`, async () => {
     let pages = 0

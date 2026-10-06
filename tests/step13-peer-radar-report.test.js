@@ -236,7 +236,11 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
   const sources = {
     asOf: radar.asOf,
     candidateCount: 1,
-    candidates: [],
+    candidates: [{
+      symbol: "MAIN",
+      news: { status: "empty", items: [] },
+      twitter: { status: "empty", tweets: [] },
+    }],
     newsEnrichment: { from: "2026-09-23T07:00:00.000Z", asOf: radar.generatedAt },
     twitterEnrichment: { from: "2026-09-23T07:00:00.000Z", asOf: radar.generatedAt },
   }
@@ -255,7 +259,15 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
       assessments: [{ symbol: "MAIN", movementProbability: 0.6, estimateConfidence: "medium", drivers: ["Main driver"], counterSignals: [] }],
     },
     "step9-twitter-enrichment.json": sources,
-    "step10-context-enrichment.json": { ...sources, generatedAt: radar.generatedAt },
+    "step10-context-enrichment.json": {
+      ...sources,
+      generatedAt: radar.generatedAt,
+      candidates: [{
+        symbol: "MAIN", newsStatus: "empty", twitterStatus: "empty",
+        newsSummary: null, twitterSummary: null, contextCaveat: null,
+        socialSignificant: null, socialReason: null, socialSentiment: null,
+      }],
+    },
   }
   await Promise.all(Object.entries(mainInputs).map(([filename, data]) => writeJson(filename, data)))
   await fs.writeFile(path.join(directory, "reports", "peer-radar-archive.json"), JSON.stringify(radar))

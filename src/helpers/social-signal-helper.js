@@ -11,15 +11,15 @@ export function readSocialSignal ({ socialSignificant, socialReason, socialSenti
 
   if (
     !(socialSignificant === null && socialReason === null)
-    && (!isString(socialReason) || !socialReason.trim() || socialReason.length > 300)
+    && (!isString(socialReason) || !socialReason.trim())
   ) {
-    throw new Error("socialReason must be a short non-empty string, or null for an unknown signal")
+    throw new Error("socialReason must be a non-empty string, or null for an unknown signal")
   }
 
-  if (socialSignificant === true
-    ? !["positive", "negative", "mixed", "neutral"].includes(socialSentiment)
-    : socialSentiment !== null) {
-    throw new Error("socialSentiment must be positive, negative, mixed or neutral for a significant signal, and null otherwise")
+  if (socialSentiment === null
+    ? socialSignificant === true
+    : socialSignificant === null || !["bullish", "bearish", "positive", "negative", "mixed", "neutral"].includes(socialSentiment)) {
+    throw new Error("socialSentiment must be bullish, bearish, mixed or neutral; unknown significance requires null sentiment")
   }
 
   return {

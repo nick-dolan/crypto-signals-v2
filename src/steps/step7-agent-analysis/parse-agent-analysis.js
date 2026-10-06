@@ -41,7 +41,9 @@ function assertProbability (value, label) {
 }
 
 function formatEvidenceValue (value) {
-  return isArray(value) || isObject(value) ? JSON.stringify(value) : String(value)
+  return isArray(value) || isObject(value) || (isString(value) && /[:"\n\\]/.test(value))
+    ? JSON.stringify(value)
+    : String(value)
 }
 
 function normalizeObservations (value, maxLength, payload, candidate, label) {
@@ -95,12 +97,12 @@ function normalizeObservations (value, maxLength, payload, candidate, label) {
   })
 }
 
-function assertReadableExplanation (explanation, fields, label) {
+function assertReadableExplanation (explanation, fields, label, allowEventNumbers = false) {
   if (
     !isString(explanation)
     || !explanation.trim()
     || explanation.length > 500
-    || /\d/.test(explanation)
+    || (!allowEventNumbers && /\d/.test(explanation))
   ) {
     invalidAnalysis(`${label} has an invalid explanation`)
   }
@@ -149,8 +151,12 @@ export function parseAgentAnalysis (content, payload) {
     "response",
   )
 
-  if (![1, 2].includes(analysis.schemaVersion)) {
-    invalidAnalysis("schemaVersion must equal 1 or 2")
+  if (![1, 2, 3].includes(analysis.schemaVersion)) {
+    invalidAnalysis("schemaVersion must equal 1, 2 or 3")
+  }
+
+  if (payload.schemaVersion >= 14 && analysis.schemaVersion !== 3) {
+    invalidAnalysis("growth analysis requires schemaVersion 3")
   }
 
   if (analysis.asOf !== payload.asOf) {
@@ -232,7 +238,7 @@ export function parseAgentAnalysis (content, payload) {
   analysis.topCandidates.forEach((candidate, index) => {
     assertExactKeys(
       candidate,
-      analysis.schemaVersion === 2
+      analysis.schemaVersion >= 2
         ? ["symbol", "movementProbability", "technicalSummary"]
         : ["symbol", "movementProbability", "explanation"],
       `top candidate ${index}`,
@@ -247,7 +253,7 @@ export function parseAgentAnalysis (content, payload) {
       invalidAnalysis(`top candidate ${index} does not match assessments`)
     }
 
-    if (analysis.schemaVersion === 2) {
+    if (analysis.schemaVersion >= 2) {
       const label = `top candidate ${candidate.symbol} technicalSummary`
 
       try {
@@ -257,7 +263,7 @@ export function parseAgentAnalysis (content, payload) {
       }
 
       candidate.explanation = formatCoinSummary(candidate.technicalSummary)
-      assertReadableExplanation(candidate.explanation, explanationFields, label)
+      assertReadableExplanation(candidate.explanation, explanationFields, label, analysis.schemaVersion === 3)
     } else {
       assertReadableExplanation(candidate.explanation, explanationFields, `top candidate ${candidate.symbol}`)
     }

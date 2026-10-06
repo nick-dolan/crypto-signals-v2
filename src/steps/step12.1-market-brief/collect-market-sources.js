@@ -84,7 +84,7 @@ function formatText (collection, full, snippet, title, partial = false) {
   }
 
   const prefix = notes.map(note => `[${note}]\n`).join("")
-  return prefix + text.slice(0, Math.max(0, 6_000 - prefix.length))
+  return prefix + text.slice(0, Math.max(0, 6_000 - prefix.length)).replace(/[\uD800-\uDBFF]$/u, "")
 }
 
 function compareSources (first, second) {
@@ -234,7 +234,7 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
       const text = sourceString(tweet?.text)
       const source = normalizeSource(collection, {
         url: tweetUrl(tweet),
-        title: text.slice(0, 240),
+        title: text.slice(0, 240).replace(/[\uD800-\uDBFF]$/u, ""),
         publishedAt: tweet?.createdAt,
         author: sourceString(tweet?.author?.userName) || sourceAuthor(tweet?.author),
       }, referenceTimestamp)

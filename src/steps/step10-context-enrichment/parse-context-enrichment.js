@@ -1,6 +1,5 @@
 import { readSocialSignal } from "../../helpers/social-signal-helper.js"
 import { isError, isObject, isString } from "../../helpers/utils.typed.js"
-import { readCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 
 export class InvalidContextEnrichmentError extends Error {
   constructor (message) {
@@ -29,6 +28,18 @@ function assertExactKeys (value, expectedKeys) {
   }
 }
 
+function readSummary (value, field) {
+  if (value === null) {
+    return null
+  }
+
+  if (!isString(value) || !value.trim()) {
+    invalidEnrichment(`${field} must be a non-empty string or null`)
+  }
+
+  return value.trim()
+}
+
 export function parseContextEnrichment (content, expectedSymbol) {
   if (!isString(content) || !content.trim()) {
     invalidEnrichment("response must be a non-empty string")
@@ -52,34 +63,31 @@ export function parseContextEnrichment (content, expectedSymbol) {
     enrichment,
     [
       "schemaVersion", "symbol", "socialSignificant", "socialReason", "socialSentiment",
-      enrichment?.schemaVersion === 3 ? "summary" : "informationBackground",
+      "newsSummary", "twitterSummary", "contextCaveat",
     ],
   )
 
-  if (![2, 3].includes(enrichment.schemaVersion)) {
-    invalidEnrichment("schemaVersion must equal 2 or 3")
+  if (enrichment.schemaVersion !== 4) {
+    invalidEnrichment("schemaVersion must equal 4")
   }
 
   if (enrichment.symbol !== expectedSymbol) {
     invalidEnrichment("symbol does not match the candidate")
   }
 
-  if (enrichment.schemaVersion === 2 && (
-    !isString(enrichment.informationBackground)
-    || !enrichment.informationBackground.trim()
-    || enrichment.informationBackground.length > 700
-  )) {
-    invalidEnrichment("informationBackground must be a short non-empty string")
+  if (enrichment.socialSentiment !== null
+    && !["bullish", "bearish", "mixed", "neutral"].includes(enrichment.socialSentiment)) {
+    invalidEnrichment("socialSentiment must be bullish, bearish, mixed, neutral or null")
+  }
+
+  if (enrichment.socialSignificant === false && enrichment.socialSentiment === null) {
+    invalidEnrichment("socialSentiment is required for assessed publications, including noise")
   }
 
   let socialSignal
-  let summary
 
   try {
     socialSignal = readSocialSignal(enrichment)
-    if (enrichment.schemaVersion === 3) {
-      summary = readCoinSummary(enrichment.summary, "summary")
-    }
   } catch (error) {
     invalidEnrichment(isError(error) ? error.message : "invalid social signal")
   }
@@ -87,6 +95,8 @@ export function parseContextEnrichment (content, expectedSymbol) {
   return {
     ...enrichment,
     ...socialSignal,
-    ...(summary ? { summary } : { informationBackground: enrichment.informationBackground.trim() }),
+    newsSummary: readSummary(enrichment.newsSummary, "newsSummary"),
+    twitterSummary: readSummary(enrichment.twitterSummary, "twitterSummary"),
+    contextCaveat: readSummary(enrichment.contextCaveat, "contextCaveat"),
   }
 }

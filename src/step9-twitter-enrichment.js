@@ -3,7 +3,7 @@ import "dotenv/config"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { isString } from "./helpers/utils.typed.js"
-import { enrichTopCandidatesWithTwitter } from "./steps/step9-twitter-enrichment/enrich-top-candidates-with-twitter.js"
+import { enrichCandidatesWithTwitter } from "./steps/step9-twitter-enrichment/enrich-candidates-with-twitter.js"
 
 async function runTwitterEnrichmentStep () {
   const apiKey = process.env.TWITTERAPI_IO_KEY
@@ -13,7 +13,7 @@ async function runTwitterEnrichmentStep () {
   }
 
   const input = await readTmpJson("step8-news-enrichment.json")
-  const output = await enrichTopCandidatesWithTwitter(input)
+  const output = await enrichCandidatesWithTwitter(input)
   const outputPath = await writeTmpJson("step9-twitter-enrichment.json", output)
   const tweetCount = output.candidates.reduce((total, candidate) => (
     total + candidate.twitter.tweets.length
@@ -23,11 +23,11 @@ async function runTwitterEnrichmentStep () {
   )).length
 
   console.log(
-    `✓ Enriched ${output.candidates.length} report candidates with ${tweetCount} tweets from the last 24 hours in ${outputPath}`,
+    `✓ Enriched ${output.candidates.length} preliminary candidates with ${tweetCount} tweets from the last 24 hours in ${outputPath}`,
   )
 
   if (failedCandidateCount > 0) {
-    console.log(`✗ Twitter unavailable for ${failedCandidateCount} report candidates`)
+    console.log(`✗ Twitter unavailable for ${failedCandidateCount} preliminary candidates`)
   }
 }
 

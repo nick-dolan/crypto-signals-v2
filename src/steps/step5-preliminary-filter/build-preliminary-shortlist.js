@@ -377,7 +377,7 @@ export function buildPreliminaryShortlist (profiles) {
     ))
     .filter(evaluation => evaluation.hasMarketEvidence)
     .sort(comparePriority)
-  const selected = nominated.slice(0, 60)
+  const selected = nominated.slice(0, 50)
   const candidates = selected.map((evaluation, index) => ({
     ...evaluation.profile,
     selection: {
@@ -399,7 +399,7 @@ export function buildPreliminaryShortlist (profiles) {
     excludedCoinCount: profiles.length - candidates.length,
     filter: {
       topPerAxis: 5,
-      candidateLimit: 60,
+      candidateLimit: 50,
       latePumpExcludedCoinCount: evaluations.filter(evaluation => evaluation.latePump).length,
       lateDumpExcludedCoinCount: evaluations.filter(evaluation => evaluation.lateDump).length,
       divergenceNominatedCoinCount: divergenceCandidates.length,
@@ -408,7 +408,7 @@ export function buildPreliminaryShortlist (profiles) {
       eligibleCoinCountByAxis,
       nominatedCoinCountByAxis,
       nominatedBeforeLimit: nominated.length,
-      limitApplied: nominated.length > 60,
+      limitApplied: nominated.length > 50,
     },
     candidates,
   }

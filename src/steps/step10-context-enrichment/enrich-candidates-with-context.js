@@ -1,8 +1,6 @@
-import { omit } from "radash"
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
-import { formatCoinSummary } from "../step7-agent-analysis/coin-summary.js"
 import {
   InvalidContextEnrichmentError,
   parseContextEnrichment,
@@ -21,54 +19,76 @@ function validateInput (input) {
       `Step 9 enrichment candidate ${index} symbol`,
     )
 
-    if (!isString(candidate.explanation)) {
-      throw new Error(`Step 9 enrichment candidate ${symbol} explanation must be a string`)
-    }
-
-    const explanation = candidate.explanation.trim()
     const normalizedSymbol = symbol.toUpperCase()
 
     if (symbols.has(normalizedSymbol)) {
       throw new Error(`Step 9 enrichment candidates contain duplicate symbol ${normalizedSymbol}`)
     }
 
-    if (!isObject(candidate.news)) {
+    if (!isObject(candidate.news) || !isArray(candidate.news.items)) {
       throw new Error(`Step 9 enrichment candidate ${symbol} news are required`)
     }
 
-    if (!isObject(candidate.twitter)) {
+    if (!isObject(candidate.twitter) || !isArray(candidate.twitter.tweets)) {
       throw new Error(`Step 9 enrichment candidate ${symbol} twitter data are required`)
     }
 
+    for (const source of ["news", "twitter"]) {
+      if (!["available", "empty", "failed"].includes(candidate[source].status)) {
+        throw new Error(`Step 9 enrichment candidate ${symbol} ${source} status is invalid`)
+      }
+    }
+
     symbols.add(normalizedSymbol)
-    return { candidate, explanation, symbol }
+    return candidate
   })
 
   return { asOf, candidates }
 }
 
-function buildUserMessage (asOf, { candidate, explanation, symbol }) {
+function buildUserMessage (input, candidate) {
   return JSON.stringify({
-    asOf,
-    symbol,
-    explanation,
-    ...(candidate.technicalSummary === undefined ? {} : { technicalSummary: candidate.technicalSummary }),
-    ...(!explanation ? { drivers: candidate.drivers, counterSignals: candidate.counterSignals } : {}),
+    asOf: input.asOf,
+    symbol: candidate.symbol,
+    ...(candidate.name ? { name: candidate.name } : {}),
+    newsEnrichment: input.newsEnrichment,
+    twitterEnrichment: input.twitterEnrichment,
     news: candidate.news,
     twitter: candidate.twitter,
   })
 }
 
 async function enrichCandidate (
-  asOf,
+  input,
   candidate,
   systemPrompt,
   callAgent,
   modelSettings,
 ) {
+  const identity = {
+    symbol: candidate.symbol,
+    ...(candidate.name ? { name: candidate.name } : {}),
+    newsStatus: candidate.news.status,
+    twitterStatus: candidate.twitter.status,
+  }
+
+  if (candidate.news.items.length === 0 && candidate.twitter.tweets.length === 0) {
+    return {
+      ...identity,
+      newsSummary: null,
+      twitterSummary: null,
+      contextCaveat: [candidate.news.status, candidate.twitter.status].includes("failed")
+        ? "Публикации недоступны: загрузка одного или обоих источников завершилась ошибкой."
+        : "В доступной выборке за последние сутки публикаций нет.",
+      socialSignificant: null,
+      socialReason: null,
+      socialSentiment: null,
+    }
+  }
+
   const content = await callAgent(
     systemPrompt,
-    buildUserMessage(asOf, candidate),
+    buildUserMessage(input, candidate),
     modelSettings,
   )
   let enrichment
@@ -76,12 +96,13 @@ async function enrichCandidate (
   try {
     enrichment = parseContextEnrichment(content, candidate.symbol)
 
-    if (
-      enrichment.socialSignificant !== null
-      && ![candidate.candidate.news.items, candidate.candidate.twitter.tweets]
-        .some(items => isArray(items) && items.length > 0)
-    ) {
-      throw new InvalidContextEnrichmentError("socialSignificant must be null without source publications")
+    for (const [field, publications] of [
+      ["newsSummary", candidate.news.items],
+      ["twitterSummary", candidate.twitter.tweets],
+    ]) {
+      if (publications.length === 0 && enrichment[field] !== null) {
+        throw new InvalidContextEnrichmentError(`${field} must be null without source publications`)
+      }
     }
   } catch (error) {
     if (error instanceof InvalidContextEnrichmentError) {
@@ -93,18 +114,17 @@ async function enrichCandidate (
   }
 
   return {
-    ...omit(candidate.candidate, ["news", "twitter", "summary"]),
-    enrichedExplanation: enrichment.summary
-      ? formatCoinSummary(enrichment.summary)
-      : [candidate.explanation, enrichment.informationBackground].filter(Boolean).join(" "),
-    ...(enrichment.socialSignificant === true && enrichment.summary ? { summary: enrichment.summary } : {}),
+    ...identity,
+    newsSummary: enrichment.newsSummary,
+    twitterSummary: enrichment.twitterSummary,
+    contextCaveat: enrichment.contextCaveat,
     socialSignificant: enrichment.socialSignificant,
     socialReason: enrichment.socialReason,
     socialSentiment: enrichment.socialSentiment,
   }
 }
 
-export async function enrichTopCandidatesWithContext (
+export async function enrichCandidatesWithContext (
   input,
   systemPrompt,
   { callAgent = callModel } = {},
@@ -123,7 +143,7 @@ export async function enrichTopCandidatesWithContext (
 
   for (const candidate of candidates) {
     enrichedCandidates.push(await enrichCandidate(
-      asOf,
+      input,
       candidate,
       systemPrompt,
       callAgent,
@@ -132,14 +152,18 @@ export async function enrichTopCandidatesWithContext (
   }
 
   return {
-    ...input,
-    schemaVersion: 8,
+    schemaVersion: 9,
     generatedAt: new Date().toISOString(),
+    asOf,
+    newsEnrichment: input.newsEnrichment,
+    twitterEnrichment: input.twitterEnrichment,
     contextEnrichment: {
       source: `github-${modelSettings.provider}`,
       model: modelSettings.model,
       reasoningEffort: modelSettings.reasoningEffort,
-      candidateCallCount: enrichedCandidates.length,
+      candidateCallCount: candidates.filter(candidate => (
+        candidate.news.items.length > 0 || candidate.twitter.tweets.length > 0
+      )).length,
     },
     candidates: enrichedCandidates,
   }

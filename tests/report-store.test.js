@@ -115,6 +115,29 @@ test("round-trips the complete nested snapshot, absence/null, order, gaps and un
   }])
 })
 
+test("repairs lone Unicode surrogates in source text while preserving emojis, literal escapes and input", async (t) => {
+  const store = await openStore(t, await temporaryDirectory(t))
+  const report = createReport()
+  const malformed = "Заголовок 🚀: high \uD83D, low \uDC00; literal \\ud83d; конец \uD83D"
+  const repaired = "Заголовок 🚀: high �, low �; literal \\ud83d; конец �"
+  report.marketBrief = { sources: [{ title: malformed, text: "Полный текст 🚀 без повреждений" }] }
+  report.coins[0].information.twitter.tweets[0].text = malformed
+  report.coins[0].history.warning = malformed
+  report.peerRadar.warning = malformed
+  const before = structuredClone(report)
+  const expected = structuredClone(report)
+  expected.marketBrief.sources[0].title = repaired
+  expected.coins[0].information.twitter.tweets[0].text = repaired
+  expected.coins[0].history.warning = repaired
+  expected.peerRadar.warning = repaired
+
+  const { id } = await store.save(report)
+
+  assert.deepEqual(await store.read(id), expected)
+  assert.deepEqual(report, before)
+  assert.equal((await store.list())[0].id, id)
+})
+
 for (const [label, peerRadar] of [
   ["unavailable", { status: "unavailable", warning: "Нет данных", data: null, histories: {} }],
   ["empty", { status: "available", warning: null, data: { observations: [], observationCount: 0, coverage: { unavailable: 250 } }, histories: {} }],

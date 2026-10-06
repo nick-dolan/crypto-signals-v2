@@ -556,11 +556,13 @@ table {
     height: 100%;
 }
 
-.social-indicator[data-sentiment="positive"] {
+.social-indicator[data-sentiment="positive"],
+.social-indicator[data-sentiment="bullish"] {
     color: var(--positive);
 }
 
-.social-indicator[data-sentiment="negative"] {
+.social-indicator[data-sentiment="negative"],
+.social-indicator[data-sentiment="bearish"] {
     color: var(--negative);
 }
 

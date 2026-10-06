@@ -2,6 +2,7 @@
 
 (() => {
   const report = JSON.parse(document.getElementById("report-data").textContent)
+  const growthObjective = isString(report.objective) && report.objective.startsWith("P(рост >")
   const coinsBySymbol = new Map(report.coins.map(coin => [coin.symbol, coin]))
   const coinDescriptions = new Map(Object.entries(report.coinDescriptions ?? {}))
   const chartStates = new Map(report.coins.map(coin => [coin.symbol, { data: null, pending: false, error: null, requested: false }]))
@@ -140,6 +141,14 @@
     byId("coverage").textContent = `${report.candidateCount} оценено / ${report.universeCoinCount} монет во вселенной`
     byId("candidate-count").textContent = report.candidateCount
     byId("objective").textContent = `Цель анализа: ${report.objective}`
+    if (growthObjective) {
+      byId("report-title").textContent = "Рынок перед ростом"
+      byId("report-subtitle").textContent = "Кандидаты на сильный рост в ближайшие 4–12 часов"
+      byId("probability-sort").textContent = "По вероятности роста"
+      byId("candidate-caption").textContent = "Кандидаты с вероятностью сильного роста"
+      byId("probability-heading").textContent = "P роста"
+      byId("drivers-heading").textContent = "Поддерживает рост"
+    }
     byId("candle-time-note").textContent = `Время на графике — UTC, по открытию свечи. Последняя свеча среза закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC.`
 
     renderAltMarketBackground()
@@ -169,16 +178,18 @@
   }
 
   function socialSignalText (coin) {
-    if (coin.socialSignificant !== true) {
+    if (![true, false].includes(coin.socialSignificant) || !coin.socialSentiment) {
       return coin.socialReason ?? ""
     }
     const label = {
-      positive: "Позитивный инфоповод",
-      negative: "Негативный инфоповод",
-      mixed: "Смешанный инфоповод",
-      neutral: "Нейтральный инфоповод",
+      bullish: "Бычий",
+      bearish: "Медвежий",
+      positive: "Позитивный",
+      negative: "Негативный",
+      mixed: "Смешанный",
+      neutral: "Нейтральный",
     }[coin.socialSentiment]
-    return `${label}: ${coin.socialReason}`
+    return `${label} ${coin.socialSignificant === true ? "инфоповод" : "фон"}: ${coin.socialReason}`
   }
 
   function createSocialIndicator (coin) {
@@ -215,7 +226,7 @@
         heading.append(createCoinGeckoBadge())
       }
       const estimate = element("span", "top-card-probability")
-      estimate.append(element("strong", "", probability(coin.movementProbability)), element("span", "muted", "P движения"))
+      estimate.append(element("strong", "", probability(coin.movementProbability)), element("span", "muted", growthObjective ? "P роста" : "P движения"))
       const track = element("span", "probability-track")
       const fill = element("span", "probability-fill")
       fill.style.width = `${coin.movementProbability * 100}%`
@@ -816,12 +827,22 @@
     byId("context-generated").textContent = ""
     byId("social-reason").textContent = socialSignalText(coin)
     byId("social-reason").hidden = !byId("social-reason").textContent
+    for (const [id, value, label] of [
+      ["news-summary", coin.newsSummary, "Новости: "],
+      ["twitter-summary", coin.twitterSummary, "Twitter: "],
+      ["context-caveat", coin.contextCaveat, ""],
+    ]) {
+      byId(id).textContent = value ? `${label}${value}` : ""
+      byId(id).hidden = !value
+    }
     byId("information-panel").hidden = !coin.information
-    byId("analysis-source").textContent = byId("information-panel").hidden ? "Анализ шага 7" : "Объяснение дополнено на шаге 10"
+    byId("analysis-source").textContent = growthObjective
+      ? "Рыночные данные и инфофон"
+      : byId("information-panel").hidden ? "Анализ шага 7" : "Архивный анализ с инфофоном"
     if (byId("information-panel").hidden) {
       return
     }
-    byId("context-generated").textContent = `Объяснение дополнено ${time(report.informationSources.contextGeneratedAt)} UTC. Вероятности и аргументы шага 7 не пересчитывались.`
+    byId("context-generated").textContent = `Инфофон подготовлен ${time(report.informationSources.contextGeneratedAt)} UTC.${growthObjective ? " Учтён в основной оценке роста." : ""}`
     renderSource("news", coin.information.news, coin.information.news.items, newsItem)
     renderSource("twitter", coin.information.twitter, coin.information.twitter.tweets, tweetItem)
   }
@@ -1147,7 +1168,7 @@
     byId("top-rank").textContent = `ТОП ${coin.topRank}`
     byId("top-rank").hidden = coin.topRank == null
     byId("coin-badges").replaceChildren(
-      element("span", "badge", `P движения ${probability(coin.movementProbability)}`),
+      element("span", "badge", `${growthObjective ? "P роста" : "P движения"} ${probability(coin.movementProbability)}`),
       element("span", "badge neutral", `Уверенность: ${confidence(coin.estimateConfidence)}`),
     )
     if (coin.features.socialStatus === "unavailable") {

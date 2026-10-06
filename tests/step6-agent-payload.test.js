@@ -172,6 +172,25 @@ function createShortlist (candidates) {
   }
 }
 
+function createInformationContext (shortlist) {
+  return {
+    asOf: shortlist.asOf,
+    newsEnrichment: { from: "2026-08-30T10:00:00.000Z", asOf: "2026-08-31T10:00:00.000Z" },
+    twitterEnrichment: { from: "2026-08-30T10:05:00.000Z", asOf: "2026-08-31T10:05:00.000Z" },
+    candidates: shortlist.candidates.map(({ coin }) => ({
+      symbol: coin.symbol,
+      newsStatus: "available",
+      newsSummary: "Проект объявил важное обновление сети.",
+      twitterStatus: "available",
+      twitterSummary: "Пользователи обсуждают объявленное обновление.",
+      socialSignificant: true,
+      socialReason: "Есть официальное объявление обновления.",
+      socialSentiment: "bullish",
+      contextCaveat: "Обсуждения повторяют одну новость.",
+    })),
+  }
+}
+
 function createPeerLeader (overrides = {}) {
   return {
     baseCurrencyId: "XTVCVET",
@@ -237,7 +256,7 @@ test("agent payload groups the original fields in the approved order, including 
   assert.deepEqual(decodeAgentPayload(payload).candidates, [])
   assert.deepEqual(Object.keys(payload.schema), [
     "profile", "volatility", "lifecycle", "volume", "derivatives", "social",
-    "relativeStrength", "sustainedStrength", "categoryContext", "peerContext", "coingecko",
+    "relativeStrength", "sustainedStrength", "categoryContext", "peerContext", "coingecko", "informationContext",
   ])
   assert.deepEqual(payload.schema, {
     profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -303,6 +322,10 @@ test("agent payload groups the original fields in the approved order, including 
       "peerCoinReturn4hPct", "peerCoinMove4hAtr", "peerLeaders",
     ],
     coingecko: ["coingeckoTrending", "coingeckoTrendingCategories"],
+    informationContext: [
+      "newsStatus", "newsSummary", "twitterStatus", "twitterSummary",
+      "socialSignificant", "socialReason", "socialSentiment", "contextCaveat",
+    ],
   })
 })
 
@@ -312,7 +335,8 @@ test("agent payload creates documented grouped candidates without changing marke
   const payload = buildAgentPayload(shortlist)
   const { fields, candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 13)
+  assert.equal(payload.schemaVersion, 14)
+  assert.equal(payload.objective, "P(рост > 2.5 ATR в следующие 4–12 часов)")
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
   assert.equal(payload.candidateCount, 1)
@@ -414,6 +438,14 @@ test("agent payload creates documented grouped candidates without changing marke
     peerLeaders: null,
     coingeckoTrending: null,
     coingeckoTrendingCategories: null,
+    newsStatus: "unavailable",
+    newsSummary: null,
+    twitterStatus: "unavailable",
+    twitterSummary: null,
+    socialSignificant: null,
+    socialReason: null,
+    socialSentiment: null,
+    contextCaveat: "Информационный контекст не передан.",
     flags: ["coiling", "resilient", "fresh_quiet_breakout"],
   })
 
@@ -479,7 +511,7 @@ test("CoinGecko context passes JSON, validation and step 7 evidence without chan
       assert.equal(prompt, systemPrompt)
       assert.deepEqual(JSON.parse(input), payload)
       return JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 3,
         asOf: payload.asOf,
         topCandidates: [],
         assessments: candidates.map(({ symbol }) => ({
@@ -1005,12 +1037,12 @@ test("sustained strength passes steps 5 → 6 → 7 without changing selection o
 
   const systemPrompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
   const response = {
-    schemaVersion: 1,
+    schemaVersion: 3,
     asOf: payload.asOf,
     topCandidates: [{
       symbol: "FIRST",
       movementProbability: 0.25,
-      explanation: "После затишья торговая активность оживает, но подтверждение пока частичное.",
+      technicalSummary: { observation: "После затишья торговая активность оживает.", caveat: "Подтверждение пока частичное." },
     }],
     assessments: selection.candidates.map(({ coin }) => ({
       symbol: coin.symbol,
@@ -1250,7 +1282,7 @@ test("peer context passes steps 5 → 6 → 7 without changing selection or disc
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
       return JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 3,
         asOf: payload.asOf,
         topCandidates: [],
         assessments: candidates.map(({ symbol }) => ({
@@ -1280,12 +1312,12 @@ test("peer schema supports an empty shortlist through step 7 with no history too
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
       assert.deepEqual(options.tools, [])
-      return JSON.stringify({ schemaVersion: 1, asOf: payload.asOf, topCandidates: [], assessments: [] })
+      return JSON.stringify({ schemaVersion: 3, asOf: payload.asOf, topCandidates: [], assessments: [] })
     },
     readCoinData: async () => assert.fail("Empty shortlist must not load history"),
   })
 
-  assert.equal(payload.schemaVersion, 13)
+  assert.equal(payload.schemaVersion, 14)
   assert.equal(payload.schema.peerContext.length, 7)
   assert.equal(analysis.candidateCount, 0)
   assert.deepEqual(analysis.assessments, [])
@@ -1300,4 +1332,136 @@ test("agent payload rejects an inconsistent shortlist count", () => {
     }),
     /declares 2 candidates but contains 1/,
   )
+})
+
+test("information context joins every shortlisted candidate by symbol before analysis", async () => {
+  const shortlist = createShortlist([createCandidate("SOL"), createCandidate("ETH")])
+  const context = createInformationContext(shortlist)
+  context.candidates.reverse()
+  Object.assign(context.candidates[0], {
+    newsStatus: "failed",
+    newsSummary: null,
+    twitterStatus: "empty",
+    twitterSummary: null,
+    socialSignificant: null,
+    socialReason: null,
+    socialSentiment: null,
+    contextCaveat: "Новости недоступны, твитов не найдено.",
+    news: { items: [{ title: "Raw article must not reach agent" }] },
+  })
+  const before = structuredClone({ shortlist, context })
+  const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist, context)))
+  const { candidates } = decodeAgentPayload(payload)
+
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["SOL", "ETH"])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.informationContext), [
+    ["available", "Проект объявил важное обновление сети.", "available", "Пользователи обсуждают объявленное обновление.", true, "Есть официальное объявление обновления.", "bullish", "Обсуждения повторяют одну новость."],
+    ["failed", null, "empty", null, null, null, null, "Новости недоступны, твитов не найдено."],
+  ])
+  assert.deepEqual(payload.informationSources, {
+    news: context.newsEnrichment,
+    twitter: context.twitterEnrichment,
+  })
+  assert.notEqual(payload.informationSources.news.asOf, payload.asOf)
+  assert.doesNotMatch(JSON.stringify(payload.candidates), /Raw article|2026-08/)
+  assert.deepEqual({ shortlist, context }, before)
+
+  const analysis = await analyzeCandidates(payload, shortlist, "system prompt", {
+    callAgent: async (prompt, input) => {
+      assert.equal(prompt, "system prompt")
+      assert.deepEqual(JSON.parse(input), payload)
+      return JSON.stringify({
+        schemaVersion: 3,
+        asOf: payload.asOf,
+        topCandidates: [],
+        assessments: candidates.map(({ symbol }) => ({
+          symbol,
+          movementProbability: 0.25,
+          estimateConfidence: "medium",
+          drivers: [{ fields: ["newsSummary", "socialSentiment"], text: "Учитывается доступный информационный фон" }],
+          counterSignals: [{ fields: ["newsStatus", "contextCaveat"], text: "Покрытие источников ограничивает оценку" }],
+        })),
+      })
+    },
+    readCoinData: async () => assert.fail("Compact information context must not require raw history"),
+  })
+
+  assert.deepEqual(analysis.assessments.map(candidate => candidate.symbol), ["SOL", "ETH"])
+  assert.match(analysis.assessments[0].drivers[0], /newsSummary=Проект объявил важное обновление сети\. и socialSentiment=bullish/)
+  assert.match(analysis.assessments[1].counterSignals[0], /newsStatus=failed/)
+})
+
+test("empty information context preserves publication windows without inventing candidates", () => {
+  const shortlist = createShortlist([])
+  const context = createInformationContext(shortlist)
+  const payload = buildAgentPayload(shortlist, context)
+
+  assert.deepEqual(payload.candidates, [])
+  assert.deepEqual(payload.informationSources, { news: context.newsEnrichment, twitter: context.twitterEnrichment })
+  assert.deepEqual(buildAgentPayload(shortlist).informationSources, { news: null, twitter: null })
+})
+
+test("information context preserves assessed sentiment even without a significant event", () => {
+  const shortlist = createShortlist([createCandidate("SOL")])
+  for (const socialSentiment of ["bullish", "bearish", "mixed", "neutral"]) {
+    const context = createInformationContext(shortlist)
+    Object.assign(context.candidates[0], {
+      socialSignificant: false,
+      socialReason: "В публикациях нет существенного события.",
+      socialSentiment,
+    })
+    const { candidates: [candidate] } = decodeAgentPayload(buildAgentPayload(shortlist, context))
+
+    assert.equal(candidate.socialSignificant, false)
+    assert.equal(candidate.socialSentiment, socialSentiment)
+  }
+})
+
+test("information context must use the same market snapshot and exact candidate set", () => {
+  const shortlist = createShortlist([createCandidate("SOL"), createCandidate("ETH")])
+  for (const mutate of [
+    (context) => {
+      context.asOf = "2026-08-31T08:00:00.000Z"
+    },
+    (context) => {
+      context.candidates.pop()
+    },
+    (context) => {
+      context.candidates[1].symbol = "BTC"
+    },
+    (context) => {
+      context.candidates[1].symbol = "SOL"
+    },
+    (context) => {
+      context.candidates.push({ ...context.candidates[0], symbol: "BTC" })
+    },
+  ]) {
+    const context = createInformationContext(shortlist)
+    mutate(context)
+    assert.throws(() => buildAgentPayload(shortlist, context), /market snapshots|candidate sets|duplicate symbol/)
+  }
+})
+
+test("information context rejects broken windows and invalid status or sentiment contracts", () => {
+  const shortlist = createShortlist([createCandidate("SOL")])
+  for (const window of [undefined, {}, { from: "invalid", asOf: shortlist.asOf }, { from: "2026-09-01T00:00:00.000Z", asOf: shortlist.asOf }]) {
+    const context = createInformationContext(shortlist)
+    context.newsEnrichment = window
+    assert.throws(() => buildAgentPayload(shortlist, context), /publication window/)
+  }
+  for (const changes of [
+    { newsStatus: "missing" },
+    { twitterStatus: null },
+    { newsSummary: undefined },
+    { twitterSummary: " " },
+    { socialSignificant: "true" },
+    { socialSentiment: "positive" },
+    { socialSignificant: false, socialSentiment: null },
+    { socialSignificant: null, socialSentiment: "neutral" },
+    { contextCaveat: {} },
+  ]) {
+    const context = createInformationContext(shortlist)
+    Object.assign(context.candidates[0], changes)
+    assert.throws(() => buildAgentPayload(shortlist, context), /Step 10 SOL/)
+  }
 })
