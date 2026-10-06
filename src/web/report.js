@@ -826,7 +826,7 @@
     }
     const socialReason = byId("social-reason")
     socialReason.replaceChildren(...[
-      coin.socialReason && [true, false].includes(coin.socialSignificant) && coin.socialSentiment ? createSocialIndicator(coin) : null,
+      coin.socialSignificant === true ? createSocialIndicator(coin) : null,
       coin.socialReason ? element("span", "", coin.socialReason) : null,
     ].filter(Boolean))
     socialReason.hidden = !coin.socialReason

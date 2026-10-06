@@ -2677,15 +2677,16 @@ for (const [sentiment, label] of [
   })
 }
 
-test("sidebar social indicators require literal true, never false, unknown, absent or truthy alternatives", () => {
+test("sidebar and section social indicators require literal true, never false, unknown, absent or truthy alternatives", () => {
   for (const socialSignificant of [false, null, undefined, 0, 1, "true", {}, []]) {
     const report = createReport()
     addInformation(report)
     if (socialSignificant !== undefined) {
-      Object.assign(report.coins[0], { socialSignificant, socialReason: "Значимость не подтверждена", socialSentiment: null })
+      Object.assign(report.coins[0], { socialSignificant, socialReason: "Значимость не подтверждена", socialSentiment: "bullish" })
     }
     const { byId } = runReport(report)
     assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
+    assert.equal(descendants(byId("social-reason")).filter(node => node.className === "social-indicator").length, 0)
     assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
   }
 })
@@ -2698,7 +2699,7 @@ test("switching coins replaces the social reason and clears it for unknown, lega
   report.coins.slice(0, 5).forEach(coin => addInformation(report, coin))
   Object.assign(report.coins[0], { socialSignificant: true, socialReason: "Новое партнёрство", socialSentiment: "positive" })
   Object.assign(report.coins[1], { socialSignificant: true, socialReason: "Взлом протокола", socialSentiment: "negative" })
-  Object.assign(report.coins[2], { socialSignificant: false, socialReason: "Только повторяющиеся упоминания", socialSentiment: null })
+  Object.assign(report.coins[2], { socialSignificant: false, socialReason: "Только повторяющиеся упоминания", socialSentiment: "neutral" })
   Object.assign(report.coins[3], { socialSignificant: null, socialReason: null, socialSentiment: null })
   const before = structuredClone(report)
   const browser = runReport(report)
@@ -3855,19 +3856,16 @@ test("growth reports label the probability correctly and show context without re
   }
 })
 
-test("general background displays a tone icon without manufacturing a significant sidebar event indicator", () => {
-  for (const [socialSentiment, label] of [["bullish", "Бычий"], ["bearish", "Медвежий"], ["mixed", "Смешанный"], ["neutral", "Нейтральный"]]) {
+test("general background preserves its reason without showing an icon in either the sidebar or section", () => {
+  for (const socialSentiment of ["bullish", "bearish", "mixed", "neutral"]) {
     const report = createReport()
     addInformation(report)
     Object.assign(report.coins[0], { socialSignificant: false, socialSentiment, socialReason: "Обсуждение без нового события." })
     const before = structuredClone(report)
     const { byId } = runReport(report)
     assert.equal(byId("social-reason").textContent, report.coins[0].socialReason)
-    const indicators = descendants(byId("social-reason")).filter(node => node.className === "social-indicator")
-    assert.equal(indicators.length, 1)
-    assert.equal(indicators[0].dataset.sentiment, socialSentiment)
-    assert.equal(indicators[0].title, `${label} фон: Обсуждение без нового события.`)
-    assert.equal(indicators[0].attributes.get("aria-label"), indicators[0].title)
+    assert.equal(byId("social-reason").hidden, false)
+    assert.equal(descendants(byId("social-reason")).filter(node => node.className === "social-indicator").length, 0)
     assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
     assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
     assert.deepEqual(report, before)
