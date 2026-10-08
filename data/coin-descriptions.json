@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-06T09:18:12.627Z",
+  "generatedAt": "2026-10-07T08:01:35.996Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-06T09:17:55.353Z"
+    "sourceGeneratedAt": "2026-10-07T08:01:20.581Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 269,
+  "coinCount": 270,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3950,6 +3950,22 @@
         {
           "url": "https://faq.bandprotocol.com/",
           "checkedAt": "2026-10-06T09:18:08.726Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCCTCON",
+      "symbol": "CT",
+      "name": "Concrete",
+      "description": "Concrete — протокол на Ethereum, предоставляющий инфраструктуру хранилищ для размещения капитала в блокчейне. CT — токен Concrete, выпущенный Concrete Network, Ltd.; он доступен для получения через сайт проекта.",
+      "sources": [
+        {
+          "url": "https://concrete.xyz/terms",
+          "checkedAt": "2026-10-07T08:01:33.716Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/concrete",
+          "checkedAt": "2026-10-07T08:01:33.880Z"
         }
       ]
     }
