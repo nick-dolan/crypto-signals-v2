@@ -82,6 +82,22 @@ test("download and website share the report shell, renderer, updater, chart vend
   assert.ok(offline.includes(license.content.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")))
   assert.equal(scripts(offline)[1].content, charts.content)
   assert.ok(scripts(offline)[2].content.includes(renderer.content))
+  for (const html of [offline, online]) {
+    assert.deepEqual([...html.matchAll(/\bid="(report-time-note|release-time-note|chart-source)"/g)].map(([, id]) => id), [])
+    assert.match(html, /<p id="chart-update-status"[^>]*class="chart-update-status"[^>]*role="status"[^>]*aria-live="polite"[^>]*hidden\s*>\s*<\/p>/)
+    assert.match(html, /id="chart-update-error"[^>]*role="alert"[^>]*hidden/)
+    assert.match(html, /id="history-warning"[^>]*role="status"[^>]*hidden/)
+  }
+  assert.match(renderer.content, /coin\.chartSnapshot\?\.data/)
+  assert.match(renderer.content, /logicalToCoordinate/)
+  assert.match(renderer.content, /createPriceLine/)
+  assert.match(renderer.content, /price: quote\.price/)
+  for (const label of ["Срез анализа", "Отчёт готов", "Цена при выпуске"]) {
+    assert.ok(renderer.content.includes(label), label)
+  }
+  assert.doesNotMatch(renderer.content, /report-time-note|release-time-note|chart-source|Сохранённое продолжение: снимок/)
+  assert.doesNotMatch(styles.content, /\.(?:report-time-note|release-time-note|chart-update-notes)\b/)
+  assert.match(styles.content, /\.chart-update-status\b/)
   assert.doesNotMatch(offline, /<(?:script|link|img|iframe)\b[^>]*(?:src|href)\s*=/i)
   assert.doesNotMatch(offline, /@import|url\(\s*["']?https?:|\/assets\/|\/api\/reports/)
   assert.match(renderer.content, /https:\/\/fapi\.binance\.com/)

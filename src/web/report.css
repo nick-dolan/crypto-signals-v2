@@ -785,7 +785,7 @@ table {
     cursor: wait;
 }
 
-.chart-update-notes {
+.chart-update-status {
     margin: 0 18px 10px;
     color: var(--muted);
     font-size: 10px;
@@ -793,13 +793,6 @@ table {
     overflow-wrap: anywhere;
 }
 
-.chart-update-notes p:not([hidden])~p:not([hidden]) {
-    margin-top: 4px;
-}
-
-.report-time-note {
-    color: #f2c56d;
-}
 
 .range-buttons {
     display: flex;

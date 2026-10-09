@@ -27,6 +27,10 @@ test("report embeds its data, executable browser scripts and chart license witho
   assert.match(html, /^<!doctype html>/i)
   assert.match(html, /<html lang="ru">/)
   assert.match(html, /<meta name="viewport"/)
+  assert.deepEqual([...html.matchAll(/\bid="(report-time-note|release-time-note|chart-source)"/g)].map(([, id]) => id), [])
+  assert.match(html, /<p id="chart-update-status"[^>]*class="chart-update-status"[^>]*role="status"[^>]*aria-live="polite"[^>]*hidden\s*>\s*<\/p>/)
+  assert.match(html, /id="chart-update-error"[^>]*role="alert"[^>]*hidden/)
+  assert.match(html, /id="history-warning"[^>]*role="status"[^>]*hidden/)
 
   const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
   assert.deepEqual([...sortOptions.matchAll(/<option\b[^>]*value="([^"]+)"/g)].map(([, value]) => value), [
@@ -103,12 +107,47 @@ test("report embeds its data, executable browser scripts and chart license witho
   }
 })
 
+test("saved continuation, quote and actual release time are embedded unchanged without text blocks above the chart", async () => {
+  const report = {
+    asOf: "2026-09-15T09:00:00.000Z", reportCreatedAt: "2026-09-15T11:37:42.123Z",
+    coins: [{
+      symbol: "COTI",
+      history: { candles: [{ time: 1_789_462_800, open: 1, high: 2, low: 1, close: 2 }], volume: [], openInterest: [], warning: null },
+      chartSnapshot: {
+        data: {
+          history: { candles: [{ time: 1_789_470_000, open: 2, high: 3, low: 2, close: 3 }], volume: [], openInterest: [], warning: null },
+          updatedAt: "2026-09-15T11:30:00.000Z", formingTime: 1_789_470_000, currentOiAt: null,
+          sourceFrom: 1_789_470_000, oiSourceFrom: null, limitReached: false,
+        },
+        quote: { price: 3.25, at: "2026-09-15T11:37:41.000Z" }, warning: "OI недоступен",
+      },
+    }],
+  }
+  const before = structuredClone(report)
+  const html = await renderReportHtml(report)
+  const embedded = scripts(html)
+  assert.deepEqual(JSON.parse(embedded[0].content), before)
+  assert.deepEqual(report, before)
+  assert.deepEqual([...html.matchAll(/\bid="(report-time-note|release-time-note|chart-source)"/g)].map(([, id]) => id), [])
+  assert.match(html, /<p id="chart-update-status"[^>]*class="chart-update-status"[^>]*role="status"[^>]*aria-live="polite"[^>]*hidden\s*>\s*<\/p>/)
+  assert.match(html.replace(/\s+/g, " "), /после перезагрузки вернётся сохранённый график отчёта, включая продолжение/)
+  for (const label of ["Срез анализа", "Отчёт готов", "Цена при выпуске"]) {
+    assert.ok(embedded[2].content.includes(label), label)
+  }
+  assert.doesNotMatch(embedded[2].content, /report-time-note|release-time-note|chart-source|Сохранённое продолжение: снимок/)
+  assert.match(embedded[2].content, /attachPrimitive/)
+  assert.match(embedded[2].content, /createPriceLine/)
+  assert.doesNotMatch(html, /<(?:script|link|img)\b[^>]*(?:src|href)\s*=/i)
+  assert.doesNotThrow(() => new vm.Script(embedded[2].content))
+})
+
 test("agent text cannot escape embedded JSON, become executable HTML, or replace template slots", async () => {
   const unsafe = "</ScRiPt><script>globalThis.injected = true</script><img src=x onerror=alert(1)><!-- & \" {{charts}} $& $' $` \u2028\u2029"
   const report = {
     coins: [{
       symbol: unsafe, explanation: unsafe, drivers: [unsafe], history: { warning: unsafe },
       socialSignificant: true, socialReason: unsafe, socialSentiment: "negative",
+      chartSnapshot: { data: null, quote: { price: 1, at: "2026-09-15T11:37:41.000Z" }, warning: unsafe },
       features: { coingeckoId: "coin", coingeckoTrending: true, coingeckoTrendingCategories: [unsafe] },
       information: {
         news: { status: "failed", error: unsafe, items: [{ title: unsafe, content: unsafe, shortDescription: unsafe }] },

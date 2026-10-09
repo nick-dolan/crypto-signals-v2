@@ -60,11 +60,34 @@ function createNode (tagName = "div") {
 
 function createChart (container, options) {
   const panes = []
-  return {
+  let visible = null
+  const scale = {
+    setVisibleRange (range) {
+      chart.ranges.push(structuredClone(range))
+      const first = chart.series[0]?.data[0]?.time
+      visible = { from: (range.from - first) / 3_600, to: (range.to - first) / 3_600 }
+    },
+    setVisibleLogicalRange (range) {
+      visible = structuredClone(range)
+      chart.logicalRanges.push(visible)
+    },
+    logicalToCoordinate (logical) {
+      chart.coordinateRequests.push(logical)
+      if (!isSafeInteger(logical)) {
+        return 0
+      }
+      return visible ? chart.width - 1 - (visible.to - logical + 0.5) * chart.width / (visible.to - visible.from + 1) : null
+    },
+  }
+  const chart = {
     container,
     options,
     series: [],
     ranges: [],
+    logicalRanges: [],
+    coordinateRequests: [],
+    width: 1_000,
+    primitiveUpdates: 0,
     removed: false,
     addSeries (type, options, paneIndex = 0) {
       panes[paneIndex] ??= {
@@ -82,6 +105,17 @@ function createChart (container, options) {
         options,
         paneIndex,
         data: [],
+        primitives: [],
+        priceLines: [],
+        attachPrimitive (primitive) {
+          this.primitives.push(primitive)
+          primitive.attached?.({ chart, series: this, requestUpdate: () => chart.primitiveUpdates++ })
+        },
+        createPriceLine (options) {
+          const line = { options: structuredClone(options) }
+          this.priceLines.push(line)
+          return line
+        },
         setData (points) {
           // VM objects have different prototypes; record data in the test's realm.
           this.data = structuredClone(points)
@@ -91,13 +125,7 @@ function createChart (container, options) {
       this.series.push(series)
       return series
     },
-    timeScale () {
-      return {
-        setVisibleRange: (range) => {
-          this.ranges.push(structuredClone(range))
-        },
-      }
-    },
+    timeScale: () => scale,
     panes: () => panes,
     subscribeCrosshairMove (listener) {
       this.crosshair = listener
@@ -105,8 +133,10 @@ function createChart (container, options) {
     remove () {
       this.removed = true
       this.removeCount = (this.removeCount ?? 0) + 1
+      this.series.forEach(series => series.primitives.forEach(primitive => primitive.detached?.()))
     },
   }
+  return chart
 }
 
 function runReport (report, {
@@ -192,6 +222,7 @@ function runReport (report, {
       ? {
           ColorType: { Solid: "solid" },
           CrosshairMode: { Normal: 0 },
+          LineStyle: { Dashed: 2 },
           TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
           CandlestickSeries: "Candlestick",
           HistogramSeries: "Histogram",
@@ -1397,7 +1428,7 @@ test("visible radar charts and facts survive main updates, selection, search and
   await pending
   const cached = browser.charts.at(-1)
   assert.equal(cached.container, byId("chart"))
-  assert.match(byId("chart-update-status").textContent, /Обновлено/)
+  assertChartUpdateState(byId)
   assert.ok(charts.every(chart => !chart.removed && chart.ranges[0].to === Date.parse(report.peerRadar.data.snapshotClosedAt) / 1_000))
   selectCoin(browser, "SOL")
   selectCoin(browser, "COTI")
@@ -1731,7 +1762,7 @@ test("peer radar DOM, expanded cards and embedded data survive main selection, s
   assertUnchanged()
   selectCoin(browser, "COTI")
   assertUnchanged()
-  assert.match(byId("chart-update-status").textContent, /Обновлено/)
+  assertChartUpdateState(byId)
   const failed = click(byId("update-chart"))
   assertUnchanged()
   controlled.requests[1].reject(new Error("Offline"))
@@ -2304,6 +2335,19 @@ function createUpdate (report, coin = report.coins[0], hours = 5) {
   }
 }
 
+function addChartSnapshot (report, coin = report.coins[0], hours = 2) {
+  const data = createUpdate(report, coin, hours)
+  for (const key of ["candles", "volume", "openInterest"]) {
+    data.history[key] = data.history[key].filter(point => point.time > chartTime(report))
+  }
+  coin.chartSnapshot = {
+    data,
+    quote: { price: 450.25, at: new Date(Date.parse(report.reportCreatedAt) - 1_123).toISOString() },
+    warning: null,
+  }
+  return coin.chartSnapshot
+}
+
 function controlledUpdater () {
   const requests = []
   return {
@@ -2322,11 +2366,17 @@ function selectCoin (browser, symbol) {
   return click(browser.byId("candidate-rows"), row)
 }
 
-function assertHiddenChartNotes (byId) {
-  for (const id of ["chart-update-status", "chart-source"]) {
-    assert.equal(byId(id).textContent, "")
-    assert.equal(byId(id).hidden, true)
+function assertChartUpdateState (byId, pending = false) {
+  for (const id of ["report-time-note", "release-time-note", "chart-source"]) {
+    assert.equal(byId(id), null, id)
   }
+  const status = byId("chart-update-status")
+  assert.equal(status.tagName, "P")
+  assert.equal(status.attributes.get("class"), "chart-update-status")
+  assert.equal(status.attributes.get("role"), "status")
+  assert.equal(status.attributes.get("aria-live"), "polite")
+  assert.equal(status.textContent, pending ? "Загружаем свечи, объём и OI выбранной монеты с Binance…" : "")
+  assert.equal(status.hidden, !pending)
 }
 
 function chartSeries (chart, type) {
@@ -2335,6 +2385,31 @@ function chartSeries (chart, type) {
 
 function chartMarkers (browser, chart = browser.charts.at(-1)) {
   return browser.markers.filter(plugin => chart.series.includes(plugin.series)).flatMap(plugin => plugin.data)
+}
+
+function drawRelease (chart) {
+  const [primitive] = chartSeries(chart, "Candlestick").primitives
+  const lines = []
+  const labels = []
+  const context = {
+    save () {},
+    restore () {},
+    beginPath () {},
+    stroke () {},
+    setLineDash () {},
+    moveTo: (...point) => lines.push(point),
+    lineTo: (...point) => lines.push(point),
+    measureText: text => ({ width: text.length * 6 }),
+    fillText: (...label) => labels.push(label),
+  }
+  primitive.updateAllViews()
+  const views = primitive.paneViews()
+  assert.equal(primitive.paneViews(), views)
+  assert.equal(views[0].zOrder(), "top")
+  views[0].renderer().draw({
+    useMediaCoordinateSpace: draw => draw({ context, mediaSize: { width: chart.width, height: 300 } }),
+  })
+  return { lines, labels }
 }
 
 function hoverChart (chart, time) {
@@ -2473,8 +2548,8 @@ test("snapshot metadata, publication windows and source tooltips use UTC+3 at th
   assert.equal(byId("as-of").textContent, "01 янв. 2027 г., 01:00")
   assert.equal(byId("as-of").dateTime, before.asOf)
   assert.match(byId("alt-market-as-of").textContent, /^Срез 01 янв\. 2027 г\., 01:00 UTC\+3/)
-  assert.match(byId("report-time-note").textContent, /^Срез отчёта: 01 янв\. 2027 г\., 01:00 UTC\+3/)
-  assert.match(byId("candle-time-note").textContent, /Время на графике — UTC\+3.*закрыта 01 янв\. 2027 г\., 02:00 UTC\+3\.$/)
+  assertChartUpdateState(byId)
+  assert.match(byId("candle-time-note").textContent, /Время на графике — UTC\+3.*свеча анализа закрыта 01 янв\. 2027 г\., 02:00 UTC\+3\. Продолжение.*незакрытую свечу/)
   assert.equal(byId("peer-radar-time").textContent, "Срез закрыт: 01 янв. 2027 г., 02:00 UTC+3 · Анализ выпущен: 01 янв. 2027 г., 02:08:09 UTC+3")
   assert.match(byId("peer-radar-provenance").textContent, /asOf \(открытие\): 01 янв\. 2027 г\., 01:00 UTC\+3.*Скан шага 11 выпущен: 01 янв\. 2027 г\., 02:02 UTC\+3.*Справочник: 01 янв\. 2027 г\., 01:15 UTC\+3$/)
   for (const key of ["news", "twitter"]) {
@@ -2500,7 +2575,7 @@ test("snapshot metadata, publication windows and source tooltips use UTC+3 at th
   assert.deepEqual(report, before)
 })
 
-test("update, current OI and source transition labels use UTC+3 while candle times, ranges and the report marker stay UTC", async () => {
+test("updated chart labels use UTC+3 while candle and OI times, ranges and the report marker stay UTC", async () => {
   const report = createReport(["COTI"], "2026-12-31T22:00:00.000Z")
   const before = structuredClone(report)
   const result = createUpdate(report, report.coins[0], 2)
@@ -2508,12 +2583,12 @@ test("update, current OI and source transition labels use UTC+3 while candle tim
   const browser = runReport(report, { updateChartHistory: async () => result })
   const { byId } = browser
   const embedded = byId("report-data").textContent
-  await click(byId("update-chart"))
+  const pending = click(byId("update-chart"))
+  assertChartUpdateState(byId, true)
+  await pending
   const chart = browser.charts.at(-1)
 
-  assert.match(byId("chart-update-status").textContent, /Обновлено 01 янв\. 2027 г\., 03:30:00 UTC\+3.*формируются.*Текущий OI: снимок 01 янв\. 2027 г\., 03:29:59 UTC\+3, не закрытие часа/)
-  assert.match(byId("chart-source").textContent, /Свечи и объём: TradingView → Binance с 01 янв\. 2027 г\., 02:00 UTC\+3\. OI: TradingView → Binance с 01 янв\. 2027 г\., 03:00 UTC\+3\./)
-  assert.match(byId("report-time-note").textContent, /^Срез отчёта: 01 янв\. 2027 г\., 01:00 UTC\+3/)
+  assertChartUpdateState(byId)
   assert.equal(chart.options.localization.timeFormatter(result.formingTime), "01 янв. 2027 г., 03:00 UTC+3")
   hoverChart(chart, result.formingTime)
   assert.equal(byId("chart-legend").children[0].textContent, "01 янв. 2027 г., 03:00 UTC+3")
@@ -2541,6 +2616,7 @@ test("initializes the first ranked top candidate, hourly whitespace grid and sev
     history[key] = history[key].filter((_, index) => index >= 5 && index !== 80)
   }
   const { byId, charts, days } = runReport(report)
+  assertChartUpdateState(byId)
   assert.equal(byId("coin-symbol").textContent, "FIRST")
   assert.equal(byId("as-of").dateTime, report.asOf)
   assert.equal(byId("coin-detail").hidden, false)
@@ -2669,6 +2745,7 @@ test("missing history preserves assessment and empty state before and after swit
   report.coins[0].history = { candles: [], volume: [], openInterest: [], warning: "История недоступна" }
   const { byId, charts, days } = runReport(report)
   const assertEmptyHistory = () => {
+    assertChartUpdateState(byId)
     assert.equal(byId("coin-symbol").textContent, "MISSING")
     assert.equal(byId("coin-detail").hidden, false)
     assert.equal(byId("no-candidates").hidden, true)
@@ -2703,6 +2780,7 @@ test("missing history preserves assessment and empty state before and after swit
 
 test("an empty candidate list renders its empty states without creating a chart", () => {
   const { byId, charts, days } = runReport(createReport([]))
+  assertChartUpdateState(byId)
   assert.equal(charts.length, 0)
   assert.equal(byId("candidate-count").textContent, "0")
   assert.equal(byId("no-candidates").hidden, false)
@@ -3259,6 +3337,433 @@ test("social indicators preserve top selection, sorting, filtering and movement 
   assert.deepEqual(browser.directRequests, [])
 })
 
+for (const mode of ["download", "website"]) {
+  test(`${mode} immediately draws continuation-only snapshots and frozen release facts without startup requests`, async () => {
+    const report = createReport(["COTI", "SOL"])
+    report.coins.forEach(coin => addChartSnapshot(report, coin))
+    report.coins[1].chartSnapshot.quote.price = 380.5
+    const before = structuredClone(report)
+    const html = mode === "download" ? await renderReportHtml(report) : null
+    const source = html
+      ? [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+      : `${(await readWebAsset("report.js")).content}\nglobalThis.renderReport()`
+    const browser = runReport(report, { browserScript: new vm.Script(source) })
+
+    for (const coin of report.coins) {
+      selectCoin(browser, coin.symbol)
+      const chart = browser.charts.at(-1)
+      const candles = chartSeries(chart, "Candlestick")
+      const volume = chartSeries(chart, "Histogram")
+      assert.equal(browser.byId("chart").hidden, false)
+      assert.equal(browser.byId("chart-empty").hidden, true)
+      assert.deepEqual(candles.data, [...coin.history.candles, ...coin.chartSnapshot.data.history.candles])
+      assert.deepEqual(volume.data.map(({ time, value }) => ({ time, value })), [...coin.history.volume, ...coin.chartSnapshot.data.history.volume])
+      assert.deepEqual(chartSeries(chart, "Line").data, [...coin.history.openInterest, ...coin.chartSnapshot.data.history.openInterest])
+      assert.equal(candles.data.length, 170)
+      assert.ok(candles.data.every(point => point.time % 3_600 === 0))
+      assert.equal(candles.priceLines[0].options.price, coin.chartSnapshot.quote.price)
+      assert.equal(candles.priceLines[0].options.title, "Цена при выпуске")
+      assert.equal(candles.primitives.length, 1)
+      assert.equal(chart.primitiveUpdates, 1)
+      assert.equal(drawRelease(chart).labels[0][0], "Отчёт готов")
+      assert.deepEqual(chartMarkers(browser).map(({ time, text }) => ({ time, text })), [{ time: chartTime(report), text: "Срез анализа" }])
+      assertChartUpdateState(browser.byId)
+      assert.match(browser.byId("last-price-label").textContent, /незакрытая свеча/)
+      assert.equal(candles.priceLines.length, 1)
+      assert.equal(browser.byId("explanation").textContent, coin.explanation)
+      assert.equal(browser.byId("as-of").dateTime, report.asOf)
+      for (const day of browser.days) {
+        click(day)
+      }
+    }
+    assert.equal(browser.updateCalls.length, 0)
+    assert.equal(browser.directRequests.length, 0)
+    assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+    assert.deepEqual(report, before)
+  })
+}
+
+test("release primitive interpolates the exact in-hour timestamp through ranges and resizing without adding time slots", () => {
+  const report = createReport()
+  addChartSnapshot(report)
+  const before = structuredClone(report)
+  const browser = runReport(report)
+  const chart = browser.charts[0]
+  const data = chart.series.map(series => structuredClone(series.data))
+  const release = Date.parse(report.reportCreatedAt) / 1_000
+  const index = 167 + (release - chartTime(report)) / 3_600
+  assert.ok(index > 169 && index < 170)
+
+  for (const day of browser.days) {
+    click(day)
+    for (const width of [400, 800, 1_200]) {
+      chart.width = width
+      const { lines, labels } = drawRelease(chart)
+      assert.equal(lines.length, 2)
+      assert.equal(lines[0][1], 0)
+      assert.equal(lines[1][1], 300)
+      const x = lines[0][0]
+      assert.equal(lines[1][0], x)
+      assert.deepEqual(chart.coordinateRequests.slice(-2), [Math.floor(index), Math.floor(index) + 1])
+      const left = chart.timeScale().logicalToCoordinate(169)
+      const right = chart.timeScale().logicalToCoordinate(170)
+      assert.ok(Math.abs(x - (left + (right - left) * (index - 169))) < 1e-8)
+      assert.ok(x > 0 && x < width)
+      assert.ok(labels[0][1] >= 0 && labels[0][1] < width)
+    }
+  }
+  assert.equal(chart.logicalRanges.at(-1).to, index + 1)
+  assert.deepEqual(chart.series.map(series => series.data), data)
+  assert.equal(chartSeries(chart, "Candlestick").data.at(-1).time, chartTime(report, 2))
+  chart.timeScale().setVisibleLogicalRange({ from: 0, to: 10 })
+  assert.equal(drawRelease(chart).lines.length, 0)
+  chart.remove()
+  assert.equal(drawRelease(chart).lines.length, 0)
+  assert.deepEqual(report, before)
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+})
+
+test("release just after an hour boundary is never snapped onto the previous forming candle", () => {
+  const report = createReport(["COTI"], "2026-12-31T22:00:00.000Z")
+  report.reportCreatedAt = "2027-01-01T01:00:00.123Z"
+  const snapshot = addChartSnapshot(report)
+  snapshot.quote.at = "2027-01-01T00:59:59.000Z"
+  const browser = runReport(report)
+  const chart = browser.charts[0]
+  assert.equal(chartSeries(chart, "Candlestick").data.at(-1).time, chartTime(report, 2))
+  const x = drawRelease(chart).lines[0][0]
+  assert.ok(x > chart.timeScale().logicalToCoordinate(170))
+  assert.ok(x < chart.timeScale().logicalToCoordinate(171))
+  assert.deepEqual(chart.coordinateRequests.slice(-4, -2), [170, 171])
+  assert.equal(chartSeries(chart, "Candlestick").priceLines[0].options.price, snapshot.quote.price)
+  assert.deepEqual(chartMarkers(browser).map(({ time, text }) => ({ time, text })), [{ time: chartTime(report), text: "Срез анализа" }])
+  assertChartUpdateState(browser.byId)
+})
+
+for (const price of [450.25, 0.000_000_1, 9.9e-13]) {
+  test(`saved quote ${price} stays visible outside the candle price range without modifying autoscale data`, () => {
+    const report = createReport()
+    addChartSnapshot(report).quote.price = price
+    const browser = runReport(report)
+    const candles = chartSeries(browser.charts[0], "Candlestick")
+    const base = Object.freeze({ priceRange: Object.freeze({ minValue: 99, maxValue: 303 }), margins: { above: 3, below: 2 } })
+    const info = structuredClone(candles.options.autoscaleInfoProvider(() => base))
+    assert.deepEqual(info, { priceRange: { minValue: Math.min(99, price), maxValue: Math.max(303, price) }, margins: { above: 3, below: 2 } })
+    assert.equal(candles.options.autoscaleInfoProvider(() => null), null)
+    assert.equal(candles.priceLines[0].options.price, price)
+    assert.equal(candles.priceLines[0].options.axisLabelVisible, true)
+    assert.equal(candles.priceLines[0].options.lineStyle, 2)
+    assert.equal(candles.data.at(-1).close, 302)
+    assert.notEqual(candles.data.at(-1).close, price)
+    if (price < 1e-11) {
+      assert.match(candles.options.priceFormat.formatter(candles.priceLines[0].options.price), /E[-−]/)
+      assert.equal(candles.options.priceFormat.type, "custom")
+      assert.match(candles.options.priceFormat.formatter(price), /E[-−]/)
+    }
+  })
+}
+
+test("saved continuations retain frozen gaps, omit a missing analysis marker and never replace pre-cutoff data", async () => {
+  const report = createReport()
+  const coin = report.coins[0]
+  coin.history.candles = coin.history.candles.filter(point => point.time !== chartTime(report))
+  const snapshot = addChartSnapshot(report)
+  snapshot.data.history.candles = snapshot.data.history.candles.filter(point => point.time !== chartTime(report, 1))
+  snapshot.data.history.openInterest = [{ time: chartTime(report, 1) }, { time: chartTime(report, 2), value: 20_001 }]
+  snapshot.warning = "Сохранённый снимок: есть пропуски"
+  const before = structuredClone(report)
+  const result = createUpdate(report)
+  result.history.candles[0].close = 999
+  result.history.candles.push({ time: chartTime(report), open: 999, high: 1_000, low: 998, close: 999 })
+  result.history.volume[0].value = 999
+  result.history.openInterest[0].value = 999
+  const browser = runReport(report, { updateChartHistory: async () => result })
+  const initial = browser.charts[0]
+  assert.deepEqual(chartSeries(initial, "Candlestick").data.find(point => point.time === chartTime(report)), { time: chartTime(report) })
+  assert.deepEqual(chartSeries(initial, "Candlestick").data.find(point => point.time === chartTime(report, 1)), { time: chartTime(report, 1) })
+  assert.deepEqual(chartSeries(initial, "Histogram").data.find(point => point.time === chartTime(report, 1)), { time: chartTime(report, 1) })
+  assert.deepEqual(initial.series.filter(series => series.type === "Line").at(-1).data, [{ time: chartTime(report, 2), value: 20_001 }])
+  assert.equal(chartMarkers(browser).length, 0)
+  assertChartUpdateState(browser.byId)
+  assert.match(browser.byId("history-warning").textContent, /Сохранённый снимок: есть пропуски/)
+  await click(browser.byId("update-chart"))
+  const updated = browser.charts.at(-1)
+  assert.deepEqual(chartSeries(updated, "Candlestick").data.filter(point => point.close != null && point.time <= chartTime(report)), before.coins[0].history.candles)
+  assert.deepEqual(chartSeries(updated, "Histogram").data.slice(0, 167).map(({ time, value }) => ({ time, value })), before.coins[0].history.volume.slice(0, 167))
+  assert.deepEqual(chartSeries(updated, "Line").data.slice(0, 168), before.coins[0].history.openInterest)
+  assert.equal(chartMarkers(browser).length, 0)
+  assert.equal(chartSeries(updated, "Candlestick").priceLines[0].options.price, snapshot.quote.price)
+  assert.deepEqual(report, before)
+})
+
+test("saved caches, release time and quotes survive updates, inactive completion, failures, switching and reload", async () => {
+  const report = createReport(["COTI", "SOL"])
+  report.coins.forEach(coin => addChartSnapshot(report, coin))
+  report.coins[0].chartSnapshot.warning = "Котировка получена после снимка свечей"
+  report.coins[1].chartSnapshot.quote.price = 380.5
+  const before = structuredClone(report)
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const embedded = browser.byId("report-data").textContent
+  const cotPriceLine = chartSeries(browser.charts[0], "Candlestick").priceLines[0].options
+  const pending = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
+  const saved = browser.updateCalls[0].previous
+  assert.deepEqual(structuredClone(saved), before.coins[0].chartSnapshot.data)
+  assert.ok(saved.history.candles.every(point => point.time > chartTime(report)))
+  selectCoin(browser, "SOL")
+  assertChartUpdateState(browser.byId)
+  const active = browser.charts.at(-1)
+  const result = createUpdate(report)
+  controlled.requests[0].resolve(result)
+  await pending
+  assert.equal(browser.charts.at(-1), active)
+  assert.equal(chartSeries(active, "Candlestick").priceLines[0].options.price, 380.5)
+  assertChartUpdateState(browser.byId)
+  selectCoin(browser, "COTI")
+  const updated = browser.charts.at(-1)
+  assert.deepEqual(chartSeries(updated, "Candlestick").data, result.history.candles)
+  assert.equal(chartSeries(updated, "Candlestick").priceLines[0].options.price, 450.25)
+  assert.deepEqual(chartSeries(updated, "Candlestick").priceLines[0].options, cotPriceLine)
+  assertChartUpdateState(browser.byId)
+  assert.equal(chartMarkers(browser)[0].text, "Срез анализа")
+  assert.equal(drawRelease(updated).lines.length, 2)
+  const releaseIndex = 167 + (Date.parse(report.reportCreatedAt) / 1_000 - chartTime(report)) / 3_600
+  assert.deepEqual(updated.coordinateRequests.slice(-2), [Math.floor(releaseIndex), Math.floor(releaseIndex) + 1])
+  assert.match(browser.byId("history-warning").textContent, /Котировка получена после снимка свечей/)
+
+  const failed = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
+  assert.equal(browser.updateCalls.at(-1).previous, result)
+  controlled.requests.at(-1).reject(new Error("CORS"))
+  await failed
+  assert.equal(browser.charts.at(-1), updated)
+  assert.deepEqual(chartSeries(updated, "Candlestick").priceLines[0].options, cotPriceLine)
+  assertChartUpdateState(browser.byId)
+  assert.match(browser.byId("chart-update-error").textContent, /CORS.*График не изменён/)
+  selectCoin(browser, "SOL")
+  assertChartUpdateState(browser.byId)
+  const solPending = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
+  assert.deepEqual(structuredClone(browser.updateCalls.at(-1).previous), before.coins[1].chartSnapshot.data)
+  controlled.requests.at(-1).resolve(createUpdate(report, report.coins[1], 8))
+  await solPending
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").priceLines[0].options.price, 380.5)
+  assertChartUpdateState(browser.byId)
+  selectCoin(browser, "COTI")
+  assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").priceLines[0].options, cotPriceLine)
+  assertChartUpdateState(browser.byId)
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").priceLines[0].options.price, 450.25)
+  click(browser.days[0])
+  assert.equal(browser.byId("report-data").textContent, embedded)
+  assert.deepEqual(report, before)
+
+  const reloaded = runReport(JSON.parse(embedded))
+  assert.deepEqual(chartSeries(reloaded.charts[0], "Candlestick").data, [...before.coins[0].history.candles, ...before.coins[0].chartSnapshot.data.history.candles])
+  assert.deepEqual(chartSeries(reloaded.charts[0], "Candlestick").priceLines[0].options, cotPriceLine)
+  assert.equal(drawRelease(reloaded.charts[0]).labels[0][0], "Отчёт готов")
+  assert.equal(chartSeries(reloaded.charts[0], "Candlestick").priceLines[0].options.price, 450.25)
+  assertChartUpdateState(reloaded.byId)
+  assert.equal(reloaded.updateCalls.length, 0)
+  assert.equal(reloaded.directRequests.length, 0)
+  assert.deepEqual(JSON.parse(reloaded.byId("report-data").textContent), before)
+})
+
+test("real updater consumes the saved post-cutoff cache, replaces its forming candle and OI, and keeps the seven-day cap", async () => {
+  const report = createReport()
+  const snapshot = addChartSnapshot(report)
+  const before = structuredClone(report)
+  const api = createBinanceApi(report)
+  api.state.now = chartTime(report, 2) * 1_000 + 1_200_000
+  const browser = runReport(report, {
+    updateChartHistory: createChartUpdater({ isArray, isFinite, isSafeInteger, isString, fetch: api.fetch }),
+  })
+  assert.equal(api.requests.length, 0)
+  await click(browser.byId("update-chart"))
+  const candlesRequest = api.requests.find(({ url }) => url.pathname === "/fapi/v1/klines")
+  assert.equal(Number(candlesRequest.url.searchParams.get("startTime")), snapshot.data.formingTime * 1_000)
+  assert.deepEqual(structuredClone(browser.updateCalls[0].previous), before.coins[0].chartSnapshot.data)
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).close, 400)
+  assert.equal(chartSeries(browser.charts.at(-1), "Line").data.at(-1).value, 6_000)
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").priceLines[0].options.price, snapshot.quote.price)
+  api.state.now = chartTime(report, 336) * 1_000
+  await click(browser.byId("update-chart"))
+  const chart = browser.charts.at(-1)
+  assert.equal(chartSeries(chart, "Candlestick").data.length, 336)
+  assert.ok(chart.series.every(series => series.data.every(point => point.time <= chartTime(report, 168))))
+  assert.equal(chart.ranges.at(-1).to, chartTime(report, 168))
+  assert.equal(chartSeries(chart, "Candlestick").priceLines[0].options.price, snapshot.quote.price)
+  assertChartUpdateState(browser.byId)
+  assert.deepEqual(report, before)
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+})
+
+test("saved 168th forming candle keeps its exact release line visible without a 169th candle or time slot", () => {
+  const report = createReport()
+  report.reportCreatedAt = "2026-09-22T09:37:42.123Z"
+  addChartSnapshot(report, report.coins[0], 168)
+  const browser = runReport(report)
+  const chart = browser.charts[0]
+  assert.equal(chartSeries(chart, "Candlestick").data.length, 336)
+  assert.ok(chart.series.every(series => series.data.every(point => point.time <= chartTime(report, 168))))
+  assert.equal(drawRelease(chart).lines.length, 2)
+  assert.deepEqual(chart.coordinateRequests.slice(-2), [335, 336])
+  assert.match(browser.byId("last-price-label").textContent, /незакрытая свеча/)
+  for (const day of browser.days) {
+    click(day)
+    assert.equal(drawRelease(chart).lines.length, 2)
+    assert.equal(chartSeries(chart, "Candlestick").data.at(-1).time, chartTime(report, 168))
+  }
+  assert.equal(browser.updateCalls.length, 0)
+})
+
+test("a quote-only saved snapshot draws the genuine release price but never uses it as a candle", () => {
+  const report = createReport()
+  const snapshot = addChartSnapshot(report)
+  snapshot.data = null
+  snapshot.warning = "Продолжение свечей не получено"
+  const browser = runReport(report)
+  const chart = browser.charts[0]
+  assertChartUpdateState(browser.byId)
+  assert.deepEqual(chartSeries(chart, "Candlestick").data, report.coins[0].history.candles)
+  assert.equal(chartSeries(chart, "Candlestick").priceLines[0].options.price, snapshot.quote.price)
+  assert.equal(browser.byId("last-price").textContent, "268")
+  assert.equal(drawRelease(chart).lines.length, 2)
+  assert.match(browser.byId("history-warning").textContent, /Продолжение свечей не получено/)
+  assert.equal(browser.updateCalls.length, 0)
+})
+
+test("saved capture failures and missing quotes remain literal warnings without hiding assessment or inventing a price", async () => {
+  const report = createReport()
+  const unsafe = "<img src=x onerror=alert(1)>"
+  report.coins[0].chartSnapshot = { data: null, quote: null, warning: unsafe }
+  const before = structuredClone(report)
+  const browser = runReport(report, {
+    updateChartHistory: async () => {
+      throw new Error("Network failed")
+    },
+  })
+  const chart = browser.charts[0]
+  assert.equal(browser.byId("chart").hidden, false)
+  assert.equal(browser.byId("explanation").textContent, report.coins[0].explanation)
+  assert.equal(browser.byId("history-warning").textContent, unsafe)
+  assert.equal(browser.byId("history-warning").children.length, 0)
+  assert.equal(chartSeries(chart, "Candlestick").priceLines.length, 0)
+  assert.equal(drawRelease(chart).lines.length, 2)
+  assertChartUpdateState(browser.byId)
+  await click(browser.byId("update-chart"))
+  assert.equal(browser.charts.at(-1), chart)
+  assert.equal(browser.byId("history-warning").textContent, unsafe)
+  assert.equal(chartSeries(chart, "Candlestick").priceLines.length, 0)
+  assertChartUpdateState(browser.byId)
+  assert.deepEqual(report, before)
+})
+
+test("saved cache and release lines survive a failed first manual update without leaving idle status text", async () => {
+  const report = createReport()
+  addChartSnapshot(report)
+  const browser = runReport(report, {
+    updateChartHistory: async () => {
+      throw new Error("HTTP 429")
+    },
+  })
+  const chart = browser.charts[0]
+  const priceLine = chartSeries(chart, "Candlestick").priceLines[0].options
+  const release = drawRelease(chart)
+  const pending = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
+  await pending
+  assert.equal(browser.charts.at(-1), chart)
+  assertChartUpdateState(browser.byId)
+  assert.deepEqual(drawRelease(chart), release)
+  assert.deepEqual(chartSeries(chart, "Candlestick").priceLines[0].options, priceLine)
+  assert.equal(priceLine.price, 450.25)
+  assert.match(browser.byId("chart-update-error").textContent, /HTTP 429/)
+})
+
+test("missing frozen history can display saved continuation alone without an invented analysis candle", () => {
+  const report = createReport()
+  report.coins[0].history = { candles: [], volume: [], openInterest: [], warning: "История анализа недоступна" }
+  addChartSnapshot(report)
+  const browser = runReport(report)
+  const candles = chartSeries(browser.charts[0], "Candlestick")
+  assert.equal(browser.byId("chart").hidden, false)
+  assert.equal(candles.data.length, 170)
+  assert.ok(candles.data.slice(0, 168).every(point => point.close == null))
+  assert.equal(candles.data.at(-1).close, 302)
+  assert.equal(chartMarkers(browser).length, 0)
+  assert.match(browser.byId("history-warning").textContent, /История анализа недоступна/)
+  assert.equal(browser.updateCalls.length, 0)
+})
+
+test("missing or invalid saved quote and release timestamps never fall back to candle close, asOf or update time", async () => {
+  for (const quote of [null, { price: 0 }, { price: -1 }, { price: "450" }, { price: 450, at: "invalid" }, { price: 450 }]) {
+    const report = createReport()
+    addChartSnapshot(report).quote = quote
+    delete report.reportCreatedAt
+    const browser = runReport(report, { updateChartHistory: async () => createUpdate(report) })
+    for (const updated of [false, true]) {
+      if (updated) {
+        await click(browser.byId("update-chart"))
+      }
+      const candles = chartSeries(browser.charts.at(-1), "Candlestick")
+      assert.equal(candles.priceLines.length, 0)
+      assert.equal(candles.primitives.length, 0)
+      assertChartUpdateState(browser.byId)
+      assert.equal(chartMarkers(browser)[0].time, chartTime(report))
+    }
+  }
+  const report = createReport()
+  addChartSnapshot(report)
+  report.reportCreatedAt = "invalid"
+  const browser = runReport(report)
+  assert.equal(chartSeries(browser.charts[0], "Candlestick").primitives.length, 0)
+  assert.equal(chartSeries(browser.charts[0], "Candlestick").priceLines[0].options.price, 450.25)
+  assertChartUpdateState(browser.byId)
+  const legacy = runReport(createReport())
+  assertChartUpdateState(legacy.byId)
+  assert.equal(chartSeries(legacy.charts[0], "Candlestick").priceLines.length, 0)
+  assert.equal(chartSeries(legacy.charts[0], "Candlestick").primitives.length, 0)
+})
+
+test("saved capture warnings and release data remain available when the chart library is unavailable", () => {
+  const report = createReport()
+  addChartSnapshot(report).warning = "Не удалось сохранить котировку для другой монеты"
+  const browser = runReport(report, { chartsAvailable: false })
+  assert.equal(browser.byId("chart").hidden, true)
+  assert.equal(browser.byId("explanation").textContent, report.coins[0].explanation)
+  assert.match(browser.byId("history-warning").textContent, /Не удалось сохранить котировку.*Не удалось построить график/)
+  assertChartUpdateState(browser.byId)
+  assert.equal(browser.charts.length, 0)
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), report)
+  assert.equal(browser.updateCalls.length, 0)
+})
+
+test("saved main continuations and updates never feed peer comparison charts or rebuild frozen radar facts", async () => {
+  const report = createReport(["COTI", "SOL"])
+  report.coins.forEach(coin => addChartSnapshot(report, coin))
+  addPeerRadar(report)
+  addPeerHistories(report)
+  const before = structuredClone(report)
+  const browser = runReport(report, { updateChartHistory: async coin => createUpdate(report, report.coins.find(item => item.symbol === coin.symbol)) })
+  click(browser.tabs[1])
+  const cards = [...browser.byId("peer-radar-observations").children]
+  const facts = cards.map(card => card.textContent)
+  const peers = radarCharts(browser)
+  const points = peers.map(chart => chart.series.map(series => structuredClone(series.data)))
+  await click(browser.byId("update-chart"))
+  selectCoin(browser, "SOL")
+  await click(browser.byId("update-chart"))
+  click(browser.days[0])
+  assert.deepEqual(browser.byId("peer-radar-observations").children, cards)
+  assert.deepEqual(cards.map(card => card.textContent), facts)
+  assert.deepEqual(radarCharts(browser), peers)
+  assert.deepEqual(peers.map(chart => chart.series.map(series => series.data)), points)
+  assert.ok(peers.every(chart => chart.series.every(series => series.primitives.length === 0 && series.priceLines.length === 0)))
+  assert.deepEqual(JSON.parse(browser.byId("report-data").textContent), before)
+  assert.deepEqual(report, before)
+})
+
 test("startup, coin selection, periods, search and sorting never call the updater or fetch", async () => {
   const report = createReport(["COTI", "SOL"])
   const api = createBinanceApi(report)
@@ -3284,7 +3789,7 @@ test("startup, coin selection, periods, search and sorting never call the update
   assert.equal(browser.markers.length, 0)
   assert.equal(browser.byId("update-chart").disabled, false)
   assert.equal(browser.byId("update-chart").attributes.get("aria-busy"), "false")
-  assertHiddenChartNotes(browser.byId)
+  assertChartUpdateState(browser.byId)
   assert.match(browser.byId("update-chart").attributes.get("title"), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта/)
   assert.match(template.match(/<footer class="page-footer">([\s\S]*?)<\/footer>/)[1].replace(/\s+/g, " "), /Максимум 7 дней \(168 часовых свечей\) после среза отчёта; повторные нажатия не продлевают окно/)
 })
@@ -3300,6 +3805,7 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   const original = browser.charts.at(-1)
   const pending = click(browser.byId("update-chart"))
   assert.ok(isFunction(pending?.then))
+  assertChartUpdateState(browser.byId, true)
   await pending
   const first = browser.charts.at(-1)
   const candles = chartSeries(first, "Candlestick")
@@ -3328,8 +3834,7 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   assert.ok(api.requests.every(call => call.url.origin === "https://fapi.binance.com" && call.options.credentials === "omit"))
   assert.ok(api.requests.filter(call => call.url.searchParams.has("symbol"))
     .every(call => call.url.searchParams.get("symbol") === "RAYSOLUSDT"))
-  assert.match(browser.byId("chart-update-status").textContent, /Обновлено.*17:20:00 UTC\+3.*формируются.*17:19:59 UTC\+3.*не закрытие часа/)
-  assert.match(browser.byId("chart-source").textContent, /TradingView → Binance.*OI.*базовом активе/)
+  assertChartUpdateState(browser.byId)
   assert.match(browser.byId("last-price-label").textContent, /незакрытая свеча/)
   assert.equal(browser.byId("chart-update-error").hidden, true)
   assert.equal(browser.byId("history-warning").hidden, true)
@@ -3346,6 +3851,12 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   assert.equal(browser.updateCalls.length, 2)
   assert.equal(browser.updateCalls[1].previous.history.candles.at(-1).close, 400)
   assert.equal(browser.updateCalls[1].previous.history.openInterest.at(-1).value, 6_000)
+  assert.equal(browser.updateCalls[1].previous.updatedAt, "2026-09-15T14:20:00.000Z")
+  assert.equal(browser.updateCalls[1].previous.currentOiAt, "2026-09-15T14:19:59.000Z")
+  assert.equal(browser.updateCalls[1].previous.formingTime, chartTime(report, 5))
+  assert.equal(browser.updateCalls[1].previous.sourceFrom, chartTime(report, 1))
+  assert.equal(browser.updateCalls[1].previous.oiSourceFrom, chartTime(report, 1))
+  assertChartUpdateState(browser.byId)
   assert.equal(candles.data.at(-1).close, 400)
   assert.equal(oi.at(-1).value, 6_000)
   for (const type of ["Candlestick", "Histogram", "Line"]) {
@@ -3361,7 +3872,7 @@ test("real createChartUpdater integrates fake Binance OHLCV and native OI; same-
   assert.deepEqual(report, before)
 })
 
-test("the limit status allows gap recovery and stays coin-local without claiming live candle or OI failures", async () => {
+test("the seven-day limit allows coin-local gap recovery without leaving idle status text", async () => {
   const report = createReport(["COTI", "SOL"])
   const result = {
     ...createUpdate(report, report.coins[0], 168),
@@ -3378,12 +3889,12 @@ test("the limit status allows gap recovery and stays coin-local without claiming
   const browser = runReport(report, controlled)
   const { byId } = browser
   const pending = click(byId("update-chart"))
+  assertChartUpdateState(byId, true)
   controlled.requests[0].resolve(result)
   await pending
-  const status = byId("chart-update-status").textContent
-  assert.match(status, /Достигнут лимит: 7 дней после среза отчёта/)
-  assert.match(status, /Пропуски возможны.*можно повторить/)
-  assert.doesNotMatch(status, /Текущая свеча недоступна|Текущий OI|формируются/)
+  assertChartUpdateState(byId)
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.length, 336)
+  assert.ok(browser.charts.at(-1).series.every(series => series.data.every(point => point.time <= chartTime(report, 168))))
   assert.match(byId("last-price-label").textContent, /последняя закрытая свеча/)
   assert.equal(byId("history-warning").hidden, false)
   assert.equal(byId("update-chart").disabled, false)
@@ -3391,27 +3902,29 @@ test("the limit status allows gap recovery and stays coin-local without claiming
   assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data.find(point => point.time === chartTime(report, 40)), { time: chartTime(report, 40) })
 
   selectCoin(browser, "SOL")
-  assertHiddenChartNotes(byId)
+  assertChartUpdateState(byId)
   assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).time, chartTime(report))
   selectCoin(browser, "COTI")
-  assert.equal(byId("chart-update-status").textContent, status)
+  assertChartUpdateState(byId)
   assert.equal(browser.updateCalls.length, 1)
 
   const failed = click(byId("update-chart"))
   assert.equal(byId("update-chart").disabled, true)
+  assertChartUpdateState(byId, true)
   assert.equal(browser.updateCalls.at(-1).previous, result)
   controlled.requests.at(-1).reject(new Error("Network failed"))
   await failed
-  assert.equal(byId("chart-update-status").textContent, status)
+  assertChartUpdateState(byId)
   assert.equal(byId("chart-update-error").hidden, false)
   assert.equal(byId("update-chart").disabled, false)
 
   const retry = click(byId("update-chart"))
+  assertChartUpdateState(byId, true)
   assert.equal(browser.updateCalls.at(-1).previous, result)
   controlled.requests.at(-1).resolve(complete)
   await retry
   assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, complete.history.candles)
-  assert.equal(byId("chart-update-status").textContent, status)
+  assertChartUpdateState(byId)
   assert.equal(byId("history-warning").hidden, true)
   assert.equal(byId("chart-update-error").hidden, true)
   assert.equal(byId("update-chart").disabled, false)
@@ -3446,8 +3959,7 @@ test("real updater keeps an old report at asOf + 168h across retries, coin switc
     assert.deepEqual(chartSeries(chart, "Histogram").data.slice(0, 168).map(({ time, value }) => ({ time, value })), coin.history.volume)
     assert.deepEqual(chartSeries(chart, "Line").data.slice(0, 168), coin.history.openInterest)
     assert.equal(chartMarkers(browser)[0].time, chartTime(report))
-    assert.match(browser.byId("chart-update-status").textContent, /Достигнут лимит: 7 дней после среза отчёта/)
-    assert.doesNotMatch(browser.byId("chart-update-status").textContent, /Текущая свеча недоступна|Текущий OI|формируются/)
+    assertChartUpdateState(browser.byId)
     assert.equal(browser.byId("history-warning").hidden, true)
     assert.equal(browser.byId("chart-update-error").hidden, true)
     assert.equal(browser.byId("update-chart").disabled, false)
@@ -3490,8 +4002,7 @@ test("real updater keeps the 168th candle forming until it closes, then replaces
   assert.equal(chartSeries(forming, "Candlestick").data.at(-1).close, 400)
   assert.equal(chartSeries(forming, "Histogram").data.at(-1).value, 2_500)
   assert.equal(chartSeries(forming, "Line").data.at(-1).value, 6_000)
-  assert.match(byId("chart-update-status").textContent, /формируются.*Текущий OI: снимок/)
-  assert.doesNotMatch(byId("chart-update-status").textContent, /Достигнут лимит|недоступ/)
+  assertChartUpdateState(byId)
   assert.match(byId("last-price-label").textContent, /незакрытая свеча/)
   assert.equal(api.requests.filter(call => call.url.pathname === "/fapi/v1/openInterest").length, 1)
 
@@ -3506,8 +4017,7 @@ test("real updater keeps the 168th candle forming until it closes, then replaces
   assert.equal(chartSeries(browser.charts.at(-1), "Histogram").data.at(-1).value, 2_167)
   assert.equal(chartSeries(browser.charts.at(-1), "Line").data.at(-1).value, 10_169)
   assert.equal(api.requests.slice(requestCount).some(call => call.url.pathname === "/fapi/v1/openInterest"), false)
-  assert.match(byId("chart-update-status").textContent, /Достигнут лимит: 7 дней после среза отчёта/)
-  assert.doesNotMatch(byId("chart-update-status").textContent, /Текущая свеча недоступна|Текущий OI|формируются/)
+  assertChartUpdateState(byId)
   assert.match(byId("last-price-label").textContent, /последняя закрытая свеча/)
   assert.equal(byId("history-warning").hidden, true)
 
@@ -3528,13 +4038,14 @@ test("real updater keeps the 168th candle forming until it closes, then replaces
   }
 })
 
-test("the report marker stays at the saved asOf, never at HTML creation or either update time", async () => {
+test("the analysis marker stays at the saved asOf, never at HTML creation or either update time", async () => {
   const report = createReport()
   const updates = [createUpdate(report), createUpdate(report, report.coins[0], 8)]
   const browser = runReport(report, { updateChartHistory: async () => updates.shift() })
   const hour = chartTime(report)
   assert.equal(browser.markers.length, 0)
-  assert.match(browser.byId("report-time-note").textContent, /12:00 UTC\+3/)
+  assertChartUpdateState(browser.byId)
+  assert.equal(browser.charts[0].options.localization.timeFormatter(hour), "15 сент. 2026 г., 12:00 UTC+3")
   assert.notEqual(hour, Math.floor(Date.parse(report.reportCreatedAt) / 3_600_000) * 3_600)
 
   for (const end of [5, 8]) {
@@ -3542,9 +4053,10 @@ test("the report marker stays at the saved asOf, never at HTML creation or eithe
     const markers = chartMarkers(browser)
     assert.equal(markers.length, 1)
     assert.equal(markers[0].time, hour)
-    assert.equal(markers[0].text, "Отчёт")
+    assert.equal(markers[0].text, "Срез анализа")
     assert.notEqual(markers[0].time, chartTime(report, end))
-    assert.match(browser.byId("report-time-note").textContent, /12:00 UTC\+3.*Отметка «Отчёт»/)
+    assertChartUpdateState(browser.byId)
+    assert.equal(browser.charts.at(-1).options.localization.timeFormatter(markers[0].time), "15 сент. 2026 г., 12:00 UTC+3")
     const count = browser.markers.length
     click(browser.days.find(day => day.dataset.days === "7"))
     assert.equal(browser.markers.length, count)
@@ -3553,7 +4065,7 @@ test("the report marker stays at the saved asOf, never at HTML creation or eithe
   assert.equal(report.reportCreatedAt, "2026-09-15T11:37:42.123Z")
 })
 
-test("regenerating HTML during the latest candle does not move the marker away from the saved snapshot", async () => {
+test("regenerating legacy HTML during the latest candle does not move the analysis marker away from its cutoff", async () => {
   const report = createReport()
   for (const hours of [5, 8]) {
     const update = createUpdate(report, report.coins[0], hours)
@@ -3565,7 +4077,7 @@ test("regenerating HTML during the latest candle does not move the marker away f
   }
 })
 
-test("a missing asOf candle never snaps the marker to an older or newly loaded candle, even if OI exists at asOf", async () => {
+test("a missing asOf candle never snaps the analysis marker to an older or newly loaded candle, even if OI exists at asOf", async () => {
   const report = createReport()
   const hour = chartTime(report)
   report.coins[0].history.candles = report.coins[0].history.candles.filter(point => point.time !== hour)
@@ -3578,7 +4090,7 @@ test("a missing asOf candle never snaps the marker to an older or newly loaded c
   assert.deepEqual(chartSeries(chart, "Histogram").data.find(point => point.time === hour), { time: hour })
   assert.ok(chart.series.some(series => series.type === "Line" && series.data.some(point => point.time === hour)))
   assert.equal(browser.markers.length, 0)
-  assert.match(browser.byId("report-time-note").textContent, /Свеча среза недоступна.*не подменяется/)
+  assertChartUpdateState(browser.byId)
   for (const day of browser.days) {
     click(day)
   }
@@ -3588,14 +4100,16 @@ test("a missing asOf candle never snaps the marker to an older or newly loaded c
   assert.equal(chartMarkers(browser).length, 0)
 })
 
-test("a legacy report without reportCreatedAt still marks its saved asOf", async () => {
+test("a legacy report without reportCreatedAt still marks its analysis cutoff", async () => {
   const report = createReport()
   delete report.reportCreatedAt
   const browser = runReport(report, { updateChartHistory: async () => createUpdate(report) })
   await click(browser.byId("update-chart"))
   assert.equal(chartMarkers(browser).length, 1)
   assert.equal(chartMarkers(browser)[0].time, chartTime(report))
-  assert.match(browser.byId("report-time-note").textContent, /Срез отчёта.*12:00 UTC\+3/)
+  assert.equal(chartMarkers(browser)[0].text, "Срез анализа")
+  assert.equal(browser.charts.at(-1).options.localization.timeFormatter(chartMarkers(browser)[0].time), "15 сент. 2026 г., 12:00 UTC+3")
+  assertChartUpdateState(browser.byId)
   assert.equal(browser.byId("chart-update-error").hidden, true)
 })
 
@@ -3611,9 +4125,7 @@ test("loading disables Update and suppresses duplicate handlers while keeping th
   assert.equal(button.disabled, true)
   assert.equal(button.attributes.get("aria-busy"), "true")
   assert.equal(button.textContent, "Обновление…")
-  assert.match(browser.byId("chart-update-status").textContent, /Загружаем свечи, объём и OI/)
-  assert.equal(browser.byId("chart-update-status").hidden, false)
-  assert.equal(browser.byId("chart-source").hidden, true)
+  assertChartUpdateState(browser.byId, true)
   assert.equal(browser.charts.at(-1), original)
   assert.equal(original.removed, false)
   // Dispatch directly even though the button is disabled: the handler must also guard duplicates.
@@ -3627,8 +4139,7 @@ test("loading disables Update and suppresses duplicate handlers while keeping th
   assert.equal(button.disabled, false)
   assert.equal(button.attributes.get("aria-busy"), "false")
   assert.equal(button.textContent, "Update chart")
-  assert.equal(browser.byId("chart-update-status").hidden, false)
-  assert.equal(browser.byId("chart-source").hidden, false)
+  assertChartUpdateState(browser.byId)
   assert.equal(browser.charts.length, 2)
   assert.equal(original.removed, true)
   assert.deepEqual(browser.charts.at(-1).ranges.at(-1), { from: chartTime(report, 5 - 167), to: chartTime(report, 5) })
@@ -3645,7 +4156,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   await click(browser.byId("update-chart"))
   selectCoin(browser, "SOL")
   assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.length, 168)
-  assertHiddenChartNotes(browser.byId)
+  assertChartUpdateState(browser.byId)
   assert.equal(chartMarkers(browser).length, 0)
   await click(browser.byId("update-chart"))
   assert.equal(browser.updateCalls[1].previous, null)
@@ -3653,9 +4164,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   for (const [symbol, result] of [["COTI", cot], ["SOL", sol], ["COTI", cot]]) {
     selectCoin(browser, symbol)
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, result.history.candles)
-    assert.match(browser.byId("chart-update-status").textContent, /Обновлено/)
-    assert.equal(browser.byId("chart-update-status").hidden, false)
-    assert.equal(browser.byId("chart-source").hidden, false)
+    assertChartUpdateState(browser.byId)
     assert.equal(chartMarkers(browser)[0].time, chartTime(report))
   }
   assert.equal(browser.updateCalls.length, 2)
@@ -3671,7 +4180,7 @@ test("coin switches reuse independent caches, pass the correct previous result, 
   assert.equal(reloaded.directRequests.length, 0)
   assert.equal(reloaded.markers.length, 0)
   assert.deepEqual(chartSeries(reloaded.charts[0], "Candlestick").data, report.coins[0].history.candles)
-  assertHiddenChartNotes(reloaded.byId)
+  assertChartUpdateState(reloaded.byId)
   assert.equal(reloaded.byId("chart-update-error").hidden, true)
   assert.deepEqual(reloaded.days.map(day => day.attributes.get("aria-pressed")), ["false", "false", "true"])
 })
@@ -3681,10 +4190,11 @@ test("switching coins during an update keeps the inactive success cached without
   const controlled = controlledUpdater()
   const browser = runReport(report, controlled)
   const pending = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
   selectCoin(browser, "SOL")
+  assertChartUpdateState(browser.byId)
   const active = browser.charts.at(-1)
   const count = browser.charts.length
-  const status = browser.byId("chart-update-status").textContent
   assert.equal(browser.byId("update-chart").disabled, false)
   controlled.requests[0].resolve(createUpdate(report))
   await pending
@@ -3693,11 +4203,11 @@ test("switching coins during an update keeps the inactive success cached without
   assert.equal(browser.charts.length, count)
   assert.equal(browser.charts.at(-1), active)
   assert.equal(active.removed, false)
-  assert.equal(browser.byId("chart-update-status").textContent, status)
+  assertChartUpdateState(browser.byId)
   assert.equal(chartMarkers(browser).length, 0)
   selectCoin(browser, "COTI")
   assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.length, 173)
-  assert.match(browser.byId("chart-update-status").textContent, /Обновлено/)
+  assertChartUpdateState(browser.byId)
   assert.equal(browser.updateCalls.length, 1)
 })
 
@@ -3707,12 +4217,17 @@ for (const order of [[0, 1], [1, 0]]) {
     const controlled = controlledUpdater()
     const browser = runReport(report, controlled)
     const pending = [click(browser.byId("update-chart"))]
+    assertChartUpdateState(browser.byId, true)
     selectCoin(browser, "SOL")
+    assertChartUpdateState(browser.byId)
     pending.push(click(browser.byId("update-chart")))
+    assertChartUpdateState(browser.byId, true)
     selectCoin(browser, "COTI")
+    assertChartUpdateState(browser.byId, true)
     assert.equal(browser.byId("update-chart").disabled, true)
     await click(browser.byId("update-chart"))
     selectCoin(browser, "SOL")
+    assertChartUpdateState(browser.byId, true)
     assert.equal(browser.byId("update-chart").disabled, true)
     await click(browser.byId("update-chart"))
     assert.equal(controlled.requests.length, 2)
@@ -3728,6 +4243,7 @@ for (const order of [[0, 1], [1, 0]]) {
       completed.add(index)
       assert.equal(browser.byId("coin-symbol").textContent, "SOL")
       assert.equal(browser.byId("update-chart").disabled, !completed.has(1))
+      assertChartUpdateState(browser.byId, !completed.has(1))
       assert.equal(browser.byId("chart-update-error").hidden, true)
       if (index === 0) {
         assert.equal(browser.charts.at(-1), visible)
@@ -3739,6 +4255,7 @@ for (const order of [[0, 1], [1, 0]]) {
     }
     selectCoin(browser, "COTI")
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, results[0].history.candles)
+    assertChartUpdateState(browser.byId)
     assert.equal(browser.byId("update-chart").disabled, false)
     assert.equal(browser.updateCalls.length, 2)
   })
@@ -3756,9 +4273,12 @@ for (const cached of [false, true]) {
       await initial
     }
     const failed = click(browser.byId("update-chart"))
+    assertChartUpdateState(browser.byId, true)
     const failedRequest = controlled.requests.at(-1)
     selectCoin(browser, "SOL")
+    assertChartUpdateState(browser.byId)
     const other = click(browser.byId("update-chart"))
+    assertChartUpdateState(browser.byId, true)
     const otherRequest = controlled.requests.at(-1)
     const sol = createUpdate(report, report.coins[1], 8)
     if (cached) {
@@ -3767,14 +4287,14 @@ for (const cached of [false, true]) {
     }
     const active = browser.charts.at(-1)
     const count = browser.charts.length
-    const status = browser.byId("chart-update-status").textContent
+    assertChartUpdateState(browser.byId, !cached)
     failedRequest.reject(new Error("CORS COTI"))
     await failed
 
     assert.equal(browser.charts.at(-1), active)
     assert.equal(browser.charts.length, count)
     assert.equal(active.removed, false)
-    assert.equal(browser.byId("chart-update-status").textContent, status)
+    assertChartUpdateState(browser.byId, !cached)
     assert.equal(browser.byId("chart-update-error").hidden, true)
     assert.equal(browser.byId("update-chart").disabled, !cached)
     if (!cached) {
@@ -3782,8 +4302,10 @@ for (const cached of [false, true]) {
       await other
     }
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, sol.history.candles)
+    assertChartUpdateState(browser.byId)
     selectCoin(browser, "COTI")
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, cached ? cot.history.candles : report.coins[0].history.candles)
+    assertChartUpdateState(browser.byId)
     assert.equal(browser.byId("chart-update-error").hidden, false)
     assert.match(browser.byId("chart-update-error").textContent, /CORS COTI.*можно повторить/)
     assert.equal(browser.byId("update-chart").disabled, false)
@@ -3808,7 +4330,7 @@ for (const cached of [false, true]) {
     const data = previous.series.map(series => series.data)
     const ranges = structuredClone(previous.ranges)
     const legend = browser.byId("chart-legend").textContent
-    const source = browser.byId("chart-source").textContent
+    assertChartUpdateState(browser.byId)
     for (const message of ["HTTP 429", "CORS repeated failure"]) {
       const pending = click(browser.byId("update-chart"))
       assert.equal(browser.charts.at(-1), previous)
@@ -3816,8 +4338,7 @@ for (const cached of [false, true]) {
       assert.equal(browser.updateCalls.at(-1).previous, cached ? result : null)
       assert.equal(browser.byId("chart-update-error").hidden, true)
       assert.equal(browser.byId("update-chart").disabled, true)
-      assert.equal(browser.byId("chart-update-status").hidden, false)
-      assert.equal(browser.byId("chart-source").hidden, !cached)
+      assertChartUpdateState(browser.byId, true)
       controlled.requests.at(-1).reject(new Error(message))
       await pending
 
@@ -3828,9 +4349,7 @@ for (const cached of [false, true]) {
       assert.deepEqual(previous.ranges, ranges)
       assert.equal(browser.markers.length, markerCount)
       assert.equal(browser.byId("chart-legend").textContent, legend)
-      assert.equal(browser.byId("chart-source").textContent, source)
-      assert.equal(browser.byId("chart-update-status").hidden, !cached)
-      assert.equal(browser.byId("chart-source").hidden, !cached)
+      assertChartUpdateState(browser.byId)
       assert.equal(browser.byId("chart").hidden, false)
       assert.equal(browser.byId("chart-update-error").hidden, false)
       assert.ok(browser.byId("chart-update-error").textContent.startsWith(message))
@@ -3840,6 +4359,7 @@ for (const cached of [false, true]) {
     }
 
     const retry = click(browser.byId("update-chart"))
+    assertChartUpdateState(browser.byId, true)
     assert.equal(browser.byId("chart-update-error").hidden, true)
     assert.equal(browser.byId("chart-update-error").textContent, "")
     assert.equal(browser.updateCalls.at(-1).previous, cached ? result : null)
@@ -3851,8 +4371,7 @@ for (const cached of [false, true]) {
     assert.equal(browser.charts.length, count + 1)
     assert.equal(previous.removed, true)
     assert.deepEqual(chartSeries(browser.charts.at(-1), "Candlestick").data, recovered.history.candles)
-    assert.equal(browser.byId("chart-update-status").hidden, false)
-    assert.equal(browser.byId("chart-source").hidden, false)
+    assertChartUpdateState(browser.byId)
     assert.equal(browser.byId("chart-update-error").hidden, true)
     assert.equal(browser.byId("update-chart").disabled, false)
     assert.equal(browser.updateCalls.length, cached ? 4 : 3)
@@ -3906,14 +4425,18 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
   }
 
   const pending = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
   assertUnchanged()
   controlled.requests.at(-1).resolve(createUpdate(report))
   await pending
+  assertChartUpdateState(browser.byId)
   assertUnchanged()
   const failed = click(browser.byId("update-chart"))
+  assertChartUpdateState(browser.byId, true)
   assertUnchanged()
   controlled.requests.at(-1).reject(new Error("Network failed"))
   await failed
+  assertChartUpdateState(browser.byId)
   assertUnchanged()
 })
 
@@ -3940,7 +4463,7 @@ for (const value of [22, 0, undefined]) {
     assert.equal(browser.byId("chart-legend").children.at(-2).textContent, "Объём 17")
     assert.match(browser.byId("chart-legend").children[0].textContent, /14:00 UTC\+3/)
     assert.match(browser.byId("last-price-label").textContent, /последняя закрытая свеча/)
-    assert.match(browser.byId("chart-update-status").textContent, /Текущая свеча недоступна.*Текущий OI: снимок/)
+    assertChartUpdateState(browser.byId)
     assert.deepEqual(chartSeries(chart, "Candlestick").data.at(-1), { time: chartTime(report, 3) })
     assert.deepEqual(chartSeries(chart, "Histogram").data.at(-1), { time: chartTime(report, 3) })
     assert.equal(chart.ranges.at(-1).to, chartTime(report, 3))

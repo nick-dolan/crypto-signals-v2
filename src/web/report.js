@@ -5,7 +5,10 @@
   const growthObjective = isString(report.objective) && report.objective.startsWith("P(рост >")
   const coinsBySymbol = new Map(report.coins.map(coin => [coin.symbol, coin]))
   const coinDescriptions = new Map(Object.entries(report.coinDescriptions ?? {}))
-  const chartStates = new Map(report.coins.map(coin => [coin.symbol, { data: null, pending: false, error: null, requested: false }]))
+  const chartStates = new Map(report.coins.map(coin => [coin.symbol, {
+    data: coin.chartSnapshot?.data ?? null, pending: false, error: null, requested: false,
+  }]))
+  const reportReadyTime = isString(report.reportCreatedAt) ? Date.parse(report.reportCreatedAt) / 1_000 : NaN
   const topCandidates = report.coins.filter(coin => coin.topRank != null)
     .sort((first, second) => first.topRank - second.topRank)
   let selectedSymbol = topCandidates[0]?.symbol ?? report.coins[0]?.symbol ?? null
@@ -162,7 +165,7 @@
       byId("probability-heading").textContent = "P роста"
       byId("drivers-heading").textContent = "Поддерживает рост"
     }
-    byId("candle-time-note").textContent = `Время на графике — UTC+3, по открытию свечи. Последняя свеча среза закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC+3.`
+    byId("candle-time-note").textContent = `Время на графике — UTC+3, по открытию свечи. Последняя свеча анализа закрыта ${time(Date.parse(report.asOf) + 3_600_000)} UTC+3. Продолжение после анализа может включать незакрытую свечу; оценка не меняется.`
 
     renderAltMarketBackground()
     byId("market-summary").replaceChildren(...[
@@ -946,7 +949,21 @@
   }
 
   function chartHistory (coin) {
-    return chartStates.get(coin.symbol).data?.history ?? coin.history
+    const continuation = chartStates.get(coin.symbol).data?.history
+    const asOf = Date.parse(report.asOf) / 1_000
+    return {
+      ...coin.history,
+      ...(continuation && Object.fromEntries(["candles", "volume", "openInterest"].map(key => [key, [
+        ...coin.history[key].filter(point => point.time <= asOf),
+        ...continuation[key].filter(point => point.time > asOf && point.time <= asOf + 168 * 3_600),
+      ].sort((first, second) => first.time - second.time)]))),
+      warning: [...new Set([coin.history.warning, continuation?.warning, coin.chartSnapshot?.warning].filter(Boolean))].join(". ") || null,
+    }
+  }
+
+  function savedQuote (coin) {
+    const quote = coin.chartSnapshot?.quote
+    return isFinite(quote?.price) && quote.price > 0 && isString(quote.at) && isFinite(Date.parse(quote.at)) ? quote : null
   }
 
   function historyEnd (history) {
@@ -964,10 +981,59 @@
     })
   }
 
-  function reportMarkerTime (history) {
+  function analysisMarkerTime (coin) {
     const hour = Date.parse(report.asOf) / 1_000
     // Never let the library snap a marker across a missing candle to the wrong hour.
-    return history.candles.some(candle => candle.time === hour) ? hour : null
+    return coin.history.candles.some(candle => candle.time === hour) ? hour : null
+  }
+
+  function releasePrimitive (timestamp) {
+    let scale = null
+    let x = null
+    const views = [{
+      zOrder: () => "top",
+      renderer: () => ({
+        draw (target) {
+          target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+            if (x == null || x < 0 || x > mediaSize.width) {
+              return
+            }
+            context.save()
+            context.strokeStyle = "#77b7ff"
+            context.lineWidth = 1
+            context.setLineDash([4, 4])
+            context.beginPath()
+            context.moveTo(x, 0)
+            context.lineTo(x, mediaSize.height)
+            context.stroke()
+            context.font = "11px sans-serif"
+            context.fillStyle = "#77b7ff"
+            const width = context.measureText("Отчёт готов").width
+            context.fillText("Отчёт готов", Math.max(4, Math.min(x + 5, mediaSize.width - width - 4)), 14)
+            context.restore()
+          })
+        },
+      }),
+    }]
+    return {
+      attached ({ chart, requestUpdate }) {
+        scale = chart.timeScale()
+        requestUpdate()
+      },
+      detached () {
+        scale = null
+        x = null
+      },
+      updateAllViews () {
+        // The library's coordinate cache accepts integer indexes; interpolate within the hourly grid.
+        const index = 167 + (timestamp - Date.parse(report.asOf) / 1_000) / 3_600
+        const hour = Math.floor(index)
+        const from = scale?.logicalToCoordinate(hour)
+        const to = scale?.logicalToCoordinate(hour + 1)
+        x = from == null || to == null ? null : from + (to - from) * (index - hour)
+      },
+      paneViews: () => views,
+    }
   }
 
   function renderUpdateState (coin) {
@@ -980,25 +1046,8 @@
     byId("chart-update-error").hidden = !state.error
     byId("chart-update-status").textContent = state.pending
       ? "Загружаем свечи, объём и OI выбранной монеты с Binance…"
-      : state.data
-        ? [
-            `Обновлено ${time(state.data.updatedAt, true)} UTC+3.`,
-            state.data.limitReached
-              ? "Достигнут лимит: 7 дней после среза отчёта. Пропуски возможны — обновление можно повторить."
-              : `${state.data.formingTime == null ? "Текущая свеча недоступна." : "Последняя свеча и её объём ещё формируются."} ${state.data.currentOiAt ? `Текущий OI: снимок ${time(state.data.currentOiAt, true)} UTC+3, не закрытие часа.` : "Текущий OI недоступен."}`,
-          ].join(" ")
-        : ""
-    byId("chart-update-status").hidden = !state.pending && !state.data
-    byId("chart-source").textContent = state.data
-      ? `Свечи и объём: TradingView → Binance с ${time(state.data.sourceFrom * 1_000)} UTC+3. ${state.data.oiSourceFrom == null ? "Продолжение OI пока недоступно." : `OI: TradingView → Binance с ${time(state.data.oiSourceFrom * 1_000)} UTC+3.`} OI в базовом активе; небольшие различия источников возможны.`
       : ""
-    byId("chart-source").hidden = !state.data
-    byId("report-time-note").textContent = [
-      `Срез отчёта: ${time(report.asOf)} UTC+3 — время открытия последней закрытой свечи.`,
-      reportMarkerTime(chartHistory(coin)) == null
-        ? "Свеча среза недоступна — отметка не подменяется другим временем."
-        : "Отметка «Отчёт» при обновлении привязана к этой свече, а не ко времени создания HTML.",
-    ].join(" ")
+    byId("chart-update-status").hidden = !state.pending
   }
 
   async function refreshSelectedChart () {
@@ -1031,8 +1080,18 @@
 
   function applyRange () {
     if (chart) {
-      const to = historyEnd(chartHistory(coinsBySymbol.get(selectedSymbol)))
-      chart.timeScale().setVisibleRange({ from: to - (selectedDays * 24 - 1) * 3_600, to })
+      const coin = coinsBySymbol.get(selectedSymbol)
+      const to = historyEnd(chartHistory(coin))
+      const from = to - (selectedDays * 24 - 1) * 3_600
+      const asOf = Date.parse(report.asOf) / 1_000
+      if (coin.chartSnapshot && isFinite(reportReadyTime) && reportReadyTime > to && reportReadyTime < asOf + 169 * 3_600) {
+        // Make room for the release line after the last bar without adding time slots or candles.
+        chart.timeScale().setVisibleLogicalRange({
+          from: 167 + (from - asOf) / 3_600, to: 168 + (reportReadyTime - asOf) / 3_600,
+        })
+      } else {
+        chart.timeScale().setVisibleRange({ from, to })
+      }
     }
     document.querySelectorAll("[data-days]").forEach((button) => {
       button.setAttribute("aria-pressed", String(Number(button.dataset.days) === selectedDays))
@@ -1091,7 +1150,8 @@
       return
     }
 
-    const precision = Math.max(2, 4 - Math.floor(Math.log10(Math.min(...history.candles.map(candle => candle.low)))))
+    const quote = savedQuote(coin)
+    const precision = Math.max(2, 4 - Math.floor(Math.log10(Math.min(...history.candles.map(candle => candle.low), quote?.price ?? Infinity))))
     byId("last-price").textContent = number(lastCandle.close, precision)
     const volumeByTime = new Map(history.volume.map(point => [point.time, point]))
     const oiByTime = new Map(history.openInterest.map(point => [point.time, point]))
@@ -1127,6 +1187,18 @@
         wickUpColor: "#52d3a1",
         wickDownColor: "#ed7e8a",
         borderVisible: false,
+        ...(quote && {
+          autoscaleInfoProvider: (original) => {
+            const info = original()
+            return info && {
+              ...info,
+              priceRange: {
+                minValue: Math.min(info.priceRange.minValue, quote.price),
+                maxValue: Math.max(info.priceRange.maxValue, quote.price),
+              },
+            }
+          },
+        }),
         priceFormat: precision > 16
           ? { type: "custom", minMove: 10 ** -precision, formatter: value => number(value, precision) }
           : { type: "price", precision, minMove: 10 ** -precision },
@@ -1152,11 +1224,20 @@
       }
       const to = historyEnd(history)
       candles.setData(hourlyGrid(history.candles, to))
-      const markerTime = reportMarkerTime(history)
-      if (state.requested && markerTime != null) {
+      const markerTime = analysisMarkerTime(coin)
+      if ((coin.chartSnapshot || state.requested) && markerTime != null) {
         LightweightCharts.createSeriesMarkers(candles, [{
-          time: markerTime, position: "aboveBar", shape: "arrowDown", color: "#f2c56d", text: "Отчёт",
+          time: markerTime, position: "aboveBar", shape: "arrowDown", color: "#f2c56d", text: "Срез анализа",
         }])
+      }
+      if (coin.chartSnapshot && isFinite(reportReadyTime)) {
+        candles.attachPrimitive(releasePrimitive(reportReadyTime))
+      }
+      if (quote) {
+        candles.createPriceLine({
+          price: quote.price, color: "#77b7ff", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: "Цена при выпуске",
+        })
       }
       const candlesByTime = new Map(history.candles.map(candle => [candle.time, candle]))
       volume.setData(hourlyGrid(history.volume, to).map((point) => {

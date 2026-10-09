@@ -276,7 +276,10 @@ test("step 13 embeds outsider descriptions without changing radar data or main r
   let reports = await store.list()
   assert.deepEqual(reports, [])
   const run = async () => {
-    await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../src/step13-report.js", import.meta.url))], {
+    await promisify(execFile)(process.execPath, [
+      "--import", `data:text/javascript,${encodeURIComponent("globalThis.fetch = async () => { throw new Error(\"Offline chart snapshot fixture\") }")}`,
+      fileURLToPath(new URL("../src/step13-report.js", import.meta.url)),
+    ], {
       cwd: directory, timeout: 10_000,
     })
     const current = await store.list()

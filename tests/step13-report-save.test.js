@@ -80,6 +80,7 @@ async function prepareInputs (t, empty = false) {
 
 function runStep (directory, filename = "step13-report.js", env = {}) {
   return promisify(execFile)(process.execPath, [
+    ...(filename === "step13-report.js" ? ["--import", `data:text/javascript,${encodeURIComponent("globalThis.fetch = async () => { throw new Error(\"Offline chart snapshot fixture\") }")}`] : []),
     new URL(`../src/${filename}`, import.meta.url).pathname,
   ], { cwd: directory, timeout: 20_000, env: { ...process.env, ...env } })
 }
@@ -88,6 +89,7 @@ function runInjected (directory, code) {
   return promisify(execFile)(process.execPath, ["--input-type=module", "--eval", `
     import assert from "node:assert/strict"
     import { runReportStep } from ${JSON.stringify(new URL("../src/step13-report.js", import.meta.url).href)}
+    globalThis.fetch = async () => { throw new Error("Offline chart snapshot fixture") }
     ${code}
   `], { cwd: directory, timeout: 20_000 })
 }
@@ -126,6 +128,9 @@ for (const empty of [false, true]) {
         assert.equal(report.coins[0].socialSignificant, true)
         assert.equal(report.coins[0].information.news.items[0].title, "Новость <script>")
         assert.equal(report.coins[0].history.candles[0].close, 1.5)
+        assert.equal(report.coins[0].chartSnapshot.data, null)
+        assert.equal(report.coins[0].chartSnapshot.quote, null)
+        assert.match(report.coins[0].chartSnapshot.warning, /График при выпуске не обновлён.*Цена при выпуске не получена/)
         assert.deepEqual(report.coins[0].history.openInterest, [{ time: Date.parse(metadata.asOf) / 1_000 }])
         assert.equal(report.coinDescriptions.XTVCCOTI.description, "Описание на момент отчёта")
       }
@@ -137,6 +142,63 @@ for (const empty of [false, true]) {
     }
   })
 }
+
+test("step 13 archives a separate forming chart and release quote without changing any analysis inputs", async (t) => {
+  const directory = await prepareInputs(t)
+  const filenames = [
+    "step2-data-bootstrap/COTI--XTVCCOTI/data.json", "step5-preliminary-filter.json",
+    "step9-agent-payload.json", "step10-agent-analysis.json",
+  ].map(filename => path.join(directory, "tmp", filename))
+  const before = await Promise.all(filenames.map(filename => fs.readFile(filename, "utf8")))
+  await runInjected(directory, `
+    import { buildReportChartSnapshots } from ${JSON.stringify(new URL("../src/steps/step13-report/build-report-chart-snapshots.js", import.meta.url).href)}
+    let quoteFetchedAt
+    const { report } = await runReportStep({
+      buildChartSnapshots: (coins, asOf) => buildReportChartSnapshots(coins, asOf, {
+        updateChartHistory: async coin => {
+          const formingTime = Date.parse(asOf) / 1_000 + 3_600
+          return {
+            history: {
+              candles: [...coin.history.candles, { time: formingTime, open: 1.5, high: 3, low: 1, close: 2.5 }],
+              volume: [...coin.history.volume, { time: formingTime, value: 500 }],
+              openInterest: [...coin.history.openInterest, { time: formingTime, value: 42 }],
+              warning: null,
+            },
+            updatedAt: new Date().toISOString(), formingTime, currentOiAt: new Date().toISOString(),
+            sourceFrom: formingTime, oiSourceFrom: formingTime, limitReached: false,
+          }
+        },
+        fetchQuotes: async () => {
+          quoteFetchedAt = Date.now()
+          return [{ symbol: "COTIUSDT", price: "2.75", time: quoteFetchedAt - 123 }]
+        },
+      }),
+    })
+    assert.ok(Date.parse(report.reportCreatedAt) >= quoteFetchedAt)
+    assert.equal(report.coins[0].chartSnapshot.quote.at, new Date(quoteFetchedAt - 123).toISOString())
+  `)
+
+  const receipt = await readReceipt(directory)
+  const store = await createReportStore({ directory: path.join(directory, "reports") })
+  t.after(() => store.close())
+  const report = await store.read(receipt.id)
+  const coin = report.coins[0]
+  const hour = Date.parse(report.asOf) / 1_000
+  assert.equal(coin.features.volumeZ, 2.5)
+  assert.equal(coin.movementProbability, 0.7)
+  assert.deepEqual(coin.history.candles, [{ time: hour, open: 1, high: 2, low: 0.5, close: 1.5 }])
+  assert.equal(coin.chartSnapshot.warning, null)
+  assert.equal(coin.chartSnapshot.data.formingTime, hour + 3_600)
+  assert.deepEqual(coin.chartSnapshot.data.history.candles, [{ time: hour + 3_600, open: 1.5, high: 3, low: 1, close: 2.5 }])
+  assert.deepEqual(coin.chartSnapshot.data.history.volume, [{ time: hour + 3_600, value: 500 }])
+  assert.deepEqual(coin.chartSnapshot.data.history.openInterest, [{ time: hour + 3_600, value: 42 }])
+  assert.equal(coin.chartSnapshot.quote.price, 2.75)
+  const html = await renderReportHtml(report)
+  assert.deepEqual(JSON.parse(html.match(/<script id="report-data" type="application\/json">([\s\S]*?)<\/script>/)[1]), report)
+  assert.deepEqual(await Promise.all(filenames.map(filename => fs.readFile(filename, "utf8"))), before)
+  await fs.rm(path.join(directory, "tmp"), { recursive: true })
+  assert.deepEqual(await store.read(receipt.id), report)
+})
 
 test("rebuilding step 13 updates the receipt without changing the previous snapshot or legacy files", { timeout: 30_000 }, async (t) => {
   const directory = await prepareInputs(t)
