@@ -16,7 +16,7 @@ export function renderTelegramHtml (report, { candidates, createdAt }) {
     html.push("<p><br></p>")
   }
 
-  html.push("<p><b>Монеты под наблюдением</b></p>")
+  html.push("<p><b>👀 Монеты под наблюдением</b></p>")
   html.push("<p><br></p>")
 
   for (const [index, item] of topCandidates.entries()) {
@@ -43,7 +43,7 @@ export function renderTelegramHtml (report, { candidates, createdAt }) {
   }
 
   html.push("<p><br></p>")
-  html.push(`<p><b>${briefTitle(brief)}</b></p>`)
+  html.push(`<p><b>🕒 ${briefTitle(brief)}</b></p>`)
   html.push("<p><br></p>")
 
   for (const [index, item] of briefItems(brief).entries()) {

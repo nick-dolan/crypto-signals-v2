@@ -136,7 +136,7 @@ test("release HTML preserves section order, item spacing, collage and warning pl
   assert.equal(buildTelegramRelease(report).richMessage.html, [
     "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
     "<tg-collage><img src=\"tg://photo?id=card_1\"/><img src=\"tg://photo?id=card_2\"/><img src=\"tg://photo?id=card_3\"/><img src=\"tg://photo?id=card_4\"/></tg-collage>",
-    "<p><b>Монеты под наблюдением</b></p>",
+    "<p><b>👀 Монеты под наблюдением</b></p>",
     "<p><br></p>",
     "<p><b>TOP-A</b> · <b>Монета TOP-A</b><br>Техническое наблюдение.</p>",
     "<p><br></p>",
@@ -148,7 +148,7 @@ test("release HTML preserves section order, item spacing, collage and warning pl
     "<p><br></p>",
     "<p><b>NEWS-B</b> · <b>Монета NEWS-B</b><br>Обогащённое наблюдение.</p>",
     "<p><br></p>",
-    "<p><b>Новости за последние 6 часов</b></p>",
+    "<p><b>🕒 Новости за последние 6 часов</b></p>",
     "<p><br></p>",
     "<p>• <b>Событие A</b><br>Первая новость. 🚀 <a href=\"https://news.example/a\">[1]</a></p>",
     "<p><br></p>",
@@ -167,7 +167,7 @@ test("single-candidate HTML has no collage, extra separators or empty explanatio
     assert.equal(buildTelegramRelease(report).richMessage.html, [
       "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
       "<img src=\"tg://photo?id=card_1\"/>",
-      "<p><b>Монеты под наблюдением</b></p>",
+      "<p><b>👀 Монеты под наблюдением</b></p>",
       "<p><br></p>",
       ...(section === "news"
         ? [
@@ -179,7 +179,7 @@ test("single-candidate HTML has no collage, extra separators or empty explanatio
         : []),
       "<p><b>ONLY</b></p>",
       "<p><br></p>",
-      "<p><b>Новости</b></p>",
+      "<p><b>🕒 Новости</b></p>",
       "<p><br></p>",
       "<p>Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий.</p>",
     ].join("\n"))
@@ -194,11 +194,11 @@ test("empty releases invent neither candidates nor media", () => {
   assert.equal(release.richMessage.html, [
     "<p><b>📊 Крипторадар | 1 октября 2026, 10:45 МСК</b></p>",
     "<p><br></p>",
-    "<p><b>Монеты под наблюдением</b></p>",
+    "<p><b>👀 Монеты под наблюдением</b></p>",
     "<p><br></p>",
     "<p>Агент не выделил убедительных ранних кандидатов.</p>",
     "<p><br></p>",
-    "<p><b>Новости</b></p>",
+    "<p><b>🕒 Новости</b></p>",
     "<p><br></p>",
     "<p>Сводка недоступна или относится к другому срезу. Отсутствие данных не означает отсутствие событий.</p>",
   ].join("\n"))
