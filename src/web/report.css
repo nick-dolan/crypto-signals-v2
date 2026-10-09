@@ -314,6 +314,10 @@ select {
     font-size: 12px;
 }
 
+.top-section>.section-heading {
+    flex-wrap: wrap;
+}
+
 .top-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1132,6 +1136,10 @@ summary {
     margin-bottom: 18px;
     padding: 14px 18px;
     overflow-wrap: anywhere;
+}
+
+.market-brief h2 {
+    margin-bottom: 10px;
 }
 
 .market-brief-list {

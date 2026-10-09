@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Crypto Signals · Срез рынка</title>
+    <title>Crypto Signals · Крипторадар</title>
     <!-- REPORT_STYLES -->
 </head>
 
@@ -15,10 +15,8 @@
     <header class="page-header">
         <div>
             <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/
-                    ШАГ 13</span></p>
-            <h1 id="report-title">Рынок перед движением</h1>
-            <p id="report-subtitle" class="subtitle">Кандидаты на сильное движение в ближайшие <strong>4–12
-                    часов</strong></p>
+                    РАННИЕ ДВИЖЕНИЯ</span></p>
+            <h1 id="report-title">Крипторадар</h1>
         </div>
         <div class="snapshot">
             <span class="snapshot-label"><span class="status-dot" aria-hidden="true"></span> Сохранённый срез ·
@@ -27,8 +25,9 @@
             <span id="coverage" class="muted"></span>
         </div>
     </header>
-    <section id="market-brief" class="panel market-brief" data-status="unavailable" aria-label="Краткая сводка рынка"
-        hidden>
+    <section id="market-brief" class="panel market-brief" data-status="unavailable"
+        aria-labelledby="market-brief-heading" hidden>
+        <h2 id="market-brief-heading">Новости за последние 6 часов</h2>
         <div id="market-brief-paragraphs"></div>
         <p id="market-brief-empty" class="market-brief-empty" hidden></p>
         <p id="market-brief-note" class="market-brief-note" hidden></p>
@@ -74,8 +73,11 @@
         <p class="context-note">Ротация — изменение доли сегмента в капитализации, а не прямой приток денег.</p>
         <section class="top-section" aria-labelledby="top-heading">
             <div class="section-heading">
-                <h2 id="top-heading">В фокусе агента</h2>
-                <span class="muted">Нажмите на монету, чтобы изучить сигнал</span>
+                <div>
+                    <h2 id="top-heading">В фокусе агента</h2>
+                    <p id="top-subtitle" class="subtitle"></p>
+                </div>
+                <span id="top-hint" class="muted" hidden>Нажмите на монету, чтобы изучить сигнал</span>
             </div>
             <div id="top-candidates" class="top-grid"></div>
         </section>

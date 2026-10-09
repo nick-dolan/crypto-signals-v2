@@ -154,12 +154,10 @@
 
     byId("as-of").dateTime = report.asOf
     byId("as-of").textContent = time(report.asOf)
-    byId("coverage").textContent = `${report.candidateCount} оценено / ${report.universeCoinCount} монет во вселенной`
+    byId("coverage").textContent = `Оценено агентом: ${report.candidateCount} из ${report.universeCoinCount} монет`
     byId("candidate-count").textContent = report.candidateCount
     byId("objective").textContent = `Цель анализа: ${report.objective}`
     if (growthObjective) {
-      byId("report-title").textContent = "Рынок перед ростом"
-      byId("report-subtitle").textContent = "Кандидаты на сильный рост в ближайшие 4–12 часов"
       byId("probability-sort").textContent = "По вероятности роста"
       byId("candidate-caption").textContent = "Кандидаты с вероятностью сильного роста"
       byId("probability-heading").textContent = "P роста"
@@ -231,6 +229,12 @@
   }
 
   function renderTopCandidates () {
+    const movement = growthObjective ? "сильный рост" : "сильное движение"
+    byId("top-subtitle").textContent = topCandidates.length
+      ? `Кандидаты на ${movement} в ближайшие 4–12 часов`
+      : `Агент не выделил лучших кандидатов на ${movement} в ближайшие 4–12 часов.`
+    byId("top-hint").hidden = !topCandidates.length
+    byId("top-candidates").hidden = !topCandidates.length
     byId("top-candidates").replaceChildren(...topCandidates.map((coin) => {
       const card = element("button", "top-card")
       card.type = "button"
@@ -252,10 +256,6 @@
       card.append(heading, element("span", "top-card-name", coin.name), estimate, track, footer)
       return card
     }))
-
-    if (!topCandidates.length) {
-      byId("top-candidates").append(element("p", "muted", "Агент не выделил лучших кандидатов в этом срезе."))
-    }
   }
 
   function renderCandidates () {

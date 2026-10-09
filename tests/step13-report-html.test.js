@@ -2,11 +2,29 @@ import assert from "node:assert/strict"
 import vm from "node:vm"
 import test from "node:test"
 
-import { renderReportHtml } from "../src/reports/render-report-html.js"
+import { renderReportHtml, renderReportPage } from "../src/reports/render-report-html.js"
 
 function scripts (html) {
   return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
     .map(([, attributes, content]) => ({ attributes, content }))
+}
+
+for (const mode of ["download", "website"]) {
+  test(`${mode} separates the radar header, news heading and agent focus outlook`, async () => {
+    const html = mode === "download" ? await renderReportHtml({ coins: [] }) : await renderReportPage()
+    const header = html.match(/<header class="page-header">([\s\S]*?)<\/header>/)[1].replace(/\s+/g, " ")
+    const brief = html.match(/<section id="market-brief"[^>]*>([\s\S]*?)<\/section>/)[1]
+    const focus = html.match(/<section class="top-section"[^>]*>([\s\S]*?)<\/section>/)[1]
+
+    assert.match(html, /<title>Crypto Signals · Крипторадар<\/title>/)
+    assert.match(header, /CRYPTO SIGNALS <span class="muted">\/ РАННИЕ ДВИЖЕНИЯ<\/span>/)
+    assert.match(header, /<h1 id="report-title">Крипторадар<\/h1>/)
+    assert.doesNotMatch(header, /ШАГ 13|Кандидаты|report-subtitle/)
+    assert.match(brief, /<h2 id="market-brief-heading">Новости за последние 6 часов<\/h2>/)
+    assert.doesNotMatch(brief, /Кандидаты|top-subtitle/)
+    assert.match(focus, /<h2 id="top-heading">В фокусе агента<\/h2>\s*<p id="top-subtitle" class="subtitle"><\/p>/)
+    assert.match(focus, /<span id="top-hint" class="muted" hidden>Нажмите на монету, чтобы изучить сигнал<\/span>/)
+  })
 }
 
 test("all three template timezone labels are fixed UTC+3", async () => {
@@ -66,7 +84,7 @@ test("report embeds its data, executable browser scripts and chart license witho
   assert.match(html, /Фон альтрынка · 4ч/)
   assert.match(text, /более 55%.*менее 45%/)
   assert.match(text, /Это простое правило для текущего среза, не прогноз и не оценка вероятности\./)
-  assert.match(html, /id="market-brief"[^>]*aria-label="Краткая сводка рынка"[^>]*hidden/)
+  assert.match(html, /id="market-brief"[^>]*aria-labelledby="market-brief-heading"[^>]*hidden/)
   assert.match(html, /id="report-tabs"[^>]*role="tablist"[^>]*aria-label="Разделы отчёта"/)
   assert.match(html, /id="main-tab"[^>]*role="tab"[^>]*aria-controls="main-panel"[^>]*aria-selected="true"[^>]*tabindex="0"/)
   assert.match(html, /id="peer-radar-tab"[^>]*role="tab"[^>]*aria-controls="peer-radar"[^>]*aria-selected="false"[^>]*tabindex="-1"/)

@@ -294,6 +294,52 @@ function createReport (symbols = ["COTI"], asOf = "2026-09-15T09:00:00.000Z") {
   return report
 }
 
+for (const growth of [false, true]) {
+  const movement = growth ? "сильный рост" : "сильное движение"
+
+  test(`agent focus shows the ${growth ? "growth" : "movement"} outlook and click hint only with top cards`, () => {
+    const report = createReport(["TOP", "OTHER"])
+    if (growth) {
+      report.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+    }
+    report.universeCoinCount = 250
+    report.coins[1].topRank = null
+    const before = structuredClone(report)
+    const { byId } = runReport(report)
+
+    assert.equal(byId("report-subtitle"), null)
+    assert.equal(byId("coverage").textContent, "Оценено агентом: 2 из 250 монет")
+    assert.equal(byId("top-subtitle").textContent, `Кандидаты на ${movement} в ближайшие 4–12 часов`)
+    assert.equal(byId("top-hint").hidden, false)
+    assert.equal(byId("top-candidates").hidden, false)
+    assert.deepEqual(byId("top-candidates").children.map(node => node.dataset.symbol), ["TOP"])
+    assert.deepEqual(report, before)
+  })
+
+  for (const symbols of [[], ["COTI", "SOL"]]) {
+    test(`empty ${growth ? "growth" : "movement"} focus uses one explanation with ${symbols.length} assessed coins`, () => {
+      const report = createReport(symbols)
+      if (growth) {
+        report.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+      }
+      report.coins.forEach((coin) => {
+        coin.topRank = null
+      })
+      const before = structuredClone(report)
+      const { byId } = runReport(report)
+
+      assert.equal(byId("coverage").textContent, `Оценено агентом: ${symbols.length} из 30 монет`)
+      assert.equal(byId("top-subtitle").textContent, `Агент не выделил лучших кандидатов на ${movement} в ближайшие 4–12 часов.`)
+      assert.equal(byId("top-hint").hidden, true)
+      assert.equal(byId("top-candidates").hidden, true)
+      assert.equal(byId("top-candidates").children.length, 0)
+      assert.equal(byId("candidate-count").textContent, String(symbols.length))
+      assert.equal(byId("coin-detail").hidden, symbols.length === 0)
+      assert.deepEqual(report, before)
+    })
+  }
+}
+
 function addMarketBrief (report, schemaVersion = 2) {
   report.marketBrief = {
     schemaVersion,
@@ -509,7 +555,7 @@ test("v3 shows all five news in saved importance order as a list with ten access
 
   assert.equal(byId("market-brief").hidden, false)
   assert.equal(byId("market-brief").dataset.status, "available")
-  assert.equal(byId("market-brief").attributes.get("aria-label"), "Краткая сводка рынка")
+  assert.equal(byId("market-brief").attributes.get("aria-labelledby"), "market-brief-heading")
   assert.equal(byId("market-brief-note").hidden, true)
   assert.equal(byId("market-brief-empty").hidden, true)
   assert.equal(content.children.length, 1)
@@ -631,7 +677,7 @@ test("v2 market brief shows two short paragraphs with compact, globally numbered
 
   assert.equal(byId("market-brief").hidden, false)
   assert.equal(byId("market-brief").dataset.status, "available")
-  assert.equal(byId("market-brief").attributes.get("aria-label"), "Краткая сводка рынка")
+  assert.equal(byId("market-brief").attributes.get("aria-labelledby"), "market-brief-heading")
   assert.equal(byId("market-brief-note").hidden, true)
   assert.equal(byId("market-brief-empty").hidden, true)
   assert.equal(paragraphs.length, 2)
@@ -2785,7 +2831,7 @@ test("an empty candidate list renders its empty states without creating a chart"
   assert.equal(byId("candidate-count").textContent, "0")
   assert.equal(byId("no-candidates").hidden, false)
   assert.equal(byId("coin-detail").hidden, true)
-  assert.match(byId("top-candidates").textContent, /не выделил лучших кандидатов/)
+  assert.match(byId("top-subtitle").textContent, /не выделил лучших кандидатов/)
   assert.equal(byId("candidate-rows").textContent, "Ничего не найдено")
   assert.equal(byId("search-results").textContent, "Показано 0 из 0")
   days.forEach(node => click(node))
@@ -4534,7 +4580,7 @@ test("growth reports label the probability correctly and show context without re
   Object.assign(coin, { socialSignificant: true, socialReason: "Обновление сети.", socialSentiment: "bullish" })
   const { byId } = runReport(report)
 
-  assert.equal(byId("report-title").textContent, "Рынок перед ростом")
+  assert.equal(byId("top-subtitle").textContent, "Кандидаты на сильный рост в ближайшие 4–12 часов")
   assert.equal(byId("probability-heading").textContent, "P роста")
   assert.match(byId("coin-badges").textContent, /P роста 80%/)
   assert.match(byId("top-candidates").textContent, /P роста/)
