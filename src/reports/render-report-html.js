@@ -1,12 +1,14 @@
 import fs from "node:fs/promises"
 
 import { readWebAsset } from "../web/read-web-asset.js"
+import { renderIconSprite } from "../web/render-icon-sprite.js"
 
 async function renderShell (replacements) {
-  const [template, license] = await Promise.all([
+  const [template, license, icons] = await Promise.all([
     fs.readFile(new URL("../web/report.html", import.meta.url), "utf8"),
-    readWebAsset("chart-license.txt"),
+    readWebAsset("chart-license.txt"), renderIconSprite(),
   ])
+  replacements.ICONS = icons
   replacements.LICENSE = license.content.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
   return template.replace(/<!-- REPORT_([A-Z]+) -->|"REPORT_DATA"/g, (_, name) => replacements[name ?? "DATA"])
 }

@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 
 import { isFinite, isObject, isSafeInteger, isString } from "../helpers/utils.typed.js"
 import { createChartUpdater } from "./chart-update.js"
+import { renderIconSprite } from "./render-icon-sprite.js"
 
 function browserTypes () {
   // Radash's isArray is native; the other helpers can be shared verbatim.
@@ -15,8 +16,12 @@ async function readAsset (url, contentType) {
 
 export async function readWebAsset (name) {
   switch (name) {
-    case "index.html":
-      return readAsset(new URL("./index.html", import.meta.url), "text/html; charset=utf-8")
+    case "index.html": {
+      const [asset, icons] = await Promise.all([
+        readAsset(new URL("./index.html", import.meta.url), "text/html; charset=utf-8"), renderIconSprite(),
+      ])
+      return { ...asset, content: asset.content.replace("<!-- WEB_ICONS -->", icons) }
+    }
     case "report.css":
     case "web.css":
       return readAsset(new URL(name, import.meta.url), "text/css; charset=utf-8")

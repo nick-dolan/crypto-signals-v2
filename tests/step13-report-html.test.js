@@ -25,6 +25,24 @@ for (const mode of ["download", "website"]) {
     assert.match(focus, /<h2 id="top-heading">В фокусе агента<\/h2>\s*<p id="top-subtitle" class="subtitle"><\/p>/)
     assert.match(focus, /<span id="top-hint" class="muted" hidden>Нажмите на монету, чтобы изучить сигнал<\/span>/)
   })
+
+  test(`${mode} exposes current-strength sorting and an empty detail-header indicator slot with local SVG references`, async () => {
+    const html = mode === "download" ? await renderReportHtml({ coins: [] }) : await renderReportPage()
+    const options = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
+    assert.deepEqual([...options.matchAll(/<option\b([^>]*)>([^<]+)<\/option>/g)].map(([, attributes, label]) => [
+      attributes.match(/value="([^"]+)"/)[1], label.trim(), /\bselected\b/.test(attributes),
+    ]), [
+      ["probability", "По вероятности движения", false], ["top", "Сначала топ агента", true],
+      ["confidence", "По уверенности агента", false], ["strength", "По текущей силе", false],
+    ])
+    const header = html.match(/<header class="coin-header">([\s\S]*?)<\/header>/)[1]
+    assert.match(header, /<h2 id="coin-symbol"><\/h2>/)
+    assert.match(header, /<span\s+id="coin-indicators"\s+class="coin-indicators"\s+hidden\s*>\s*<\/span>/)
+    assert.equal([...html.matchAll(/\bid="coin-indicators"/g)].length, 1)
+    const references = [...html.matchAll(/<use\b[^>]*\bhref="([^"]+)"/g)].map(([, href]) => href)
+    assert.ok(references.length > 0)
+    assert.ok(references.every(href => /^#icon-[a-z-]+$/.test(href)))
+  })
 }
 
 test("all three template timezone labels are fixed UTC+3", async () => {
@@ -52,11 +70,11 @@ test("report embeds its data, executable browser scripts and chart license witho
 
   const sortOptions = html.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
   assert.deepEqual([...sortOptions.matchAll(/<option\b[^>]*value="([^"]+)"/g)].map(([, value]) => value), [
-    "probability", "top", "confidence",
+    "probability", "top", "confidence", "strength",
   ])
 
   const candidateTable = html.match(/<table class="candidate-table">([\s\S]*?)<\/table>/)[1]
-  assert.match(candidateTable, /<caption\b[^>]*>Кандидаты с вероятностью сильного движения<\/caption>/)
+  assert.match(candidateTable, /<caption\b[^>]*>\s*Кандидаты\s+с\s+вероятностью\s+сильного\s+движения\s*<\/caption>/)
   assert.deepEqual([...candidateTable.matchAll(/<th\b[^>]*scope="col">([^<]+)<\/th>/g)].map(([, label]) => label), [
     "Монета", "P движения",
   ])

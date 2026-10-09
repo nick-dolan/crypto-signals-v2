@@ -13,10 +13,14 @@
 </head>
 
 <body>
+    <!-- WEB_ICONS -->
     <main class="shell reports-shell">
         <header class="page-header">
             <div>
-                <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS</p>
+                <p class="eyebrow"><span class="brand-mark" aria-hidden="true"><svg class="icon" aria-hidden="true"
+                            focusable="false">
+                            <use href="#icon-diamond"></use>
+                        </svg></span> CRYPTO SIGNALS</p>
                 <h1>Сохранённые отчёты</h1>
                 <p class="subtitle">Рынок перед движением · оценки на ближайшие <strong>4–12 часов</strong></p>
             </div>
@@ -36,9 +40,15 @@
         </section>
         <div id="report-groups" aria-busy="true"></div>
         <nav class="reports-pagination" aria-label="Страницы отчётов">
-            <button id="reports-previous" class="web-button" type="button" disabled>← Назад</button>
+            <button id="reports-previous" class="web-button" type="button" disabled><svg class="icon" aria-hidden="true"
+                    focusable="false">
+                    <use href="#icon-arrow-left"></use>
+                </svg> Назад</button>
             <span id="reports-page" class="muted">Страница 1</span>
-            <button id="reports-next" class="web-button" type="button" disabled>Далее →</button>
+            <button id="reports-next" class="web-button" type="button" disabled>Далее <svg class="icon"
+                    aria-hidden="true" focusable="false">
+                    <use href="#icon-arrow-right"></use>
+                </svg></button>
         </nav>
         <footer class="page-footer">
             <p>По 30 отчётов на странице. Неделя или месяц могут продолжаться на следующей странице.</p>

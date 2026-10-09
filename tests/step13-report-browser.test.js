@@ -144,6 +144,7 @@ function runReport (report, {
   chartsAvailable = true,
   configureChart = () => {},
   browserScript = script,
+  reportData = JSON.stringify(report),
 } = {}) {
   const document = { activeElement: null }
   const createElement = (tag) => {
@@ -198,7 +199,7 @@ function runReport (report, {
       return byId("top-candidates").children.filter(node => node.className === "top-card")
     },
   })
-  byId("report-data").textContent = JSON.stringify(report)
+  byId("report-data").textContent = reportData
   const sortOptions = template.match(/<select id="sort">([\s\S]*?)<\/select>/)[1]
   byId("sort").value = sortOptions.match(/<option value="([^"]+)" selected>/)[1]
   const charts = []
@@ -1543,7 +1544,10 @@ test("radar uses only verified history symbols for leader links and treats all h
     assert.equal(link.target, "_blank")
     assert.equal(link.listeners.size, 0)
   }
-  assert.ok(descendants(card).every(node => !["SCRIPT", "IMG", "SVG", "IFRAME"].includes(node.tagName)))
+  assert.ok(descendants(card).every(node => !["SCRIPT", "IMG", "IFRAME"].includes(node.tagName)))
+  for (const svg of descendants(card).filter(node => node.tagName === "SVG")) {
+    assertIcon(svg, svg.children[0]?.attributes.get("href"))
+  }
   assert.equal(browser.updateCalls.length, 0)
   assert.equal(browser.directRequests.length, 0)
 })
@@ -1854,7 +1858,10 @@ test("peer radar agent and registry text stays literal and market symbols cannot
     assert.equal(links[0].rel, "noopener noreferrer")
     assert.equal(links[0].target, "_blank")
   })
-  assert.ok(nodes.every(node => !["SCRIPT", "IMG", "SVG", "IFRAME"].includes(node.tagName)))
+  assert.ok(nodes.every(node => !["SCRIPT", "IMG", "IFRAME"].includes(node.tagName)))
+  for (const svg of nodes.filter(node => node.tagName === "SVG")) {
+    assertIcon(svg, svg.children[0]?.attributes.get("href"))
+  }
   assert.ok(nodes.every(node => !Object.hasOwn(node, "innerHTML")))
   assert.ok(nodes.every(node => !node.className?.includes(unsafe) && !node.dataset.symbol))
   assert.equal(byId("coin-symbol").textContent, "COTI")
@@ -2303,6 +2310,202 @@ test("switching coins replaces sustained strength and clears values for a legacy
   assert.equal(browser.directRequests.length, 0)
 })
 
+for (const mode of ["direct", "download", "website"]) {
+  test(`${mode} sorts current strength descending, including zero, with probability and symbol ties and missing scores last`, async () => {
+    const entries = [
+      ["NULL", null, 0.8], ["ZETA", 82, 0.7], ["ZERO", 0, 0.1], ["MISSING", undefined, 0.8],
+      ["BETA", 82, 0.7], ["MORE", 82, 0.9], ["HIGH", 95, 0.05],
+    ]
+    const report = createReport(entries.map(([symbol]) => symbol))
+    report.coins.forEach((coin, index) => {
+      coin.movementProbability = entries[index][2]
+      if (entries[index][1] !== undefined) {
+        coin.features.sustainedCurrentScore = entries[index][1]
+      }
+    })
+    const before = structuredClone(report)
+    const browser = runReport(report, { browserScript: await reportBrowserScript(report, mode) })
+    const { byId } = browser
+    const chart = browser.charts[0]
+
+    assert.equal(byId("sort").value, "top")
+    assert.equal(byId("coin-symbol").textContent, "NULL")
+    byId("sort").value = "strength"
+    byId("sort").listeners.get("change")()
+    assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["HIGH", "MORE", "BETA", "ZETA", "ZERO", "MISSING", "NULL"])
+    assert.equal(byId("candidate-rows").children.find(row => row.className === "selected").dataset.symbol, "NULL")
+    byId("search").value = "TA"
+    byId("search").listeners.get("input")()
+    assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["BETA", "ZETA"])
+    assert.equal(byId("coin-symbol").textContent, "NULL")
+    assert.equal(browser.charts.length, 1)
+    assert.equal(browser.charts[0], chart)
+    assert.equal(chart.removed, false)
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  })
+
+  test(`${mode} treats nonnumeric and non-finite strength scores as unavailable, not as coerced numbers`, async () => {
+    const entries = [
+      ["STRING", "100", 0.99], ["TEXT", "invalid", 0.98], ["BOOLEAN", true, 0.97], ["EMPTY", "", 0.96],
+      ["ARRAY", [100], 0.95], ["OBJECT", { value: 100 }, 0.94],
+      ["POSITIVE", "1e400", 0.93], ["NEGATIVE", "-1e400", 0.92],
+      ["NULL", null, 0.91], ["MISSING", undefined, 0.9], ["NUMBER", 82, 0.8], ["ZERO", 0, 0.1],
+    ]
+    const report = createReport(entries.map(([symbol]) => symbol))
+    report.coins.forEach((coin, index) => {
+      coin.movementProbability = entries[index][2]
+      if (entries[index][1] !== undefined) {
+        coin.features.sustainedCurrentScore = entries[index][1]
+      }
+    })
+    const before = structuredClone(report)
+    // JSON.stringify replaces Infinity with null; overflow literals preserve non-finite parsed scores.
+    const reportData = JSON.stringify(report)
+      .replace("\"sustainedCurrentScore\":\"1e400\"", "\"sustainedCurrentScore\":1e400")
+      .replace("\"sustainedCurrentScore\":\"-1e400\"", "\"sustainedCurrentScore\":-1e400")
+    assert.equal(JSON.parse(reportData).coins[6].features.sustainedCurrentScore, Infinity)
+    assert.equal(JSON.parse(reportData).coins[7].features.sustainedCurrentScore, -Infinity)
+    const browser = runReport(report, { reportData, browserScript: await reportBrowserScript(report, mode) })
+    const { byId } = browser
+
+    byId("sort").value = "strength"
+    byId("sort").listeners.get("change")()
+    assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), [
+      "NUMBER", "ZERO", "STRING", "TEXT", "BOOLEAN", "EMPTY", "ARRAY", "OBJECT", "POSITIVE", "NEGATIVE", "NULL", "MISSING",
+    ])
+    assert.equal(byId("coin-symbol").textContent, "STRING")
+    assert.equal(browser.charts.length, 1)
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+    assert.equal(byId("report-data").textContent, reportData)
+    assert.deepEqual(report, before)
+  })
+
+  test(`${mode} shows accessible snapshot strength badges only for literal persistent and emerging statuses`, async () => {
+    const entries = [
+      ["PERSISTENT", "persistent", 82, "Устойчиво сильная", "82 / 100"],
+      ["EMERGING", "emerging", 83.333, "Сила появляется", "83,3 / 100"],
+      ["ZERO", "persistent", 0, "Устойчиво сильная", "0 / 100"],
+      ["NULL", "persistent", null, "Устойчиво сильная", null],
+      ["MISSING", "emerging", undefined, "Сила появляется", null],
+      ...["fading", "neutral", "insufficient_data", undefined, null, "unknown", "__proto__", "Persistent", "persistent ", true,
+        ["persistent"], { status: "emerging" }, "<svg onload=alert(1)>"].map((status, index) => [`INVALID${index}`, status, 100, null, null]),
+    ]
+    const report = createReport(entries.map(([symbol]) => symbol))
+    report.coins.forEach((coin, index) => {
+      const [, status, score] = entries[index]
+      coin.movementProbability = 0.8
+      if (status !== undefined) {
+        coin.features.sustainedStatus = status
+      }
+      if (score !== undefined) {
+        coin.features.sustainedCurrentScore = score
+      }
+    })
+    const before = structuredClone(report)
+    const browser = runReport(report, { browserScript: await reportBrowserScript(report, mode) })
+    const { byId } = browser
+    const header = byId("coin-indicators")
+    assert.ok(header)
+
+    for (const [symbol, status, , label, scoreText] of entries) {
+      selectCoin(browser, symbol)
+      const row = byId("candidate-rows").children.find(row => row.dataset.symbol === symbol)
+      const sidebar = descendants(row).filter(node => node.className === "strength-indicator")
+      assert.equal(sidebar.length, label ? 1 : 0, symbol)
+      assert.equal(header.hidden, !label, symbol)
+      assert.deepEqual(header.children.map(node => node.className), label ? ["strength-indicator"] : [], symbol)
+      assert.equal(byId("coin-symbol").textContent, symbol)
+      assert.deepEqual(byId("coin-symbol").children, [])
+      if (label) {
+        assert.equal(header.children[0].title, sidebar[0].title)
+        for (const indicator of [sidebar[0], header.children[0]]) {
+          assert.equal(indicator.tagName, "SPAN")
+          assert.equal(indicator.dataset.status, status)
+          assert.equal(indicator.attributes.get("role"), "img")
+          assert.equal(indicator.attributes.get("aria-label"), indicator.title)
+          assert.ok(indicator.title.includes(label))
+          assert.ok(indicator.title.includes("Срез отчёта"))
+          if (scoreText) {
+            assert.ok(indicator.title.includes(scoreText))
+          } else {
+            assert.doesNotMatch(indicator.title, /\d(?:[.,]\d+)?\s*\/\s*100/)
+          }
+          assert.equal(indicator.children.length, 1)
+          assertIcon(indicator.children[0], "#icon-hand-fist")
+        }
+      }
+    }
+    assert.equal(descendants(byId("top-candidates")).filter(node => ["strength-indicator", "social-indicator"].includes(node.className)).length, 0)
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  })
+
+  test(`${mode} updates and clears ordered header indicators without requiring an information panel, and SVG clicks select coins`, async () => {
+    const report = createReport(["BOTH", "CURRENT", "EVENT", "NONE", "LEGACY"])
+    Object.assign(report.coins[0].features, { sustainedStatus: "persistent", sustainedCurrentScore: 82 })
+    Object.assign(report.coins[1].features, { sustainedStatus: "emerging", sustainedCurrentScore: 75 })
+    Object.assign(report.coins[2].features, { sustainedStatus: "fading", sustainedCurrentScore: 100 })
+    Object.assign(report.coins[3].features, { sustainedStatus: "neutral", sustainedCurrentScore: 100 })
+    Object.assign(report.coins[0], { socialSignificant: true, socialSentiment: "positive", socialReason: "Новое партнёрство" })
+    Object.assign(report.coins[2], { topRank: null, socialSignificant: true, socialSentiment: "negative", socialReason: "Взлом протокола" })
+    Object.assign(report.coins[3], { socialSignificant: false, socialSentiment: "neutral", socialReason: "Только упоминания" })
+    addInformation(report, report.coins[0])
+    const before = structuredClone(report)
+    const browser = runReport(report, { browserScript: await reportBrowserScript(report, mode) })
+    const { byId } = browser
+
+    for (const [symbol, classes] of [
+      ["BOTH", ["strength-indicator", "social-indicator"]], ["CURRENT", ["strength-indicator"]],
+      ["EVENT", ["social-indicator"]], ["NONE", []], ["EVENT", ["social-indicator"]], ["LEGACY", []],
+      ["BOTH", ["strength-indicator", "social-indicator"]],
+    ]) {
+      selectCoin(browser, symbol)
+      const header = byId("coin-indicators")
+      assert.ok(header)
+      assert.equal(header.hidden, classes.length === 0)
+      assert.deepEqual(header.children.map(node => node.className), classes)
+      assert.equal(byId("information-panel").hidden, symbol !== "BOTH")
+      const row = byId("candidate-rows").children.find(row => row.dataset.symbol === symbol)
+      for (const indicator of header.children) {
+        const sidebar = descendants(row).find(node => node.className === indicator.className)
+        assert.ok(sidebar)
+        assert.equal(indicator.title, sidebar.title)
+        assert.deepEqual(indicator.dataset, sidebar.dataset)
+        assert.equal(indicator.attributes.get("role"), "img")
+        assert.equal(indicator.attributes.get("aria-label"), indicator.title)
+        assertIcon(indicator.children[0], indicator.className === "strength-indicator" ? "#icon-hand-fist" : "#icon-megaphone")
+      }
+      assert.equal(byId("coin-symbol").textContent, symbol)
+      assert.deepEqual(byId("coin-symbol").children, [])
+    }
+    for (const [symbol, className, href] of [
+      ["CURRENT", "strength-indicator", "#icon-hand-fist"], ["EVENT", "social-indicator", "#icon-megaphone"], ["BOTH", "top-star", "#icon-star"],
+    ]) {
+      for (const target of ["SVG", "USE"]) {
+        selectCoin(browser, "LEGACY")
+        const row = byId("candidate-rows").children.find(row => row.dataset.symbol === symbol)
+        const indicator = descendants(row).find(node => node.className === className)
+        assert.ok(indicator)
+        assertIcon(indicator.children[0], href)
+        click(byId("candidate-rows"), target === "SVG" ? indicator.children[0] : indicator.children[0].children[0])
+        assert.equal(byId("coin-symbol").textContent, symbol)
+        assert.equal(byId("candidate-rows").children.find(row => row.className === "selected").dataset.symbol, symbol)
+      }
+    }
+    assert.equal(descendants(byId("top-candidates")).filter(node => ["strength-indicator", "social-indicator"].includes(node.className)).length, 0)
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  })
+}
+
 function addOiGaps (report) {
   const { history } = report.coins[0]
   const timeAt = index => history.candles[index].time
@@ -2352,6 +2555,31 @@ function addInformation (report, coin = report.coins[0]) {
 
 function descendants (node) {
   return node.children.flatMap(child => [child, ...descendants(child)])
+}
+
+function assertIcon (svg, href) {
+  assert.ok(svg)
+  assert.equal(svg.tagName, "SVG")
+  assert.equal(svg.namespaceURI, "http://www.w3.org/2000/svg")
+  assert.equal(svg.attributes.get("class") ?? svg.className, "icon")
+  assert.equal(svg.attributes.get("aria-hidden"), "true")
+  assert.equal(svg.attributes.get("focusable"), "false")
+  assert.equal(svg.children.length, 1)
+  assert.equal(svg.children[0].tagName, "USE")
+  assert.equal(svg.children[0].namespaceURI, svg.namespaceURI)
+  assert.equal(svg.children[0].attributes.get("href"), href)
+  assert.match(href, /^#icon-[a-z-]+$/)
+  assert.equal(svg.attributes.has("onload"), false)
+}
+
+async function reportBrowserScript (report, mode) {
+  if (mode === "direct") {
+    return script
+  }
+  const source = mode === "download"
+    ? [...(await renderReportHtml(report)).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+    : `${(await readWebAsset("report.js")).content}\nglobalThis.renderReport()`
+  return new vm.Script(source)
 }
 
 function oiLegend (byId) {
@@ -2919,13 +3147,7 @@ for (const [sentiment, label] of [
       assert.equal(indicator.attributes.get("role"), "img")
       assert.equal(indicator.attributes.get("aria-label"), title)
       const svg = indicator.children[0]
-      assert.equal(svg.tagName, "SVG")
-      assert.equal(svg.namespaceURI, "http://www.w3.org/2000/svg")
-      assert.equal(svg.attributes.get("aria-hidden"), "true")
-      assert.equal(svg.attributes.get("focusable"), "false")
-      assert.equal(svg.children[0].tagName, "PATH")
-      assert.equal(svg.children[0].namespaceURI, svg.namespaceURI)
-      assert.ok(svg.children[0].attributes.get("d"))
+      assertIcon(svg, "#icon-megaphone")
 
       click(byId("candidate-rows"), svg.children[0])
       assert.equal(byId("coin-symbol").textContent, coin.symbol)
@@ -2938,7 +3160,15 @@ for (const [sentiment, label] of [
       assert.equal(informationIndicator.dataset.sentiment, sentiment)
       assert.equal(informationIndicator.title, title)
       assert.deepEqual([...informationIndicator.attributes], [...indicator.attributes])
-      assert.equal(informationIndicator.children[0].children[0].attributes.get("d"), svg.children[0].attributes.get("d"))
+      assertIcon(informationIndicator.children[0], "#icon-megaphone")
+      assert.equal(byId("coin-indicators").hidden, false)
+      assert.equal(byId("coin-indicators").children.length, 1)
+      const headerIndicator = byId("coin-indicators").children[0]
+      assert.equal(headerIndicator.className, "social-indicator")
+      assert.equal(headerIndicator.dataset.sentiment, sentiment)
+      assert.equal(headerIndicator.title, title)
+      assert.deepEqual([...headerIndicator.attributes], [...indicator.attributes])
+      assertIcon(headerIndicator.children[0], "#icon-megaphone")
     }
     assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
     assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
@@ -2948,7 +3178,7 @@ for (const [sentiment, label] of [
   })
 }
 
-test("sidebar and section social indicators require literal true, never false, unknown, absent or truthy alternatives", () => {
+test("sidebar, header and section social indicators require literal true, never false, unknown, absent or truthy alternatives", () => {
   for (const socialSignificant of [false, null, undefined, 0, 1, "true", {}, []]) {
     const report = createReport()
     addInformation(report)
@@ -2958,6 +3188,8 @@ test("sidebar and section social indicators require literal true, never false, u
     const { byId } = runReport(report)
     assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "social-indicator").length, 0)
     assert.equal(descendants(byId("social-reason")).filter(node => node.className === "social-indicator").length, 0)
+    assert.equal(byId("coin-indicators").hidden, true)
+    assert.deepEqual(byId("coin-indicators").children, [])
     assert.equal(descendants(byId("top-candidates")).filter(node => node.className === "social-indicator").length, 0)
   }
 })
@@ -3012,12 +3244,16 @@ test("social reason markup stays literal in the tooltip, accessible name and inf
   assert.equal(indicator.title, `Негативный инфоповод: ${unsafe}`)
   assert.equal(indicator.attributes.get("aria-label"), indicator.title)
   assert.equal(byId("social-reason").textContent, unsafe)
-  assert.deepEqual(descendants(byId("social-reason")).map(node => node.tagName), ["SPAN", "SVG", "PATH", "SPAN"])
+  assert.deepEqual(descendants(byId("social-reason")).map(node => node.tagName), ["SPAN", "SVG", "USE", "SPAN"])
   assert.equal(byId("social-reason").children[0].title, indicator.title)
   assert.equal(byId("social-reason").children[0].attributes.get("aria-label"), indicator.title)
   assert.equal(byId("social-reason").children[1].textContent, unsafe)
   assert.deepEqual(byId("social-reason").children[1].children, [])
-  assert.deepEqual(descendants(indicator).map(node => node.tagName), ["SVG", "PATH"])
+  assert.deepEqual(descendants(indicator).map(node => node.tagName), ["SVG", "USE"])
+  const headerIndicator = byId("coin-indicators").children[0]
+  assert.equal(headerIndicator.title, indicator.title)
+  assert.equal(headerIndicator.attributes.get("aria-label"), indicator.title)
+  assertIcon(headerIndicator.children[0], "#icon-megaphone")
   assert.equal(indicator.attributes.has("onerror"), false)
   assert.equal(indicator.children[0].attributes.has("onload"), false)
 })
@@ -3240,10 +3476,10 @@ test("compact market context keeps breadth and derived stable rotation visible w
 })
 
 for (const [status, change4hPct, breadth4h, label, icon, change, breadth] of [
-  ["up", 1.25, 0.6, "Преобладает рост", "↑", "+1,25%", "60%"],
-  ["down", -2.5, 0.2, "Преобладает снижение", "↓", "-2,5%", "20%"],
-  ["mixed", 0, 0.55, "Смешанный фон", "↔", "0%", "55%"],
-  ["unavailable", null, 0.6, "Недостаточно данных", "—", "Нет данных", "60%"],
+  ["up", 1.25, 0.6, "Преобладает рост", "#icon-arrow-up", "+1,25%", "60%"],
+  ["down", -2.5, 0.2, "Преобладает снижение", "#icon-arrow-down", "-2,5%", "20%"],
+  ["mixed", 0, 0.55, "Смешанный фон", "#icon-arrows-left-right", "0%", "55%"],
+  ["unavailable", null, 0.6, "Недостаточно данных", "#icon-minus", "Нет данных", "60%"],
 ]) {
   test(`alt-market banner renders ${status} with a textual status, icon and saved metrics`, () => {
     const report = createReport()
@@ -3253,7 +3489,9 @@ for (const [status, change4hPct, breadth4h, label, icon, change, breadth] of [
     const browser = runReport(report)
     assert.equal(browser.byId("alt-market-background").dataset.status, status)
     assert.equal(browser.byId("alt-market-status").textContent, label)
-    assert.equal(browser.byId("alt-market-icon").textContent, icon)
+    assert.equal(browser.byId("alt-market-icon").textContent, "")
+    assert.equal(browser.byId("alt-market-icon").children.length, 1)
+    assertIcon(browser.byId("alt-market-icon").children[0], icon)
     assert.equal(browser.byId("alt-market-change").textContent, change)
     assert.equal(browser.byId("alt-market-breadth").textContent, breadth)
     assert.equal(browser.byId("alt-market-warning").hidden, status !== "unavailable")
@@ -3312,6 +3550,7 @@ test("the market background stays at the original universe snapshot during chart
     text: ["alt-market-status", "alt-market-icon", "alt-market-change", "alt-market-breadth", "alt-market-as-of", "alt-market-warning"]
       .map(id => browser.byId(id).textContent),
     warningHidden: browser.byId("alt-market-warning").hidden,
+    icon: browser.byId("alt-market-icon").children[0].children[0].attributes.get("href"),
   })
   const initial = view()
   const embedded = browser.byId("report-data").textContent
@@ -3337,6 +3576,9 @@ test("social indicators preserve top selection, sorting, filtering and movement 
   Object.assign(report.coins[1], { topRank: null, estimateConfidence: "low" })
   Object.assign(report.coins[2], { topRank: null, estimateConfidence: "high" })
   Object.assign(report.coins[3], { topRank: 1, estimateConfidence: "medium" })
+  report.coins.forEach((coin, index) => {
+    coin.features.sustainedCurrentScore = [0, 82, 82, null][index]
+  })
   report.coins.slice(1, 3).forEach((coin) => {
     coin.features.coingeckoTrending = true
     addInformation(report, coin)
@@ -3355,6 +3597,7 @@ test("social indicators preserve top selection, sorting, filtering and movement 
     ["probability", ["COTI", "SOL", "ADA", "BTC"]],
     ["top", ["BTC", "COTI", "SOL", "ADA"]],
     ["confidence", ["ADA", "BTC", "COTI", "SOL"]],
+    ["strength", ["SOL", "ADA", "COTI", "BTC"]],
   ]) {
     byId("sort").value = sort
     byId("sort").listeners.get("change")()
@@ -3381,6 +3624,95 @@ test("social indicators preserve top selection, sorting, filtering and movement 
   assert.deepEqual(report, before)
   assert.deepEqual(browser.updateCalls, [])
   assert.deepEqual(browser.directRequests, [])
+})
+
+test("search, sorting, ranges and explicit chart updates preserve snapshot indicators and strength scores without unsolicited requests", async () => {
+  const report = createReport(["COTI", "SOL"])
+  report.coins.forEach((coin, index) => {
+    Object.assign(coin.features, {
+      sustainedStatus: index ? "emerging" : "persistent", sustainedHistoryScore: index ? 25 : 70, sustainedCurrentScore: index ? 90 : 82,
+    })
+    Object.assign(coin, { socialSignificant: true, socialSentiment: "positive", socialReason: `Событие ${coin.symbol}` })
+    addChartSnapshot(report, coin)
+  })
+  const before = structuredClone(report)
+  const controlled = controlledUpdater()
+  const browser = runReport(report, controlled)
+  const { byId } = browser
+  const embedded = byId("report-data").textContent
+  const chart = browser.charts[0]
+  const indicatorState = node => ({
+    className: node.className, dataset: { ...node.dataset }, title: node.title, attributes: [...node.attributes],
+    icon: node.children[0].children[0].attributes.get("href"),
+  })
+  const rowState = row => ({
+    symbol: row.dataset.symbol, probability: row.children[1].textContent,
+    indicators: descendants(row).filter(node => ["strength-indicator", "social-indicator"].includes(node.className)).map(indicatorState),
+  })
+  const rows = new Map(byId("candidate-rows").children.map(row => [row.dataset.symbol, rowState(row)]))
+  const view = () => ({
+    symbol: byId("coin-symbol").textContent, hidden: byId("coin-indicators").hidden,
+    indicators: byId("coin-indicators").children.map(indicatorState),
+    strength: ["sustained-strength-status", "sustained-strength-history", "sustained-strength-current"].map(id => byId(id).textContent),
+  })
+  const initial = view()
+  assert.equal(initial.indicators.length, 2)
+  assert.deepEqual(initial.strength, ["Устойчиво сильная", "70 / 100", "82 / 100"])
+  const assertUnchanged = (requests = 0) => {
+    assert.deepEqual(view(), initial)
+    for (const row of byId("candidate-rows").children.filter(row => row.dataset.symbol)) {
+      assert.deepEqual(rowState(row), rows.get(row.dataset.symbol))
+    }
+    assert.equal(byId("report-data").textContent, embedded)
+    assert.deepEqual(JSON.parse(embedded), before)
+    assert.deepEqual(report, before)
+    assert.equal(browser.updateCalls.length, requests)
+    assert.equal(controlled.requests.length, requests)
+    assert.deepEqual(browser.directRequests, [])
+    for (const call of browser.updateCalls) {
+      assert.equal(call.asOf, report.asOf)
+      assert.deepEqual(structuredClone(call.coin), before.coins[0])
+    }
+  }
+
+  assertUnchanged()
+  for (const sort of ["strength", "probability", "confidence", "top", "strength"]) {
+    byId("sort").value = sort
+    byId("sort").listeners.get("change")()
+    if (sort === "strength") {
+      assert.deepEqual(byId("candidate-rows").children.map(row => row.dataset.symbol), ["SOL", "COTI"])
+    }
+    assertUnchanged()
+  }
+  for (const query of ["SOL", "UNKNOWN", ""]) {
+    byId("search").value = query
+    byId("search").listeners.get("input")()
+    assertUnchanged()
+  }
+  for (const day of browser.days) {
+    click(day)
+    assertUnchanged()
+  }
+  assert.equal(browser.charts.length, 1)
+  assert.equal(browser.charts[0], chart)
+  assert.equal(chart.removed, false)
+  const pending = click(byId("update-chart"))
+  assertUnchanged(1)
+  const result = createUpdate(report)
+  controlled.requests[0].resolve(result)
+  await pending
+  assert.equal(chartSeries(browser.charts.at(-1), "Candlestick").data.at(-1).close, result.history.candles.at(-1).close)
+  assertUnchanged(1)
+  const failed = click(byId("update-chart"))
+  assertUnchanged(2)
+  controlled.requests[1].reject(new Error("Offline"))
+  await failed
+  assertUnchanged(2)
+  selectCoin(browser, "SOL")
+  assert.equal(byId("coin-indicators").children[0].dataset.status, "emerging")
+  assert.ok(byId("coin-indicators").children[0].title.includes("90 / 100"))
+  selectCoin(browser, "COTI")
+  assertUnchanged(2)
 })
 
 for (const mode of ["download", "website"]) {
@@ -4432,6 +4764,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
   })
   addInformation(report)
   addDescriptions(report)
+  Object.assign(report.coins[0], { socialSignificant: true, socialSentiment: "positive", socialReason: "Новое партнёрство" })
   const before = structuredClone(report)
   const controlled = controlledUpdater()
   const browser = runReport(report, controlled)
@@ -4443,7 +4776,7 @@ test("pending, successful and failed updates preserve embedded JSON, analysis an
     node.open = true
   })
   const unchanged = [
-    "as-of", "coverage", "objective", "coin-badges", "market-summary", "top-candidates", "candidate-rows",
+    "as-of", "coverage", "objective", "coin-badges", "coin-indicators", "market-summary", "top-candidates", "candidate-rows",
     "explanation", "drivers", "counter-signals", "feature-highlights", "feature-rows", "flags", "analysis-source",
     "information-panel", "social-reason", "news-summary", "twitter-summary", "context-caveat", "news-window", "news-count", "news-status", "news-items", "twitter-window",
     "twitter-count", "twitter-status", "twitter-items",

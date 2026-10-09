@@ -21,6 +21,26 @@ body {
     line-height: 1.5;
 }
 
+.icon-definitions {
+    position: absolute;
+    overflow: hidden;
+}
+
+.icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    fill: currentColor;
+    vertical-align: -.125em;
+}
+
+.icon-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 button,
 input,
 select {
@@ -541,11 +561,25 @@ table {
 }
 
 .coin-button .top-star {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     color: var(--accent);
     font-size: 10px;
     margin-left: 6px;
 }
 
+.coin-button .top-star .icon {
+    font-size: 14px;
+}
+
+.coin-button .top-star,
+.coin-button .strength-indicator,
+.coin-button .social-indicator {
+    vertical-align: middle;
+}
+
+.strength-indicator,
 .social-indicator {
     display: inline-flex;
     width: 14px;
@@ -555,9 +589,18 @@ table {
     color: var(--muted);
 }
 
+.strength-indicator svg,
 .social-indicator svg {
     width: 100%;
     height: 100%;
+}
+
+.strength-indicator[data-status="persistent"] {
+    color: var(--positive);
+}
+
+.strength-indicator[data-status="emerging"] {
+    color: var(--accent);
 }
 
 .social-indicator[data-sentiment="positive"],
@@ -619,6 +662,19 @@ table {
     font-weight: 650;
     letter-spacing: -.5px;
     overflow-wrap: anywhere;
+}
+
+.coin-indicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.coin-indicators .strength-indicator,
+.coin-indicators .social-indicator {
+    width: 20px;
+    height: 20px;
+    margin: 0;
 }
 
 .coin-header p {

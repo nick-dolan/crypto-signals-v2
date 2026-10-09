@@ -28,6 +28,7 @@ test("web assets use an explicit allowlist, text MIME types and executable nativ
     null, undefined, "", "../report.js", "./report.js", "/report.js", "..\\report.js", "%2e%2e%2freport.js",
     "report.js?x=1", "report.js#x", "REPORT.JS", "report.js\0", "toString", "__proto__", "constructor",
     "read-web-asset.js", "report.html", "report-navigation.html", "chart-update.js", "package.json",
+    "render-icon-sprite.js", "icons/arrow-up.svg", "arrow-up.svg",
     "../../package.json", "node_modules/lightweight-charts/package.json", "https://example.com/report.js",
   ]) {
     assert.equal(await readWebAsset(name), null, String(name))
@@ -42,7 +43,7 @@ test("both website pages reference only allowlisted same-origin assets in depend
     assert.match(html, /<html lang="ru">/)
     assert.match(html, /<meta name="viewport"/)
     assert.match(html, /<noscript>/)
-    assert.doesNotMatch(html, /REPORT_[A-Z]+/)
+    assert.doesNotMatch(html, /(?:REPORT|WEB)_[A-Z]+/)
     for (const [, url] of html.matchAll(/<(?:link|script)\b[^>]*(?:href|src)="([^"]+)"/g)) {
       assert.ok(url.startsWith("/assets/"), url)
       assert.ok(await readWebAsset(url.slice("/assets/".length)), url)
@@ -63,7 +64,10 @@ test("both website pages reference only allowlisted same-origin assets in depend
     "/assets/lightweight-charts.js", "/assets/browser-helpers.js", "/assets/report.js", "/assets/report-loader.js",
   ])
   assert.match(index, /UTC\+3 · неделя с понедельника · новые сверху/)
-  assert.match(report, /<a href="\/">← Все отчёты<\/a>/)
+  assert.match(index, /class="brand-mark"[^>]*>\s*<svg[^>]*>\s*<use href="#icon-diamond"><\/use>\s*<\/svg>\s*<\/span>\s+CRYPTO SIGNALS/)
+  assert.match(index, /id="reports-previous"[^>]*disabled>\s*<svg[^>]*>\s*<use href="#icon-arrow-left"><\/use>\s*<\/svg>\s+Назад<\/button>/)
+  assert.match(index, /id="reports-next"[^>]*disabled>Далее\s+<svg[^>]*>\s*<use href="#icon-arrow-right"><\/use>\s*<\/svg>\s*<\/button>/)
+  assert.match(report, /<a href="\/">\s*<svg[^>]*>\s*<use href="#icon-arrow-left"><\/use>\s*<\/svg>\s+Все отчёты<\/a>/)
   assert.match(report, /id="report-download"[^>]*hidden[^>]*download/)
   assert.match(report, /id="report-load-message"[^>]*role="status"/)
   assert.match(report, /id="report-shell"[^>]*\bhidden\b/)

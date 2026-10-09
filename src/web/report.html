@@ -10,11 +10,15 @@
 </head>
 
 <body>
+    <!-- REPORT_ICONS -->
     <!-- REPORT_NAVIGATION -->
     <!-- REPORT_MAIN -->
     <header class="page-header">
         <div>
-            <p class="eyebrow"><span class="brand-mark" aria-hidden="true">◈</span> CRYPTO SIGNALS <span class="muted">/
+            <p class="eyebrow"><span class="brand-mark" aria-hidden="true"><svg class="icon" aria-hidden="true"
+                        focusable="false">
+                        <use href="#icon-diamond"></use>
+                    </svg></span> CRYPTO SIGNALS <span class="muted">/
                     РАННИЕ ДВИЖЕНИЯ</span></p>
             <h1 id="report-title">Крипторадар</h1>
         </div>
@@ -42,7 +46,10 @@
         <section id="alt-market-background" class="alt-market-background" data-status="unavailable"
             aria-labelledby="alt-market-heading">
             <div class="alt-market-overview">
-                <span id="alt-market-icon" class="alt-market-icon" aria-hidden="true">—</span>
+                <span id="alt-market-icon" class="alt-market-icon" aria-hidden="true"><svg class="icon"
+                        aria-hidden="true" focusable="false">
+                        <use href="#icon-minus"></use>
+                    </svg></span>
                 <div>
                     <h2 id="alt-market-heading">Фон альтрынка · 4ч</h2>
                     <p id="alt-market-status" class="alt-market-status">Недостаточно данных</p>
@@ -96,6 +103,7 @@
                         <option id="probability-sort" value="probability">По вероятности движения</option>
                         <option value="top" selected>Сначала топ агента</option>
                         <option value="confidence">По уверенности агента</option>
+                        <option value="strength">По текущей силе</option>
                     </select>
                 </div>
                 <div class="candidate-scroll">
@@ -118,7 +126,8 @@
                     <header class="coin-header">
                         <div>
                             <div class="coin-title">
-                                <h2 id="coin-symbol"></h2><span id="top-rank" class="top-badge" hidden></span><span
+                                <h2 id="coin-symbol"></h2><span id="coin-indicators" class="coin-indicators"
+                                    hidden></span><span id="top-rank" class="top-badge" hidden></span><span
                                     id="coingecko-badge" hidden></span>
                             </div>
                             <p id="coin-name" class="muted"></p>
@@ -129,8 +138,11 @@
                     <div id="coin-description"></div>
                     <div class="coin-meta">
                         <div id="coin-badges" class="badge-list"></div>
-                        <a id="tradingview-link" target="_blank" rel="noopener noreferrer">Открыть в TradingView
-                            ↗</a>
+                        <a id="tradingview-link" class="icon-link" target="_blank" rel="noopener noreferrer">Открыть в
+                            TradingView
+                            <svg class="icon" aria-hidden="true" focusable="false">
+                                <use href="#icon-arrow-up-right-from-square"></use>
+                            </svg></a>
                     </div>
                     <section id="coingecko-context" class="coingecko-context" aria-labelledby="coingecko-heading"
                         hidden>

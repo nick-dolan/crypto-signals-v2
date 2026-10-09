@@ -279,9 +279,47 @@ test("real browser: temporary archive, list, charts, peer radar and server-indep
     await waitFor(() => evaluate(`document.querySelector('#report-groups').getAttribute('aria-busy') === 'false' && document.querySelectorAll('.report-group').length === ${weekly.labels.length}`), "week groups restored")
 
     async function inspectReport () {
+      async function inspectIndicators (coin) {
+        const indicators = await evaluate(`(() => {
+          const header = document.querySelector('#coin-indicators');
+          const row = [...document.querySelectorAll('#candidate-rows tr[data-symbol]')].find(node => node.dataset.symbol === ${JSON.stringify(coin.symbol)});
+          return { hidden: header.hidden, badges: [...header.children].map(node => ({
+            className: node.className, title: node.title, role: node.getAttribute('role'), label: node.getAttribute('aria-label'),
+            icon: node.querySelector('use').getAttribute('href'),
+            matchesSidebar: [...row.querySelectorAll('.strength-indicator, .social-indicator')].some(badge => badge.className === node.className && badge.title === node.title && getComputedStyle(badge).color === getComputedStyle(node).color)
+          })) };
+        })()`)
+        const classes = [
+          ...(["persistent", "emerging"].includes(coin.features.sustainedStatus) ? ["strength-indicator"] : []),
+          ...(coin.socialSignificant === true ? ["social-indicator"] : []),
+        ]
+        assert.equal(indicators.hidden, classes.length === 0)
+        assert.deepEqual(indicators.badges.map(badge => badge.className), classes)
+        for (const badge of indicators.badges) {
+          assert.equal(badge.role, "img")
+          assert.equal(badge.label, badge.title)
+          assert.equal(badge.matchesSidebar, true)
+          assert.equal(badge.icon, badge.className === "strength-indicator" ? "#icon-hand-fist" : "#icon-megaphone")
+        }
+      }
+
       assert.equal(await evaluate("document.querySelector('#coin-symbol').textContent"), initialCoin.symbol)
       assert.equal(await evaluate("document.querySelectorAll('#candidate-rows tr[data-symbol]').length"), report.candidateCount)
+      assert.equal(await evaluate("document.querySelector('#sort').value"), "top")
+      await inspectIndicators(initialCoin)
       await frames()
+      const iconRows = await evaluate(`[...document.querySelectorAll('.coin-button')].map(button => ({
+        symbol: button.querySelector('strong').textContent,
+        icons: [...button.querySelectorAll('svg.icon')].map(node => {
+          const box = node.getBoundingClientRect();
+          return { href: node.querySelector('use').getAttribute('href'), width: box.width, height: box.height, centerY: box.top + box.height / 2 };
+        })
+      })).filter(row => row.icons.length > 1)`)
+      for (const { symbol, icons } of iconRows) {
+        assert.ok(icons.every(icon => icon.width === 14 && icon.height === 14), JSON.stringify({ symbol, icons }))
+        const centers = icons.map(icon => icon.centerY)
+        assert.ok(Math.max(...centers) - Math.min(...centers) <= 0.25, JSON.stringify({ symbol, icons }))
+      }
       const chart = await evaluate(`(() => {
         const node = document.querySelector('#chart');
         const canvas = node.querySelector('canvas');
@@ -304,8 +342,26 @@ test("real browser: temporary archive, list, charts, peer radar and server-indep
       assert.equal(await evaluate("document.querySelectorAll('#candidate-rows tr[data-symbol]').length"), matchingCoins.length)
       await evaluate(`[...document.querySelectorAll('#candidate-rows tr[data-symbol]')].find(node => node.dataset.symbol === ${JSON.stringify(selectedCoin.symbol)}).querySelector('.coin-button').click()`)
       assert.equal(await evaluate("document.querySelector('#coin-symbol').textContent"), selectedCoin.symbol)
+      await inspectIndicators(selectedCoin)
       await evaluate("document.querySelector('#search').value = ''; document.querySelector('#search').dispatchEvent(new Event('input')); document.querySelector('#sort').value = 'probability'; document.querySelector('#sort').dispatchEvent(new Event('change'))")
       assert.equal(await evaluate("document.querySelectorAll('#candidate-rows tr[data-symbol]').length"), report.candidateCount)
+      await evaluate("document.querySelector('#sort').value = 'strength'; document.querySelector('#sort').dispatchEvent(new Event('change'))")
+      const strengthOrder = [...report.coins].sort((first, second) => (
+        (isFinite(second.features.sustainedCurrentScore) ? second.features.sustainedCurrentScore : -Infinity)
+        - (isFinite(first.features.sustainedCurrentScore) ? first.features.sustainedCurrentScore : -Infinity)
+        || second.movementProbability - first.movementProbability || first.symbol.localeCompare(second.symbol)
+      )).map(coin => coin.symbol)
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#candidate-rows tr[data-symbol]')].map(node => node.dataset.symbol)"), strengthOrder)
+      assert.equal(await evaluate("document.querySelector('#coin-symbol').textContent"), selectedCoin.symbol)
+      await inspectIndicators(selectedCoin)
+      const icons = await evaluate(`[...document.querySelectorAll('svg.icon')].filter(node => node.getBoundingClientRect().width > 0).map(node => {
+        const href = node.querySelector('use').getAttribute('href');
+        const box = node.getBBox();
+        return { href, width: box.width, height: box.height, local: document.querySelector(href)?.tagName === 'symbol',
+          decorative: node.getAttribute('aria-hidden') === 'true', color: getComputedStyle(node).fill === getComputedStyle(node).color };
+      })`)
+      assert.ok(icons.length > 0)
+      assert.ok(icons.every(icon => icon.local && icon.decorative && icon.color && icon.width > 0 && icon.height > 0), JSON.stringify(icons))
       await click("#peer-radar-tab")
       await frames()
       const radar = await evaluate(`({ observations: document.querySelectorAll('.peer-observation').length,
@@ -322,7 +378,7 @@ test("real browser: temporary archive, list, charts, peer radar and server-indep
       await frames()
       assert.equal(await evaluate("document.querySelector('#coin-symbol').textContent"), selectedCoin.symbol)
       assert.ok(await evaluate("!document.querySelector('#main-panel').hidden && document.querySelectorAll('#chart canvas').length > 0"))
-      return { chart, radar }
+      return { chart, radar, icons: icons.length, alignedIconRows: iconRows.length, strengthSort: true }
     }
 
     await click(".report-open")

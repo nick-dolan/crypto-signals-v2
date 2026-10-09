@@ -24,6 +24,17 @@
     return node
   }
 
+  function createIcon (name) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    svg.setAttribute("class", "icon")
+    svg.setAttribute("aria-hidden", "true")
+    svg.setAttribute("focusable", "false")
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use")
+    use.setAttribute("href", `#icon-${name}`)
+    svg.append(use)
+    return svg
+  }
+
   function byId (id) {
     return document.getElementById(id)
   }
@@ -122,15 +133,15 @@
     }
     const status = ["up", "down", "mixed"].includes(background.status) ? background.status : "unavailable"
     const [label, icon] = {
-      up: ["Преобладает рост", "↑"],
-      down: ["Преобладает снижение", "↓"],
-      mixed: ["Смешанный фон", "↔"],
-      unavailable: ["Недостаточно данных", "—"],
+      up: ["Преобладает рост", "arrow-up"],
+      down: ["Преобладает снижение", "arrow-down"],
+      mixed: ["Смешанный фон", "arrows-left-right"],
+      unavailable: ["Недостаточно данных", "minus"],
     }[status]
 
     byId("alt-market-background").dataset.status = status
     byId("alt-market-status").textContent = label
-    byId("alt-market-icon").textContent = icon
+    byId("alt-market-icon").replaceChildren(createIcon(icon))
     byId("alt-market-change").textContent = background.change4hPct == null
       ? "Нет данных"
       : `${number(background.change4hPct, 3, "exceptZero")}%`
@@ -191,6 +202,34 @@
     return badge
   }
 
+  function strengthLabel (status) {
+    return {
+      persistent: "Устойчиво сильная",
+      emerging: "Сила появляется",
+      fading: "Сила ослабевает",
+      neutral: "Не выделяется",
+      insufficient_data: "Недостаточно данных",
+    }[status] ?? "Недостаточно данных"
+  }
+
+  function createStrengthIndicator (coin) {
+    const indicator = element("span", "strength-indicator")
+    const value = coin.features.sustainedCurrentScore
+    indicator.dataset.status = coin.features.sustainedStatus
+    indicator.title = `${strengthLabel(coin.features.sustainedStatus)} · Текущая сила: ${isFinite(value) ? `${number(value, 1)} / 100` : "Нет данных"} · Срез отчёта`
+    indicator.setAttribute("role", "img")
+    indicator.setAttribute("aria-label", indicator.title)
+    indicator.append(createIcon("hand-fist"))
+    return indicator
+  }
+
+  function coinIndicators (coin) {
+    return [
+      ...(["persistent", "emerging"].includes(coin.features.sustainedStatus) ? [createStrengthIndicator(coin)] : []),
+      ...(coin.socialSignificant === true ? [createSocialIndicator(coin)] : []),
+    ]
+  }
+
   function socialSignalText (coin) {
     if (![true, false].includes(coin.socialSignificant) || !coin.socialSentiment) {
       return coin.socialReason ?? ""
@@ -212,19 +251,7 @@
     indicator.title = socialSignalText(coin)
     indicator.setAttribute("role", "img")
     indicator.setAttribute("aria-label", indicator.title)
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
-    svg.setAttribute("viewBox", "0 0 24 24")
-    svg.setAttribute("fill", "none")
-    svg.setAttribute("stroke", "currentColor")
-    svg.setAttribute("stroke-width", "2")
-    svg.setAttribute("stroke-linecap", "round")
-    svg.setAttribute("stroke-linejoin", "round")
-    svg.setAttribute("aria-hidden", "true")
-    svg.setAttribute("focusable", "false")
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
-    path.setAttribute("d", "M3 9h4l13-5v16L7 15H3V9Z M7 9v6 M7 15l2 6h4l-2-4.5")
-    svg.append(path)
-    indicator.append(svg)
+    indicator.append(createIcon("megaphone"))
     return indicator
   }
 
@@ -264,6 +291,13 @@
     const coins = report.coins
       .filter(coin => `${coin.symbol} ${coin.name}`.toLocaleLowerCase().includes(query))
       .sort((first, second) => {
+        if (sort === "strength") {
+          const firstScore = isFinite(first.features.sustainedCurrentScore) ? first.features.sustainedCurrentScore : -Infinity
+          const secondScore = isFinite(second.features.sustainedCurrentScore) ? second.features.sustainedCurrentScore : -Infinity
+          if (firstScore !== secondScore) {
+            return secondScore - firstScore
+          }
+        }
         if (sort === "top" && first.topRank !== second.topRank) {
           return (first.topRank ?? Infinity) - (second.topRank ?? Infinity)
         }
@@ -281,12 +315,14 @@
       const button = element("button", "coin-button")
       button.type = "button"
       button.setAttribute("aria-pressed", String(coin.symbol === selectedSymbol))
-      button.append(element("strong", "", coin.symbol))
+      button.append(element("strong", "", coin.symbol), ...coinIndicators(coin))
       if (coin.topRank != null) {
-        button.append(element("span", "top-star", `★ ${coin.topRank}`))
-      }
-      if (coin.socialSignificant === true) {
-        button.append(createSocialIndicator(coin))
+        const rank = element("span", "top-star")
+        rank.title = `Топ агента: ${coin.topRank}`
+        rank.setAttribute("role", "img")
+        rank.setAttribute("aria-label", rank.title)
+        rank.append(createIcon("star"), element("span", "", coin.topRank))
+        button.append(rank)
       }
       if (coin.features.coingeckoTrending === true) {
         button.append(createCoinGeckoBadge())
@@ -324,14 +360,17 @@
     }
   }
 
-  function sourceLink (label, href) {
+  function sourceLink (label, href, withIcon = false) {
     try {
       const url = new URL(href)
       if (["https:", "http:"].includes(url.protocol)) {
-        const link = element("a", "", label)
+        const link = element("a", withIcon ? "icon-link" : "", label)
         link.href = url.href
         link.target = "_blank"
         link.rel = "noopener noreferrer"
+        if (withIcon) {
+          link.append(createIcon("arrow-up-right-from-square"))
+        }
         return link
       }
     } catch {
@@ -491,13 +530,13 @@
     return metrics
   }
 
-  function peerMarketLink (label, marketSymbol) {
+  function peerMarketLink (label, marketSymbol, withIcon = false) {
     if (!marketSymbol) {
       return element("span", "", label)
     }
     const url = new URL("https://www.tradingview.com/chart/")
     url.searchParams.set("symbol", marketSymbol)
-    return sourceLink(label, url.href)
+    return sourceLink(label, url.href, withIcon)
   }
 
   function peerLeader (leader, coin, snapshotClosedAt) {
@@ -559,7 +598,7 @@
       element("span", "peer-verdict", verdict === "watch" ? "Обратить внимание" : "Ограниченная интерпретация"),
       element("span", "peer-radar-meta", `Лидеров: ${observation.leaders.length}`),
     )
-    heading.append(peerMarketLink("Открыть в TradingView ↗", coin.marketSymbol))
+    heading.append(peerMarketLink("Открыть в TradingView", coin.marketSymbol, true))
     const comparison = element("div", "peer-comparison")
     const timestamp = element("p", "peer-chart-time")
     const legend = element("div", "peer-chart-legend")
@@ -797,7 +836,7 @@
     }
     if (item.tradingViewUrl) {
       const footer = element("div", "source-footer")
-      footer.append(sourceLink("Новость в TradingView ↗", item.tradingViewUrl))
+      footer.append(sourceLink("Новость в TradingView", item.tradingViewUrl, true))
       article.append(footer)
     }
     return article
@@ -815,7 +854,7 @@
       ["Подписчики", tweet.authorFollowers],
     ].map(([label, value]) => element("span", "", `${label}: ${number(value, 0)}`)))
     if (/^\d+$/.test(tweet.id ?? "")) {
-      footer.append(sourceLink("Открыть в X ↗", `https://x.com/i/status/${tweet.id}`))
+      footer.append(sourceLink("Открыть в X", `https://x.com/i/status/${tweet.id}`, true))
     }
     article.append(footer)
     return article
@@ -898,13 +937,7 @@
       : "insufficient_data"
 
     byId("sustained-strength").dataset.status = status
-    byId("sustained-strength-status").textContent = {
-      persistent: "Устойчиво сильная",
-      emerging: "Сила появляется",
-      fading: "Сила ослабевает",
-      neutral: "Не выделяется",
-      insufficient_data: "Недостаточно данных",
-    }[status]
+    byId("sustained-strength-status").textContent = strengthLabel(status)
     byId("sustained-strength-status").title = report.definitions?.sustainedStatus ?? ""
 
     for (const [id, field] of [
@@ -1272,6 +1305,9 @@
     selectedSymbol = symbol
     byId("coin-detail").hidden = false
     byId("coin-symbol").textContent = coin.symbol
+    const indicators = coinIndicators(coin)
+    byId("coin-indicators").replaceChildren(...indicators)
+    byId("coin-indicators").hidden = !indicators.length
     byId("coin-name").textContent = `${coin.name} · ${coin.marketSymbol}`
     byId("coin-description").replaceChildren(coinDescription(coin))
     byId("top-rank").textContent = `ТОП ${coin.topRank}`
