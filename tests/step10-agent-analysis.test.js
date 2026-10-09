@@ -147,6 +147,28 @@ test("analysis prompt example follows the structured response schema", async () 
   assert.deepEqual(Object.keys(example.assessments[0].technicalSummary).sort(), ["caveat", "observation"])
 })
 
+test("analysis prompt distinguishes current strength against the market from historical resilience", async () => {
+  const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+
+  assert.match(prompt, /`altMarketBackground` со статусом `down`.*`peerCoinReturn4hPct` за те же 4ч/)
+  assert.match(prompt, /рост монеты — наиболее сильный положительный аргумент; удержание около нуля — более слабый признак устойчивости; меньшее падение — лишь относительное преимущество, не подтверждение роста/)
+  assert.match(prompt, /Без доступного фона или собственной доходности не утверждай текущий рост против рынка/)
+  assert.match(prompt, /`sustainedDownPositiveRate` — историческая доля роста.*`sustainedDownWinRate` — историческая доля преимущества/)
+  assert.match(prompt, /Не выдавай исторические доли за поведение в текущем окне/)
+})
+
+test("analysis prompt weighs strength without a fixed bonus, duplicate evidence or bypassing early triggers", async () => {
+  const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+
+  assert.match(prompt, /Учитывай силу против рынка при оценке `movementProbability`/)
+  assert.match(prompt, /При сопоставимых Setup и свежем Trigger отдавай преимущество монете/)
+  assert.match(prompt, /Не назначай фиксированную прибавку к вероятности.*scores.*делением на 100/)
+  assert.match(prompt, /Если сила существенно повлияла на оценку.*`drivers` и итоговом резюме/)
+  assert.match(prompt, /Сила, CoinGecko trending.*не заменяют собственные Setup и свежий Trigger кандидата и не отменяют позднюю фазу/)
+  assert.match(prompt, /Не считай повторные представления одного сигнала независимыми подтверждениями:[\s\S]*`sustainedStatus`, scores и компоненты/)
+  assert.doesNotMatch(prompt, /устойчивая относительная сила[^\n]*дают только контекст/)
+})
+
 test("agent analysis parser rejects a direction forecast as an extra field", () => {
   for (const group of ["assessments", "topCandidates"]) {
     const response = createAgentResponse()
