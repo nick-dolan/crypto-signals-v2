@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-07T08:01:35.996Z",
+  "generatedAt": "2026-10-09T14:24:35.399Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-07T08:01:20.581Z"
+    "sourceGeneratedAt": "2026-10-09T14:24:20.504Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 270,
+  "coinCount": 271,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3966,6 +3966,18 @@
         {
           "url": "https://www.coingecko.com/en/coins/concrete",
           "checkedAt": "2026-10-07T08:01:33.880Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCMERL",
+      "symbol": "MERL",
+      "name": "Merlin Chain",
+      "description": "Merlin Chain — EVM-совместимый Bitcoin Layer 2 с низкими комиссиями и поддержкой протоколов BRC20, BRC420, Bitmap и других. Официальный сайт упоминает токен MERL, но не объясняет его назначение.",
+      "sources": [
+        {
+          "url": "https://merlinchain.io/",
+          "checkedAt": "2026-10-09T14:24:33.360Z"
         }
       ]
     }
