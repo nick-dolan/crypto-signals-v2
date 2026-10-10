@@ -1,6 +1,8 @@
+import { parallel } from "radash"
+
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
-import { isArray, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
+import { isArray, isFunction, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import {
   InvalidContextEnrichmentError,
   parseContextEnrichment,
@@ -127,7 +129,7 @@ async function enrichCandidate (
 export async function enrichCandidatesWithContext (
   input,
   systemPrompt,
-  { callAgent = callModel } = {},
+  { callAgent = callModel, concurrency = 10 } = {},
 ) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Context enrichment system prompt is required")
@@ -137,19 +139,21 @@ export async function enrichCandidatesWithContext (
     throw new Error("Context enrichment agent must be a function")
   }
 
+  if (!isSafeInteger(concurrency) || concurrency < 1) {
+    throw new Error("Context enrichment concurrency must be a positive integer")
+  }
+
   const { asOf, candidates } = validateInput(input)
   const modelSettings = getModelSettings("candidateContext")
-  const enrichedCandidates = []
-
-  for (const candidate of candidates) {
-    enrichedCandidates.push(await enrichCandidate(
-      input,
-      candidate,
-      systemPrompt,
-      callAgent,
-      modelSettings,
-    ))
-  }
+  const enrichedCandidates = await parallel(concurrency, candidates, candidate => enrichCandidate(
+    input,
+    candidate,
+    systemPrompt,
+    callAgent,
+    modelSettings,
+  )).catch((error) => {
+    throw error.errors?.[0] ?? error
+  })
 
   return {
     schemaVersion: 9,

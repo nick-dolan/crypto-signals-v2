@@ -495,7 +495,8 @@ test("all candidates receive information before analysis and keep its final asse
   const result = addReportContext(report, sources, context)
 
   assert.equal(analysisCallCount, 1)
-  assert.deepEqual(contextCalls, ["COTI", "SOL", "MINA"])
+  assert.deepEqual([...contextCalls].sort(), ["COTI", "MINA", "SOL"])
+  assert.deepEqual(context.candidates.map(candidate => candidate.symbol), ["COTI", "SOL", "MINA"])
   assert.deepEqual(sources.candidates.map(candidate => candidate.symbol), ["COTI", "SOL", "MINA"])
   assert.deepEqual(result.coins.map(coin => coin.topRank), [1, null, null])
   assert.equal(result.objective, input.payload.objective)

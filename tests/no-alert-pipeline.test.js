@@ -146,12 +146,12 @@ test("every preliminary candidate gets context before top selection, including n
       const completeReport = addReportContext(report, sources, context)
       const html = await renderReportHtml(completeReport)
 
-      assert.deepEqual({ ...calls, news: [...calls.news].sort() }, {
+      assert.deepEqual({ ...calls, news: [...calls.news].sort(), context: [...calls.context].sort() }, {
         news: expectedSymbols.map(symbol => `CRYPTO:${symbol}USD`).sort(),
         twitter: expectedSymbols.map(symbol => (
           `$${symbol} since_time:${referenceTimestamp - 86_400} until_time:${referenceTimestamp + 1}`
         )),
-        context: expectedSymbols,
+        context: [...expectedSymbols].sort(),
       })
       for (const output of [news, sources, context]) {
         assert.deepEqual(output.candidates.map(coin => coin.symbol), expectedSymbols)

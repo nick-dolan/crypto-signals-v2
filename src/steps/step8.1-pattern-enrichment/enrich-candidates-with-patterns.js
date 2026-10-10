@@ -1,8 +1,9 @@
 import path from "node:path"
+import { parallel } from "radash"
 
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
-import { isArray, isError, isFunction, isString } from "../../helpers/utils.typed.js"
+import { isArray, isError, isFunction, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { parsePatternEnrichment } from "./parse-pattern-enrichment.js"
 
 async function enrichCandidate (input, candidate, systemPrompt, modelSettings, callAgent, writeJson) {
@@ -61,6 +62,7 @@ async function enrichCandidate (input, candidate, systemPrompt, modelSettings, c
 export async function enrichCandidatesWithPatterns (input, systemPrompt, {
   callAgent = callModel,
   writeJson = writeTmpJson,
+  concurrency = 10,
 } = {}) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Pattern enrichment system prompt is required")
@@ -71,14 +73,18 @@ export async function enrichCandidatesWithPatterns (input, systemPrompt, {
   if (!isFunction(callAgent)) {
     throw new Error("Pattern enrichment agent must be a function")
   }
+  if (!isSafeInteger(concurrency) || concurrency < 1) {
+    throw new Error("Pattern enrichment concurrency must be a positive integer")
+  }
   const modelSettings = getModelSettings("candidatePattern")
   if (modelSettings.provider !== "copilot-sdk") {
     throw new Error("Pattern image analysis requires copilot-sdk attachments")
   }
-  const candidates = []
-  for (const candidate of input.candidates) {
-    candidates.push(await enrichCandidate(input, candidate, systemPrompt, modelSettings, callAgent, writeJson))
-  }
+  const candidates = await parallel(concurrency, input.candidates, candidate => (
+    enrichCandidate(input, candidate, systemPrompt, modelSettings, callAgent, writeJson)
+  )).catch((error) => {
+    throw error.errors?.[0] ?? error
+  })
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),

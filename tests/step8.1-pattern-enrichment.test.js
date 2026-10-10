@@ -247,9 +247,9 @@ test("one mini-agent per usable candidate receives only metadata and two absolut
     },
     writeJson: async (filename, value) => writes.push({ filename, value }),
   })
-  assert.equal(maximum, 1)
-  assert.deepEqual(calls.map(call => call.metadata.symbol), ["SOL", "ETH"])
-  assert.deepEqual(calls[0].metadata, {
+  assert.equal(maximum, 2)
+  assert.deepEqual(calls.map(call => call.metadata.symbol).sort(), ["ETH", "SOL"])
+  assert.deepEqual(calls.find(call => call.metadata.symbol === "SOL").metadata, {
     symbol: "SOL", name: "Coin SOL", marketSymbol: "BINANCE:SOLUSDT.P", asOf: input.asOf,
     timeframe: "1h", from: input.from, to: input.to, coverage: { candles: 168, volume: 168 }, dataCaveat: null,
     views: [
@@ -276,10 +276,131 @@ test("one mini-agent per usable candidate receives only metadata and two absolut
   assert.deepEqual(result.candidates.map(candidate => candidate.symbol), ["SOL", "BTC", "ETH"])
   assert.equal(writes.length, 3)
   assert.ok(writes.every(write => write.filename.endsWith("analysis.json")))
-  assert.deepEqual(writes.map(write => write.value), result.candidates)
+  assert.deepEqual(result.candidates.map(candidate => (
+    writes.find(write => write.value.symbol === candidate.symbol).value
+  )), result.candidates)
   assert.deepEqual(input, before)
   assert.doesNotMatch(JSON.stringify(result), /"(?:files|file|views|attachments|path|coverage|candles)"|\.png|\.svg|movementProbability/)
   assert.equal(readPatternContext(createShortlist(["SOL", "BTC", "ETH"]), result).bySymbol.size, 3)
+})
+
+test("limits pattern agents to two and keeps results and files associated after out-of-order completion", async () => {
+  const symbols = ["SOL", "BTC", "ETH", "XRP", "ADA"]
+  const input = createPrepared(symbols)
+  const first = Promise.withResolvers()
+  const others = Promise.withResolvers()
+  const completed = []
+  const writes = []
+  let firstSymbol
+  let active = 0
+  let maximum = 0
+  const pending = enrichCandidatesWithPatterns(input, "Prompt", {
+    concurrency: 2,
+    callAgent: async (_, message) => {
+      const { symbol } = JSON.parse(message)
+      firstSymbol ??= symbol
+      active += 1
+      maximum = Math.max(maximum, active)
+      if (symbol === firstSymbol) {
+        await first.promise
+      } else {
+        await new Promise(resolve => setImmediate(resolve))
+      }
+      active -= 1
+      completed.push(symbol)
+      if (completed.length === symbols.length - 1) {
+        others.resolve()
+      }
+      return JSON.stringify(createResponse(symbol, { summary: `Паттерн ${symbol}` }))
+    },
+    writeJson: async (filename, value) => writes.push({ filename, value }),
+  })
+
+  try {
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(maximum, 2)
+    await others.promise
+    assert.equal(active, 1)
+    first.resolve()
+    const result = await pending
+    assert.equal(maximum, 2)
+    assert.equal(active, 0)
+    assert.equal(completed.at(-1), firstSymbol)
+    assert.notDeepEqual(completed, symbols)
+    assert.deepEqual(result.candidates.map(candidate => candidate.symbol), symbols)
+    assert.equal(result.patternEnrichment.candidateCallCount, symbols.length)
+    assert.equal(writes.length, symbols.length)
+    for (const candidate of input.candidates) {
+      const analysis = result.candidates.find(result => result.symbol === candidate.symbol)
+      assert.equal(analysis.summary, `Паттерн ${candidate.symbol}`)
+      assert.deepEqual(writes.find(write => write.filename === path.join(input.directory, candidate.directory, "analysis.json")).value, analysis)
+    }
+  } finally {
+    first.resolve()
+  }
+})
+
+test("uses ten pattern agents by default and supports explicit limits without changing results", async () => {
+  const input = createPrepared(Array.from({ length: 12 }, (_, index) => `COIN${index}`))
+  for (const concurrency of [undefined, 1, 2, 4, 6, 8, 10]) {
+    let active = 0
+    let maximum = 0
+    const result = await enrichCandidatesWithPatterns(input, "Prompt", {
+      concurrency,
+      callAgent: async (_, message) => {
+        active += 1
+        maximum = Math.max(maximum, active)
+        await new Promise(resolve => setImmediate(resolve))
+        active -= 1
+        return JSON.stringify(createResponse(JSON.parse(message).symbol))
+      },
+      writeJson: async () => {},
+    })
+    assert.equal(maximum, concurrency ?? 10)
+    assert.equal(active, 0)
+    assert.deepEqual(result.candidates.map(candidate => candidate.symbol), input.candidates.map(candidate => candidate.symbol))
+    assert.equal(result.patternEnrichment.candidateCallCount, input.candidates.length)
+  }
+})
+
+test("rejects invalid pattern concurrency before calling the model or writing files", async () => {
+  for (const concurrency of [0, -1, 1.5, NaN, Infinity, "2", null]) {
+    await assert.rejects(enrichCandidatesWithPatterns(createPrepared(), "Prompt", {
+      concurrency,
+      callAgent: async () => assert.fail("Invalid concurrency must not call the model"),
+      writeJson: async () => assert.fail("Invalid concurrency must not write files"),
+    }), /concurrency must be a positive integer/)
+  }
+})
+
+test("returns the original write error only after concurrent candidate files have finished", async () => {
+  const input = createPrepared()
+  const other = Promise.withResolvers()
+  const expectedError = new Error("Pattern analysis write failed")
+  let finished = false
+  let rejected = false
+  const pending = assert.rejects(enrichCandidatesWithPatterns(input, "Prompt", {
+    callAgent: async (_, message) => JSON.stringify(createResponse(JSON.parse(message).symbol)),
+    writeJson: async (_, value) => {
+      if (value.symbol === "SOL") {
+        throw expectedError
+      }
+      await other.promise
+      finished = true
+    },
+  }), error => error === expectedError).then(() => {
+    rejected = true
+  })
+
+  try {
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(rejected, false)
+    assert.equal(finished, false)
+  } finally {
+    other.resolve()
+  }
+  await pending
+  assert.equal(finished, true)
 })
 
 test("no recognizable pattern is a valid assessment, not unavailable or bearish", async () => {

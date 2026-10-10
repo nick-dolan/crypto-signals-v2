@@ -75,9 +75,9 @@ test("summarizes before analysis, passes project identity and sampling limits, a
   })
   const settings = getModelSettings("candidateContext")
 
-  assert.equal(maximum, 1)
+  assert.equal(maximum, 2)
   assert.equal(calls.length, 2)
-  assert.deepEqual(calls[0], {
+  assert.deepEqual(calls.find(call => call.message.symbol === "SOL"), {
     systemPrompt: "System prompt",
     message: {
       asOf: input.asOf, symbol: "SOL", name: "Solana",
@@ -107,6 +107,131 @@ test("summarizes before analysis, passes project identity and sampling limits, a
     socialSignificant: null, socialReason: null, socialSentiment: null,
   })
   assert.deepEqual(input, before)
+})
+
+test("limits context agents to two and preserves candidate order after out-of-order completion", async () => {
+  const input = createInput()
+  const symbols = ["SOL", "BTC", "ETH", "XRP", "ADA"]
+  input.candidates = symbols.map(symbol => ({ ...input.candidates[0], symbol }))
+  const first = Promise.withResolvers()
+  const others = Promise.withResolvers()
+  const completed = []
+  let firstSymbol
+  let active = 0
+  let maximum = 0
+  const pending = enrichCandidatesWithContext(input, "Prompt", {
+    concurrency: 2,
+    callAgent: async (_, message) => {
+      const { symbol } = JSON.parse(message)
+      firstSymbol ??= symbol
+      active += 1
+      maximum = Math.max(maximum, active)
+      if (symbol === firstSymbol) {
+        await first.promise
+      } else {
+        await new Promise(resolve => setImmediate(resolve))
+      }
+      active -= 1
+      completed.push(symbol)
+      if (completed.length === symbols.length - 1) {
+        others.resolve()
+      }
+      return JSON.stringify(createResponse({ symbol }))
+    },
+  })
+
+  try {
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(maximum, 2)
+    await others.promise
+    assert.equal(active, 1)
+    first.resolve()
+    const result = await pending
+    assert.equal(maximum, 2)
+    assert.equal(active, 0)
+    assert.equal(completed.at(-1), firstSymbol)
+    assert.notDeepEqual(completed, symbols)
+    assert.deepEqual(result.candidates.map(candidate => candidate.symbol), symbols)
+    assert.equal(result.contextEnrichment.candidateCallCount, symbols.length)
+  } finally {
+    first.resolve()
+  }
+})
+
+test("uses ten context agents by default and supports explicit limits without changing results", async () => {
+  const input = createInput()
+  input.candidates = Array.from({ length: 12 }, (_, index) => ({
+    ...input.candidates[0], symbol: `COIN${index}`,
+  }))
+  for (const concurrency of [undefined, 1, 2, 4, 6, 8, 10]) {
+    let active = 0
+    let maximum = 0
+    const result = await enrichCandidatesWithContext(input, "Prompt", {
+      concurrency,
+      callAgent: async (_, message) => {
+        active += 1
+        maximum = Math.max(maximum, active)
+        await new Promise(resolve => setImmediate(resolve))
+        active -= 1
+        return JSON.stringify(createResponse({ symbol: JSON.parse(message).symbol }))
+      },
+    })
+    assert.equal(maximum, concurrency ?? 10)
+    assert.equal(active, 0)
+    assert.deepEqual(result.candidates.map(candidate => candidate.symbol), input.candidates.map(candidate => candidate.symbol))
+    assert.equal(result.contextEnrichment.candidateCallCount, input.candidates.length)
+  }
+})
+
+test("rejects invalid context concurrency before calling the model", async () => {
+  for (const concurrency of [0, -1, 1.5, NaN, Infinity, "2", null]) {
+    await assert.rejects(enrichCandidatesWithContext(createInput(), "Prompt", {
+      concurrency,
+      callAgent: async () => assert.fail("Invalid concurrency must not call the model"),
+    }), /concurrency must be a positive integer/)
+  }
+})
+
+test("returns the original agent error only after concurrent calls have finished", async () => {
+  const input = createInput()
+  input.candidates = ["SOL", "ETH"].map(symbol => ({ ...input.candidates[0], symbol }))
+  const other = Promise.withResolvers()
+  const expectedError = new Error("Context request failed")
+  let finished = false
+  let rejected = false
+  const pending = assert.rejects(enrichCandidatesWithContext(input, "Prompt", {
+    callAgent: async (_, message) => {
+      const { symbol } = JSON.parse(message)
+      if (symbol === "SOL") {
+        throw expectedError
+      }
+      await other.promise
+      finished = true
+      return JSON.stringify(createResponse({ symbol }))
+    },
+  }), error => error === expectedError).then(() => {
+    rejected = true
+  })
+
+  try {
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(rejected, false)
+    assert.equal(finished, false)
+  } finally {
+    other.resolve()
+  }
+  await pending
+  assert.equal(finished, true)
+})
+
+test("empty context shortlists do not call the model", async () => {
+  const input = createInput()
+  input.candidates = []
+  const result = await enrichCandidatesWithContext(input, "Prompt", {
+    callAgent: async () => assert.fail("No candidates"),
+  })
+  assert.deepEqual(result.candidates, [])
+  assert.equal(result.contextEnrichment.candidateCallCount, 0)
 })
 
 test("follows the configured provider and model", async (t) => {
@@ -221,7 +346,7 @@ test("preserves complete text beyond the prompt length target without stopping l
     },
   })
 
-  assert.deepEqual(calls, ["SOL", "RIVER"])
+  assert.deepEqual(calls.sort(), ["RIVER", "SOL"])
   for (const candidate of output.candidates.filter(candidate => candidate.symbol !== "BTC")) {
     for (const field of ["newsSummary", "twitterSummary", "contextCaveat", "socialReason"]) {
       assert.equal(candidate[field], response[field].trim())
