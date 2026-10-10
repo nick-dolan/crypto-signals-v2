@@ -2215,8 +2215,8 @@ test("report displays directional pattern labels and new numeric features", () =
 })
 
 for (const [status, label, history, current, historyText, currentText] of [
-  ["persistent", "Устойчиво сильная", 81.412, 91.235, "81,4 / 100", "91,2 / 100"],
-  ["emerging", "Сила появляется", 37.555, 83.333, "37,6 / 100", "83,3 / 100"],
+  ["persistent", "Устойчиво сильный", 81.412, 91.235, "81,4 / 100", "91,2 / 100"],
+  ["emerging", "Показывает силу", 37.555, 83.333, "37,6 / 100", "83,3 / 100"],
   ["fading", "Сила ослабевает", 82.345, 64.999, "82,3 / 100", "65 / 100"],
   ["neutral", "Не выделяется", 0, 0, "0 / 100", "0 / 100"],
   ["insufficient_data", "Недостаточно данных", null, 73.35, "Нет данных", "73,4 / 100"],
@@ -2299,7 +2299,7 @@ test("switching coins replaces sustained strength and clears values for a legacy
       .map(id => browser.byId(id).textContent),
   ]
   const initial = view()
-  assert.deepEqual(initial, ["persistent", "Устойчиво сильная", "80 / 100", "90 / 100"])
+  assert.deepEqual(initial, ["persistent", "Устойчиво сильный", "80 / 100", "90 / 100"])
   selectCoin(browser, "SOL")
   assert.deepEqual(view(), ["fading", "Сила ослабевает", "75 / 100", "30 / 100"])
   selectCoin(browser, "ADA")
@@ -2386,11 +2386,11 @@ for (const mode of ["direct", "download", "website"]) {
 
   test(`${mode} shows accessible snapshot strength badges only for literal persistent and emerging statuses`, async () => {
     const entries = [
-      ["PERSISTENT", "persistent", 82, "Устойчиво сильная", "82 / 100"],
-      ["EMERGING", "emerging", 83.333, "Сила появляется", "83,3 / 100"],
-      ["ZERO", "persistent", 0, "Устойчиво сильная", "0 / 100"],
-      ["NULL", "persistent", null, "Устойчиво сильная", null],
-      ["MISSING", "emerging", undefined, "Сила появляется", null],
+      ["PERSISTENT", "persistent", 82, "Устойчиво сильный", "82 / 100"],
+      ["EMERGING", "emerging", 83.333, "Показывает силу", "83,3 / 100"],
+      ["ZERO", "persistent", 0, "Устойчиво сильный", "0 / 100"],
+      ["NULL", "persistent", null, "Устойчиво сильный", null],
+      ["MISSING", "emerging", undefined, "Показывает силу", null],
       ...["fading", "neutral", "insufficient_data", undefined, null, "unknown", "__proto__", "Persistent", "persistent ", true,
         ["persistent"], { status: "emerging" }, "<svg onload=alert(1)>"].map((status, index) => [`INVALID${index}`, status, 100, null, null]),
     ]
@@ -3657,7 +3657,7 @@ test("search, sorting, ranges and explicit chart updates preserve snapshot indic
   })
   const initial = view()
   assert.equal(initial.indicators.length, 2)
-  assert.deepEqual(initial.strength, ["Устойчиво сильная", "70 / 100", "82 / 100"])
+  assert.deepEqual(initial.strength, ["Устойчиво сильный", "70 / 100", "82 / 100"])
   const assertUnchanged = (requests = 0) => {
     assert.deepEqual(view(), initial)
     for (const row of byId("candidate-rows").children.filter(row => row.dataset.symbol)) {

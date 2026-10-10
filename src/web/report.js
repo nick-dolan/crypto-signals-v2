@@ -204,8 +204,8 @@
 
   function strengthLabel (status) {
     return {
-      persistent: "Устойчиво сильная",
-      emerging: "Сила появляется",
+      persistent: "Устойчиво сильный",
+      emerging: "Показывает силу",
       fading: "Сила ослабевает",
       neutral: "Не выделяется",
       insufficient_data: "Недостаточно данных",
