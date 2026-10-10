@@ -106,6 +106,7 @@ function assertReport (report, input, candidateCallCount) {
   assert.equal(report.timeframe, input.timeframe)
   assert.equal(report.candidateCount, input.candidateCount)
   assert.equal(report.candidates.length, input.candidateCount)
+  assert.doesNotMatch(JSON.stringify(report), /"(?:files|file|views|attachments|path|coverage|candles)"|\.png|\.svg|movementProbability/)
   assert.equal(new Date(report.generatedAt).toISOString(), report.generatedAt)
   assert.deepEqual(report.patternEnrichment, {
     source: "github-copilot-sdk",
@@ -140,22 +141,52 @@ async function readPatternFiles (directory, candidate) {
     data: "tmp/step8.1-pattern-data/SOL--XTVCSOL/data.json",
     svg: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.svg",
     png: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.png",
+    recentSvg: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.svg",
+    recentPng: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.png",
   })
-  const [data, svg, png] = await Promise.all([
-    fs.readFile(path.join(directory, candidate.files.data), "utf8").then(JSON.parse),
-    fs.readFile(path.join(directory, candidate.files.svg), "utf8"),
-    fs.readFile(path.join(directory, candidate.files.png)),
-  ])
-  assert.match(svg, /^<svg\s/)
-  assert.equal([...svg.matchAll(/class="candle"/g)].length, candidate.coverage.candles)
-  assert.doesNotMatch(svg, /OPEN INTEREST|Оценка агента|Вероятность|ТОП /)
-  assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a")
-  assert.equal(png.readUInt32BE(16), 1200)
-  assert.equal(png.readUInt32BE(20), 1280)
+  assert.equal(new Set(Object.values(candidate.files)).size, 5)
+  const data = await fs.readFile(path.join(directory, candidate.files.data), "utf8").then(JSON.parse)
+  assert.deepEqual(candidate.views, [168, 48].map((hours, index) => ({
+    name: index === 0 ? "week-168h.png" : "recent-48h.png",
+    file: index === 0 ? candidate.files.png : candidate.files.recentPng,
+    hours,
+    from: new Date(Date.parse(data.asOf) - (hours - 1) * 3_600_000).toISOString(),
+    to: data.to,
+    coverage: {
+      candles: data.candles.slice(-hours).filter(point => point.close !== null).length,
+      volume: data.candles.slice(-hours).filter(point => point.volume !== null).length,
+    },
+  })))
+  const svgs = await Promise.all(candidate.views.map(async (view, index) => {
+    const [svg, png] = await Promise.all([
+      fs.readFile(path.join(directory, index === 0 ? candidate.files.svg : candidate.files.recentSvg), "utf8"),
+      fs.readFile(path.join(directory, view.file)),
+    ])
+    assert.match(svg, /^<svg\s/)
+    assert.match(svg, /width="1400" height="800" viewBox="0 0 1400 800"/)
+    assert.equal([...svg.matchAll(/class="candle"/g)].length, view.coverage.candles)
+    assert.deepEqual([...svg.matchAll(/class="candle" data-time="(\d+)"/g)].map(([, time]) => Number(time)),
+      data.candles.slice(-view.hours).filter(point => point.close !== null).map(point => point.time))
+    assert.doesNotMatch(svg, /OPEN INTEREST|Оценка агента|Вероятность|ТОП /)
+    const metadata = JSON.parse(svg.match(/<desc>(.*?)<\/desc>/s)[1].replaceAll("&quot;", "\""))
+    assert.equal(metadata.symbol, candidate.symbol)
+    assert.equal(metadata.asOf, data.asOf)
+    assert.equal(metadata.timeframe, data.timeframe)
+    assert.equal(metadata.hours, view.hours)
+    assert.equal(metadata.from, view.from)
+    assert.equal(metadata.closedAt, view.to)
+    assert.equal(metadata.timeZone, "UTC")
+    assert.equal(metadata.timeAxis, "candle open")
+    assert.deepEqual(metadata.coverage, view.coverage)
+    assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a")
+    assert.equal(png.readUInt32BE(16), 1400)
+    assert.equal(png.readUInt32BE(20), 800)
+    return svg
+  }))
   assert.deepEqual((await fs.readdir(path.join(directory, "tmp", "step8.1-pattern-data", candidate.directory))).sort(), [
-    "analysis.json", "chart.png", "chart.svg", "data.json",
+    "analysis.json", "chart-48h.png", "chart-48h.svg", "chart.png", "chart.svg", "data.json",
   ])
-  return data
+  return { data, svgs }
 }
 
 test("importing step 8.1 does not run the CLI or change existing files", { timeout: 30_000 }, async (t) => {
@@ -181,7 +212,7 @@ test("step 8.1 real CLI writes an empty report and final manifest without starti
   assert.deepEqual(await readJson(directory, "unrelated/marker.json"), { untouched: true })
 })
 
-test("step 8.1 runs real preparation and enrichment with one stubbed agent and an absolute PNG attachment", { timeout: 30_000 }, async (t) => {
+test("step 8.1 runs real preparation and enrichment with one stubbed agent and two absolute PNG attachments", { timeout: 30_000 }, async (t) => {
   const directory = await prepareInputs(t)
   const input = await readJson(directory, "step5-preliminary-filter.json")
   const history = await readJson(directory, "step2-data-bootstrap/SOL--XTVCSOL/data.json")
@@ -192,14 +223,27 @@ test("step 8.1 runs real preparation and enrichment with one stubbed agent and a
         symbol: "SOL", name: "Solana", marketSymbol: "BINANCE:SOLUSDT.P", asOf: "2026-10-09T13:00:00.000Z",
         timeframe: "1h", from: "2026-10-02T14:00:00.000Z", to: "2026-10-09T14:00:00.000Z",
         coverage: { candles: 168, volume: 168 }, dataCaveat: null,
+        views: [
+          { name: "week-168h.png", hours: 168, from: "2026-10-02T14:00:00.000Z", to: "2026-10-09T14:00:00.000Z", coverage: { candles: 168, volume: 168 } },
+          { name: "recent-48h.png", hours: 48, from: "2026-10-07T14:00:00.000Z", to: "2026-10-09T14:00:00.000Z", coverage: { candles: 48, volume: 48 } },
+        ],
       })
+      assert.doesNotMatch(message, /"(?:files|file|path)"|tmp/)
       assert.deepEqual(options, {
         provider: "copilot-sdk", model: "gpt-6-luna", reasoningEffort: "medium",
-        attachments: [{ type: "file", path: path.resolve("tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.png"), displayName: "chart.png" }],
+        attachments: [
+          { type: "file", path: path.resolve("tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.png"), displayName: "week-168h.png" },
+          { type: "file", path: path.resolve("tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.png"), displayName: "recent-48h.png" },
+        ],
       })
-      assert.ok(path.isAbsolute(options.attachments[0].path))
-      const png = await fs.readFile(options.attachments[0].path)
-      assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a")
+      assert.equal(new Set(options.attachments.map(attachment => attachment.path)).size, 2)
+      for (const attachment of options.attachments) {
+        assert.ok(path.isAbsolute(attachment.path))
+        const png = await fs.readFile(attachment.path)
+        assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a")
+        assert.equal(png.readUInt32BE(16), 1400)
+        assert.equal(png.readUInt32BE(20), 800)
+      }
       return JSON.stringify({ symbol: "SOL", summary: " Возможный бычий флаг. ", caveat: " Выход не подтверждён. " })
     })
     const result = await runPatternEnrichmentStep({
@@ -216,14 +260,25 @@ test("step 8.1 runs real preparation and enrichment with one stubbed agent and a
   }])
   assertFinalManifest(manifest, report)
   const [candidate] = manifest.candidates
-  const data = await readPatternFiles(directory, candidate)
+  const { data, svgs } = await readPatternFiles(directory, candidate)
+  assert.notEqual(svgs[0], svgs[1])
+  const widths = svgs.map(svg => Number(svg.match(/class="body"[^>]* width="([^"]+)"/)[1]))
+  assert.ok(widths[1] > widths[0])
   assert.deepEqual(candidate, {
     symbol: "SOL", name: "Solana", marketSymbol: "BINANCE:SOLUSDT.P", directory: "SOL--XTVCSOL",
     files: {
       data: "tmp/step8.1-pattern-data/SOL--XTVCSOL/data.json",
       svg: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.svg",
       png: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.png",
+      recentSvg: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.svg",
+      recentPng: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.png",
     },
+    views: [
+      { name: "week-168h.png", file: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart.png", hours: 168,
+        from: "2026-10-02T14:00:00.000Z", to: "2026-10-09T14:00:00.000Z", coverage: { candles: 168, volume: 168 } },
+      { name: "recent-48h.png", file: "tmp/step8.1-pattern-data/SOL--XTVCSOL/chart-48h.png", hours: 48,
+        from: "2026-10-07T14:00:00.000Z", to: "2026-10-09T14:00:00.000Z", coverage: { candles: 48, volume: 48 } },
+    ],
     coverage: { candles: 168, volume: 168 }, ready: true, ...report.candidates[0],
   })
   assert.deepEqual(data, {
@@ -252,8 +307,53 @@ test("step 8.1 runs real preparation and enrichment with one stubbed agent and a
   assert.deepEqual(await readJson(directory, "unrelated/marker.json"), { untouched: true })
 })
 
+test("step 8.1 keeps recent coverage complete when a missing candle is outside the last 48 hours", { timeout: 30_000 }, async (t) => {
+  const directory = await prepareInputs(t)
+  const input = await readJson(directory, "step5-preliminary-filter.json")
+  const history = await readJson(directory, "step2-data-bootstrap/SOL--XTVCSOL/data.json")
+  history.chart.periods = history.chart.periods.filter(point => point.time !== Date.parse(input.asOf) / 1_000 - 72 * 3_600)
+  await writeJson(directory, "step2-data-bootstrap/SOL--XTVCSOL/data.json", history)
+  await runInjected(directory, `
+    const callAgent = mock.fn(async (_, message) => {
+      const metadata = JSON.parse(message)
+      assert.deepEqual(metadata.coverage, { candles: 167, volume: 167 })
+      assert.deepEqual(metadata.views.map(({ hours, coverage }) => ({ hours, coverage })), [
+        { hours: 168, coverage: { candles: 167, volume: 167 } },
+        { hours: 48, coverage: { candles: 48, volume: 48 } },
+      ])
+      assert.ok(metadata.views.every(view => view.to === metadata.to))
+      assert.match(metadata.dataCaveat, /Неполная неделя/)
+      assert.doesNotMatch(message, /"(?:files|file|path)"|tmp/)
+      return JSON.stringify({ symbol: "SOL", summary: "Актуальный диапазон виден на обоих масштабах.", caveat: null })
+    })
+    await runPatternEnrichmentStep({
+      enrich: (prepared, systemPrompt) => enrichCandidatesWithPatterns(prepared, systemPrompt, { callAgent }),
+    })
+    assert.equal(callAgent.mock.callCount(), 1)
+  `)
+  const report = await readJson(directory, "step8.1-pattern-enrichment.json")
+  const manifest = await readJson(directory, "step8.1-pattern-data/manifest.json")
+  assertReport(report, input, 1)
+  assertFinalManifest(manifest, report)
+  assert.equal(report.candidates[0].status, "available")
+  assert.equal(report.candidates[0].summary, "Актуальный диапазон виден на обоих масштабах.")
+  assert.equal(manifest.candidates[0].ready, true)
+  const { data } = await readPatternFiles(directory, manifest.candidates[0])
+  assert.deepEqual(data.coverage, { candles: 167, volume: 167 })
+  assert.equal(data.candles.at(-73).close, null)
+  assert.equal(report.candidates[0].caveat, data.warnings.join(" "))
+  assert.deepEqual(await readJson(directory, "step8.1-pattern-data/SOL--XTVCSOL/analysis.json"), report.candidates[0])
+  assert.deepEqual(await readJson(directory, "unrelated/marker.json"), { untouched: true })
+})
+
 for (const [name, update, warning] of [
   ["missing history", null, /ENOENT/],
+  ["a missing latest candle", data => ({
+    ...data, chart: { ...data.chart, periods: data.chart.periods.filter(point => point.time !== Date.parse("2026-10-09T13:00:00.000Z") / 1_000) },
+  }), /нет корректной свечи на asOf/],
+  ["an invalid latest candle", data => ({
+    ...data, chart: { ...data.chart, periods: data.chart.periods.map(point => point.time === Date.parse("2026-10-09T13:00:00.000Z") / 1_000 ? { ...point, close: 0 } : point) },
+  }), /нет корректной свечи на asOf/],
   ["a mismatched history timeframe", data => ({ ...data, timeframe: "15m" }), /интервал 1h/],
   ["millisecond history epochs", data => ({
     ...data, chart: { ...data.chart, periods: data.chart.periods.map(point => ({ ...point, time: point.time * 1_000 })) },
@@ -284,7 +384,7 @@ for (const [name, update, warning] of [
     assert.equal(report.candidates[0].summary, null)
     assert.match(report.candidates[0].caveat, warning)
     assert.equal(manifest.candidates[0].ready, false)
-    const data = await readPatternFiles(directory, manifest.candidates[0])
+    const { data } = await readPatternFiles(directory, manifest.candidates[0])
     assert.equal(data.asOf, input.asOf)
     assert.equal(data.timeframe, input.timeframe)
     assert.equal(data.from, manifest.from)

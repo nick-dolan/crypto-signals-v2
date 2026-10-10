@@ -27,9 +27,10 @@ async function enrichCandidate (input, candidate, systemPrompt, modelSettings, c
         to: input.to,
         coverage: candidate.coverage,
         dataCaveat: candidate.caveat,
+        views: candidate.views.map(({ name, hours, from, to, coverage }) => ({ name, hours, from, to, coverage })),
       }), {
         ...modelSettings,
-        attachments: [{ type: "file", path: path.resolve(candidate.files.png), displayName: "chart.png" }],
+        attachments: candidate.views.map(view => ({ type: "file", path: path.resolve(view.file), displayName: view.name })),
       })
       const enrichment = parsePatternEnrichment(content, candidate.symbol)
       result = {

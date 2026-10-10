@@ -1,4 +1,4 @@
-# Noto Sans для карточки монеты
+# Noto Sans для SVG-графиков
 
 Неизменённые статические hinted TTF версии **2.008**. Семейство: **Noto Sans**;
 Regular — вес **400**, Bold — **700**. Системные шрифты не используются.
@@ -34,7 +34,7 @@ U+0400–U+04FF**, в том числе все **66 русских букв**, �
 
 В опциях `font` задавать `fontFiles` с абсолютными путями к **обоим локальным TTF**,
 `loadSystemFonts: false` и `defaultFontFamily: 'Noto Sans'`.
-Для ES-модуля в `src/reports/coin-card/` путь к Regular:
-`fileURLToPath(new URL('./fonts/NotoSans-Regular.ttf', import.meta.url))`
+Для ES-модуля в `src/helpers/` путь к Regular:
+`fileURLToPath(new URL('../reports/fonts/NotoSans-Regular.ttf', import.meta.url))`
 (`fileURLToPath` из `node:url`); к Bold — аналогично с `NotoSans-Bold.ttf`.
 В SVG: `font-family="Noto Sans"`, `font-weight="400"` или `font-weight="700"`.

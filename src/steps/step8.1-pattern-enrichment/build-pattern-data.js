@@ -1,5 +1,5 @@
 import { isArray, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
-import { buildPatternChartData } from "../../reports/coin-card/build-coin-card-data.js"
+import { buildHourlyChartData } from "../../helpers/hourly-chart-data-helper.js"
 
 export function validatePatternShortlist (input) {
   if (!isObject(input) || !isArray(input.candidates) || input.candidateCount !== input.candidates.length) {
@@ -24,7 +24,7 @@ export function validatePatternShortlist (input) {
 }
 
 export function buildPatternData (coin, history, asOf) {
-  const chart = buildPatternChartData({ asOf, timeframe: "1h" }, { ...coin, history })
+  const chart = buildHourlyChartData({ asOf, timeframe: "1h" }, { ...coin, history })
   return {
     schemaVersion: 1,
     coin: {

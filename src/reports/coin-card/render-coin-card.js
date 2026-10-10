@@ -1,16 +1,11 @@
-import { fileURLToPath } from "node:url"
-import { Resvg } from "@resvg/resvg-js"
 import { scaleLinear, scaleUtc } from "d3-scale"
 import { line } from "d3-shape"
 
+import { escapeXml } from "../../helpers/svg-helper.js"
 import { isFinite } from "../../helpers/utils.typed.js"
-import { buildCoinCardData, buildPatternChartData } from "./build-coin-card-data.js"
+import { buildCoinCardData } from "./build-coin-card-data.js"
 
-function escapeXml (value) {
-  return String(value).replace(/[&<>"']/g, character => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&apos;",
-  })[character]).replace(/\p{Cc}/gu, "")
-}
+export { renderSvgPng as renderCoinCardPng } from "../../helpers/svg-helper.js"
 
 function shorten (value, length) {
   const characters = [...String(value ?? "")]
@@ -200,47 +195,4 @@ export function buildCoinCardSvg (report, coin) {
     ${warning ? text(48, 1241, warning, { size: 18, color: "#f0bd71" }) : ""}
 
   </svg>`
-}
-
-export function buildPatternChartSvg (report, coin) {
-  const data = buildPatternChartData(report, coin)
-  const x = scaleUtc()
-    .domain([new Date((data.points[0].time - 1_800) * 1_000), new Date((data.asOf + 1_800) * 1_000)])
-    .range([76, 1012])
-  const ticks = x.ticks(5).map(tick => text(x(tick), 1189, timestamp(tick.getTime() / 1_000, false, "UTC"), {
-    size: 17, color: "#92a3bc", anchor: "middle",
-  })).join("")
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" font-family="Noto Sans">
-    <title>${escapeXml(`Недельный график · ${coin.symbol} · ${coin.marketSymbol} · 1h · asOf ${report.asOf}`)}</title>
-    <desc>${escapeXml(data.warnings.join(" ") || "Цена и объём за 7 дней; начало свечей на общей оси UTC.")}</desc>
-    <rect width="1200" height="1280" fill="#0b1120"/>
-    ${text(48, 48, "НЕДЕЛЬНЫЙ ГРАФИК · 1ч", { size: 19, weight: 700, color: "#8bb7ff" })}
-    ${text(48, 118, shorten(coin.symbol, 16), { size: 56, weight: 700 })}
-    ${text(48, 154, shorten(coin.name, 43), { size: 24, color: "#aab9d0" })}
-    ${text(48, 189, coin.marketSymbol, { size: 20, color: "#92a3bc" })}
-    ${text(1152, 48, "Последняя закрытая свеча · UTC", { size: 18, color: "#92a3bc", anchor: "end" })}
-    ${text(1152, 82, `Открытие · ${timestamp(data.asOf, true, "UTC")}`, { size: 20, anchor: "end" })}
-    ${text(1152, 116, `Закрытие · ${timestamp(data.closedAt, true, "UTC")}`, { size: 20, anchor: "end" })}
-    ${text(48, 219, `Окно: ${timestamp(data.points[0].time, true, "UTC")} — ${timestamp(data.closedAt, true, "UTC")} UTC · 168 ч`, { size: 17, color: "#92a3bc" })}
-    ${renderPrice(data, x, { top: 236, height: 740, title: "ЦЕНА · 1ч" })}
-    ${renderVolume(data, x, { top: 992, height: 170, title: "ОБЪЁМ · 1ч" })}
-    ${ticks}
-    ${text(1152, 1189, "UTC", { size: 17, color: "#92a3bc", anchor: "end" })}
-    ${text(48, 1224, "Окно: 7 дней · начало свечей на оси · UTC", { size: 17, color: "#92a3bc" })}
-    ${data.warnings.length ? text(48, 1258, shorten(data.warnings.join(" "), 110), { size: 18, color: "#f0bd71" }) : ""}
-  </svg>`
-}
-
-export function renderCoinCardPng (svg) {
-  return new Resvg(svg, {
-    font: {
-      loadSystemFonts: false,
-      defaultFontFamily: "Noto Sans",
-      fontFiles: [
-        fileURLToPath(new URL("./fonts/NotoSans-Regular.ttf", import.meta.url)),
-        fileURLToPath(new URL("./fonts/NotoSans-Bold.ttf", import.meta.url)),
-      ],
-    },
-  }).render().asPng()
 }

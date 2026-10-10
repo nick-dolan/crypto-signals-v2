@@ -543,8 +543,8 @@ test("bundled regular and bold Noto Sans rasterize Cyrillic without system fonts
         loadSystemFonts: false,
         defaultFontFamily: "Noto Sans",
         fontFiles: [
-          fileURLToPath(new URL("../src/reports/coin-card/fonts/NotoSans-Regular.ttf", import.meta.url)),
-          fileURLToPath(new URL("../src/reports/coin-card/fonts/NotoSans-Bold.ttf", import.meta.url)),
+          fileURLToPath(new URL("../src/reports/fonts/NotoSans-Regular.ttf", import.meta.url)),
+          fileURLToPath(new URL("../src/reports/fonts/NotoSans-Bold.ttf", import.meta.url)),
         ],
       },
     }).render().asPng()
