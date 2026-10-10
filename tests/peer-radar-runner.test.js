@@ -11,6 +11,7 @@ for (const failedSteps of [
   ["step1.1-coin-descriptions.js"],
   ["step11-peer-radar.js"],
   ["step12-peer-radar-analysis.js"],
+  ["step8.1-pattern-enrichment.js"],
   ["step10-agent-analysis.js"],
   ["step1.1-coin-descriptions.js", "step10-agent-analysis.js"],
   ["step12.1-market-brief.js"],
@@ -35,7 +36,7 @@ for (const failedSteps of [
       "step1-crypto-universe.js", "step1.1-coin-descriptions.js", "step2-data-bootstrap.js",
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
       "step5-preliminary-filter.js", "step6-news-enrichment.js", "step7-twitter-enrichment.js",
-      "step8-context-enrichment.js", "step9-agent-payload.js", "step10-agent-analysis.js",
+      "step8-context-enrichment.js", "step8.1-pattern-enrichment.js", "step9-agent-payload.js", "step10-agent-analysis.js",
       "step11-peer-radar.js", "step12-peer-radar-analysis.js", "step12.1-market-brief.js", "step13-report.js",
       "step14-telegram.js",
     ]) {
@@ -53,21 +54,22 @@ for (const failedSteps of [
     }).then(() => ({ code: 0 }), error => error)
     const order = (await fs.readFile(path.join(directory, "order.txt"), "utf8")).trim().split("\n")
     assert.equal(result.code, failedSteps.some(step => !["step1.1-coin-descriptions.js", "step12.1-market-brief.js"].includes(step)) ? 1 : 0)
-    assert.deepEqual(order.slice(0, 12), [
+    assert.deepEqual(order.slice(0, 13), [
       "step1-crypto-universe.js", "step1.1-coin-descriptions.js", "step2-data-bootstrap.js",
       "step3-market-context.js", "step3.1-coingecko-trending.js", "step4-feature-metrics.js",
       "step5-preliminary-filter.js",
       "step6-news-enrichment.js", "step7-twitter-enrichment.js", "step8-context-enrichment.js",
-      "step9-agent-payload.js", "step10-agent-analysis.js",
+      "step8.1-pattern-enrichment.js",
+      ...(failedSteps.includes("step8.1-pattern-enrichment.js") ? [] : ["step9-agent-payload.js", "step10-agent-analysis.js"]),
     ])
 
-    if (failedSteps.includes("step10-agent-analysis.js")) {
-      assert.equal(order.length, 12)
+    if (failedSteps.includes("step8.1-pattern-enrichment.js") || failedSteps.includes("step10-agent-analysis.js")) {
+      assert.equal(order.length, failedSteps.includes("step8.1-pattern-enrichment.js") ? 11 : 13)
       await assert.rejects(fs.access(path.join(directory, "reports", "main.parquet")), { code: "ENOENT" })
       return
     }
 
-    assert.deepEqual(order.slice(12), [
+    assert.deepEqual(order.slice(13), [
       "step11-peer-radar.js",
       ...(failedSteps.includes("step11-peer-radar.js") ? [] : ["step12-peer-radar-analysis.js"]),
       "step12.1-market-brief.js", "step13-report.js",

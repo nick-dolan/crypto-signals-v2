@@ -7,7 +7,7 @@ import { isString } from "../../helpers/utils.typed.js"
 async function sendCopilotRequest (
   systemPrompt,
   userMessage,
-  { model, reasoningEffort, tools },
+  { model, reasoningEffort, tools, attachments },
 ) {
   const client = new CopilotClient({
     mode: "empty",
@@ -53,7 +53,7 @@ async function sendCopilotRequest (
     })
 
     const response = await session.sendAndWait(
-      { prompt: userMessage },
+      { prompt: userMessage, ...(attachments.length > 0 ? { attachments } : {}) },
       10 * 60 * 1000,
     )
     const content = response?.data.content
@@ -71,12 +71,13 @@ async function sendCopilotRequest (
 export async function callCopilot (
   systemPrompt,
   userMessage,
-  { model, reasoningEffort } = {},
+  { model, reasoningEffort, attachments = [] } = {},
 ) {
   return sendCopilotRequest(systemPrompt, userMessage, {
     model,
     reasoningEffort,
     tools: [],
+    attachments,
   })
 }
 
@@ -87,11 +88,13 @@ export async function callCopilotWithTools (
     model,
     reasoningEffort,
     tools = [],
+    attachments = [],
   } = {},
 ) {
   return sendCopilotRequest(systemPrompt, userMessage, {
     model,
     reasoningEffort,
     tools,
+    attachments,
   })
 }

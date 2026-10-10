@@ -19,7 +19,7 @@ for (const [name, altMarketBackground] of [
   }],
   ["legacy missing metric becomes null", undefined],
 ]) {
-  test(`CLI steps 5 → 9 → 13: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
+  test(`CLI steps 5 → 8.1 → 9 → 13: ${name}, without raw step 3`, { timeout: 40_000 }, async (context) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "alt-market-background-pipeline-"))
     context.after(() => fs.rm(directory, { recursive: true, force: true }))
     await fs.mkdir(path.join(directory, "tmp"))
@@ -72,6 +72,11 @@ for (const [name, altMarketBackground] of [
       writeJson("step7-twitter-enrichment.json", sources),
       writeJson("step8-context-enrichment.json", { ...sources, generatedAt: featureMetrics.generatedAt }),
     ])
+    await run("step8.1-pattern-enrichment.js")
+    const patterns = await readJson("step8.1-pattern-enrichment.json")
+    assert.equal(patterns.asOf, featureMetrics.asOf)
+    assert.equal(patterns.candidateCount, 0)
+    assert.equal(patterns.patternEnrichment.candidateCallCount, 0)
     await run("step9-agent-payload.js")
     const payload = await readJson("step9-agent-payload.json")
     assert.equal(payload.asOf, featureMetrics.asOf)

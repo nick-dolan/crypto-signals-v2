@@ -17,6 +17,12 @@
     "reasoningEffort": "medium",
     "description": "Дополнение технической картины новостями и Twitter, оценка значимости инфоповодов."
   },
+  "candidatePattern": {
+    "provider": "copilot-sdk",
+    "model": "gpt-6-luna",
+    "reasoningEffort": "medium",
+    "description": "Распознавание актуальной структуры цены и объёма на недельном графике."
+  },
   "peerRadarAnalysis": {
     "provider": "openai-unofficial",
     "model": "gpt-6.1-sol",

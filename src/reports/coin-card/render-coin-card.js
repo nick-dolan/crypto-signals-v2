@@ -4,7 +4,7 @@ import { scaleLinear, scaleUtc } from "d3-scale"
 import { line } from "d3-shape"
 
 import { isFinite } from "../../helpers/utils.typed.js"
-import { buildCoinCardData } from "./build-coin-card-data.js"
+import { buildCoinCardData, buildPatternChartData } from "./build-coin-card-data.js"
 
 function escapeXml (value) {
   return String(value).replace(/[&<>"']/g, character => ({
@@ -44,9 +44,9 @@ function directionColor (value) {
   return !isFinite(value) || value === 0 ? "#edf2fb" : value > 0 ? "#49d6a3" : "#fa7685"
 }
 
-function timestamp (seconds, withYear = false) {
+function timestamp (seconds, withYear = false, timeZone = "Europe/Moscow") {
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit",
+    timeZone, day: "2-digit", month: "2-digit",
     ...(withYear ? { year: "numeric" } : {}), hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).format(new Date(seconds * 1_000))
 }
@@ -81,12 +81,12 @@ function emptyPanel (y) {
   return text(600, y, "Нет данных на этом интервале", { size: 24, color: "#92a3bc", anchor: "middle" })
 }
 
-function renderPrice (data, x) {
+function renderPrice (data, x, { top = 402, height = 330, title = "ЦЕНА · USDT · 1ч" } = {}) {
   const candles = data.points.flatMap(point => point.candle ? [point.candle] : [])
   if (!candles.length) {
-    return panel("price-panel", 402, 330, "ЦЕНА · USDT · 1ч", 0, emptyPanel(588))
+    return panel("price-panel", top, height, title, 0, emptyPanel(top + height / 2 + 21))
   }
-  const y = valueScale(candles.flatMap(candle => [candle.low, candle.high]), 462, 708)
+  const y = valueScale(candles.flatMap(candle => [candle.low, candle.high]), top + 60, top + height - 24)
   const width = (x.range()[1] - x.range()[0]) / data.points.length * 0.6
   const bars = candles.map((candle) => {
     const center = x(candle.time * 1_000)
@@ -97,21 +97,21 @@ function renderPrice (data, x) {
     </g>`
   }).join("")
   const lastPrice = data.price === null ? "" : `<line x1="76" x2="1012" y1="${y(data.price)}" y2="${y(data.price)}" stroke="#8bb7ff" stroke-dasharray="5 6" opacity="0.65"/>`
-  return panel("price-panel", 402, 330, "ЦЕНА · USDT · 1ч", data.coverage.candles, `${grid(x, y, price, 4)}${lastPrice}${bars}`)
+  return panel("price-panel", top, height, title, data.coverage.candles, `${grid(x, y, price, 4)}${lastPrice}${bars}`)
 }
 
-function renderVolume (data, x) {
+function renderVolume (data, x, { top = 748, height = 146, title = `ОБЪЁМ · ${shorten(data.coin.symbol, 16)}` } = {}) {
   const values = data.points.map(point => point.volume).filter(isFinite)
   if (!values.length) {
-    return panel("volume-panel", 748, 146, `ОБЪЁМ · ${shorten(data.coin.symbol, 16)}`, 0, emptyPanel(842))
+    return panel("volume-panel", top, height, title, 0, emptyPanel(top + height / 2 + 21))
   }
-  const y = valueScale(values, 802, 876, true)
+  const y = valueScale(values, top + 54, top + height - 18, true)
   const width = (x.range()[1] - x.range()[0]) / data.points.length * 0.6
   const bars = data.points.filter(point => point.volume !== null).map((point) => {
     const color = point.candle ? directionColor(point.candle.close - point.candle.open) : "#92a3bc"
-    return `<rect class="volume-bar" x="${x(point.time * 1_000) - width / 2}" y="${y(point.volume)}" width="${width}" height="${876 - y(point.volume)}" fill="${color}" opacity="0.7"/>`
+    return `<rect class="volume-bar" x="${x(point.time * 1_000) - width / 2}" y="${y(point.volume)}" width="${width}" height="${y.range()[0] - y(point.volume)}" fill="${color}" opacity="0.7"/>`
   }).join("")
-  return panel("volume-panel", 748, 146, `ОБЪЁМ · ${shorten(data.coin.symbol, 16)}`, data.coverage.volume, `${grid(x, y, compact, 2)}${bars}`)
+  return panel("volume-panel", top, height, title, data.coverage.volume, `${grid(x, y, compact, 2)}${bars}`)
 }
 
 function renderInterest (data, x) {
@@ -199,6 +199,36 @@ export function buildCoinCardSvg (report, coin) {
     ${text(682, 1207, "Окно: 7 дней · начало свечей на оси", { size: 17, color: "#92a3bc" })}
     ${warning ? text(48, 1241, warning, { size: 18, color: "#f0bd71" }) : ""}
 
+  </svg>`
+}
+
+export function buildPatternChartSvg (report, coin) {
+  const data = buildPatternChartData(report, coin)
+  const x = scaleUtc()
+    .domain([new Date((data.points[0].time - 1_800) * 1_000), new Date((data.asOf + 1_800) * 1_000)])
+    .range([76, 1012])
+  const ticks = x.ticks(5).map(tick => text(x(tick), 1189, timestamp(tick.getTime() / 1_000, false, "UTC"), {
+    size: 17, color: "#92a3bc", anchor: "middle",
+  })).join("")
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" font-family="Noto Sans">
+    <title>${escapeXml(`Недельный график · ${coin.symbol} · ${coin.marketSymbol} · 1h · asOf ${report.asOf}`)}</title>
+    <desc>${escapeXml(data.warnings.join(" ") || "Цена и объём за 7 дней; начало свечей на общей оси UTC.")}</desc>
+    <rect width="1200" height="1280" fill="#0b1120"/>
+    ${text(48, 48, "НЕДЕЛЬНЫЙ ГРАФИК · 1ч", { size: 19, weight: 700, color: "#8bb7ff" })}
+    ${text(48, 118, shorten(coin.symbol, 16), { size: 56, weight: 700 })}
+    ${text(48, 154, shorten(coin.name, 43), { size: 24, color: "#aab9d0" })}
+    ${text(48, 189, coin.marketSymbol, { size: 20, color: "#92a3bc" })}
+    ${text(1152, 48, "Последняя закрытая свеча · UTC", { size: 18, color: "#92a3bc", anchor: "end" })}
+    ${text(1152, 82, `Открытие · ${timestamp(data.asOf, true, "UTC")}`, { size: 20, anchor: "end" })}
+    ${text(1152, 116, `Закрытие · ${timestamp(data.closedAt, true, "UTC")}`, { size: 20, anchor: "end" })}
+    ${text(48, 219, `Окно: ${timestamp(data.points[0].time, true, "UTC")} — ${timestamp(data.closedAt, true, "UTC")} UTC · 168 ч`, { size: 17, color: "#92a3bc" })}
+    ${renderPrice(data, x, { top: 236, height: 740, title: "ЦЕНА · 1ч" })}
+    ${renderVolume(data, x, { top: 992, height: 170, title: "ОБЪЁМ · 1ч" })}
+    ${ticks}
+    ${text(1152, 1189, "UTC", { size: 17, color: "#92a3bc", anchor: "end" })}
+    ${text(48, 1224, "Окно: 7 дней · начало свечей на оси · UTC", { size: 17, color: "#92a3bc" })}
+    ${data.warnings.length ? text(48, 1258, shorten(data.warnings.join(" "), 110), { size: 18, color: "#f0bd71" }) : ""}
   </svg>`
 }
 

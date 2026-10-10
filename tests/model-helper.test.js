@@ -15,10 +15,11 @@ function createSettings (overrides = {}) {
   }
 }
 
-test("model registry contains exactly five tasks with Russian descriptions", () => {
+test("model registry contains exactly six tasks with Russian descriptions", () => {
   assert.deepEqual(Object.keys(modelsInUse).sort(), [
     "candidateAnalysis",
     "candidateContext",
+    "candidatePattern",
     "coinDescription",
     "marketBrief",
     "peerRadarAnalysis",
@@ -33,7 +34,7 @@ test("model registry contains exactly five tasks with Russian descriptions", () 
   }
 })
 
-test("candidate context and market brief use the SDK", async (context) => {
+test("candidate context, patterns and market brief use the SDK", async (context) => {
   const clients = {
     callSdk: context.mock.fn(async () => "sdk response"),
     callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
@@ -41,6 +42,7 @@ test("candidate context and market brief use the SDK", async (context) => {
 
   for (const [task, model] of [
     ["candidateContext", "gpt-6-luna"],
+    ["candidatePattern", "gpt-6-luna"],
     ["marketBrief", "gpt-6-luna"],
   ]) {
     const settings = getModelSettings(task)
@@ -57,7 +59,7 @@ test("candidate context and market brief use the SDK", async (context) => {
     ])
   }
 
-  assert.equal(clients.callSdk.mock.callCount(), 2)
+  assert.equal(clients.callSdk.mock.callCount(), 3)
   assert.equal(clients.callUnofficial.mock.callCount(), 0)
 })
 
@@ -197,6 +199,75 @@ for (const [provider, client, options] of [
     }
   })
 }
+
+test("SDK routing forwards PNG attachments and tools unchanged", async (context) => {
+  const clients = {
+    callSdk: context.mock.fn(async () => "sdk response"),
+    callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
+    callOpenAI: context.mock.fn(() => assert.fail("Unexpected OpenAI invocation")),
+  }
+  const options = {
+    model: "custom-model",
+    reasoningEffort: "medium",
+    tools: [{ name: "read_coin" }],
+    attachments: [
+      { type: "file", path: "/tmp/coin-chart.png", displayName: "coin-chart.png" },
+      { type: "file", path: "/tmp/market-chart.png" },
+    ],
+  }
+
+  assert.equal(await callModel("system", "user", { provider: "copilot-sdk", ...options }, clients), "sdk response")
+  assert.deepEqual(clients.callSdk.mock.calls[0].arguments, ["system", "user", options])
+  assert.equal(clients.callSdk.mock.calls[0].arguments[2].attachments, options.attachments)
+  assert.equal(clients.callSdk.mock.calls[0].arguments[2].tools, options.tools)
+  assert.equal(clients.callSdk.mock.callCount(), 1)
+  assert.equal(clients.callUnofficial.mock.callCount(), 0)
+  assert.equal(clients.callOpenAI.mock.callCount(), 0)
+})
+
+for (const [provider, client] of [
+  ["copilot-sdk", "callSdk"],
+  ["copilot-unofficial", "callUnofficial"],
+  ["openai-unofficial", "callOpenAI"],
+]) {
+  test(`${provider} omits empty attachments from forwarded options`, async (context) => {
+    const clients = {
+      callSdk: context.mock.fn(async () => "response"),
+      callUnofficial: context.mock.fn(async () => "response"),
+      callOpenAI: context.mock.fn(async () => "response"),
+    }
+    const options = { model: "custom-model", reasoningEffort: null }
+
+    assert.equal(await callModel("system", "user", { provider, ...options, attachments: [] }, clients), "response")
+    assert.deepEqual(clients[client].mock.calls[0].arguments, [
+      "system", "user", { ...options, ...(provider === "copilot-sdk" ? { tools: [] } : {}) },
+    ])
+    for (const [name, call] of Object.entries(clients)) {
+      assert.equal(call.mock.callCount(), name === client ? 1 : 0)
+    }
+  })
+}
+
+test("non-SDK providers reject PNG attachments before invoking any client", async (context) => {
+  const clients = {
+    callSdk: context.mock.fn(() => assert.fail("Unexpected SDK fallback")),
+    callUnofficial: context.mock.fn(() => assert.fail("Unexpected unofficial invocation")),
+    callOpenAI: context.mock.fn(() => assert.fail("Unexpected OpenAI invocation")),
+  }
+
+  for (const provider of ["copilot-unofficial", "openai-unofficial"]) {
+    await assert.rejects(callModel("system", "user", {
+      provider,
+      model: "custom-model",
+      reasoningEffort: null,
+      attachments: [{ type: "file", path: "/tmp/coin-chart.png", displayName: "coin-chart.png" }],
+    }, clients), new RegExp(`${provider}.*does not support attachments`))
+  }
+
+  assert.equal(clients.callSdk.mock.callCount(), 0)
+  assert.equal(clients.callUnofficial.mock.callCount(), 0)
+  assert.equal(clients.callOpenAI.mock.callCount(), 0)
+})
 
 test("routing preserves null reasoning and defaults to empty SDK tools", async (context) => {
   const clients = {

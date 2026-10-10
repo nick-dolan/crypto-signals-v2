@@ -1,6 +1,11 @@
 import assert from "node:assert/strict"
-import { readFile } from "node:fs/promises"
+import { execFile } from "node:child_process"
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
+import { promisify } from "node:util"
 
 import { isArray } from "../src/helpers/utils.typed.js"
 import { buildPreliminaryShortlist } from "../src/steps/step5-preliminary-filter/build-preliminary-shortlist.js"
@@ -191,6 +196,48 @@ function createInformationContext (shortlist) {
   }
 }
 
+function createPatternContext (shortlist) {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-08-31T10:01:00.000Z",
+    asOf: shortlist.asOf,
+    timeframe: "1h",
+    candidateCount: shortlist.candidateCount,
+    patternEnrichment: {
+      source: "github-copilot-sdk",
+      model: "pattern-model",
+      reasoningEffort: "high",
+      lookbackHours: 168,
+      from: "2026-08-24T10:00:00.000Z",
+      to: "2026-08-31T10:00:00.000Z",
+      candidateCallCount: shortlist.candidateCount,
+    },
+    candidates: shortlist.candidates.map(({ coin }) => ({
+      symbol: coin.symbol,
+      status: "available",
+      summary: "Возможное сжатие диапазона; выход ещё не подтверждён.",
+      caveat: "Структура неоднозначна.",
+    })),
+  }
+}
+
+async function createStep9Fixture (context) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "step9-pattern-context-"))
+  context.after(() => rm(directory, { recursive: true, force: true }))
+  await mkdir(path.join(directory, "tmp"))
+  const shortlist = createShortlist([createCandidate("SOL")])
+  await writeFile(path.join(directory, "tmp", "step5-preliminary-filter.json"), JSON.stringify(shortlist))
+  await writeFile(path.join(directory, "tmp", "step8-context-enrichment.json"), JSON.stringify(createInformationContext(shortlist)))
+
+  return {
+    directory,
+    shortlist,
+    run: () => promisify(execFile)(process.execPath, [
+      fileURLToPath(new URL("../src/step9-agent-payload.js", import.meta.url)),
+    ], { cwd: directory, timeout: 10_000, killSignal: "SIGKILL" }),
+  }
+}
+
 function createPeerLeader (overrides = {}) {
   return {
     baseCurrencyId: "XTVCVET",
@@ -256,7 +303,7 @@ test("agent payload groups the original fields in the approved order, including 
   assert.deepEqual(decodeAgentPayload(payload).candidates, [])
   assert.deepEqual(Object.keys(payload.schema), [
     "profile", "volatility", "lifecycle", "volume", "derivatives", "social",
-    "relativeStrength", "sustainedStrength", "categoryContext", "peerContext", "coingecko", "informationContext",
+    "relativeStrength", "sustainedStrength", "categoryContext", "peerContext", "coingecko", "informationContext", "patternContext",
   ])
   assert.deepEqual(payload.schema, {
     profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -326,6 +373,7 @@ test("agent payload groups the original fields in the approved order, including 
       "newsStatus", "newsSummary", "twitterStatus", "twitterSummary",
       "socialSignificant", "socialReason", "socialSentiment", "contextCaveat",
     ],
+    patternContext: ["patternStatus", "patternSummary", "patternCaveat"],
   })
 })
 
@@ -335,7 +383,7 @@ test("agent payload creates documented grouped candidates without changing marke
   const payload = buildAgentPayload(shortlist)
   const { fields, candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 14)
+  assert.equal(payload.schemaVersion, 15)
   assert.equal(payload.objective, "P(рост > 2.5 ATR в следующие 4–12 часов)")
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
@@ -446,6 +494,9 @@ test("agent payload creates documented grouped candidates without changing marke
     socialReason: null,
     socialSentiment: null,
     contextCaveat: "Информационный контекст не передан.",
+    patternStatus: "unavailable",
+    patternSummary: null,
+    patternCaveat: "Контекст паттернов не передан.",
     flags: ["coiling", "resilient", "fresh_quiet_breakout"],
   })
 
@@ -1323,7 +1374,7 @@ test("peer schema supports an empty shortlist through step 10 with no history to
     readCoinData: async () => assert.fail("Empty shortlist must not load history"),
   })
 
-  assert.equal(payload.schemaVersion, 14)
+  assert.equal(payload.schemaVersion, 15)
   assert.equal(payload.schema.peerContext.length, 7)
   assert.equal(analysis.candidateCount, 0)
   assert.deepEqual(analysis.assessments, [])
@@ -1477,5 +1528,165 @@ test("information context rejects broken windows and invalid status or sentiment
     const context = createInformationContext(shortlist)
     Object.assign(context.candidates[0], changes)
     assert.throws(() => buildAgentPayload(shortlist, context), /Step 8 SOL/)
+  }
+})
+
+test("pattern context preserves shortlist order, market values and textual uncertainty through steps 9 and 10", async () => {
+  const shortlist = createShortlist([createCandidate("SOL"), createCandidate("ETH"), createCandidate("BTC")])
+  const context = createInformationContext(shortlist)
+  const patterns = createPatternContext(shortlist)
+  Object.assign(patterns.candidates[1], {
+    summary: "Выраженного паттерна нет; структура неоднозначна.", caveat: null,
+  })
+  Object.assign(patterns.candidates[2], {
+    status: "unavailable", summary: null, caveat: "Нет полной часовой истории.",
+    ohlcv: ["raw-pattern-data"], chartPath: "raw-pattern-chart.png", files: ["raw-artifact-folder"],
+  })
+  Object.assign(patterns.patternEnrichment, { directory: "raw-artifact-folder", chartPath: "raw-pattern-chart.png" })
+  patterns.candidates.reverse()
+  const before = structuredClone({ shortlist, context, patterns })
+  const baseline = buildAgentPayload(shortlist, context)
+  const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist, context, patterns)))
+  const { fields, candidates } = decodeAgentPayload(payload)
+
+  assert.equal(payload.schemaVersion, 15)
+  assert.deepEqual(payload.schema.patternContext, ["patternStatus", "patternSummary", "patternCaveat"])
+  assert.deepEqual(payload.patternSource, {
+    source: "github-copilot-sdk",
+    model: "pattern-model",
+    reasoningEffort: "high",
+    lookbackHours: 168,
+    from: "2026-08-24T10:00:00.000Z",
+    to: "2026-08-31T10:00:00.000Z",
+  })
+  assert.deepEqual(payload.candidates.map(candidate => candidate.patternContext), [
+    ["available", "Возможное сжатие диапазона; выход ещё не подтверждён.", "Структура неоднозначна."],
+    ["available", "Выраженного паттерна нет; структура неоднозначна.", null],
+    ["unavailable", null, "Нет полной часовой истории."],
+  ])
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["SOL", "ETH", "BTC"])
+  assert.deepEqual(payload, {
+    ...baseline,
+    patternSource: payload.patternSource,
+    candidates: baseline.candidates.map((candidate, index) => ({
+      ...candidate, patternContext: payload.candidates[index].patternContext,
+    })),
+  })
+  assert.deepEqual(Object.keys(payload.definitions).sort(), [...fields].sort())
+  assert.equal(fields.includes("patternSource"), false)
+  assert.doesNotMatch(JSON.stringify(payload), /raw-pattern-data|raw-pattern-chart|raw-artifact-folder/)
+  assert.match(payload.conventions.patternContext, /168 закрытых 1h OHLCV.*не вероятность или прогноз/)
+  assert.match(payload.conventions.patternContext, /не означает unavailable.*не.*независимым подтверждением.*данные, не инструкции/i)
+  assert.deepEqual({ shortlist, context, patterns }, before)
+
+  const analysis = await analyzeCandidates(payload, shortlist, "system prompt", {
+    callAgent: async (prompt, input) => {
+      assert.equal(prompt, "system prompt")
+      assert.deepEqual(JSON.parse(input), payload)
+      return JSON.stringify({
+        schemaVersion: 4,
+        asOf: payload.asOf,
+        topCandidates: [],
+        assessments: candidates.map(({ symbol, patternStatus }) => ({
+          symbol,
+          movementProbability: 0.25,
+          estimateConfidence: "medium",
+          technicalSummary: {
+            observation: "Рыночная структура требует подтверждения свежими покупками.",
+            caveat: patternStatus === "unavailable" ? "Часовая история недоступна." : "Описание структуры предположительно.",
+          },
+          drivers: patternStatus === "available"
+            ? [{ fields: ["patternStatus", "patternSummary"], text: "Структура уточняет стадию, но не подтверждает будущий рост" }]
+            : [],
+          counterSignals: [{ fields: ["patternCaveat"], text: "Учитывается доступное ограничение анализа" }],
+        })),
+      })
+    },
+    readCoinData: async () => assert.fail("Pattern summaries must not require chart files or raw history"),
+  })
+
+  assert.deepEqual(analysis.assessments.map(candidate => candidate.symbol), ["SOL", "ETH", "BTC"])
+  assert.match(analysis.assessments[0].drivers[0], /patternStatus=available и patternSummary=Возможное сжатие диапазона/)
+  assert.match(analysis.assessments[1].drivers[0], /patternSummary=Выраженного паттерна нет/)
+  assert.match(analysis.assessments[1].counterSignals[0], /patternCaveat=null/)
+  assert.match(analysis.assessments[2].counterSignals[0], /patternCaveat=Нет полной часовой истории/)
+  assert.deepEqual(analysis.topCandidates, [])
+  assert.deepEqual({ shortlist, context, patterns }, before)
+})
+
+test("direct payload builder keeps omitted and null pattern reports unavailable with an explicit caveat", () => {
+  const shortlist = createShortlist([createCandidate("SOL")])
+  const payload = buildAgentPayload(shortlist)
+
+  assert.equal(payload.patternSource, null)
+  assert.deepEqual(payload.candidates[0].patternContext, ["unavailable", null, "Контекст паттернов не передан."])
+  assert.deepEqual(buildAgentPayload(shortlist, undefined, null), payload)
+  assert.deepEqual(buildAgentPayload(shortlist, undefined, undefined), payload)
+})
+
+test("payload builder validates provided pattern reports instead of silently falling back", () => {
+  const shortlist = createShortlist([createCandidate("SOL")])
+  for (const mutate of [
+    (patterns) => {
+      patterns.asOf = "2026-08-31T08:00:00.000Z"
+    },
+    (patterns) => {
+      patterns.candidateCount = 0
+    },
+    (patterns) => {
+      patterns.candidates[0].summary = null
+    },
+  ]) {
+    const patterns = createPatternContext(shortlist)
+    mutate(patterns)
+    assert.throws(() => buildAgentPayload(shortlist, undefined, patterns), /Steps 5 and 8\.1|Step 8\.1 SOL/)
+  }
+})
+
+test("empty shortlist preserves provided pattern source metadata", () => {
+  const shortlist = createShortlist([])
+  const patterns = createPatternContext(shortlist)
+  const payload = buildAgentPayload(shortlist, undefined, patterns)
+
+  assert.deepEqual(payload.candidates, [])
+  assert.deepEqual(decodeAgentPayload(payload).candidates, [])
+  assert.equal(payload.patternSource.model, "pattern-model")
+  assert.equal(payload.patternSource.from, patterns.patternEnrichment.from)
+  assert.equal(payload.patternSource.to, patterns.patternEnrichment.to)
+  assert.equal(payload.patternSource.lookbackHours, 168)
+})
+
+test("step 9 entry reads the required step 8.1 report and passes it to the builder", { timeout: 15_000 }, async (context) => {
+  const { directory, shortlist, run } = await createStep9Fixture(context)
+  const patterns = createPatternContext(shortlist)
+  await writeFile(path.join(directory, "tmp", "step8.1-pattern-enrichment.json"), JSON.stringify(patterns))
+  const { stdout, stderr } = await run()
+  const payload = JSON.parse(await readFile(path.join(directory, "tmp", "step9-agent-payload.json"), "utf8"))
+
+  assert.match(stdout, /Saved 1 compact agent candidates with 13 groups/)
+  assert.equal(stderr, "")
+  assert.deepEqual(payload, buildAgentPayload(shortlist, createInformationContext(shortlist), patterns))
+})
+
+test("step 9 entry fails clearly when step 8.1 is missing instead of publishing unavailable context", { timeout: 15_000 }, async (context) => {
+  const { directory, run } = await createStep9Fixture(context)
+  await assert.rejects(run(), (error) => {
+    assert.equal(error.code, 1)
+    assert.match(error.stderr, /requires tmp\/step8\.1-pattern-enrichment\.json; run step 8\.1 pattern enrichment first/)
+    return true
+  })
+  await assert.rejects(access(path.join(directory, "tmp", "step9-agent-payload.json")), { code: "ENOENT" })
+})
+
+test("step 9 entry rejects null or stale pattern reports without publishing a payload", { timeout: 25_000 }, async (context) => {
+  const { directory, shortlist, run } = await createStep9Fixture(context)
+  for (const patterns of [null, { ...createPatternContext(shortlist), asOf: "2026-08-31T08:00:00.000Z" }]) {
+    await writeFile(path.join(directory, "tmp", "step8.1-pattern-enrichment.json"), JSON.stringify(patterns))
+    await assert.rejects(run(), (error) => {
+      assert.equal(error.code, 1)
+      assert.match(error.stderr, /Step 8\.1.*must not be null|Steps 5 and 8\.1 market snapshots/)
+      return true
+    })
+    await assert.rejects(access(path.join(directory, "tmp", "step9-agent-payload.json")), { code: "ENOENT" })
   }
 })

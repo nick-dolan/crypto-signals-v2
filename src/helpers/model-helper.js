@@ -32,7 +32,7 @@ export function getModelSettings (task, registry = modelsInUse) {
 export async function callModel (
   systemPrompt,
   userMessage,
-  { provider, model, reasoningEffort, tools = [] } = {},
+  { provider, model, reasoningEffort, tools = [], attachments = [] } = {},
   {
     callSdk = callCopilotWithTools,
     callUnofficial = callUnofficialCopilot,
@@ -40,10 +40,19 @@ export async function callModel (
   } = {},
 ) {
   if (provider === "copilot-sdk") {
-    return callSdk(systemPrompt, userMessage, { model, reasoningEffort, tools })
+    return callSdk(systemPrompt, userMessage, {
+      model,
+      reasoningEffort,
+      tools,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    })
   }
 
   if (["copilot-unofficial", "openai-unofficial"].includes(provider)) {
+    if (attachments.length > 0) {
+      throw new Error(`${provider} does not support attachments; use copilot-sdk`)
+    }
+
     if (tools.length > 0) {
       throw new Error(`${provider} does not support tools; use copilot-sdk`)
     }

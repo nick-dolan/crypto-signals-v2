@@ -44,6 +44,7 @@ async function runAll () {
       "step6-news-enrichment.js",
       "step7-twitter-enrichment.js",
       "step8-context-enrichment.js",
+      "step8.1-pattern-enrichment.js",
       "step9-agent-payload.js",
       "step10-agent-analysis.js",
       "step11-peer-radar.js",

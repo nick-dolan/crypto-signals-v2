@@ -16,8 +16,8 @@ async function runAgentAnalysisStep () {
     ),
   ])
 
-  if (payload.schemaVersion !== 14 || payload.objective !== "P(рост > 2.5 ATR в следующие 4–12 часов)") {
-    throw new Error("Growth analysis requires the current payload with information context; rerun steps 6, 7, 8 and 9")
+  if (payload.schemaVersion !== 15 || payload.objective !== "P(рост > 2.5 ATR в следующие 4–12 часов)") {
+    throw new Error("Growth analysis requires the current payload with information context and patterns; rerun steps 6, 7, 8, 8.1 and 9")
   }
 
   let analysis
