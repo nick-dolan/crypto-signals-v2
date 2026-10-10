@@ -10,7 +10,7 @@ test("icon sprite preserves the selected local SVG viewBoxes, paths and attribut
   const files = (await fs.readdir(new URL("../src/web/icons/", import.meta.url))).sort()
   assert.deepEqual(files, [
     "hand-fist", "megaphone", "star", "arrow-up", "arrow-down", "arrows-left-right", "minus",
-    "arrow-up-right-from-square", "arrow-left", "arrow-right", "diamond",
+    "arrow-up-right-from-square", "arrow-left", "arrow-right", "diamond", "coingecko",
   ].map(name => `${name}.svg`).sort())
 
   const sprite = await renderIconSprite()
@@ -21,6 +21,11 @@ test("icon sprite preserves the selected local SVG viewBoxes, paths and attribut
 
   const symbols = [...sprite.matchAll(/<symbol id="icon-([^"]+)" viewBox="([^"]+)">([\s\S]*?)<\/symbol>/g)]
   assert.deepEqual(symbols.map(([, name]) => `${name}.svg`).sort(), files)
+  const logo = symbols.find(([, name]) => name === "coingecko")[3]
+  assert.match(logo, /fill="#8f9daf"/)
+  assert.match(logo, /fill="#25303f"/)
+  assert.match(logo, /fill="#e3e9f1"/)
+  assert.match(logo, /fill="#0b1017"/)
   await Promise.all(symbols.map(async ([, name, viewBox, content]) => {
     const source = await fs.readFile(new URL(`../src/web/icons/${name}.svg`, import.meta.url), "utf8")
     assert.equal(viewBox, source.match(/\bviewBox="([^"]+)"/)[1], name)

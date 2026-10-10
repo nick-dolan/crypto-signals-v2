@@ -316,7 +316,11 @@ test("real browser: temporary archive, list, charts, peer radar and server-indep
         })
       })).filter(row => row.icons.length > 1)`)
       for (const { symbol, icons } of iconRows) {
-        assert.ok(icons.every(icon => icon.width === 14 && icon.height === 14), JSON.stringify({ symbol, icons }))
+        for (const icon of icons) {
+          const size = icon.href === "#icon-coingecko" ? 16 : 14
+          assert.equal(icon.width, size, `${symbol} ${icon.href}`)
+          assert.equal(icon.height, size, `${symbol} ${icon.href}`)
+        }
         const centers = icons.map(icon => icon.centerY)
         assert.ok(Math.max(...centers) - Math.min(...centers) <= 0.25, JSON.stringify({ symbol, icons }))
       }

@@ -202,6 +202,15 @@
     return badge
   }
 
+  function createCoinGeckoIndicator () {
+    const indicator = element("span", "coingecko-indicator")
+    indicator.title = "CoinGecko Trending"
+    indicator.setAttribute("role", "img")
+    indicator.setAttribute("aria-label", indicator.title)
+    indicator.append(createIcon("coingecko"))
+    return indicator
+  }
+
   function strengthLabel (status) {
     return {
       persistent: "Устойчиво сильный",
@@ -315,19 +324,20 @@
       const button = element("button", "coin-button")
       button.type = "button"
       button.setAttribute("aria-pressed", String(coin.symbol === selectedSymbol))
-      button.append(element("strong", "", coin.symbol), ...coinIndicators(coin))
+      const heading = element("span", "coin-button-heading")
+      heading.append(element("strong", "", coin.symbol), ...coinIndicators(coin))
       if (coin.topRank != null) {
         const rank = element("span", "top-star")
         rank.title = `Топ агента: ${coin.topRank}`
         rank.setAttribute("role", "img")
         rank.setAttribute("aria-label", rank.title)
         rank.append(createIcon("star"), element("span", "", coin.topRank))
-        button.append(rank)
+        heading.append(rank)
       }
       if (coin.features.coingeckoTrending === true) {
-        button.append(createCoinGeckoBadge())
+        heading.append(createCoinGeckoIndicator())
       }
-      button.append(element("small", "", coin.name))
+      button.append(heading, element("small", "", coin.name))
       cell.append(button)
       row.append(cell, element("td", "", probability(coin.movementProbability)))
       return row

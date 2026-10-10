@@ -2118,8 +2118,9 @@ test("CoinGecko badges and categories follow the selected coin without leaking s
   assert.deepEqual(byId("coingecko-categories").children.map(node => node.textContent), ["Privacy", "Layer 1"])
   assert.equal(byId("coingecko-category-status").hidden, true)
   assert.equal(badges(byId("top-candidates")).length, 2)
-  assert.equal(badges(byId("candidate-rows")).length, 2)
-  assert.equal(badges(byId("candidate-rows")).every(badge => badge.textContent === "CoinGecko Trending"), true)
+  assert.equal(badges(byId("top-candidates")).every(badge => badge.textContent === "CoinGecko Trending"), true)
+  assert.equal(badges(byId("candidate-rows")).length, 0)
+  assert.equal(descendants(byId("candidate-rows")).filter(node => node.className === "coingecko-indicator").length, 2)
   assert.equal(byId("feature-rows").children.find(row => row.children[0].textContent === "coingeckoTrendingCategories")
     .children[1].textContent, "Privacy, Layer 1")
 
@@ -2160,7 +2161,7 @@ for (const status of [undefined, null, false, "true"]) {
     assert.equal(byId("coingecko-context").hidden, true)
     assert.equal(byId("coingecko-categories").children.length, 0)
     for (const id of ["top-candidates", "candidate-rows"]) {
-      assert.equal(descendants(byId(id)).some(node => node.className === "badge coingecko-badge"), false)
+      assert.equal(descendants(byId(id)).some(node => ["badge coingecko-badge", "coingecko-indicator"].includes(node.className)), false)
     }
   })
 }
@@ -2311,6 +2312,54 @@ test("switching coins replaces sustained strength and clears values for a legacy
 })
 
 for (const mode of ["direct", "download", "website"]) {
+  test(`${mode} shows only an accessible local CoinGecko logo in the sidebar for confirmed trending coins`, async () => {
+    const entries = [
+      ["TRENDING", true], ["FALSE", false], ["STRING", "true"], ["NUMBER", 1], ["NULL", null], ["MISSING", undefined],
+    ]
+    const report = createReport(entries.map(([symbol]) => symbol))
+    report.coins.forEach((coin, index) => {
+      const [, status] = entries[index]
+      if (status !== undefined) {
+        coin.features.coingeckoTrending = status
+      }
+    })
+    const before = structuredClone(report)
+    const browser = runReport(report, { browserScript: await reportBrowserScript(report, mode) })
+    const { byId } = browser
+
+    for (const [symbol, status] of entries) {
+      selectCoin(browser, symbol)
+      const row = byId("candidate-rows").children.find(node => node.dataset.symbol === symbol)
+      assert.equal(descendants(row).some(node => node.className === "badge coingecko-badge"), false)
+      const logos = descendants(row).filter(node => node.className === "coingecko-indicator")
+      assert.equal(logos.length, status === true ? 1 : 0, symbol)
+      assert.equal(byId("coingecko-badge").hidden, status !== true)
+      if (status === true) {
+        assert.equal(byId("coingecko-badge").textContent, "CoinGecko Trending")
+        const [logo] = logos
+        assert.equal(logo.tagName, "SPAN")
+        assert.equal(logo.textContent, "")
+        assert.equal(logo.title, "CoinGecko Trending")
+        assert.equal(logo.attributes.get("role"), "img")
+        assert.equal(logo.attributes.get("aria-label"), logo.title)
+        assert.equal(logo.children.length, 1)
+        assertIcon(logo.children[0], "#icon-coingecko")
+      }
+    }
+    for (const target of ["SVG", "USE"]) {
+      selectCoin(browser, "FALSE")
+      const row = byId("candidate-rows").children.find(node => node.dataset.symbol === "TRENDING")
+      const logo = descendants(row).find(node => node.className === "coingecko-indicator")
+      click(byId("candidate-rows"), target === "SVG" ? logo.children[0] : logo.children[0].children[0])
+      assert.equal(byId("coin-symbol").textContent, "TRENDING")
+      assert.equal(byId("candidate-rows").children.find(node => node.className === "selected").dataset.symbol, "TRENDING")
+    }
+    assert.deepEqual(browser.updateCalls, [])
+    assert.deepEqual(browser.directRequests, [])
+    assert.deepEqual(report, before)
+    assert.deepEqual(JSON.parse(byId("report-data").textContent), before)
+  })
+
   test(`${mode} sorts current strength descending, including zero, with probability and symbol ties and missing scores last`, async () => {
     const entries = [
       ["NULL", null, 0.8], ["ZETA", 82, 0.7], ["ZERO", 0, 0.1], ["MISSING", undefined, 0.8],
@@ -3631,6 +3680,7 @@ test("search, sorting, ranges and explicit chart updates preserve snapshot indic
   report.coins.forEach((coin, index) => {
     Object.assign(coin.features, {
       sustainedStatus: index ? "emerging" : "persistent", sustainedHistoryScore: index ? 25 : 70, sustainedCurrentScore: index ? 90 : 82,
+      coingeckoTrending: true,
     })
     Object.assign(coin, { socialSignificant: true, socialSentiment: "positive", socialReason: `Событие ${coin.symbol}` })
     addChartSnapshot(report, coin)
@@ -3647,7 +3697,7 @@ test("search, sorting, ranges and explicit chart updates preserve snapshot indic
   })
   const rowState = row => ({
     symbol: row.dataset.symbol, probability: row.children[1].textContent,
-    indicators: descendants(row).filter(node => ["strength-indicator", "social-indicator"].includes(node.className)).map(indicatorState),
+    indicators: descendants(row).filter(node => ["strength-indicator", "social-indicator", "coingecko-indicator"].includes(node.className)).map(indicatorState),
   })
   const rows = new Map(byId("candidate-rows").children.map(row => [row.dataset.symbol, rowState(row)]))
   const view = () => ({
