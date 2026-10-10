@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-09T14:24:35.399Z",
+  "generatedAt": "2026-10-10T17:45:25.628Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-09T14:24:20.504Z"
+    "sourceGeneratedAt": "2026-10-10T17:45:09.076Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 271,
+  "coinCount": 272,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3978,6 +3978,18 @@
         {
           "url": "https://merlinchain.io/",
           "checkedAt": "2026-10-09T14:24:33.360Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCGRAM",
+      "symbol": "GRAM",
+      "name": "Gram (prev. Toncoin)",
+      "description": "The Open Network — блокчейн первого уровня; Gram (GRAM) является его нативной монетой. Она используется для оплаты комиссий сети, участия в валидации и голосовании.",
+      "sources": [
+        {
+          "url": "https://ton.org/",
+          "checkedAt": "2026-10-10T17:45:23.467Z"
         }
       ]
     }
