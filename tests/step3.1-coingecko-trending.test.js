@@ -58,6 +58,19 @@ function createData () {
   }
 }
 
+function createDataRequest (data, requests = []) {
+  return async (endpoint, options) => {
+    requests.push({ endpoint, options })
+    if (endpoint === "/search/trending") {
+      return data.trending
+    }
+    if (endpoint === "/derivatives/exchanges/binance_futures") {
+      return data.futures
+    }
+    return data.coinCategories.find(coin => endpoint === `/coins/${coin.id}`)
+  }
+}
+
 function createContext (universe = createUniverse(), data = createData()) {
   return buildCoinGeckoTrendingContext(universe, data, { generatedAt: "2026-09-18T12:05:00.000Z" })
 }
@@ -143,10 +156,37 @@ test("CoinGecko retains trending coins with empty categories and handles an empt
   assert.deepEqual(empty.matches, [])
 })
 
-test("CoinGecko rejects missing category data instead of treating it as no category overlap", () => {
+test("CoinGecko preserves global trends and marks unfetched categories as unknown without changing matches", () => {
   const data = createData()
-  data.coinCategories = data.coinCategories.slice(1)
-  assert.throws(() => createContext(createUniverse(), data), /categories are missing for bitcoin/)
+  const baseline = createContext(createUniverse(), data)
+  data.coinCategories = data.coinCategories.slice(0, 2)
+  const before = structuredClone(data)
+  const result = createContext(createUniverse(), data)
+
+  assert.deepEqual(data, before)
+  assert.deepEqual(result.matches, baseline.matches)
+  assert.deepEqual(result.trendingCategories, baseline.trendingCategories)
+  assert.deepEqual(result.trendingCoins.slice(0, 2), baseline.trendingCoins.slice(0, 2))
+  assert.deepEqual(result.trendingCoins.map(({ id, symbol, name }) => ({ id, symbol, name })),
+    baseline.trendingCoins.map(({ id, symbol, name }) => ({ id, symbol, name })))
+  assert.deepEqual(result.trendingCoins.slice(2).map(coin => [coin.categories, coin.trendingCategories]), [
+    [null, null], [null, null], [null, null],
+  ])
+  assert.deepEqual(result.matches[1].coingecko.trendingCategories, [])
+  const sourceUniverse = createUniverse()
+  const input = { sourceUniverse, coinData: createCoinData(sourceUniverse) }
+  assert.deepEqual(
+    buildBaseSeries({ ...input, coingeckoTrending: result }),
+    buildBaseSeries({ ...input, coingeckoTrending: baseline }),
+  )
+})
+
+test("CoinGecko rejects missing matched category data instead of treating it as no category overlap", () => {
+  for (const id of ["bitcoin", "lighter"]) {
+    const data = createData()
+    data.coinCategories = data.coinCategories.filter(coin => coin.id !== id)
+    assert.throws(() => createContext(createUniverse(), data), new RegExp(`categories are missing for ${id}`))
+  }
 })
 
 test("CoinGecko rejects incomplete responses and duplicate trending coin IDs", () => {
@@ -157,42 +197,42 @@ test("CoinGecko rejects incomplete responses and duplicate trending coin IDs", (
   assert.throws(() => createContext(createUniverse(), data), /duplicate coin IDs/)
 })
 
-test("CoinGecko fetches only trending coin details and spaces out requests", async () => {
+test("CoinGecko fetches details only for exact universe matches and spaces out requests", async () => {
+  const universe = createUniverse()
   const data = createData()
+  const before = structuredClone({ universe, data })
   const requests = []
   const pauses = []
   const progress = []
   const result = await fetchCoinGeckoTrendingData({
+    sourceUniverse: universe,
     pause: async ms => pauses.push(ms),
     onProgress: event => progress.push(event),
-    request: async (endpoint, options) => {
-      requests.push({ endpoint, options })
-      if (endpoint === "/search/trending") {
-        return data.trending
-      }
-      if (endpoint === "/derivatives/exchanges/binance_futures") {
-        return data.futures
-      }
-      return data.coinCategories.find(coin => endpoint === `/coins/${coin.id}`)
-    },
+    request: createDataRequest(data, requests),
   })
 
-  assert.deepEqual(result, data)
-  assert.equal(requests.length, data.trending.coins.length + 2)
+  assert.deepEqual({ universe, data }, before)
+  assert.deepEqual(result, { ...data, coinCategories: data.coinCategories.slice(0, 2) })
+  assert.deepEqual(createContext(universe, result).matches, createContext(universe, data).matches)
+  assert.equal(requests.length, 4)
   assert.deepEqual(requests[1].options, { searchParams: { include_tickers: "unexpired" } })
   assert.deepEqual(requests.slice(2).map(request => request.endpoint), [
-    "/coins/bitcoin", "/coins/lighter", "/coins/unrelated-lit", "/coins/dogecoin", "/coins/outside",
+    "/coins/bitcoin", "/coins/lighter",
   ])
   assert.deepEqual(requests[2].options.searchParams, {
     localization: false, tickers: false, market_data: false,
     community_data: false, developer_data: false, sparkline: false,
   })
-  assert.deepEqual(pauses, [2_000, 2_000, 2_000, 2_000, 2_000])
-  assert.deepEqual(progress.at(-1), { index: 5, total: 5, coinId: "outside" })
+  assert.deepEqual(pauses, [2_000, 2_000])
+  assert.deepEqual(progress, [
+    { index: 1, total: 2, coinId: "bitcoin" },
+    { index: 2, total: 2, coinId: "lighter" },
+  ])
 })
 
 test("CoinGecko fetcher does not request coin details when the trending list is empty", async () => {
   const result = await fetchCoinGeckoTrendingData({
+    sourceUniverse: createUniverse(),
     pause: async () => assert.fail("No detail requests should be made"),
     request: async endpoint => endpoint === "/search/trending"
       ? { coins: [], categories: [] }
@@ -202,8 +242,70 @@ test("CoinGecko fetcher does not request coin details when the trending list is 
   assert.deepEqual(result.coinCategories, [])
 })
 
+for (const emptyUniverse of [false, true]) {
+  test(`CoinGecko skips all detail requests when ${emptyUniverse ? "the universe is empty" : "no exact markets match"}`, async () => {
+    const universe = createUniverse()
+    universe.coins = emptyUniverse
+      ? []
+      : universe.coins.map(coin => ({
+          ...coin,
+          market: { tradingViewSymbol: coin.market.tradingViewSymbol.replace("BINANCE:", "BYBIT:") },
+        }))
+    const data = createData()
+    const requests = []
+    const result = await fetchCoinGeckoTrendingData({
+      sourceUniverse: universe,
+      request: createDataRequest(data, requests),
+      pause: async () => assert.fail("No pauses without category requests"),
+      onProgress: () => assert.fail("No progress without category requests"),
+    })
+
+    assert.equal(requests.length, 2)
+    assert.deepEqual(result.coinCategories, [])
+    const context = createContext(universe, result)
+    assert.deepEqual(context.matches, [])
+    assert.equal(context.trendingCoins.length, data.trending.coins.length)
+    assert.ok(context.trendingCoins.every(coin => coin.categories === null && coin.trendingCategories === null))
+  })
+}
+
+test("CoinGecko requests shared coin IDs only once and preserves every matching market", async () => {
+  const universe = createUniverse()
+  universe.coins.push({
+    ...universe.coins[0], baseCurrencyId: "XTVCBTC2", market: { tradingViewSymbol: "BINANCE:1000BTCUSDT.P" },
+  })
+  const data = createData()
+  data.futures.tickers.push({ ...data.futures.tickers[0], symbol: "1000BTCUSDT" })
+  const requests = []
+  const result = await fetchCoinGeckoTrendingData({
+    sourceUniverse: universe, request: createDataRequest(data, requests), pause: async () => {},
+  })
+
+  assert.deepEqual(requests.slice(2).map(request => request.endpoint), ["/coins/bitcoin", "/coins/lighter"])
+  assert.deepEqual(createContext(universe, result).matches, createContext(universe, data).matches)
+  assert.equal(createContext(universe, result).matches.length, 3)
+})
+
+test("CoinGecko validates the universe before sending any requests", async () => {
+  await assert.rejects(fetchCoinGeckoTrendingData({
+    request: async () => assert.fail("No requests without a universe"),
+  }), /requires universe coins array/)
+})
+
+test("CoinGecko rejects conflicting futures mappings before requesting categories", async () => {
+  const data = createData()
+  data.futures.tickers.push({ ...data.futures.tickers[0], coin_id: "unrelated-lit" })
+  const requests = []
+  await assert.rejects(fetchCoinGeckoTrendingData({
+    sourceUniverse: createUniverse(), request: createDataRequest(data, requests),
+    pause: async () => assert.fail("No category requests after a market conflict"),
+  }), /BTCUSDT.P has conflicting coin IDs/)
+  assert.equal(requests.length, 2)
+})
+
 test("CoinGecko fetcher propagates API errors and rejects wrong detail identities", async () => {
   await assert.rejects(fetchCoinGeckoTrendingData({
+    sourceUniverse: createUniverse(),
     request: async () => {
       throw new Error("CoinGecko HTTP 429")
     },
@@ -211,6 +313,7 @@ test("CoinGecko fetcher propagates API errors and rejects wrong detail identitie
 
   const data = createData()
   await assert.rejects(fetchCoinGeckoTrendingData({
+    sourceUniverse: createUniverse(),
     pause: async () => {},
     request: async (endpoint) => {
       if (endpoint === "/search/trending") {

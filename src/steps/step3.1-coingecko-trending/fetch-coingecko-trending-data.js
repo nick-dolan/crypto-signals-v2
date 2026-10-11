@@ -1,13 +1,19 @@
 import { sleep } from "radash"
+import { indexBinanceMarkets } from "../../api/coingecko/index-binance-markets.js"
 import { requestCoinGeckoJson } from "../../api/coingecko/request.js"
 import { isArray } from "../../helpers/utils.typed.js"
-import { normalizeCoinGeckoTrending } from "./build-coingecko-trending-context.js"
+import { normalizeCoinGeckoTrending, selectCoinGeckoTrendingCoins } from "./build-coingecko-trending-context.js"
 
 export async function fetchCoinGeckoTrendingData ({
+  sourceUniverse,
   request = requestCoinGeckoJson,
   pause = sleep,
   onProgress = () => {},
 } = {}) {
+  if (!isArray(sourceUniverse?.coins)) {
+    throw new Error("CoinGecko fetcher requires universe coins array")
+  }
+
   const [trending, futures] = await Promise.all([
     request("/search/trending"),
     request("/derivatives/exchanges/binance_futures", {
@@ -16,13 +22,11 @@ export async function fetchCoinGeckoTrendingData ({
   ])
   const { coins } = normalizeCoinGeckoTrending(trending)
 
-  if (!isArray(futures?.tickers)) {
-    throw new Error("CoinGecko Binance Futures response must contain a tickers array")
-  }
-
+  const { coinIdsByMarket } = indexBinanceMarkets(futures)
+  const matchedCoins = selectCoinGeckoTrendingCoins(sourceUniverse, coins, coinIdsByMarket)
   const coinCategories = []
 
-  for (const coin of coins) {
+  for (const coin of matchedCoins) {
     // Space out coin-detail requests to respect CoinGecko's public rate limits.
     await pause(2_000)
     const details = await request(`/coins/${encodeURIComponent(coin.id)}`, {
@@ -41,7 +45,7 @@ export async function fetchCoinGeckoTrendingData ({
     }
 
     coinCategories.push({ id: coin.id, categories: details.categories })
-    onProgress({ index: coinCategories.length, total: coins.length, coinId: coin.id })
+    onProgress({ index: coinCategories.length, total: matchedCoins.length, coinId: coin.id })
   }
 
   return { trending, futures, coinCategories }

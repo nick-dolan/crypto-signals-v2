@@ -6,6 +6,7 @@ import { fetchCoinGeckoTrendingData } from "./steps/step3.1-coingecko-trending/f
 async function runCoinGeckoTrendingStep () {
   const sourceUniverse = await readTmpJson("step1-crypto-universe.json")
   const data = await fetchCoinGeckoTrendingData({
+    sourceUniverse,
     onProgress: ({ index, total, coinId }) => {
       console.log(`✓ Loaded CoinGecko categories ${index}/${total}: ${coinId}`)
     },

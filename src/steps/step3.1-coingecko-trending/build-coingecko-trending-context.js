@@ -27,6 +27,14 @@ export function normalizeCoinGeckoTrending (trending) {
   }
 }
 
+export function selectCoinGeckoTrendingCoins (sourceUniverse, coins, coinIdsByMarket) {
+  const candidateIds = new Set(sourceUniverse.coins.map(coin => (
+    coinIdsByMarket.get(coin.market.tradingViewSymbol)
+  )))
+
+  return coins.filter(coin => candidateIds.has(coin.id))
+}
+
 export function buildCoinGeckoTrendingContext (
   sourceUniverse,
   { trending, futures, coinCategories },
@@ -37,8 +45,16 @@ export function buildCoinGeckoTrendingContext (
   }
 
   const normalized = normalizeCoinGeckoTrending(trending)
+  const { coinIdsByMarket, skippedMissingCoinIdCount } = indexBinanceMarkets(futures)
+  const matchedCoinIds = new Set(selectCoinGeckoTrendingCoins(
+    sourceUniverse, normalized.coins, coinIdsByMarket,
+  ).map(coin => coin.id))
   const categoriesById = new Map(coinCategories.map(coin => [coin.id, coin.categories]))
   const trendingCoins = normalized.coins.map((coin) => {
+    if (!matchedCoinIds.has(coin.id) && !categoriesById.has(coin.id)) {
+      return { ...coin, categories: null, trendingCategories: null }
+    }
+
     const categories = categoriesById.get(coin.id)
 
     if (!isArray(categories)) {
@@ -60,7 +76,6 @@ export function buildCoinGeckoTrendingContext (
     }
   })
   const trendingById = new Map(trendingCoins.map(coin => [coin.id, coin]))
-  const { coinIdsByMarket, skippedMissingCoinIdCount } = indexBinanceMarkets(futures)
   const matches = sourceUniverse.coins.flatMap((coin) => {
     const marketSymbol = coin.market.tradingViewSymbol
     const trendingCoin = trendingById.get(coinIdsByMarket.get(marketSymbol))
