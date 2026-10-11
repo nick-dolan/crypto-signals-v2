@@ -122,6 +122,57 @@ test("pipeline overlaps independent branches, waits for their inputs and preserv
   assert.equal(control.calls.length, 15)
 })
 
+for (const finishesFirst of ["main", "radar"]) {
+  test(`radar analysis starts as soon as the scan finishes and publication waits for both agents: ${finishesFirst} finishes first`, { timeout: 10_000 }, async (context) => {
+    const control = controlPipeline(context)
+    await finishInitialSteps(control)
+    control.finish("step3.1-coingecko-trending.js")
+    control.finish("step2-data-bootstrap.js")
+    await Promise.all([
+      control.started("step1.1-coin-descriptions.js"),
+      control.started("step11-peer-radar.js"),
+      control.started("step4-feature-metrics.js"),
+    ])
+    assert.equal(control.hasStarted("step12-peer-radar-analysis.js"), false)
+    control.finish("step11-peer-radar.js")
+    await setImmediate()
+    assert.equal(control.hasStarted("step12-peer-radar-analysis.js"), true)
+    assert.equal(control.active.has("step4-feature-metrics.js"), true)
+    assert.equal(control.active.has("step1.1-coin-descriptions.js"), true)
+    assert.equal(control.hasStarted("step10-agent-analysis.js"), false)
+    control.finish("step1.1-coin-descriptions.js")
+
+    for (const step of ["step4-feature-metrics.js", "step5-preliminary-filter.js", "candidate-enrichment.js", "step9-agent-payload.js"]) {
+      await control.started(step)
+      control.finish(step)
+    }
+    await control.started("step10-agent-analysis.js")
+    assert.equal(control.active.has("step12-peer-radar-analysis.js"), true)
+    control.finish(finishesFirst === "main" ? "step10-agent-analysis.js" : "step12-peer-radar-analysis.js")
+    await setImmediate()
+    assert.equal(control.hasStarted("step13-report.js"), false)
+    if (finishesFirst === "radar") {
+      assert.equal(control.hasStarted("step12.1-market-brief.js"), false)
+      control.finish("step10-agent-analysis.js")
+    }
+    await control.started("step12.1-market-brief.js")
+    control.finish("step12.1-market-brief.js")
+    await setImmediate()
+    if (finishesFirst === "main") {
+      assert.equal(control.hasStarted("step13-report.js"), false)
+      control.finish("step12-peer-radar-analysis.js")
+    }
+    await control.started("step13-report.js")
+    assert.equal(control.active.size, 1)
+    control.finish("step13-report.js")
+    await control.started("step14-telegram.js")
+    control.finish("step14-telegram.js")
+    assert.equal((await control.outcome).result.exitCode, 0)
+    assert.equal(control.calls.filter(call => call.step === "step12-peer-radar-analysis.js").length, 1)
+    assert.equal(control.active.size, 0)
+  })
+}
+
 test("pipeline also waits for universe when market history completes first", { timeout: 10_000 }, async (context) => {
   const control = controlPipeline(context)
   await Promise.all([control.started("step1-crypto-universe.js"), control.started("step3-market-context.js")])
@@ -228,6 +279,37 @@ test("pipeline drains a started sibling and preserves the original launch error"
   control.finish("step3-market-context.js")
   assert.strictEqual((await control.outcome).error, failure)
   assert.equal(control.active.size, 0)
+})
+
+test("a fatal main agent failure drains an already-running radar analysis and preserves the original error", { timeout: 10_000 }, async (context) => {
+  const control = controlPipeline(context)
+  const failure = new Error("Main agent launch failed")
+  await finishInitialSteps(control)
+  control.finish("step3.1-coingecko-trending.js")
+  control.finish("step2-data-bootstrap.js")
+  await Promise.all([
+    control.started("step1.1-coin-descriptions.js"),
+    control.started("step11-peer-radar.js"),
+    control.started("step4-feature-metrics.js"),
+  ])
+  control.finish("step1.1-coin-descriptions.js")
+  control.finish("step11-peer-radar.js")
+  await setImmediate()
+  assert.equal(control.hasStarted("step12-peer-radar-analysis.js"), true)
+  for (const step of ["step4-feature-metrics.js", "step5-preliminary-filter.js", "candidate-enrichment.js", "step9-agent-payload.js"]) {
+    await control.started(step)
+    control.finish(step)
+  }
+  await control.started("step10-agent-analysis.js")
+  control.fail("step10-agent-analysis.js", failure)
+  await setImmediate()
+  assert.equal(control.isSettled(), false)
+  assert.equal(control.hasStarted("step13-report.js"), false)
+  assert.equal(control.hasStarted("step14-telegram.js"), false)
+  control.finish("step12-peer-radar-analysis.js")
+  assert.strictEqual((await control.outcome).error, failure)
+  assert.equal(control.active.size, 0)
+  assert.equal(control.hasStarted("step12.1-market-brief.js"), false)
 })
 
 test("a fatal main failure drains background descriptions and scan without starting later work", { timeout: 10_000 }, async (context) => {

@@ -67,7 +67,10 @@ export async function runPipeline ({ runStep, onWarning = console.warn } = {}) {
     const scan = bootstrap.then(succeeded => (
       succeeded ? start("step11-peer-radar.js", radarFailed) : false
     ))
-    running.push(descriptions, scan)
+    const radar = scan.then(succeeded => (
+      succeeded ? start("step12-peer-radar-analysis.js", radarFailed) : false
+    ))
+    running.push(descriptions, scan, radar)
 
     await waitFor([bootstrap, trending])
     await waitFor([start("step4-feature-metrics.js")])
@@ -84,10 +87,6 @@ export async function runPipeline ({ runStep, onWarning = console.warn } = {}) {
       failures.marketBriefFailed = true
       onWarning("⚠ Optional market brief failed (step 12.1); continuing to the main report")
     })
-    const radar = scan.then(succeeded => (
-      succeeded ? start("step12-peer-radar-analysis.js", radarFailed) : false
-    ))
-    running.push(radar)
     await waitFor([brief, radar])
     await waitFor([start("step13-report.js")])
     await waitFor([start("step14-telegram.js")])
