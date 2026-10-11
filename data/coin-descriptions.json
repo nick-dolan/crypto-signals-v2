@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-10T17:45:25.628Z",
+  "generatedAt": "2026-10-11T10:28:33.963Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-10T17:45:09.076Z"
+    "sourceGeneratedAt": "2026-10-11T10:27:49.323Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 272,
+  "coinCount": 273,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -3990,6 +3990,18 @@
         {
           "url": "https://ton.org/",
           "checkedAt": "2026-10-10T17:45:23.467Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCDATAN",
+      "symbol": "DATA",
+      "name": "Data Network",
+      "description": "DATA Network — блокчейн-сеть и инфраструктура для сбора, подтверждения происхождения и аудита данных, предоставляемых людьми для использования в наборах данных. По описанию Data Foundation, блокчейн-сеть ведёт публичный защищённый от подмены реестр подтверждений, а инструменты сети поддерживают проверку данных, условий их использования и согласия участников.",
+      "sources": [
+        {
+          "url": "https://datafdn.org/",
+          "checkedAt": "2026-10-11T10:28:31.720Z"
         }
       ]
     }
