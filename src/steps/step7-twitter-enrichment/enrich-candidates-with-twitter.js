@@ -1,6 +1,5 @@
-import { sleep } from "radash"
-
 import { fetchTweetPage } from "../../api/twitter-api.js"
+import { createConcurrencyLimiter } from "../../helpers/concurrency-limiter.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import {
   isArray,
@@ -103,7 +102,6 @@ async function fetchRecentTweets (
   query,
   referenceTimestamp,
   fetchPage,
-  wait,
 ) {
   const firstPage = await fetchPage(query)
   const firstPageTweets = selectRecentTweets(firstPage, 1, referenceTimestamp)
@@ -118,8 +116,6 @@ async function fetchRecentTweets (
       tweets: mergeTweets(firstPageTweets),
     }
   }
-
-  await wait(300)
 
   const secondPage = await fetchPage(query, cursor)
   const secondPageTweets = selectRecentTweets(secondPage, 2, referenceTimestamp)
@@ -159,7 +155,6 @@ async function enrichCandidate (
   { candidate, symbol },
   referenceTimestamp,
   fetchPage,
-  wait,
 ) {
   // until_time is exclusive; the local window includes the exact snapshot second.
   const query = [
@@ -173,7 +168,6 @@ async function enrichCandidate (
       query,
       referenceTimestamp,
       fetchPage,
-      wait,
     )
 
     return {
@@ -207,11 +201,10 @@ export async function enrichCandidatesWithTwitter (
   {
     fetchPage = fetchTweetPage,
     referenceTimestamp = getDefaultReferenceTimestamp(input),
-    wait = sleep,
   } = {},
 ) {
-  if (!isFunction(fetchPage) || !isFunction(wait)) {
-    throw new Error("Twitter fetcher and wait must be functions")
+  if (!isFunction(fetchPage)) {
+    throw new Error("Twitter fetcher must be a function")
   }
 
   if (!isSafeInteger(referenceTimestamp) || referenceTimestamp <= 0) {
@@ -219,20 +212,10 @@ export async function enrichCandidatesWithTwitter (
   }
 
   const candidates = validateInput(input)
-  const enrichedCandidates = []
-
-  for (const [index, candidate] of candidates.entries()) {
-    enrichedCandidates.push(await enrichCandidate(
-      candidate,
-      referenceTimestamp,
-      fetchPage,
-      wait,
-    ))
-
-    if (index < candidates.length - 1) {
-      await wait(300)
-    }
-  }
+  const workers = createConcurrencyLimiter(10)
+  const enrichedCandidates = await Promise.all(candidates.map(candidate => workers.run(
+    () => enrichCandidate(candidate, referenceTimestamp, fetchPage),
+  )))
 
   return {
     ...input,

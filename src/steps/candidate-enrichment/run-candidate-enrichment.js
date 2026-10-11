@@ -1,6 +1,5 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { sleep } from "radash"
 
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
@@ -38,7 +37,6 @@ export async function runCandidateEnrichment ({
   fetchNews = fetchTradingViewNews,
   fetchStory = fetchTradingViewNewsStory,
   fetchPage = fetchTweetPage,
-  wait = sleep,
   callAgent = callModel,
   preparePatterns = preparePatternCandidates,
   enrichNews = enrichCandidatesWithNews,
@@ -54,7 +52,7 @@ export async function runCandidateEnrichment ({
     || !isFinite(new Date(referenceTimestamp * 1_000).getTime())) {
     throw new Error("Candidate enrichment referenceTimestamp must be a positive Unix timestamp")
   }
-  if (![readJson, writeJson, removeJson, readPrompt, fetchNews, fetchStory, fetchPage, wait,
+  if (![readJson, writeJson, removeJson, readPrompt, fetchNews, fetchStory, fetchPage,
     callAgent, preparePatterns, enrichNews, enrichTwitter, enrichContext, enrichPatterns].every(isFunction)) {
     throw new Error("Candidate enrichment dependencies must be functions")
   }
@@ -112,7 +110,6 @@ export async function runCandidateEnrichment ({
     const output = await enrichTwitter(twitterInput, {
       referenceTimestamp,
       fetchPage: (...args) => track(() => fetchPage(...args)),
-      wait: (...args) => track(() => wait(...args)),
     })
     validatePublicationOutput(shortlist, output, "twitter", referenceTimestamp)
     return output

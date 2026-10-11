@@ -114,7 +114,6 @@ function createReplay (shortlist = createShortlist()) {
         id: query.split(" ")[0], text: query.split(" ")[0],
         createdAt: new Date(1_800_000_000_000).toISOString(),
       }] }),
-      wait: async () => {},
       callAgent: async (_, message, settings) => agentResponse(message, settings),
     },
   }
@@ -182,7 +181,6 @@ for (const concurrency of [undefined, 9]) {
     let contextCalls = 0
     const sources = { news: 0, twitter: 0 }
     const maximumSources = { news: 0, twitter: 0 }
-    const waits = []
     t.after(() => {
       released = true
       publications.resolve()
@@ -208,7 +206,6 @@ for (const concurrency of [undefined, 9]) {
         sources.twitter -= 1
         return replay.options.fetchPage(...args)
       },
-      wait: async milliseconds => waits.push(milliseconds),
       readPrompt: async (filename) => {
         if (filename.includes("context")) {
           contextPrepared.resolve()
@@ -248,7 +245,7 @@ for (const concurrency of [undefined, 9]) {
       assert.equal(contextCalls, 0)
       assert.equal(patternCalls, ceiling)
       assert.equal(replay.artifacts.has("step7-twitter-enrichment.json"), false)
-      assert.deepEqual(maximumSources, { news: 5, twitter: 1 })
+      assert.deepEqual(maximumSources, { news: 5, twitter: 10 })
       publications.resolve()
       await contextPrepared.promise
       // One extra pattern is already queued at ceiling 9; FIFO admits it before context.
@@ -269,7 +266,7 @@ for (const concurrency of [undefined, 9]) {
     assert.equal(contextCalls, 24)
     assert.equal(maximum, ceiling)
     assert.equal(active, 0)
-    assert.deepEqual(waits, Array(23).fill(300))
+
     assert.equal(result.value.context.candidates.length, 24)
   })
 }
