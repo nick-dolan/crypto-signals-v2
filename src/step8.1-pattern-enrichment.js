@@ -9,14 +9,16 @@ import { preparePatternCandidates } from "./steps/step8.1-pattern-enrichment/pre
 
 export async function runPatternEnrichmentStep ({
   readJson = readTmpJson,
+  readPrompt = () => fs.readFile(new URL("./prompts/candidate-pattern-enrichment.md", import.meta.url), "utf8"),
+  removeJson = filename => fs.rm(path.join("tmp", filename), { force: true }),
   prepare = preparePatternCandidates,
   enrich = enrichCandidatesWithPatterns,
   writeJson = writeTmpJson,
 } = {}) {
-  await fs.rm("tmp/step8.1-pattern-enrichment.json", { force: true })
+  await removeJson("step8.1-pattern-enrichment.json")
   const [input, systemPrompt] = await Promise.all([
     readJson("step5-preliminary-filter.json"),
-    fs.readFile(new URL("./prompts/candidate-pattern-enrichment.md", import.meta.url), "utf8"),
+    readPrompt(),
   ])
   const prepared = await prepare(input)
   const output = await enrich(prepared, systemPrompt)

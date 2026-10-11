@@ -2,14 +2,16 @@ import { spawn } from "node:child_process"
 
 import { resetTmpDirectory } from "./helpers/fs-helper.js"
 import { isError } from "./helpers/utils.typed.js"
+import { runPipeline } from "./steps/run-pipeline.js"
 
-function runStep (scriptPath) {
+function runStep (scriptPath, { concurrency } = {}) {
   return new Promise((resolve, reject) => {
     console.log("\n================================================")
     console.log(`🚀 Running ${scriptPath}...`)
     console.log("================================================\n")
 
-    const child = spawn(process.execPath, [scriptPath], {
+    const args = [scriptPath, ...(concurrency === undefined ? [] : ["--concurrency", String(concurrency)])]
+    const child = spawn(process.execPath, args, {
       stdio: "inherit",
       cwd: process.cwd(),
       env: process.env,
@@ -29,55 +31,9 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
-    let coinDescriptionsFailed = false
-    let peerRadarFailed = false
-    let marketBriefFailed = false
-
-    for (const step of [
-      "step1-crypto-universe.js",
-      "step1.1-coin-descriptions.js",
-      "step2-data-bootstrap.js",
-      "step3-market-context.js",
-      "step3.1-coingecko-trending.js",
-      "step4-feature-metrics.js",
-      "step5-preliminary-filter.js",
-      "step6-news-enrichment.js",
-      "step7-twitter-enrichment.js",
-      "step8-context-enrichment.js",
-      "step8.1-pattern-enrichment.js",
-      "step9-agent-payload.js",
-      "step10-agent-analysis.js",
-      "step11-peer-radar.js",
-      "step12-peer-radar-analysis.js",
-      "step12.1-market-brief.js",
-      "step13-report.js",
-      "step14-telegram.js",
-    ]) {
-      if (peerRadarFailed && step === "step12-peer-radar-analysis.js") {
-        continue
-      }
-
-      const succeeded = await runStep(`src/${step}`)
-
-      if (!succeeded) {
-        if (step === "step1.1-coin-descriptions.js") {
-          coinDescriptionsFailed = true
-          console.warn("⚠ Optional coin descriptions enrichment failed (step 1.1); continuing the pipeline")
-          continue
-        }
-        if (step === "step12.1-market-brief.js") {
-          marketBriefFailed = true
-          console.warn("⚠ Optional market brief failed (step 12.1); continuing to the main report")
-          continue
-        }
-        process.exitCode = 1
-        if (["step11-peer-radar.js", "step12-peer-radar-analysis.js"].includes(step)) {
-          peerRadarFailed = true
-          console.warn("⚠ Peer radar failed; continuing to the independent main Parquet snapshot")
-          continue
-        }
-        return
-      }
+    const { coinDescriptionsFailed, peerRadarFailed, marketBriefFailed, exitCode } = await runPipeline({ runStep })
+    if (exitCode) {
+      process.exitCode = exitCode
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
