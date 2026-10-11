@@ -1,3 +1,5 @@
+import { parallel } from "radash"
+
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import { isFunction, isString } from "../../helpers/utils.typed.js"
 import {
@@ -13,6 +15,7 @@ export async function buildCompleteCryptoUniverse (
   sourceUniverse,
   checkCoverage,
   {
+    concurrency = 8,
     generatedAt = new Date().toISOString(),
     maxAttempts = 2,
     onProgress = () => {},
@@ -20,6 +23,7 @@ export async function buildCompleteCryptoUniverse (
 ) {
   const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)
 
+  validatePositiveInteger(concurrency, "concurrency")
   validatePositiveInteger(maxAttempts, "maxAttempts")
 
   if (!isFunction(checkCoverage)) {
@@ -33,50 +37,67 @@ export async function buildCompleteCryptoUniverse (
   const orderedCandidates = [...candidates].sort(
     (first, second) => first.rank - second.rank,
   )
-  const coins = []
-  const rejected = []
-
-  for (const [index, coin] of orderedCandidates.entries()) {
-    const progress = {
-      index: index + 1,
-      total: orderedCandidates.length,
-    }
-    const { attempts, result } = await checkWithRetry(
-      checkCoverage,
-      coin,
-      maxAttempts,
-      event => onProgress({ ...event, ...progress }),
-    )
-
-    if (result?.complete) {
-      const accepted = {
-        ...coin,
-        market: toPublicMarket(coin.market),
-        attempts,
-        coverage: result.coverage,
-        dataFile: isString(result.dataFile) ? result.dataFile : null,
+  // radash consumes its queue from the end; keep higher-ranked coins first.
+  const queue = orderedCandidates.map((coin, index) => ({ coin, index })).reverse()
+  let stopped = false
+  const checked = await parallel(
+    Math.min(concurrency, queue.length || 1),
+    queue,
+    async ({ coin, index }) => {
+      if (stopped) {
+        return null
       }
-      coins.push(accepted)
-      onProgress({
-        status: "accepted",
-        ...progress,
-        coin,
-        market: coin.market,
-        accepted,
-      })
-      continue
-    }
 
-    const rejection = createCoverageRejection(coin, attempts, result)
-    rejected.push(rejection)
-    onProgress({
-      status: "rejected",
-      ...progress,
-      coin,
-      market: coin.market,
-      rejection,
-    })
-  }
+      try {
+        const progress = {
+          index: index + 1,
+          total: orderedCandidates.length,
+        }
+        const { attempts, result } = await checkWithRetry(
+          checkCoverage,
+          coin,
+          maxAttempts,
+          event => onProgress({ ...event, ...progress }),
+        )
+
+        if (result?.complete) {
+          const accepted = {
+            ...coin,
+            market: toPublicMarket(coin.market),
+            attempts,
+            coverage: result.coverage,
+            dataFile: isString(result.dataFile) ? result.dataFile : null,
+          }
+          onProgress({
+            status: "accepted",
+            ...progress,
+            coin,
+            market: coin.market,
+            accepted,
+          })
+          return { accepted }
+        }
+
+        const rejection = createCoverageRejection(coin, attempts, result)
+        onProgress({
+          status: "rejected",
+          ...progress,
+          coin,
+          market: coin.market,
+          rejection,
+        })
+        return { rejection }
+      } catch (error) {
+        stopped = true
+        throw error
+      }
+    },
+  ).catch((error) => {
+    throw error.errors?.[0] ?? error
+  })
+  const results = checked.reverse()
+  const coins = results.flatMap(result => result.accepted ? [result.accepted] : [])
+  const rejected = results.flatMap(result => result.rejection ? [result.rejection] : [])
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { setImmediate } from "node:timers/promises"
 import { buildCompleteCryptoUniverse } from "../src/steps/step2-data-bootstrap/build-complete-crypto-universe.js"
 
 function createMarket (
@@ -91,6 +92,52 @@ function createCoverageResult (
   }
 }
 
+async function withControlledChecks (coins, options, verify) {
+  const gates = new Map(coins.map(coin => [
+    coin.baseCurrencyId,
+    Array.from({ length: options.maxAttempts }, () => Promise.withResolvers()),
+  ]))
+  const getCheck = (id, attempt = 1) => gates.get(id)[attempt - 1]
+  const state = { calls: [], finished: [], active: 0, peak: 0, settled: false }
+  const outcome = buildCompleteCryptoUniverse(
+    createSourceUniverse(coins),
+    async (coin, attempt) => {
+      state.calls = [...state.calls, [coin.baseCurrencyId, attempt]]
+      state.active += 1
+      state.peak = Math.max(state.peak, state.active)
+
+      try {
+        return await getCheck(coin.baseCurrencyId, attempt).promise
+      } finally {
+        state.active -= 1
+        state.finished = [...state.finished, [coin.baseCurrencyId, attempt]]
+      }
+    },
+    options,
+  ).then(
+    (report) => {
+      state.settled = true
+      return { report }
+    },
+    (error) => {
+      state.settled = true
+      return { error }
+    },
+  )
+
+  try {
+    await verify({ getCheck, state, outcome })
+  } finally {
+    for (const attempts of gates.values()) {
+      for (const gate of attempts) {
+        gate.resolve(createCoverageResult(true))
+      }
+    }
+    await setImmediate()
+    await outcome
+  }
+}
+
 test("complete universe checks every attached market by rank", async () => {
   const candidates = [
     createCoin(5),
@@ -108,6 +155,7 @@ test("complete universe checks every attached market by rank", async () => {
       return createCoverageResult(coin.baseCurrencyId !== "XTVCEDGED")
     },
     {
+      concurrency: 1,
       generatedAt: "2026-08-29T12:00:00Z",
       onProgress: event => progressEvents.push(event),
     },
@@ -149,6 +197,237 @@ test("complete universe checks every attached market by rank", async () => {
   })
   assert.equal(report.candidateCount, 4)
   assert.equal(report.coinCount, 3)
+})
+
+for (const { name, candidates, orderedIds } of [
+  {
+    name: "rank order",
+    candidates: [30, 9, 5, 20, 2, 12].map(rank => createCoin(rank)),
+    orderedIds: [2, 5, 9, 12, 20, 30].map(rank => `XTVC${rank}`),
+  },
+  {
+    name: "stable equal ranks",
+    candidates: [
+      createCoin(20),
+      ...["A", "B", "C", "D", "E"].map(symbol => createCoin(2, {
+        baseCurrencyId: `XTVC${symbol}`,
+        symbol,
+      })),
+    ],
+    orderedIds: ["XTVCA", "XTVCB", "XTVCC", "XTVCD", "XTVCE", "XTVC20"],
+  },
+]) {
+  test(`complete universe caps concurrency at 2, overlaps checks and preserves ${name}`, { timeout: 10_000 }, async () => {
+    const progressEvents = []
+    await withControlledChecks(candidates, {
+      concurrency: 2,
+      maxAttempts: 1,
+      onProgress: event => progressEvents.push(event),
+    }, async ({ getCheck, state, outcome }) => {
+      // Yield only to flush promise continuations; checker completion needs an explicit gate release.
+      await setImmediate()
+      assert.deepEqual(state.calls, orderedIds.slice(0, 2).map(id => [id, 1]))
+      assert.equal(state.active, 2)
+      assert.equal(state.finished.length, 0)
+      assert.equal(state.settled, false)
+
+      for (const [position, index] of [1, 0, 3, 4, 5, 2].entries()) {
+        const id = orderedIds[index]
+        getCheck(id).resolve(createCoverageResult([0, 1, 4].includes(index), false, {
+          dataFile: `tmp/step2-data-bootstrap/${id}/data.json`,
+        }))
+        await setImmediate()
+        assert.deepEqual(state.calls, orderedIds.slice(0, Math.min(position + 3, 6)).map(id => [id, 1]))
+        assert.equal(state.peak, 2)
+        assert.equal(state.active, Math.min(2, 5 - position))
+
+        if (position < 5) {
+          assert.equal(state.settled, false, "must wait for every active checker")
+        }
+      }
+
+      const { report, error } = await outcome
+      assert.ifError(error)
+      assert.deepEqual(state.finished, [1, 0, 3, 4, 5, 2].map(index => [orderedIds[index], 1]))
+      assert.equal(report.candidateCount, 6)
+      assert.equal(report.coinCount, 3)
+      assert.deepEqual(
+        report.coins.map(coin => [coin.baseCurrencyId, coin.attempts, coin.dataFile]),
+        [0, 1, 4].map(index => [
+          orderedIds[index], 1, `tmp/step2-data-bootstrap/${orderedIds[index]}/data.json`,
+        ]),
+      )
+      assert.deepEqual(
+        report.rejected.map(coin => [coin.baseCurrencyId, coin.attempts]),
+        [2, 3, 5].map(index => [orderedIds[index], 1]),
+      )
+      assert.equal(report.rejected.every(coin => !("dataFile" in coin)), true)
+      assert.deepEqual(
+        [...progressEvents].sort((first, second) => first.index - second.index).map(event => [
+          event.coin.baseCurrencyId, event.status, event.index, event.total, event.accepted?.dataFile,
+        ]),
+        orderedIds.map((id, index) => [
+          id,
+          [0, 1, 4].includes(index) ? "accepted" : "rejected",
+          index + 1,
+          6,
+          [0, 1, 4].includes(index) ? `tmp/step2-data-bootstrap/${id}/data.json` : undefined,
+        ]),
+      )
+    })
+  })
+}
+
+test("complete universe keeps concurrent retries and attempts local to each coin", { timeout: 10_000 }, async () => {
+  const progressEvents = []
+  const expectedCalls = [["XTVC5", 1], ["XTVC11", 1], ["XTVC5", 2], ["XTVC11", 2], ["XTVC11", 3], ["XTVC30", 1]]
+  await withControlledChecks([30, 11, 5].map(rank => createCoin(rank)), {
+    concurrency: 2,
+    maxAttempts: 3,
+    onProgress: event => progressEvents.push(event),
+  }, async ({ getCheck, state, outcome }) => {
+    await setImmediate()
+    assert.deepEqual(state.calls, expectedCalls.slice(0, 2))
+    assert.equal(state.active, 2)
+
+    getCheck("XTVC5").reject(new Error("Temporary coverage failure"))
+    await setImmediate()
+    assert.deepEqual(state.calls, expectedCalls.slice(0, 3))
+
+    for (const attempt of [1, 2]) {
+      getCheck("XTVC11", attempt).resolve(createCoverageResult(false, true, {
+        unavailableMetrics: ["premium"],
+      }))
+      await setImmediate()
+      assert.deepEqual(state.calls, expectedCalls.slice(0, attempt + 3))
+      assert.equal(state.active, 2)
+      assert.equal(state.peak, 2)
+    }
+
+    getCheck("XTVC5", 2).resolve(createCoverageResult(true, false, {
+      dataFile: "tmp/step2-data-bootstrap/XTVC5/data.json",
+    }))
+    await setImmediate()
+    assert.deepEqual(state.calls, expectedCalls)
+    assert.equal(state.active, 2)
+    getCheck("XTVC30").resolve(createCoverageResult(false, false, {
+      unavailableMetrics: ["premium"],
+    }))
+    await setImmediate()
+    assert.equal(state.active, 1)
+    assert.equal(state.settled, false)
+    getCheck("XTVC11", 3).resolve(createCoverageResult(false, true, {
+      unavailableMetrics: ["premium"],
+    }))
+
+    const { report, error } = await outcome
+    assert.ifError(error)
+    assert.deepEqual(state.calls, expectedCalls)
+    assert.equal(state.active, 0)
+    assert.equal(state.peak, 2)
+    assert.deepEqual(
+      report.coins.map(coin => [coin.rank, coin.attempts, coin.dataFile]),
+      [[5, 2, "tmp/step2-data-bootstrap/XTVC5/data.json"]],
+    )
+    assert.deepEqual(
+      report.rejected.map(coin => [coin.rank, coin.attempts, coin.unavailableMetrics, coin.confirmedUnavailableMetrics]),
+      [[11, 3, ["premium"], ["premium"]], [30, 1, ["premium"], []]],
+    )
+    assert.deepEqual(
+      [...progressEvents].sort((first, second) => first.coin.rank - second.coin.rank).map(event => [
+        event.coin.rank, event.status, event.index, event.total,
+        event.attempt ?? event.accepted?.attempts ?? event.rejection?.attempts,
+      ]),
+      [
+        [5, "retrying", 1, 3, 1],
+        [5, "accepted", 1, 3, 2],
+        [11, "retrying", 2, 3, 1],
+        [11, "retrying", 2, 3, 2],
+        [11, "rejected", 2, 3, 3],
+        [30, "rejected", 3, 3, 1],
+      ],
+    )
+    assert.deepEqual(
+      progressEvents.filter(event => event.status === "retrying").map(event => [
+        event.coin.rank, event.result.reasonCodes, event.result.confirmedUnavailableMetrics,
+      ]),
+      [
+        [5, ["coverage:request_failed"], []],
+        [11, ["premium:missing_values"], []],
+        [11, ["premium:missing_values"], ["premium"]],
+      ],
+    )
+  })
+})
+
+for (const status of ["retrying", "accepted", "rejected"]) {
+  test(`complete universe preserves the original ${status} progress error and drains active checks`, { timeout: 10_000 }, async () => {
+    const failure = new Error(`onProgress ${status} failed`)
+    let progressThrew = false
+    await withControlledChecks([createCoin(11), createCoin(5)], {
+      concurrency: 2,
+      maxAttempts: 2,
+      onProgress: (event) => {
+        if (event.coin.rank === 5 && event.status === status) {
+          progressThrew = true
+          throw failure
+        }
+      },
+    }, async ({ getCheck, state, outcome }) => {
+      await setImmediate()
+      assert.deepEqual(state.calls, [["XTVC5", 1], ["XTVC11", 1]])
+      assert.equal(state.active, 2)
+      getCheck("XTVC5").resolve(createCoverageResult(status === "accepted", status === "retrying"))
+      await setImmediate()
+      assert.equal(progressThrew, true)
+      assert.equal(state.active, 1)
+      assert.equal(state.settled, false, "progress errors must wait for the active checker")
+      getCheck("XTVC11").resolve(createCoverageResult(true))
+
+      const { error } = await outcome
+      assert.strictEqual(error, failure)
+      assert.equal(state.active, 0)
+      assert.deepEqual(state.calls, [["XTVC5", 1], ["XTVC11", 1]])
+      assert.deepEqual(state.finished, state.calls)
+    })
+  })
+}
+
+test("complete universe validates positive safe-integer concurrency before checking coverage", async () => {
+  let calls = 0
+  for (const coins of [[], [createCoin(1)]]) {
+    for (const concurrency of [0, -1, 1.5, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1, "2", null, true, false, {}, [], 2n, Symbol("2")]) {
+      await assert.rejects(
+        buildCompleteCryptoUniverse(
+          createSourceUniverse(coins),
+          async () => {
+            calls += 1
+            return createCoverageResult(true)
+          },
+          { concurrency },
+        ),
+        /concurrency.*positive.*integer/i,
+        `concurrency=${String(concurrency)}, candidates=${coins.length}`,
+      )
+      assert.equal(calls, 0)
+    }
+  }
+})
+
+test("complete universe accepts explicit positive safe-integer concurrency", async () => {
+  for (const concurrency of [1, 2, Number.MAX_SAFE_INTEGER]) {
+    let calls = 0
+    const report = await buildCompleteCryptoUniverse(
+      createSourceUniverse([createCoin(1)]),
+      async () => {
+        calls += 1
+        return createCoverageResult(true)
+      },
+      { concurrency },
+    )
+    assert.equal(calls, 1)
+    assert.equal(report.coinCount, 1)
+  }
 })
 
 test("complete universe checks distinct coins with the same rank independently", async () => {
