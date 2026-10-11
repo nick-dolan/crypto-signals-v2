@@ -15,7 +15,7 @@ export async function buildCompleteCryptoUniverse (
   sourceUniverse,
   checkCoverage,
   {
-    concurrency = 8,
+    concurrency = 6,
     generatedAt = new Date().toISOString(),
     maxAttempts = 2,
     onProgress = () => {},
