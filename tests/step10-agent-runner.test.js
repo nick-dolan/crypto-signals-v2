@@ -10,7 +10,8 @@ import { promisify } from "node:util"
 for (const [name, payload] of [
   ["old payload", { schemaVersion: 13, objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)" }],
   ["missing pattern context", { schemaVersion: 14, objective: "P(рост > 2.5 ATR в следующие 4–12 часов)" }],
-  ["old objective", { schemaVersion: 15, objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)" }],
+  ["old peer payload", { schemaVersion: 15, objective: "P(рост > 2.5 ATR в следующие 4–12 часов)", peerRegistryGeneratedAt: "2026-09-22T16:02:05.780Z" }],
+  ["old objective", { schemaVersion: 16, objective: "P(|движение| > 2.5 ATR в следующие 4–12 часов)" }],
 ]) {
   test(`step 10 rejects ${name} before making an analysis request`, async (t) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "growth-agent-runner-"))
@@ -33,7 +34,7 @@ for (const [name, payload] of [
 }
 
 for (const empty of [false, true]) {
-  test(`CLI step 10 accepts schema 15 with ${empty ? "empty shortlist" : "pattern context"}`, async (t) => {
+  test(`CLI step 10 accepts schema 16 with ${empty ? "empty shortlist" : "pattern context"}`, async (t) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pattern-agent-runner-"))
     t.after(() => fs.rm(directory, { recursive: true, force: true }))
     await fs.mkdir(path.join(directory, "tmp"))
@@ -44,7 +45,7 @@ for (const empty of [false, true]) {
       flags: [],
     }
     const payload = {
-      schemaVersion: 15, asOf, timeframe: "1h",
+      schemaVersion: 16, asOf, timeframe: "1h",
       objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
       candidateCount: empty ? 0 : 1,
       schema: { patternContext: ["patternStatus", "patternSummary", "patternCaveat"] },
@@ -70,7 +71,7 @@ for (const empty of [false, true]) {
           calls += 1
           assert.deepEqual(Object.keys(request), ["prompt"])
           const payload = JSON.parse(request.prompt)
-          assert.equal(payload.schemaVersion, 15)
+          assert.equal(payload.schemaVersion, 16)
           assert.deepEqual(payload.schema.patternContext, ["patternStatus", "patternSummary", "patternCaveat"])
           await fs.writeFile("tmp/captured-main-input.json", JSON.stringify(payload))
           return { data: { content: JSON.stringify({
@@ -90,6 +91,7 @@ for (const empty of [false, true]) {
     `], { cwd: directory, timeout: 10_000 })
     const captured = JSON.parse(await fs.readFile(path.join(directory, "tmp", "captured-main-input.json"), "utf8"))
     assert.deepEqual(captured, payload)
+    assert.doesNotMatch(JSON.stringify(captured), /"peer[A-Z]\w*"\s*:/)
     const output = JSON.parse(await fs.readFile(path.join(directory, "tmp", "step10-agent-analysis.json"), "utf8"))
     assert.equal(output.asOf, asOf)
     assert.equal(output.candidateCount, payload.candidateCount)

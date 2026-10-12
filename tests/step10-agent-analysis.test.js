@@ -150,11 +150,19 @@ test("analysis prompt example follows the structured response schema", async () 
 test("analysis prompt distinguishes current strength against the market from historical resilience", async () => {
   const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
 
-  assert.match(prompt, /`altMarketBackground` со статусом `down`.*`peerCoinReturn4hPct` за те же 4ч/)
+  assert.match(prompt, /`altMarketBackground` со статусом `down`.*доходность за те же 4ч.*`close` через `get_coin_history`/)
   assert.match(prompt, /рост монеты — наиболее сильный положительный аргумент; удержание около нуля — более слабый признак устойчивости; меньшее падение — лишь относительное преимущество, не подтверждение роста/)
   assert.match(prompt, /Без доступного фона или собственной доходности не утверждай текущий рост против рынка/)
   assert.match(prompt, /`sustainedDownPositiveRate` — историческая доля роста.*`sustainedDownWinRate` — историческая доля преимущества/)
   assert.match(prompt, /Не выдавай исторические доли за поведение в текущем окне/)
+})
+
+test("analysis prompt excludes competitor context while keeping category and market strength", async () => {
+  const prompt = await readFile(new URL("../src/prompts/strong-move-probability.md", import.meta.url), "utf8")
+
+  assert.doesNotMatch(prompt, /peer[A-Z]\w*|сосед|конкурент|VET\/VTHO/)
+  assert.match(prompt, /`laggard` и `categoryContext`/)
+  assert.match(prompt, /`sustainedStatus`, scores и компоненты/)
 })
 
 test("analysis prompt weighs strength without a fixed bonus, duplicate evidence or bypassing early triggers", async () => {

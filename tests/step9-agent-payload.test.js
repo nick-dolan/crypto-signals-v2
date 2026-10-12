@@ -289,6 +289,14 @@ function createPeerContext (overrides = {}) {
   }
 }
 
+function assertNoPeerData (payload) {
+  assert.doesNotMatch(JSON.stringify(payload), /"peer[^"]*"\s*:/i)
+  assert.doesNotMatch(JSON.stringify(payload.schema), /peer/i)
+  assert.doesNotMatch(JSON.stringify(payload.definitions), /\bpeer[A-Z_]\w*/)
+  assert.doesNotMatch(JSON.stringify(payload.conventions), /\bpeer(?:[A-Z_]\w*|-)/)
+  assert.ok(decodeAgentPayload(payload).fields.every(field => !/^peer/i.test(field)))
+}
+
 function getSustainedValues (payload, index = 0) {
   return Object.fromEntries(Object.entries(decodeAgentPayload(payload).candidates[index])
     .filter(([field]) => field.startsWith("sustained")))
@@ -297,13 +305,14 @@ function getSustainedValues (payload, index = 0) {
 test("agent payload groups the original fields in the approved order, including an empty shortlist", () => {
   const payload = buildAgentPayload(createShortlist([]))
 
+  assert.equal(payload.schemaVersion, 16)
   assert.equal(payload.candidateCount, 0)
-  assert.equal(payload.peerRegistryGeneratedAt, null)
+  assertNoPeerData(payload)
   assert.deepEqual(payload.candidates, [])
   assert.deepEqual(decodeAgentPayload(payload).candidates, [])
   assert.deepEqual(Object.keys(payload.schema), [
     "profile", "volatility", "lifecycle", "volume", "derivatives", "social",
-    "relativeStrength", "sustainedStrength", "categoryContext", "peerContext", "coingecko", "informationContext", "patternContext",
+    "relativeStrength", "sustainedStrength", "categoryContext", "coingecko", "informationContext", "patternContext",
   ])
   assert.deepEqual(payload.schema, {
     profile: ["rank", "atrPct", "marketCapB", "volume24hM"],
@@ -364,10 +373,6 @@ test("agent payload groups the original fields in the approved order, including 
       "sustainedExcess24hPct",
     ],
     categoryContext: ["category", "categoryStatus", "categoryMoveAtr", "categoryBreadth"],
-    peerContext: [
-      "peerStatus", "peerCount", "peerAvailableCount", "peerBenchmarkCoinCount",
-      "peerCoinReturn4hPct", "peerCoinMove4hAtr", "peerLeaders",
-    ],
     coingecko: ["coingeckoTrending", "coingeckoTrendingCategories"],
     informationContext: [
       "newsStatus", "newsSummary", "twitterStatus", "twitterSummary",
@@ -383,7 +388,7 @@ test("agent payload creates documented grouped candidates without changing marke
   const payload = buildAgentPayload(shortlist)
   const { fields, candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 15)
+  assert.equal(payload.schemaVersion, 16)
   assert.equal(payload.objective, "P(рост > 2.5 ATR в следующие 4–12 часов)")
   assert.equal(payload.asOf, "2026-08-31T09:00:00.000Z")
   assert.equal(payload.timeframe, "1h")
@@ -397,7 +402,7 @@ test("agent payload creates documented grouped candidates without changing marke
     "symbol", "name", ...Object.keys(payload.schema), "flags",
   ])
   assert.equal(Object.hasOwn(payload.candidates[0], "selectionRank"), false)
-  assert.equal(payload.peerRegistryGeneratedAt, null)
+  assertNoPeerData(payload)
   for (const [group, names] of Object.entries(payload.schema)) {
     assert.ok(isArray(payload.candidates[0][group]), group)
     assert.equal(payload.candidates[0][group].length, names.length, group)
@@ -477,13 +482,6 @@ test("agent payload creates documented grouped candidates without changing marke
     sustainedExcess24hPct: 3.457,
     categoryMoveAtr: 1.458,
     categoryBreadth: 0.667,
-    peerStatus: "unavailable",
-    peerCount: null,
-    peerAvailableCount: null,
-    peerBenchmarkCoinCount: null,
-    peerCoinReturn4hPct: null,
-    peerCoinMove4hAtr: null,
-    peerLeaders: null,
     coingeckoTrending: null,
     coingeckoTrendingCategories: null,
     newsStatus: "unavailable",
@@ -1150,23 +1148,28 @@ test("sustained strength passes steps 5 → 9 → 10 without changing selection 
   assert.deepEqual(profiles, before)
 })
 
-test("legacy profiles without peer context remain candidates with unavailable coverage", () => {
-  for (const peerContext of [undefined, null]) {
+test("missing, undefined and null peer context never adds fields to the agent payload", () => {
+  const baseline = buildAgentPayload(createShortlist([createCandidate("SOL")]))
+
+  for (const block of ["missing", "undefined", "null"]) {
     const candidate = createCandidate("SOL")
-    if (peerContext !== undefined) {
-      candidate.peerContext = peerContext
+    if (block !== "missing") {
+      candidate.peerContext = block === "null" ? null : undefined
     }
-    const before = structuredClone(candidate)
-    const payload = buildAgentPayload(createShortlist([candidate]))
+    const shortlist = createShortlist([candidate])
+    const before = structuredClone(shortlist)
+    const payload = buildAgentPayload(shortlist)
 
     assert.equal(payload.candidateCount, 1)
-    assert.deepEqual(payload.candidates[0].peerContext, ["unavailable", null, null, null, null, null, null])
-    assert.equal(payload.peerRegistryGeneratedAt, null)
-    assert.deepEqual(candidate, before)
+    assert.deepEqual(payload, baseline)
+    assertNoPeerData(payload)
+    assert.deepEqual(shortlist, before)
   }
 })
 
-test("peer context preserves unknown coverage, no peers and insufficient data without inventing leaders", () => {
+test("peer coverage statuses and leader sets leave the entire payload unchanged", () => {
+  const baseline = buildAgentPayload(createShortlist([createCandidate("SOL")]))
+
   for (const peerContext of [
     ...["unavailable", "not_covered", "unreviewed"].map(status => createPeerContext({
       status,
@@ -1182,25 +1185,32 @@ test("peer context preserves unknown coverage, no peers and insufficient data wi
     createPeerContext({ status: "insufficient_data", availablePeerCount: 0, freshLeaderCount: null, fadingLeaderCount: null, leaders: null }),
     createPeerContext({ status: "insufficient_data", benchmarkCoinCount: 2, freshLeaderCount: null, fadingLeaderCount: null, leaders: null }),
     createPeerContext({ status: "partial", freshLeaderCount: 0, fadingLeaderCount: 0, leaders: [] }),
+    createPeerContext(),
     createPeerContext({ status: "available", availablePeerCount: 3, freshLeaderCount: 0, fadingLeaderCount: 0, leaders: [] }),
+    createPeerContext({ status: "available", availablePeerCount: 3 }),
+    createPeerContext({
+      status: "available",
+      availablePeerCount: 3,
+      freshLeaderCount: 0,
+      fadingLeaderCount: 1,
+      coinReturn4h: null,
+      coinMove4hAtr: null,
+      leaders: [createPeerLeader({ ageHours: 4.000001, status: "fading", retainedFraction: 0.50000001 })],
+    }),
   ]) {
     const shortlist = createShortlist([{ ...createCandidate("SOL"), peerContext }])
     const before = structuredClone(shortlist)
     const payload = buildAgentPayload(shortlist)
-    const { candidates: [values] } = decodeAgentPayload(JSON.parse(JSON.stringify(payload)))
 
-    assert.deepEqual(payload.candidates[0].peerContext, [
-      peerContext.status, peerContext.peerCount, peerContext.availablePeerCount,
-      peerContext.benchmarkCoinCount, 1.235, 0.235, peerContext.leaders,
-    ])
-    assert.equal(payload.peerRegistryGeneratedAt, peerContext.registryGeneratedAt)
-    assert.equal(values.peerStatus, peerContext.status)
-    assert.deepEqual(values.peerLeaders, peerContext.leaders)
+    assert.deepEqual(payload, baseline, peerContext.status)
+    assert.deepEqual(JSON.parse(JSON.stringify(payload)), baseline)
+    assertNoPeerData(payload)
+    assert.equal(shortlist.candidates[0].peerContext, peerContext)
     assert.deepEqual(shortlist, before)
   }
 })
 
-test("peer leaders keep frozen event metrics, candidate reaction, metadata and nulls through JSON", () => {
+test("peer leaders, event metrics, sources and raw data never reach the serialized payload", () => {
   const peerContext = createPeerContext()
   peerContext.sources = ["https://example.org/registry"]
   peerContext.leaders[0].marketSymbol = "BINANCE:VETUSDT.P"
@@ -1208,81 +1218,60 @@ test("peer leaders keep frozen event metrics, candidate reaction, metadata and n
   peerContext.leaders[0].raw = { close: [100, 103] }
   const shortlist = createShortlist([{ ...createCandidate("SOL"), peerContext }])
   const before = structuredClone(shortlist)
+  const baseline = buildAgentPayload(createShortlist([createCandidate("SOL")]))
   const payload = buildAgentPayload(shortlist)
-  const { candidates: [values] } = decodeAgentPayload(payload)
 
-  assert.equal(values.peerStatus, "partial")
-  assert.equal(payload.peerRegistryGeneratedAt, "2026-08-30T10:00:00.000Z")
-  assert.deepEqual(payload.candidates[0].peerContext.slice(0, -1), [
-    "partial", 3, 2, 17, 1.235, 0.235,
-  ])
-  assert.deepEqual(values.peerLeaders[0], {
-    symbol: "VET",
-    type: "adjacent",
-    basis: "Экосистема: связанные токены",
-    caveat: "Не независимое подтверждение",
-    ageHours: 2,
-    status: "fresh",
-    return4hPct: 3.123,
-    move4hAtr: 2.568,
-    marketExcess4hAtr: 1.235,
-    relativeVolume4h: 1.877,
-    retainedPct: 87.654,
-    returnSinceStartPct: 3.568,
-    coinReturnSinceStartPct: -0.123,
-    coinMoveSinceStartAtr: -0.235,
-  })
-  assert.deepEqual(values.peerLeaders[1], {
-    ...values.peerLeaders[0],
-    symbol: "VTHO",
-    ageHours: 8,
-    status: "fading",
-    coinReturnSinceStartPct: null,
-    coinMoveSinceStartAtr: null,
-  })
-  assert.doesNotMatch(JSON.stringify(payload.candidates), /baseCurrencyId|XTVC|marketSymbol|https?:\/\/|"sources"|"raw"|detectedAt|windowStartedAt|peerRegistryGeneratedAt/)
-  assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))), decodeAgentPayload(payload))
+  assert.deepEqual(payload, baseline)
+  assertNoPeerData(payload)
+  assert.doesNotMatch(JSON.stringify(payload), /"VET"|"VTHO"|baseCurrencyId|XTVC|marketSymbol|https?:\/\/|"sources"|"raw"|detectedAt|windowStartedAt/)
+  assert.deepEqual(decodeAgentPayload(JSON.parse(JSON.stringify(payload))), decodeAgentPayload(baseline))
+  assert.equal(shortlist.candidates[0].peerContext, peerContext)
   assert.deepEqual(shortlist, before)
 })
 
-test("shared peer registry metadata is sent once across multiple candidates", () => {
+test("shared peer registry metadata is omitted from every candidate and the top level", () => {
+  const peerContext = createPeerContext()
   const shortlist = createShortlist(["SOL", "ETH"].map(symbol => ({
     ...createCandidate(symbol),
-    peerContext: createPeerContext(),
+    peerContext,
   })))
+  shortlist.peerRegistryGeneratedAt = peerContext.registryGeneratedAt
   const before = structuredClone(shortlist)
+  const baseline = buildAgentPayload(createShortlist(["SOL", "ETH"].map(symbol => createCandidate(symbol))))
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
 
-  assert.equal(payload.peerRegistryGeneratedAt, "2026-08-30T10:00:00.000Z")
-  assert.equal(JSON.stringify(payload).split("2026-08-30T10:00:00.000Z").length - 1, 1)
-  assert.ok(decodeAgentPayload(payload).candidates.every(candidate => !Object.hasOwn(candidate, "peerRegistryGeneratedAt")))
+  assert.deepEqual(payload, baseline)
+  assertNoPeerData(payload)
+  assert.equal(Object.hasOwn(payload, "peerRegistryGeneratedAt"), false)
+  assert.equal(JSON.stringify(payload).includes(peerContext.registryGeneratedAt), false)
+  assert.ok(shortlist.candidates.every(candidate => candidate.peerContext === peerContext))
   assert.deepEqual(shortlist, before)
 })
 
-test("peer event age and status are not recalculated from rounded metrics or candidate lifecycle", () => {
-  const peerContext = createPeerContext({
-    status: "available",
-    availablePeerCount: 3,
-    freshLeaderCount: 0,
-    fadingLeaderCount: 1,
-    coinReturn4h: null,
-    coinMove4hAtr: null,
-    leaders: [createPeerLeader({ ageHours: 4.000001, status: "fading", retainedFraction: 0.50000001 })],
-  })
-  const payload = buildAgentPayload(createShortlist([{ ...createCandidate("SOL"), peerContext }]))
-  const [values] = decodeAgentPayload(payload).candidates
+test("agent payload ignores incomplete or malformed peer context without validation or mutation", () => {
+  const baseline = buildAgentPayload(createShortlist([createCandidate("SOL")]))
 
-  assert.equal(values.peerStatus, "available")
-  assert.equal(values.peerLeaders.length, 1)
-  assert.equal(values.peerCoinReturn4hPct, null)
-  assert.equal(values.peerCoinMove4hAtr, null)
-  assert.equal(values.peerLeaders[0].ageHours, 4.000001)
-  assert.equal(values.peerLeaders[0].status, "fading")
-  assert.equal(values.peerLeaders[0].retainedPct, 50)
-  assert.deepEqual(values.flags, ["coiling", "resilient", "fresh_quiet_breakout"])
+  for (const peerContext of [
+    {},
+    [],
+    false,
+    "unreviewed",
+    { status: "unknown", leaders: [null] },
+    createPeerContext({ registryGeneratedAt: "invalid", coinReturn4h: NaN, coinMove4hAtr: Infinity, leaders: [null, {}] }),
+  ]) {
+    const shortlist = createShortlist([{ ...createCandidate("SOL"), peerContext }])
+    const before = structuredClone(shortlist)
+    const payload = buildAgentPayload(shortlist)
+
+    assert.deepEqual(payload, baseline)
+    assertNoPeerData(payload)
+    assert.deepEqual(decodeAgentPayload(payload).candidates[0].flags, ["coiling", "resilient", "fresh_quiet_breakout"])
+    assert.equal(shortlist.candidates[0].peerContext, peerContext)
+    assert.deepEqual(shortlist, before)
+  }
 })
 
-test("peer context passes steps 5 → 9 → 10 without changing selection or discarding non-shortlisted leaders", async () => {
+test("steps 5 → 9 → 10 preserve selection and order while excluding all peer data", async () => {
   const profiles = [
     {
       ...createCandidate("SOL"),
@@ -1323,20 +1312,23 @@ test("peer context passes steps 5 → 9 → 10 without changing selection or dis
   assert.deepEqual(selection.candidates[1].peerContext, profiles[0].peerContext)
 
   const shortlist = JSON.parse(JSON.stringify(createShortlist(selection.candidates)))
+  const shortlistBefore = structuredClone(shortlist)
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
   const baselinePayload = buildAgentPayload(createShortlist(baselineSelection.candidates))
-  assert.deepEqual({
-    ...payload,
-    candidates: payload.candidates.map((candidate, index) => ({ ...candidate, peerContext: baselinePayload.candidates[index].peerContext })),
-  }, baselinePayload)
+  assert.equal(payload.schemaVersion, 16)
+  assert.equal(payload.candidateCount, 2)
+  assert.deepEqual(payload, baselinePayload)
+  assert.deepEqual(payload.candidates.map(candidate => candidate.symbol), ["BTC", "SOL"])
+  assertNoPeerData(payload)
   const { candidates } = decodeAgentPayload(payload)
-  assert.equal(candidates[1].peerBenchmarkCoinCount, 17)
-  assert.equal(candidates[1].peerLeaders[0].symbol, "LATEPUMP")
 
   const analysis = await analyzeCandidates(payload, shortlist, "system prompt", {
     callAgent: async (prompt, input) => {
+      const received = JSON.parse(input)
       assert.equal(prompt, "system prompt")
-      assert.deepEqual(JSON.parse(input), payload)
+      assert.deepEqual(received, baselinePayload)
+      assertNoPeerData(received)
+      assert.deepEqual(received.candidates.map(candidate => candidate.symbol), ["BTC", "SOL"])
       return JSON.stringify({
         schemaVersion: 4,
         asOf: payload.asOf,
@@ -1345,40 +1337,52 @@ test("peer context passes steps 5 → 9 → 10 without changing selection or dis
           symbol,
           movementProbability: 0.25,
           estimateConfidence: "medium",
-          technicalSummary: { observation: "Активность связанных монет дополняет рыночную картину.", caveat: "Собственный триггер роста не подтверждён." },
-          drivers: [{ fields: ["peerStatus", "peerLeaders"], text: "Активность соседей учитывается только как контекст" }],
+          technicalSummary: { observation: "После затишья торговая активность оживает.", caveat: "Собственный триггер роста не подтверждён." },
+          drivers: [{ fields: ["volumeZ", "relVolume"], text: "Объём выше собственной нормы" }],
           counterSignals: [],
         })),
       })
     },
-    readCoinData: async () => assert.fail("Saved peer context must not require raw history"),
+    readCoinData: async () => assert.fail("Peer data must not trigger raw history reads"),
   })
   assert.deepEqual(analysis.assessments.map(assessment => assessment.drivers[0]), candidates.map(candidate => (
-    `peerStatus=${candidate.peerStatus} и peerLeaders=${JSON.stringify(candidate.peerLeaders)}: Активность соседей учитывается только как контекст`
+    `volumeZ=${candidate.volumeZ} и relVolume=${candidate.relVolume}: Объём выше собственной нормы`
   )))
   assert.deepEqual(analysis.assessments.map(assessment => assessment.symbol), ["BTC", "SOL"])
   assert.deepEqual(analysis.topCandidates, [])
+  assert.doesNotMatch(JSON.stringify(analysis), /"peer[^"]*"\s*:/i)
+  assert.deepEqual(payload, baselinePayload)
+  assert.deepEqual(shortlist, shortlistBefore)
   assert.deepEqual(profiles, before)
 })
 
-test("peer schema supports an empty shortlist through step 10 with no history tools", async () => {
+test("schema v16 supports an empty shortlist through step 10 without peers or history tools", async () => {
   const shortlist = createShortlist([])
+  const before = structuredClone(shortlist)
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist)))
+
+  assert.equal(payload.schemaVersion, 16)
+  assert.equal(payload.candidateCount, 0)
+  assert.equal(Object.keys(payload.schema).length, 12)
+  assert.deepEqual(payload.candidates, [])
+  assert.deepEqual(decodeAgentPayload(payload).candidates, [])
+  assertNoPeerData(payload)
+
   const analysis = await analyzeCandidates(payload, shortlist, "system prompt", {
     callAgent: async (prompt, input, options) => {
       assert.equal(prompt, "system prompt")
       assert.deepEqual(JSON.parse(input), payload)
+      assertNoPeerData(JSON.parse(input))
       assert.deepEqual(options.tools, [])
       return JSON.stringify({ schemaVersion: 4, asOf: payload.asOf, topCandidates: [], assessments: [] })
     },
     readCoinData: async () => assert.fail("Empty shortlist must not load history"),
   })
 
-  assert.equal(payload.schemaVersion, 15)
-  assert.equal(payload.schema.peerContext.length, 7)
   assert.equal(analysis.candidateCount, 0)
   assert.deepEqual(analysis.assessments, [])
   assert.deepEqual(analysis.topCandidates, [])
+  assert.deepEqual(shortlist, before)
 })
 
 test("agent payload rejects an inconsistent shortlist count", () => {
@@ -1549,7 +1553,7 @@ test("pattern context preserves shortlist order, market values and textual uncer
   const payload = JSON.parse(JSON.stringify(buildAgentPayload(shortlist, context, patterns)))
   const { fields, candidates } = decodeAgentPayload(payload)
 
-  assert.equal(payload.schemaVersion, 15)
+  assert.equal(payload.schemaVersion, 16)
   assert.deepEqual(payload.schema.patternContext, ["patternStatus", "patternSummary", "patternCaveat"])
   assert.deepEqual(payload.patternSource, {
     source: "github-copilot-sdk",
@@ -1663,7 +1667,7 @@ test("step 9 entry reads the required step 8.1 report and passes it to the build
   const { stdout, stderr } = await run()
   const payload = JSON.parse(await readFile(path.join(directory, "tmp", "step9-agent-payload.json"), "utf8"))
 
-  assert.match(stdout, /Saved 1 compact agent candidates with 13 groups/)
+  assert.match(stdout, /Saved 1 compact agent candidates with 12 groups/)
   assert.equal(stderr, "")
   assert.deepEqual(payload, buildAgentPayload(shortlist, createInformationContext(shortlist), patterns))
 })

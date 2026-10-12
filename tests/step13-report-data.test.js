@@ -185,6 +185,37 @@ test("report preserves confirmed, empty and unknown CoinGecko context from the a
   assert.deepEqual(input.payload, before)
 })
 
+for (const symbols of [[], ["COTI", "SOL"]]) {
+  test(`schema 16 main report excludes shortlist peer context with ${symbols.length} candidates`, async () => {
+    const input = createInput(symbols)
+    input.payload.schemaVersion = 16
+    input.payload.objective = "P(рост > 2.5 ATR в следующие 4–12 часов)"
+    input.analysis.schemaVersion = 4
+    input.analysis.objective = input.payload.objective
+    input.payload.candidates.forEach(candidate => delete candidate.selectionRank)
+    input.analysis.assessments.forEach((assessment) => {
+      assessment.technicalSummary = { observation: "После затишья торговая активность оживает.", caveat: null }
+    })
+    const baseline = await build(input)
+    input.shortlist.candidates.forEach((candidate) => {
+      candidate.peerContext = {
+        status: "available",
+        registryGeneratedAt: "2026-09-01T00:00:00.000Z",
+        peerCount: 1,
+        availablePeerCount: 1,
+        leaders: [{ symbol: "LEADER", status: "fresh", return4h: 0.05 }],
+      }
+    })
+    const before = structuredClone([input.analysis, input.payload, input.shortlist, input.histories])
+    const report = await build(input)
+
+    assert.deepEqual(report, baseline)
+    assert.doesNotMatch(JSON.stringify(report), /"peer[A-Z]\w*"\s*:/)
+    assert.deepEqual(report.coins.map(coin => coin.symbol), symbols)
+    assert.deepEqual([input.analysis, input.payload, input.shortlist, input.histories], before)
+  })
+}
+
 test("joins by symbol and preserves assessments and top order", async () => {
   const input = createInput(["COTI", "SOL", "MINA"])
   input.analysis.assessments = [
