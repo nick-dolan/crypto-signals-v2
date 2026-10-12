@@ -31,10 +31,10 @@ async function runFeatureMetricsStep () {
     source: "tradingview",
     timeframe: "1h",
     marketContext: {
-      breadth: universeContext.universeBreadth4h.at(-1),
+      breadth6h: universeContext.universeBreadth6h.at(-1),
       altMarketBackground: universeContext.altMarketBackground,
-      segmentRotation: universeContext.segmentRotation4h.at(-1),
-      stablecapChange: universeContext.stablecapChange24h.at(-1),
+      segmentRotation6h: universeContext.segmentRotation6h.at(-1),
+      stablecapChange6h: universeContext.stablecapChange6h.at(-1),
     },
     coinCount: profiles.length,
     rejectedCoinCount: rejected.length,

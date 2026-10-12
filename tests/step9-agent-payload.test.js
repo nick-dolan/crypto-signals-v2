@@ -66,8 +66,9 @@ test("agent data preserves order, units, signed funding and missing values throu
   const shortlist = {
     asOf: "2026-08-31T09:00:00.000Z", timeframe: "1h", candidateCount: 2, candidates: [first, second],
     marketContext: {
-      altMarketBackground: { status: "mixed", change4hPct: -1.23456789, breadth4h: 0.48858, warning: null },
-      segmentRotation: { btc: 0.0005958, eth: 0.0001131, alts: 0.0001018 }, stablecapChange: -0.000232,
+      altMarketBackground: { status: "mixed", change6hPct: -1.23456789, breadth6h: 0.48858, warning: null },
+      segmentRotation6h: { btc: 0.0005958, eth: 0.0001151, alts: 0.0001051, stables: -0.000816 },
+      stablecapChange6h: -0.000232,
     },
   }
   const payload = buildAgentPayload(shortlist)
@@ -92,5 +93,21 @@ test("agent data preserves order, units, signed funding and missing values throu
   assert.equal(candidates[1].socialStatus, "unavailable")
   assert.equal(candidates[1].interactionsZ, null)
   assert.deepEqual(candidates[1].flags, ["coiling"])
-  assert.deepEqual(payload.marketContext.altMarketBackground, shortlist.marketContext.altMarketBackground)
+  assert.equal(payload.schemaVersion, 17)
+  assert.deepEqual(payload.marketContext, {
+    altMarketBackground: shortlist.marketContext.altMarketBackground,
+    btcRotation6hPct: 0.06, ethRotation6hPct: 0.012, altsRotation6hPct: 0.011,
+    stablesRotation6hPct: -0.082, stablecap6hPct: -0.023,
+  })
+})
+
+test("agent payload refuses to relabel old market context as six-hour data", () => {
+  assert.throws(() => buildAgentPayload({
+    candidateCount: 0,
+    candidates: [],
+    marketContext: {
+      segmentRotation: { btc: 0.01, eth: 0, alts: 0, stables: -0.01 },
+      stablecapChange: 0.02,
+    },
+  }), /6-hour market context; rerun steps 4 and 5/)
 })

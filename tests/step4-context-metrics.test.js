@@ -28,21 +28,21 @@ function createMarketContext (times) {
 
 function createBaseCoins (times) {
   return [
-    ["TARGET", 100, 200], ["PEER1", 101, 103], ["PEER2", 102, 106], ["PEER3", 103, 102],
-    ["XTVCBTC", 100, 100], ["FLAT1", 100, 100], ["FLAT2", 100, 100],
-  ].map(([id, at8, at12], index) => ({
+    ["TARGET", 250, 100, 200], ["PEER1", 100, 101, 103], ["PEER2", 100, 102, 106], ["PEER3", 103, 103, 102],
+    ["XTVCBTC", 100, 100, 100], ["FLAT1", 100, 100, 100], ["FLAT2", 100, 100, 100],
+  ].map(([id, at6, at8, at12], index) => ({
     coin: { baseCurrencyId: id, symbol: id === "XTVCBTC" ? "BTC" : id },
     categories: index < 4 ? ["Alpha"] : [],
     times,
-    close: times.map((_, hour) => hour === 8 ? at8 : hour === 12 ? at12 : 100),
+    close: times.map((_, hour) => hour === 6 ? at6 : hour === 8 ? at8 : hour === 12 ? at12 : 100),
   }))
 }
 
-function altInput (closes = [100, 125, 90, 115, 110]) {
-  const times = closes.map((_, index) => Date.parse("2026-09-16T04:00:00.000Z") / 1_000 + index * 3_600)
+function altInput (closes = [100, 125, 90, 115, 105, 130, 110]) {
+  const times = closes.map((_, index) => Date.parse("2026-09-16T02:00:00.000Z") / 1_000 + index * 3_600)
   const marketData = createMarketContext(times)
   marketData.series.total3es.periods = times.map((time, index) => ({ time, close: closes[index] }))
-  return { asOf: "2026-09-16T08:00:00.000Z", breadth4h: 0.6, marketData }
+  return { asOf: "2026-09-16T08:00:00.000Z", breadth6h: 0.6, marketData }
 }
 
 function closeFromLogReturns (returns, initial = 100) {
@@ -61,17 +61,22 @@ function closeFromFourHourReturns (returns) {
   return close
 }
 
-test("universe context uses unrounded whole-market breadth, peer-only category medians and one hourly grid", () => {
+test("universe context uses six-hour market metrics, four-hour categories and one hourly grid", () => {
   const times = Array.from({ length: 25 }, (_, index) => index * 3_600)
   const baseCoins = createBaseCoins(times)
   const context = buildUniverseContext(baseCoins, createMarketContext(times))
   const category = context.categoryContextsByCoin.get("TARGET")
 
-  assert.equal(context.universeBreadth4h[3], null)
-  assert.equal(context.universeBreadth4h[12], 3 / 7)
-  assertClose(context.stablecapChange24h[24], 0.24)
-  assertClose(context.segmentRotation4h[4].btc, -0.004)
-  assertClose(context.segmentRotation4h[4].stables, 0.004)
+  assert.equal(context.universeBreadth6h[5], null)
+  assert.equal(context.universeBreadth6h[12], 2 / 7)
+  assert.equal(context.stablecapChange6h[5], null)
+  assertClose(context.stablecapChange6h[6], 0.06)
+  assertClose(context.stablecapChange6h[24], 6 / 118)
+  assert.equal(context.segmentRotation6h[5], null)
+  assertClose(context.segmentRotation6h[6].btc, -0.006)
+  assertClose(context.segmentRotation6h[6].stables, 0.006)
+  assert.equal(context.segmentRotation6h[6].eth, 0)
+  assert.equal(context.segmentRotation6h[6].alts, 0)
   assertClose(category.momentum4h[12], 103 / 101 - 1)
   assert.equal(category.breadth[4], null)
   assert.equal(category.breadth[12], 2 / 3)
@@ -84,8 +89,8 @@ test("universe context uses unrounded whole-market breadth, peer-only category m
   const snapshot = buildUniverseContext(createBaseCoins(snapshotTimes), market)
   assert.equal(snapshot.asOf, "1970-01-01T12:00:00.000Z")
   assert.equal(snapshot.altMarketBackground.status, "down")
-  assert.equal(snapshot.altMarketBackground.change4hPct, -10)
-  assert.equal(snapshot.altMarketBackground.breadth4h, 3 / 7)
+  assert.equal(snapshot.altMarketBackground.change6hPct, -10)
+  assert.equal(snapshot.altMarketBackground.breadth6h, 2 / 7)
 
   baseCoins[1].times = times.with(12, times[12] + 1)
   assert.throws(() => buildUniverseContext(baseCoins, createMarketContext(times)), /identical hourly time grid/)
@@ -166,43 +171,44 @@ test("divergences distinguish setup, diagnostic moves and market resilience with
 })
 
 test("alt background requires price and breadth agreement at strict 55/45 thresholds", () => {
-  for (const [change, breadth4h, status] of [
+  for (const [change, breadth6h, status] of [
     [10, 0.6, "up"], [-10, 0.4, "down"],
     [10, 0.55, "mixed"], [-10, 0.45, "mixed"],
     [10, 0.4, "mixed"], [-10, 0.6, "mixed"], [0, 0.6, "mixed"],
   ]) {
-    const input = altInput([100, 125, 90, 115, 100 + change])
-    const result = buildAltMarketBackground({ ...input, breadth4h })
-    assert.equal(result.status, status, `${change}% with breadth ${breadth4h}`)
-    assert.equal(result.change4hPct, change)
-    assert.equal(result.breadth4h, breadth4h)
+    const input = altInput([100, 125, 90, 115, 105, 130, 100 + change])
+    const result = buildAltMarketBackground({ ...input, breadth6h })
+    assert.equal(result.status, status, `${change}% with breadth ${breadth6h}`)
+    assert.equal(result.change6hPct, change)
+    assert.equal(result.breadth6h, breadth6h)
   }
 })
 
-test("alt background uses the exact asOf four-hour window, not nearby or future saved candles", () => {
-  const input = altInput([100, 200, 190, 180, 150])
+test("alt background uses the exact asOf six-hour window, not nearby or future saved candles", () => {
+  const input = altInput([100, 200, 190, 180, 170, 160, 150])
   const periods = input.marketData.series.total3es.periods
   input.marketData.collectedAt = "2099-01-01T00:00:00.000Z"
   input.marketData.series.total3es.periods = [
     { time: periods[0].time - 3_600, close: 1 },
     ...periods.toReversed(),
-    { time: periods[4].time + 3_600, close: 1_000 },
+    { time: periods[6].time + 3_600, close: 1_000 },
   ]
   const result = buildAltMarketBackground(input)
   assert.equal(result.status, "up")
-  assert.equal(result.change4hPct, 50)
+  assert.equal(result.change6hPct, 50)
 
   const shifted = altInput()
   shifted.marketData.series.total3es.periods.forEach(period => period.time += 3_600)
-  assert.equal(buildAltMarketBackground(shifted).change4hPct, null)
+  assert.equal(buildAltMarketBackground(shifted).change6hPct, null)
 })
 
 test("alt background refuses unclosed or incomplete candles without replacing unavailable metrics with zero", () => {
   const closed = buildAltMarketBackground(altInput())
-  assert.equal(closed.change4hPct, 10)
+  assert.equal(closed.change6hPct, 10)
   for (const change of [
     input => input.marketData.collectedAt = "2026-09-16T08:59:59.999Z",
-    input => input.marketData.series.total3es.periods.splice(2, 1),
+    input => input.marketData.series.total3es.periods.splice(1, 1),
+    input => input.marketData.series.total3es.periods.splice(0, 2),
     input => input.marketData.series.total3es.periods.push(input.marketData.series.total3es.periods[2]),
     input => input.marketData.series.total3es.periods[2].time += 1,
     input => input.marketData.series.total3es.periods[0].close = 0,
@@ -212,11 +218,11 @@ test("alt background refuses unclosed or incomplete candles without replacing un
     change(input)
     const result = buildAltMarketBackground(input)
     assert.equal(result.status, "unavailable")
-    assert.equal(result.change4hPct, null)
-    assert.equal(result.breadth4h, 0.6)
+    assert.equal(result.change6hPct, null)
+    assert.equal(result.breadth6h, 0.6)
   }
-  const noBreadth = buildAltMarketBackground({ ...altInput(), breadth4h: null })
+  const noBreadth = buildAltMarketBackground({ ...altInput(), breadth6h: null })
   assert.equal(noBreadth.status, "unavailable")
-  assert.equal(noBreadth.change4hPct, 10)
-  assert.equal(noBreadth.breadth4h, null)
+  assert.equal(noBreadth.change6hPct, 10)
+  assert.equal(noBreadth.breadth6h, null)
 })

@@ -2,6 +2,7 @@
 
 (() => {
   const report = JSON.parse(document.getElementById("report-data").textContent)
+  const altMarketBackground = report.altMarketBackground ?? report.marketContext?.altMarketBackground
   const growthObjective = isString(report.objective) && report.objective.startsWith("P(рост >")
   const coinsBySymbol = new Map(report.coins.map(coin => [coin.symbol, coin]))
   const coinDescriptions = new Map(Object.entries(report.coinDescriptions ?? {}))
@@ -125,11 +126,18 @@
     }
   }
 
+  function marketMetric (context, currentKey, legacyKey) {
+    const key = Object.hasOwn(context, currentKey) || !Object.hasOwn(context, legacyKey) ? currentKey : legacyKey
+    return { key, value: context[key], period: key.match(/\d+h/)[0] }
+  }
+
   function renderAltMarketBackground () {
-    const background = report.altMarketBackground ?? {
-      status: "unavailable", change4hPct: null, breadth4h: null,
+    const background = altMarketBackground ?? {
+      status: "unavailable", change6hPct: null, breadth6h: null,
       warning: "В этом отчёте фон альтрынка не рассчитан. Выполните шаги 4–9 и пересоздайте HTML для того же среза.",
     }
+    const change = marketMetric(background, "change6hPct", "change4hPct")
+    const breadth = marketMetric(background, "breadth6h", "breadth4h")
     const status = ["up", "down", "mixed"].includes(background.status) ? background.status : "unavailable"
     const [label, icon] = {
       up: ["Преобладает рост", "arrow-up"],
@@ -139,22 +147,28 @@
     }[status]
 
     byId("alt-market-background").dataset.status = status
+    byId("alt-market-heading").textContent = `Фон альтрынка · ${change.period.replace("h", "ч")}`
     byId("alt-market-status").textContent = label
     byId("alt-market-icon").replaceChildren(createIcon(icon))
-    byId("alt-market-change").textContent = background.change4hPct == null
+    byId("alt-market-change-label").textContent = `Капитализация альткоинов · ${change.period.replace("h", "ч")}`
+    byId("alt-market-breadth-label").textContent = `Растущие монеты вселенной · ${breadth.period.replace("h", "ч")}`
+    byId("alt-market-change").textContent = change.value == null
       ? "Нет данных"
-      : `${number(background.change4hPct, 3, "exceptZero")}%`
-    byId("alt-market-breadth").textContent = background.breadth4h == null
+      : `${number(change.value, 3, "exceptZero")}%`
+    byId("alt-market-breadth").textContent = breadth.value == null
       ? "Нет данных"
-      : `${number(background.breadth4h * 100, 2)}%`
+      : `${number(breadth.value * 100, 2)}%`
     byId("alt-market-as-of").textContent = `Срез ${time(report.asOf)} UTC+3 · фон не меняется при Update chart`
     byId("alt-market-warning").textContent = background.warning ?? ""
     byId("alt-market-warning").hidden = !background.warning
   }
 
   function renderSummary () {
-    const marketContext = { breadth4h: report.altMarketBackground?.breadth4h, ...report.marketContext }
-    if (!Object.hasOwn(marketContext, "stablesRotation4hPct")) {
+    const marketContext = { ...altMarketBackground, ...report.marketContext }
+    if (
+      !Object.hasOwn(marketContext, "stablesRotation6hPct") && !Object.hasOwn(marketContext, "stablesRotation4hPct")
+      && ["btcRotation4hPct", "ethRotation4hPct", "altsRotation4hPct"].some(key => Object.hasOwn(marketContext, key))
+    ) {
       const rotations = ["btcRotation4hPct", "ethRotation4hPct", "altsRotation4hPct"]
         .map(key => marketContext[key])
       marketContext.stablesRotation4hPct = rotations.every(isFinite)
@@ -177,19 +191,19 @@
 
     renderAltMarketBackground()
     byId("market-summary").replaceChildren(...[
-      ["breadth4h", "Растущие монеты · 4h", 100, "%"],
-      ["btcRotation4hPct", "Доля BTC · 4h", 1, " п.п."],
-      ["ethRotation4hPct", "Доля ETH · 4h", 1, " п.п."],
-      ["altsRotation4hPct", "Доля альткоинов · 4h", 1, " п.п."],
-      ["stablesRotation4hPct", "Доля стейблкоинов · 4h", 1, " п.п."],
-      ["stablecap24hPct", "Капитализация стейблов · 24h", 1, "%"],
-    ].map(([key, label, multiplier, suffix]) => {
+      ["breadth6h", "breadth4h", "Растущие монеты", 100, "%"],
+      ["btcRotation6hPct", "btcRotation4hPct", "Доля BTC", 1, " п.п."],
+      ["ethRotation6hPct", "ethRotation4hPct", "Доля ETH", 1, " п.п."],
+      ["altsRotation6hPct", "altsRotation4hPct", "Доля альткоинов", 1, " п.п."],
+      ["stablesRotation6hPct", "stablesRotation4hPct", "Доля стейблкоинов", 1, " п.п."],
+      ["stablecap6hPct", "stablecap24hPct", "Капитализация стейблов", 1, "%"],
+    ].map(([currentKey, legacyKey, label, multiplier, suffix]) => {
       const card = element("div", "market-card")
-      const value = marketContext[key]
+      const { key, value, period } = marketMetric(marketContext, currentKey, legacyKey)
       card.title = report.marketDefinitions?.[key] ?? ""
       card.append(
-        element("span", "metric-label", label),
-        element("strong", "metric-value", value == null ? "Нет данных" : `${number(value * multiplier, 3, key === "breadth4h" ? "auto" : "exceptZero")}${suffix}`),
+        element("span", "metric-label", `${label} · ${period}`),
+        element("strong", "metric-value", value == null ? "Нет данных" : `${number(value * multiplier, 3, key.startsWith("breadth") ? "auto" : "exceptZero")}${suffix}`),
       )
       return card
     }))

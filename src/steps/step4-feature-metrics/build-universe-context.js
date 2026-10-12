@@ -187,11 +187,11 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
       )),
     ]),
   )
-  const segmentRotation4h = times.map((_, index) => {
+  const segmentRotation6h = times.map((_, index) => {
     const change = key => (
       isFinite(segmentShares[key][index])
-      && isFinite(segmentShares[key][index - 4])
-        ? segmentShares[key][index] - segmentShares[key][index - 4]
+      && isFinite(segmentShares[key][index - 6])
+        ? segmentShares[key][index] - segmentShares[key][index - 6]
         : null
     )
     const rotation = {
@@ -203,13 +203,14 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
 
     return Object.values(rotation).every(isFinite) ? rotation : null
   })
-  const returns4h = baseCoins.map(({ close }) => simpleReturns(close, 4))
-  const universeBreadth4h = times.map((_, index) => {
-    const finite = returns4h.map(values => values[index]).filter(isFinite)
+  const returns6h = baseCoins.map(({ close }) => simpleReturns(close, 6))
+  const universeBreadth6h = times.map((_, index) => {
+    const finite = returns6h.map(values => values[index]).filter(isFinite)
     return finite.length === 0
       ? null
       : finite.filter(value => value > 0).length / finite.length
   })
+  const returns4h = baseCoins.map(({ close }) => simpleReturns(close, 4))
   const categoryContextsByCoin = new Map(baseCoins.map((baseCoin, index) => [
     baseCoin.coin.baseCurrencyId,
     buildCategoryContext(baseCoins, returns4h, index, times.length),
@@ -221,14 +222,14 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
     times,
     btcClose: btc.close,
     total3esClose,
-    universeBreadth4h,
+    universeBreadth6h,
     altMarketBackground: buildAltMarketBackground({
       asOf,
-      breadth4h: universeBreadth4h.at(-1),
+      breadth6h: universeBreadth6h.at(-1),
       marketData: marketContext,
     }),
-    segmentRotation4h,
-    stablecapChange24h: simpleReturns(stableCap, 24),
+    segmentRotation6h,
+    stablecapChange6h: simpleReturns(stableCap, 6),
     categoryContextsByCoin,
     peerContextsByCoin: buildPeerContext(baseCoins, coinPeers),
     sustainedStrengthByCoin: buildSustainedStrength(baseCoins, total3esClose),
