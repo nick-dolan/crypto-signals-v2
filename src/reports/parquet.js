@@ -1,3 +1,4 @@
+import { gunzipSync, gzipSync } from "node:zlib"
 import { isArray, isBoolean, isFinite, isObject, isString } from "../helpers/utils.typed.js"
 
 function sqlString (value) {
@@ -69,16 +70,19 @@ function restoreValue (value, schema, label) {
 
 async function readSchema (connection, filename) {
   const result = await connection.runAndReadAll(`
-    SELECT decode(value) AS schema FROM parquet_kv_metadata(?)
-    WHERE decode(key) = 'report_store_schema'
+    SELECT decode(key) AS key, decode(value) AS schema FROM parquet_kv_metadata(?)
+    WHERE decode(key) IN ('report_store_schema', 'report_store_schema_gzip')
   `, [filename])
   const rows = result.getRowObjectsJS()
   if (rows.length !== 1) {
-    throw new Error(`${filename}: missing report_store_schema Parquet metadata`)
+    throw new Error(`${filename}: missing or ambiguous report schema Parquet metadata`)
   }
-  const schema = JSON.parse(rows[0].schema)
+  const { key, schema: value } = rows[0]
+  const schema = JSON.parse(
+    key === "report_store_schema_gzip" ? gunzipSync(Buffer.from(value, "base64")).toString("utf8") : value,
+  )
   if (!isObject(schema)) {
-    throw new Error(`${filename}: invalid report_store_schema Parquet metadata`)
+    throw new Error(`${filename}: invalid ${key} Parquet metadata`)
   }
   return schema
 }
@@ -92,6 +96,7 @@ export async function writeParquet (connection, filename, rows, sample = {}) {
   if (!isObject(schema)) {
     throw new Error(`${filename}: expected structured records`)
   }
+  const metadata = gzipSync(JSON.stringify(schema), { level: 9 }).toString("base64")
   const values = rows.map((value) => {
     const missing = []
     const data = prepareValue(value, schema, missing)
@@ -108,7 +113,7 @@ export async function writeParquet (connection, filename, rows, sample = {}) {
       ORDER BY position
     ) TO ${sqlString(filename)} (
       FORMAT PARQUET, COMPRESSION ZSTD, COMPRESSION_LEVEL 5,
-      KV_METADATA {report_store_schema: ${sqlString(JSON.stringify(schema))}}
+      KV_METADATA {report_store_schema_gzip: ${sqlString(metadata)}}
     )
   `, [JSON.stringify(values)])
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { DuckDBInstance } from "@duckdb/node-api"
-import { isArray, isFinite, isObject, isSafeInteger, isString } from "../helpers/utils.typed.js"
+import { isArray, isBoolean, isFinite, isObject, isSafeInteger, isString } from "../helpers/utils.typed.js"
 import { parquetRowCount, readParquet, writeParquet } from "./parquet.js"
 
 function isReportId (id) {
@@ -28,9 +28,54 @@ function validateReport (report) {
   }
 }
 
+function isTextField (key) {
+  return ["marketDefinitions", "definitions", "flagDefinitions"].includes(key)
+}
+
+function containsNumber (value) {
+  return isFinite(value) || ((isArray(value) || isObject(value)) && Object.values(value).some(containsNumber))
+}
+
+function restoreHeader ({ report, manifest }) {
+  if (manifest.version === 1) {
+    return report
+  }
+  const header = { ...report }
+  for (const key of manifest.textFields) {
+    if (!isString(header[key])) {
+      throw new Error(`report.parquet has an invalid compact text field: ${key}`)
+    }
+    const value = JSON.parse(header[key])
+    if (!(isObject(value) || isArray(value)) || containsNumber(value)) {
+      throw new Error(`report.parquet compact text field must be a non-numeric object or array: ${key}`)
+    }
+    header[key] = value
+  }
+  if (manifest.coinDescriptions) {
+    const entries = header.coinDescriptions
+    if (
+      !isArray(entries) || entries.some(entry => !isString(entry?.key) || !Object.hasOwn(entry, "value"))
+      || new Set(entries.map(entry => entry.key)).size !== entries.length
+    ) {
+      throw new Error("report.parquet has invalid or duplicate coin description keys")
+    }
+    header.coinDescriptions = Object.fromEntries(entries.map(({ key, value }) => [key, value]))
+  }
+  return header
+}
+
 function splitReport (report, id) {
   validateReport(report)
   const { coins, peerRadar, ...header } = report
+  const textFields = Object.entries(header)
+    .filter(([key, value]) => isTextField(key) && (isObject(value) || isArray(value)) && !containsNumber(value))
+    .map(([key]) => key)
+  const coinDescriptions = isObject(header.coinDescriptions) && !containsNumber(header.coinDescriptions)
+  const compactHeader = {
+    ...header,
+    ...Object.fromEntries(textFields.map(key => [key, JSON.stringify(header[key])])),
+    ...(coinDescriptions ? { coinDescriptions: Object.entries(header.coinDescriptions).map(([key, value]) => ({ key, value })) } : {}),
+  }
   const histories = coins.flatMap((coin, coinIndex) => (
     Object.hasOwn(coin, "history") ? [{ coinIndex, history: coin.history }] : []
   ))
@@ -40,7 +85,10 @@ function splitReport (report, id) {
     radar[0] = { radar: rest, histories: Object.entries(histories).map(([key, history]) => ({ key, history })) }
   }
   return {
-    report: [{ report: header, manifest: { version: 1, id, coins: coins.length, history: histories.length, peerRadar: radar.length } }],
+    report: [{
+      report: compactHeader,
+      manifest: { version: 2, id, coins: coins.length, history: histories.length, peerRadar: radar.length, textFields, coinDescriptions },
+    }],
     coins: coins.map(coin => Object.fromEntries(Object.entries(coin).filter(([key]) => key !== "history"))),
     history: histories,
     peerRadar: radar,
@@ -114,11 +162,17 @@ export async function createReportStore ({ directory = path.resolve("reports") }
     }
     validateMetadata(fields)
     if (
-      manifest?.version !== 1 || manifest.id !== id || manifest.coins !== fields.candidateCount
+      ![1, 2].includes(manifest?.version) || manifest.id !== id || manifest.coins !== fields.candidateCount
       || !isSafeInteger(manifest.history) || manifest.history < 0 || manifest.history > manifest.coins
       || ![0, 1].includes(manifest.peerRadar)
     ) {
       throw new Error("report.parquet has an invalid or unsupported manifest")
+    }
+    if (manifest.version === 2 && (
+      !isArray(manifest.textFields) || !manifest.textFields.every(isTextField)
+      || new Set(manifest.textFields).size !== manifest.textFields.length || !isBoolean(manifest.coinDescriptions)
+    )) {
+      throw new Error("report.parquet has invalid compact-header metadata")
     }
     for (const [name, count] of [["report", 1], ["coins", manifest.coins], ["history", manifest.history], ["peer-radar", manifest.peerRadar]]) {
       if (await parquetRowCount(connection, path.join(folder, `${name}.parquet`)) !== count) {
@@ -177,7 +231,7 @@ export async function createReportStore ({ directory = path.resolve("reports") }
           const coins = await readParquet(connection, filename("coins"))
           const histories = await readParquet(connection, filename("history"))
           const radar = await readParquet(connection, filename("peer-radar"))
-          const report = { ...header.report, coins }
+          const report = { ...restoreHeader(header), coins }
           validateReport(report)
           const assigned = new Set()
           for (const record of histories) {
