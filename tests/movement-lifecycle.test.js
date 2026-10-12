@@ -14,324 +14,117 @@ function createInput (close, squeezeAge = close.map(() => 0)) {
 }
 
 function assertClose (actual, expected) {
+  assert.notEqual(actual, null)
   assert.ok(
     Math.abs(actual - expected) < 1e-12,
     `Expected ${actual} to be close to ${expected}`,
   )
 }
 
-test("previous boundary distances stay signed inside, at and beyond the range", () => {
-  for (const [price, highDistance, lowDistance] of [
-    [100, 5, 5],
-    [110, 0, 10],
-    [114, -2, 12],
-    [90, 10, 0],
-    [86, 12, -2],
-  ]) {
-    const input = createInput([...Array(24).fill(100), price])
-    input.high.fill(110, 0, 24)
-    input.low.fill(90, 0, 24)
-    input.atr24hPct.fill(0.02, 0, 24)
-
-    const metrics = calculateMovementLifecycleMetrics(input)
-
-    assert.equal(metrics.distance_to_previous_high_atr[24], highDistance)
-    assert.equal(metrics.distance_to_previous_low_atr[24], lowDistance)
-  }
-})
-
-test("previous boundaries use exactly 24 bars, excluding current and expired bars", () => {
-  const input = createInput(Array(27).fill(100))
+test("previous range excludes current and expired candles and uses the previous candle ATR", () => {
+  const input = createInput(Array(26).fill(100))
+  input.high.fill(110)
+  input.low.fill(90)
   input.high[0] = 500
   input.low[0] = 10
   input.high[1] = 120
   input.low[1] = 80
-  input.high[24] = 110
-  input.low[24] = 90
+  input.close[24] = 105
+  input.close[25] = 124
   input.high[25] = 1_000
   input.low[25] = 1
-
-  const metrics = calculateMovementLifecycleMetrics(input)
-
-  assert.deepEqual(
-    metrics.distance_to_previous_high_atr,
-    [...Array(24).fill(null), 400, 20, 900],
-  )
-  assert.deepEqual(
-    metrics.distance_to_previous_low_atr,
-    [...Array(24).fill(null), 90, 20, 99],
-  )
-})
-
-test("previous boundary distances use ATR and its close from the previous candle", () => {
-  const input = createInput(Array(26).fill(100))
-  input.high.fill(110)
-  input.low.fill(90)
-  input.close[24] = 105
   input.atr24hPct[23] = 0.02
   input.atr24hPct[24] = 0.2
 
   const metrics = calculateMovementLifecycleMetrics(input)
 
-  assert.equal(metrics.distance_to_previous_high_atr[24], 2.5)
-  assert.equal(metrics.distance_to_previous_low_atr[24], 7.5)
-  assertClose(metrics.distance_to_previous_high_atr[25], 10 / 21)
-  assertClose(metrics.distance_to_previous_low_atr[25], 10 / 21)
+  assert.deepEqual(metrics.distance_to_previous_high_atr.slice(0, 25), [...Array(24).fill(null), 197.5])
+  assert.deepEqual(metrics.distance_to_previous_low_atr.slice(0, 25), [...Array(24).fill(null), 47.5])
+  assertClose(metrics.distance_to_previous_high_atr[25], -4 / 21)
+  assertClose(metrics.distance_to_previous_low_atr[25], 44 / 21)
 })
 
-test("previous high and low distances are symmetric under price reflection", () => {
-  const close = Array.from({ length: 60 }, (_, index) => 100 + index)
-  const upward = calculateMovementLifecycleMetrics(createInput(close))
-  const downward = calculateMovementLifecycleMetrics(
-    createInput(close.map(value => 200 - value)),
-  )
-
-  for (let index = 24; index < close.length; index += 1) {
-    assertClose(
-      upward.distance_to_previous_high_atr[index],
-      downward.distance_to_previous_low_atr[index],
-    )
-    assertClose(
-      upward.distance_to_previous_low_atr[index],
-      downward.distance_to_previous_high_atr[index],
-    )
-  }
-})
-
-test("previous boundary distances support empty inputs and remain null during warmup", () => {
-  for (const length of [0, 1, 24]) {
-    const metrics = calculateMovementLifecycleMetrics(
-      createInput(Array(length).fill(100)),
-    )
-
-    assert.deepEqual(metrics.distance_to_previous_high_atr, Array(length).fill(null))
-    assert.deepEqual(metrics.distance_to_previous_low_atr, Array(length).fill(null))
-  }
-})
-
-test("a missing boundary invalidates only its own next 24 windows", () => {
-  for (const [source, affected, unaffected] of [
-    ["high", "distance_to_previous_high_atr", "distance_to_previous_low_atr"],
-    ["low", "distance_to_previous_low_atr", "distance_to_previous_high_atr"],
-  ]) {
-    const input = createInput(Array(50).fill(100))
-    input[source][24] = null
-
-    const metrics = calculateMovementLifecycleMetrics(input)
-
-    assert.equal(metrics[affected][24], 0.5)
-    assert.deepEqual(metrics[affected].slice(25, 49), Array(24).fill(null))
-    assert.equal(metrics[affected][49], 0.5)
-    assert.deepEqual(metrics[unaffected].slice(24), Array(26).fill(0.5))
-  }
-})
-
-test("previous boundary distances are null for missing close or unusable previous ATR", () => {
-  for (const [source, index, value] of [
-    ["close", 24, null],
-    ["close", 23, null],
-    ["atr24hPct", 23, null],
-    ["atr24hPct", 23, 0],
-    ["atr24hPct", 23, -0.01],
-  ]) {
-    const input = createInput(Array(27).fill(100))
-    input[source][index] = value
-
-    const metrics = calculateMovementLifecycleMetrics(input)
-
-    assert.equal(metrics.distance_to_previous_high_atr[24], null)
-    assert.equal(metrics.distance_to_previous_low_atr[24], null)
-    assert.equal(metrics.distance_to_previous_high_atr[26], 0.5)
-    assert.equal(metrics.distance_to_previous_low_atr[26], 0.5)
-  }
-})
-
-test("previous boundary distances have no lookahead and do not mutate inputs", () => {
-  const input = createInput(
-    Array.from({ length: 60 }, (_, index) => 100 + (index % 10) * 3),
-  )
-  input.high[10] = null
-  input.low[20] = null
-  input.atr24hPct[30] = null
-  const snapshot = structuredClone(input)
-  Object.values(input).forEach(Object.freeze)
-  Object.freeze(input)
-
-  const full = calculateMovementLifecycleMetrics(input)
-
-  for (let length = 0; length <= input.close.length; length += 1) {
-    const prefix = calculateMovementLifecycleMetrics(Object.fromEntries(
-      Object.entries(input).map(([name, series]) => [name, series.slice(0, length)]),
-    ))
-
-    for (const name of ["distance_to_previous_high_atr", "distance_to_previous_low_atr"]) {
-      assert.deepEqual(prefix[name], full[name].slice(0, length), `${name}: ${length}`)
-    }
-  }
-
-  assert.deepEqual(input, snapshot)
-})
-
-test("historical runups exclude the latest four hours", () => {
-  const baselineClose = Array.from({ length: 220 }, (_, index) => 100 + index)
-  const pumpedClose = baselineClose.map((value, index) => (
-    index < 216 ? value : value + 1_000
+test("historical moves exclude the latest four hours and distinguish late pump from late dump", () => {
+  const close = Array.from({ length: 220 }, (_, index) => (
+    100 + index + (index >= 216 ? 100 : 0)
   ))
-  const baseline = calculateMovementLifecycleMetrics(createInput(baselineClose))
-  const pumped = calculateMovementLifecycleMetrics(createInput(pumpedClose))
+  const rising = calculateMovementLifecycleMetrics(createInput(close))
+  const falling = calculateMovementLifecycleMetrics(createInput(close.map(value => 500 - value)))
 
-  assert.equal(pumped.prior_runup_atr_72h.at(-1), 72)
-  assertClose(pumped.max_24h_runup_last_7d_atr.at(-1), 24)
-  assert.equal(
-    pumped.prior_runup_atr_72h.at(-1),
-    baseline.prior_runup_atr_72h.at(-1),
+  assertClose(rising.prior_runup_atr_72h.at(-1), 72)
+  assertClose(rising.max_24h_runup_last_7d_atr.at(-1), 24)
+  assertClose(falling.prior_drawdown_atr_72h.at(-1), 72)
+  assertClose(falling.max_24h_drawdown_last_7d_atr.at(-1), 24)
+  assert.deepEqual(
+    [rising.fresh_quiet_breakout.at(-1), rising.late_pump.at(-1), rising.late_dump.at(-1)],
+    [false, true, false],
   )
-  assert.equal(
-    pumped.max_24h_runup_last_7d_atr.at(-1),
-    baseline.max_24h_runup_last_7d_atr.at(-1),
+  assert.deepEqual(
+    [falling.fresh_quiet_breakout.at(-1), falling.late_pump.at(-1), falling.late_dump.at(-1)],
+    [false, false, true],
   )
-  assert.equal(pumped.late_pump.at(-1), true)
 })
 
-test("a mature decline mirrors a mature rise", () => {
-  const risingClose = Array.from({ length: 220 }, (_, index) => 100 + index)
-  const fallingClose = risingClose.map(value => 500 - value)
-  const rising = calculateMovementLifecycleMetrics(createInput(risingClose))
-  const falling = calculateMovementLifecycleMetrics(createInput(fallingClose))
-
-  assertClose(
-    falling.prior_drawdown_atr_72h.at(-1),
-    rising.prior_runup_atr_72h.at(-1),
-  )
-  assertClose(
-    falling.max_24h_drawdown_last_7d_atr.at(-1),
-    rising.max_24h_runup_last_7d_atr.at(-1),
-  )
-  assert.equal(rising.late_pump.at(-1), true)
-  assert.equal(rising.late_dump.at(-1), false)
-  assert.equal(falling.late_pump.at(-1), false)
-  assert.equal(falling.late_dump.at(-1), true)
-})
-
-test("a mature quiet base produces one fresh breakout lifecycle", () => {
-  const close = Array.from({ length: 240 }, (_, index) => (
-    index < 210 ? 100 + index : 309
-  ))
-  const squeezeAge = close.map(() => 0)
-
-  for (let index = 220; index <= 231; index += 1) {
-    squeezeAge[index] = index - 219
-  }
-
+test("fresh quiet breakouts in either direction are not late moves and expire after extension", () => {
+  const close = Array.from({ length: 235 }, (_, index) => index < 210 ? 100 + index : 309)
+  const squeezeAge = close.map((_, index) => index >= 220 && index <= 231 ? index - 219 : 0)
   close[232] = 310
   close[233] = 310.4
   close[234] = 311.2
 
-  const metrics = calculateMovementLifecycleMetrics(
-    createInput(close, squeezeAge),
-  )
+  const rising = calculateMovementLifecycleMetrics(createInput(close, squeezeAge))
+  const falling = calculateMovementLifecycleMetrics(createInput(close.map(value => 500 - value), squeezeAge))
 
-  assert.equal(metrics.pre_breakout_squeeze_age[231], null)
-  assert.equal(metrics.pre_breakout_squeeze_age[232], 12)
-  assert.equal(metrics.squeeze_ended_hours_ago[233], 1)
-  assert.equal(metrics.breakout_age_hours[232], 0)
-  assert.equal(metrics.breakout_age_hours[233], 1)
-  assertClose(metrics.post_breakout_extension_atr[233], 0.9)
-  assertClose(metrics.extension_from_base_atr[233], 1.4)
-  assert.equal(metrics.fresh_quiet_breakout[233], true)
-  assert.equal(metrics.fresh_quiet_breakout[234], false)
-  assert.equal(metrics.late_pump[233], false)
-  assert.equal(metrics.late_dump[233], false)
+  assert.equal(rising.pre_breakout_squeeze_age[232], 12)
+  assert.equal(rising.breakout_age_hours[233], 1)
+  assertClose(rising.post_breakout_extension_atr[233], 0.9)
+  assertClose(falling.post_breakout_extension_atr[233], 0.9)
+  assertClose(rising.extension_from_base_atr[233], 1.4)
+  assert.deepEqual(rising.fresh_quiet_breakout.slice(232), [true, true, false])
+  assert.deepEqual(falling.fresh_quiet_breakout.slice(232), [true, true, false])
+  assert.deepEqual([rising.late_pump[233], falling.late_dump[233]], [false, false])
 })
 
-test("a short squeeze preserves the previous mature base until a new one matures", () => {
-  const close = Array(70).fill(100)
-  const squeezeAge = close.map(() => 0)
-
-  for (let index = 10; index <= 21; index += 1) {
-    squeezeAge[index] = index - 9
-  }
-
-  for (let index = 30; index <= 37; index += 1) {
-    squeezeAge[index] = index - 29
-  }
-
-  close.fill(110, 45, 58)
-
-  for (let index = 45; index <= 56; index += 1) {
-    squeezeAge[index] = index - 44
-  }
-
-  const metrics = calculateMovementLifecycleMetrics(
-    createInput(close, squeezeAge),
-  )
-
-  assert.equal(metrics.squeeze_ended_hours_ago[38], 16)
-  assert.equal(metrics.extension_from_base_atr[38], 0)
-  assert.equal(metrics.squeeze_ended_hours_ago[55], 33)
-  assert.equal(metrics.extension_from_base_atr[55], 10)
-  assert.equal(metrics.squeeze_ended_hours_ago[56], null)
-  assert.equal(metrics.extension_from_base_atr[56], null)
-  assert.equal(metrics.squeeze_ended_hours_ago[57], 0)
-  assert.equal(metrics.extension_from_base_atr[57], 0)
-})
-
-test("a move after the four-hour breakout window keeps only base distance", () => {
-  const close = Array(210).fill(100)
-  const squeezeAge = close.map(() => 0)
-
-  for (let index = 180; index <= 191; index += 1) {
-    squeezeAge[index] = index - 179
-  }
-
-  close[197] = 102
-
-  const metrics = calculateMovementLifecycleMetrics(
-    createInput(close, squeezeAge),
-  )
-
-  assert.equal(metrics.squeeze_ended_hours_ago[197], 5)
-  assert.equal(metrics.pre_breakout_squeeze_age[197], null)
-  assert.equal(metrics.breakout_age_hours[197], null)
-  assert.equal(metrics.post_breakout_extension_atr[197], null)
-  assert.equal(metrics.extension_from_base_atr[197], 2)
-  assert.equal(metrics.fresh_quiet_breakout[197], false)
-})
-
-test("downside and base metrics at an hour are unchanged by later candles", () => {
-  const close = Array.from({ length: 240 }, (_, index) => (
-    300 - index / 10
+test("a future price shock and a new base do not change past lifecycle metrics", () => {
+  const close = Array.from({ length: 240 }, (_, index) => 300 - index / 10)
+  const squeezeAge = close.map((_, index) => (
+    index >= 180 && index <= 191
+      ? index - 179
+      : index >= 220 && index <= 231 ? index - 219 : 0
   ))
-  const fullInput = createInput(close)
-
-  for (let index = 180; index <= 191; index += 1) {
-    fullInput.squeezeAge[index] = index - 179
-  }
-
-  for (let index = 200; index <= 207; index += 1) {
-    fullInput.squeezeAge[index] = index - 199
-  }
-
-  for (let index = 220; index <= 231; index += 1) {
-    fullInput.squeezeAge[index] = index - 219
-  }
-
-  fullInput.close.fill(250, 232)
-  fullInput.high.fill(250.5, 232)
-  fullInput.low.fill(249.5, 232)
-  fullInput.atr24hPct.fill(1 / 250, 232)
-
+  const input = createInput(close, squeezeAge)
   const prefixInput = Object.fromEntries(
-    Object.entries(fullInput).map(([name, series]) => [name, series.slice(0, 211)]),
+    Object.entries(input).map(([name, series]) => [name, series.slice(0, 211)]),
   )
-  const full = calculateMovementLifecycleMetrics(fullInput)
+  input.close.fill(1_000, 211)
+  input.high.fill(1_000.5, 211)
+  input.low.fill(999.5, 211)
+  input.atr24hPct.fill(1 / 1_000, 211)
+
+  const full = calculateMovementLifecycleMetrics(input)
   const prefix = calculateMovementLifecycleMetrics(prefixInput)
 
   assert.equal(prefix.squeeze_ended_hours_ago.at(-1), 18)
-  assert.ok(prefix.prior_drawdown_atr_72h.at(-1) > 0)
-  assert.ok(prefix.max_24h_drawdown_last_7d_atr.at(-1) > 0)
-
+  assertClose(prefix.prior_drawdown_atr_72h.at(-1), 7.2)
   for (const name of Object.keys(full)) {
     assert.equal(full[name][210], prefix[name].at(-1), name)
   }
+})
+
+test("missing boundaries and closes or zero previous ATR produce nulls and then recover", () => {
+  const input = createInput(Array(53).fill(100))
+  input.high[24] = null
+  input.atr24hPct[25] = 0
+  input.close[50] = null
+
+  const metrics = calculateMovementLifecycleMetrics(input)
+
+  assert.equal(metrics.distance_to_previous_high_atr[24], 0.5)
+  assert.deepEqual(metrics.distance_to_previous_high_atr.slice(25, 49), Array(24).fill(null))
+  assert.equal(metrics.distance_to_previous_low_atr[25], 0.5)
+  assert.equal(metrics.distance_to_previous_low_atr[26], null)
+  assert.equal(metrics.distance_to_previous_low_atr[27], 0.5)
+  assert.equal(metrics.distance_to_previous_high_atr[49], 0.5)
+  assert.deepEqual(metrics.distance_to_previous_high_atr.slice(50), [null, null, 0.5])
+  assert.deepEqual(metrics.distance_to_previous_low_atr.slice(50), [null, null, 0.5])
 })

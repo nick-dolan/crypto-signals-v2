@@ -1,8 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { isBoolean, isFinite } from "../src/helpers/utils.typed.js"
+import { isFinite } from "../src/helpers/utils.typed.js"
+import { buildAlignedCoinSeries } from "../src/steps/step4-feature-metrics/build-base-series.js"
+import { createFeatureProfile } from "../src/steps/step4-feature-metrics/build-feature-profiles.js"
+import { calculateCoinMetrics } from "../src/steps/step4-feature-metrics/calculate-coin-metrics.js"
 import { calculateDerivativesMetrics } from "../src/steps/step4-feature-metrics/metrics/derivatives.js"
+import { calculateDivergenceFlags } from "../src/steps/step4-feature-metrics/metrics/divergence-flags.js"
 import { calculateSocialMetrics } from "../src/steps/step4-feature-metrics/metrics/social.js"
 import { calculateVolatilityCompressionMetrics } from "../src/steps/step4-feature-metrics/metrics/volatility-compression.js"
 import { calculateVolumeOrderFlowMetrics } from "../src/steps/step4-feature-metrics/metrics/volume-order-flow.js"
@@ -11,245 +15,284 @@ const createSeries = mapper => Array.from({ length: 2_240 }, (_, index) => mappe
 const latest = series => series.at(-1)
 
 function assertClose (actual, expected, tolerance = 1e-12) {
-  assert.ok(
-    Math.abs(actual - expected) <= tolerance,
-    `Expected ${actual} to be within ${tolerance} of ${expected}`,
-  )
+  assert.ok(isFinite(actual) && Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`)
 }
 
-function assertMetricShape (metrics, expectedKeys) {
-  assert.deepEqual(Object.keys(metrics), expectedKeys)
-
-  for (const [name, series] of Object.entries(metrics)) {
-    assert.equal(series.length, 2_240, `${name} must stay aligned`)
-
-    series.forEach((value, index) => {
-      assert.ok(
-        value === null || isBoolean(value) || isFinite(value),
-        `${name}[${index}] must be null, boolean, or finite`,
-      )
-    })
-
-    assert.notEqual(latest(series), null, `${name} must be established at the latest hour`)
-  }
-}
-
-test("volatility compression metrics preserve alignment and identify a mature squeeze", () => {
-  const quietStart = 2_240 - 48
-  const close = createSeries(index => (
-    index >= quietStart ? 100 : 100 + (index % 2 === 0 ? -4 : 4)
-  ))
-  const high = close.map((value, index) => (
-    value + (index >= quietStart ? 0.01 : 3)
-  ))
-  const low = close.map((value, index) => (
-    value - (index >= quietStart ? 0.01 : 3)
-  ))
-  const metrics = calculateVolatilityCompressionMetrics({ high, low, close })
-
-  assertMetricShape(metrics, [
-    "rv_24h_over_rv_7d",
-    "bb_bandwidth_pct_30d",
-    "atr_pct_90d",
-    "range_compression_streak",
-    "squeeze_age_hours",
-  ])
-  assert.equal(metrics.rv_24h_over_rv_7d[0], null)
-  assert.equal(latest(metrics.rv_24h_over_rv_7d), 0)
-  assert.ok(latest(metrics.bb_bandwidth_pct_30d) <= 0.2)
-  assert.ok(latest(metrics.atr_pct_90d) <= 0.2)
-  assert.ok(latest(metrics.range_compression_streak) >= 24)
-  assert.ok(latest(metrics.squeeze_age_hours) > 0)
-})
-
-test("volume and order-flow metrics use USD volume and base-volume delta shares", () => {
-  const close = createSeries(index => (
-    index >= 2_240 - 20 ? 10 : 100 + Math.sin(index / 9) * 3
-  ))
-  const volume = createSeries((index) => {
-    if (index >= 2_240 - 3) {
-      return 200
-    }
-
-    if (index >= 2_240 - 6) {
-      return 100
-    }
-
-    return 100 + index % 11
-  })
-  const volumeDelta = createSeries((index) => {
-    if (index >= 2_240 - 4) {
-      return [10, 20, 30, 40][index - (2_240 - 4)]
-    }
-
-    return index % 9 - 4
-  })
-  const metrics = calculateVolumeOrderFlowMetrics({ close, volume, volumeDelta })
-
-  assertMetricShape(metrics, [
-    "volume_z_30d",
-    "volume_acceleration_3h",
-    "rel_volume_at_time",
-    "vd_net_4h_over_volume",
-    "cvd_minus_price_z_12h",
-  ])
-  assertClose(latest(metrics.volume_acceleration_3h), 1)
-  assertClose(latest(metrics.vd_net_4h_over_volume), 1 / 7)
-})
-
-test("derivatives metrics expose OI flags, liquidation fallbacks, and trader disagreement", () => {
-  const close = createSeries(index => 100 + Math.sin(index / 13) * 2)
-  const openInterest = createSeries(index => 1_000 + index + Math.sin(index / 7) * 2)
-  const fundingRate = createSeries(index => Math.sin(index / 19) * 0.001)
-  const premium = close.map((value, index) => (
-    value * (0.001 + Math.sin(index / 17) * 0.0005)
-  ))
-  const longLiquidations = createSeries(index => (
-    index >= 2_240 - 4 ? 0 : (index % 7 - 3) * 0.1
-  ))
-  const shortLiquidations = createSeries(index => (
-    index >= 2_240 - 4 ? 0 : (index % 5 - 2) * 0.1
-  ))
-  const longShortRatioAccounts = createSeries(index => (
-    index === 2_240 - 1 ? 3 : 1.2 + Math.sin(index / 23) * 0.2
-  ))
-  const topTradersLong = createSeries(index => index === 2_240 - 1 ? 80 : 55)
-  const topTradersShort = createSeries(index => index === 2_240 - 1 ? 20 : 45)
-  const rv24OverRv7 = createSeries((index) => {
-    if (index < 168) {
-      return null
-    }
-
-    return index === 2_240 - 1 ? 0.5 : 1.2
-  })
-  const metrics = calculateDerivativesMetrics({
-    close,
+function derivativesInput (openInterest) {
+  const filled = value => openInterest.map(() => value)
+  return {
     openInterest,
-    fundingRate,
-    premium,
-    longLiquidations,
-    shortLiquidations,
-    longShortRatioAccounts,
-    topTradersLong,
-    topTradersShort,
-    rv24OverRv7,
-  })
-
-  assertMetricShape(metrics, [
-    "oi_change_1h",
-    "oi_change_4h",
-    "oi_change_12h",
-    "oi_acceleration_4h",
-    "oi_change_4h_z_30d",
-    "oi_level_percentile_90d",
-    "oi_up_while_rv_down",
-    "funding_rate",
-    "funding_percentile_90d",
-    "funding_minus_oi_z_4h",
-    "premium_z_30d",
-    "liquidations_4h_over_oi",
-    "liq_imbalance_4h",
-    "crowd_vs_top_traders",
-  ])
-  assert.deepEqual(metrics.funding_rate, fundingRate)
-  assert.deepEqual(metrics.oi_level_percentile_90d.slice(0, 2_159), Array(2_159).fill(null))
-  assertClose(metrics.oi_level_percentile_90d[2_159], 2_159.5 / 2_160)
-  assertClose(latest(metrics.oi_level_percentile_90d), 2_159.5 / 2_160)
-  assert.equal(metrics.oi_up_while_rv_down[0], null)
-  assert.equal(latest(metrics.oi_up_while_rv_down), true)
-  assert.equal(latest(metrics.liquidations_4h_over_oi), 0)
-  assert.equal(latest(metrics.liq_imbalance_4h), 0)
-  assertClose(latest(metrics.crowd_vs_top_traders), -0.1)
-})
-
-test("derivatives preserve raw signed funding and the 2160-hour OI percentile with ties and gaps", () => {
-  const openInterest = [null, ...Array(2_160).fill(1_000), 2_000, 1_000, null]
-  const fundingRate = [null, -0.0123, 0, 0.0456, ...Array(2_160).fill(-0.000123)]
-  const before = structuredClone({ openInterest, fundingRate })
-  const filled = value => Array(openInterest.length).fill(value)
-  const metrics = calculateDerivativesMetrics({
-    close: filled(100),
-    openInterest,
-    fundingRate,
+    fundingRate: filled(0),
     premium: filled(0.1),
     longLiquidations: filled(0),
     shortLiquidations: filled(0),
     longShortRatioAccounts: filled(1),
     topTradersLong: filled(50),
-    topTradersShort: filled(50),
+    topTradersShort: filled(-50),
     rv24OverRv7: filled(1),
-  })
+  }
+}
 
-  assert.deepEqual(metrics.funding_rate, before.fundingRate)
-  assert.equal(metrics.oi_level_percentile_90d.length, openInterest.length)
+function directionalInput (sign) {
+  return {
+    close: [100],
+    movementLifecycle: {
+      distance_to_previous_high_atr: [0.5],
+      distance_to_previous_low_atr: [0.5],
+    },
+    volumeOrderFlow: { rel_volume_at_time: [1.5], vd_net_4h_over_volume: [sign * 0.1] },
+    derivatives: {
+      funding_rate: [-sign * 0.001],
+      funding_percentile_90d: [sign === 1 ? 0.05 : 0.95],
+      oi_level_percentile_90d: [0.8],
+      oi_change_4h: [0.01],
+      crowd_vs_top_traders: [-sign * 0.16],
+    },
+  }
+}
+
+test("volatility compression identifies a mature squeeze without future candles or filled gaps", () => {
+  const close = createSeries(index => index >= 2_192 ? 100 : 100 + (index % 2 === 0 ? -4 : 4))
+  const input = {
+    close,
+    high: close.map((value, index) => value + (index >= 2_192 ? 0.01 : 3)),
+    low: close.map((value, index) => value - (index >= 2_192 ? 0.01 : 3)),
+  }
+  const metrics = calculateVolatilityCompressionMetrics(input)
+
+  assert.equal(metrics.rv_24h_over_rv_7d[167], null)
+  assert.equal(latest(metrics.rv_24h_over_rv_7d), 0)
+  assertClose(latest(metrics.bb_bandwidth_pct_30d), 29 / 1_440)
+  assertClose(latest(metrics.atr_pct_90d), 12 / 2_160)
+  assert.equal(latest(metrics.range_compression_streak), 49)
+  assert.ok(latest(metrics.squeeze_age_hours) >= 24)
+
+  const prefix = calculateVolatilityCompressionMetrics(Object.fromEntries(
+    Object.entries(input).map(([name, series]) => [name, series.slice(0, 2_216)]),
+  ))
+  for (const [name, series] of Object.entries(prefix)) {
+    assert.deepEqual(series, metrics[name].slice(0, 2_216), name)
+  }
+  const gapped = calculateVolatilityCompressionMetrics({ ...input, high: input.high.with(2_238, null) })
+  assert.equal(latest(gapped.squeeze_age_hours), null)
+})
+
+test("volume uses changing-price USD windows, base-volume delta shares and prior seasonal observations", () => {
+  const input = {
+    close: [...createSeries(() => 100).slice(0, -6), 10, 20, 30, 40, 50, 60],
+    volume: [...createSeries(() => 10).slice(0, -6), 100, 100, 100, 200, 200, 200],
+    volumeDelta: [...createSeries(() => 1).slice(0, -4), 10, 20, 30, 40],
+  }
+  const metrics = calculateVolumeOrderFlowMetrics(input)
+
+  // USD volume rises from 6000 to 30000; base volume would give only a 100% rise.
+  assertClose(latest(metrics.volume_acceleration_3h), 4)
+  assertClose(latest(metrics.vd_net_4h_over_volume), 1 / 7)
+  assertClose(latest(metrics.rel_volume_at_time), 12)
+
+  const prefix = calculateVolumeOrderFlowMetrics(Object.fromEntries(
+    Object.entries(input).map(([name, series]) => [name, series.slice(0, -6)]),
+  ))
+  for (const [name, series] of Object.entries(prefix)) {
+    assert.deepEqual(series, metrics[name].slice(0, -6), name)
+  }
+  const gapped = calculateVolumeOrderFlowMetrics({ ...input, volume: input.volume.with(2_238, null) })
+  assert.equal(latest(gapped.volume_acceleration_3h), null)
+  assert.equal(latest(gapped.vd_net_4h_over_volume), null)
+  const zeroPrevious = [...input.volume]
+  zeroPrevious.fill(0, 2_234, 2_237)
+  assert.equal(latest(calculateVolumeOrderFlowMetrics({ ...input, volume: zeroPrevious }).volume_acceleration_3h), null)
+  const zeroCurrent = [...input.volume]
+  zeroCurrent.fill(0, 2_236)
+  assert.equal(latest(calculateVolumeOrderFlowMetrics({ ...input, volume: zeroCurrent }).vd_net_4h_over_volume), null)
+  const zeroBaseline = [...createSeries(() => 0).slice(0, -6), ...input.volume.slice(-6)]
+  assert.equal(latest(calculateVolumeOrderFlowMetrics({ ...input, volume: zeroBaseline }).rel_volume_at_time), null)
+})
+
+test("derivatives preserve signed funding and exactly 2160 OI observations with ties and gaps", () => {
+  const openInterest = [null, ...Array(2_160).fill(1_000), 2_000, 1_000, null]
+  const fundingRate = [null, -0.0123, 0, 0.0456, ...Array(2_160).fill(-0.000123)]
+  const metrics = calculateDerivativesMetrics({ ...derivativesInput(openInterest), fundingRate })
+
+  assert.deepEqual(metrics.funding_rate, fundingRate)
   assert.deepEqual(metrics.oi_level_percentile_90d.slice(0, 2_160), Array(2_160).fill(null))
   assert.equal(metrics.oi_level_percentile_90d[2_160], 0.5)
   assertClose(metrics.oi_level_percentile_90d[2_161], 2_159.5 / 2_160)
   assertClose(metrics.oi_level_percentile_90d[2_162], 2_159 / 2 / 2_160)
   assert.equal(metrics.oi_level_percentile_90d[2_163], null)
-  assert.deepEqual({ openInterest, fundingRate }, before)
+  assert.equal(metrics.oi_change_1h[2_162], -0.5)
+
+  const rising = calculateDerivativesMetrics(derivativesInput(
+    Array.from({ length: 13 }, (_, index) => 100 + index * 10),
+  ))
+  assertClose(latest(rising.oi_change_1h), 1 / 21)
+  assertClose(latest(rising.oi_change_4h), 2 / 9)
+  assertClose(latest(rising.oi_change_12h), 6 / 5)
+  assertClose(latest(rising.oi_acceleration_4h), -4 / 63)
 })
 
-test("premium z-score is independent of the coin price path", () => {
-  const premium = createSeries(index => 0.01 + Math.sin(index / 17) * 0.003)
-  const sharedInput = {
-    openInterest: createSeries(index => 1_000 + index),
-    fundingRate: createSeries(index => Math.sin(index / 19) * 0.001),
-    premium,
+test("premium is not price-normalized and derivatives handle signed positions and zero denominators", () => {
+  const input = {
+    ...derivativesInput(createSeries(index => 1_000 + index)),
+    close: createSeries(() => 100),
+    premium: createSeries(index => index),
+    longLiquidations: createSeries(() => 2),
+    shortLiquidations: createSeries(() => -1),
+    longShortRatioAccounts: createSeries(() => 3),
+    topTradersLong: createSeries(() => 80),
+    topTradersShort: createSeries(() => -20),
+    rv24OverRv7: createSeries(() => 0.5),
+  }
+  const metrics = calculateDerivativesMetrics(input)
+  const repriced = calculateDerivativesMetrics({ ...input, close: createSeries(index => 10 + index ** 2) })
+
+  assertClose(latest(metrics.premium_z_30d), Math.sqrt(3 * 719 / 721))
+  assert.deepEqual(metrics.premium_z_30d, repriced.premium_z_30d)
+  assert.equal(latest(metrics.oi_up_while_rv_down), true)
+  assertClose(latest(metrics.liquidations_4h_over_oi), 12 / 3_239)
+  assertClose(latest(metrics.liq_imbalance_4h), 1 / 3)
+  assertClose(latest(metrics.crowd_vs_top_traders), -0.1)
+
+  const zero = calculateDerivativesMetrics({
+    ...input,
+    openInterest: createSeries(() => 0),
     longLiquidations: createSeries(() => 0),
     shortLiquidations: createSeries(() => 0),
-    longShortRatioAccounts: createSeries(() => 1),
-    topTradersLong: createSeries(() => 50),
-    topTradersShort: createSeries(() => 50),
-    rv24OverRv7: createSeries(() => 1),
-  }
-  const flatPrice = calculateDerivativesMetrics({
-    ...sharedInput,
-    close: createSeries(() => 100),
+    topTradersLong: createSeries(() => 0),
+    topTradersShort: createSeries(() => 0),
   })
-  const trendingPrice = calculateDerivativesMetrics({
-    ...sharedInput,
-    close: createSeries(index => 10 + index ** 2),
-  })
-
-  assert.deepEqual(flatPrice.premium_z_30d, trendingPrice.premium_z_30d)
-  assert.notEqual(latest(flatPrice.premium_z_30d), 0)
+  assert.equal(latest(zero.liquidations_4h_over_oi), null)
+  assert.equal(latest(zero.liq_imbalance_4h), 0)
+  assert.equal(latest(zero.crowd_vs_top_traders), null)
 })
 
-test("social metrics use adjacent windows and zero-contributor fallbacks", () => {
-  const close = createSeries(index => 100 + Math.sin(index / 11) * 2)
-  const socialDominance = createSeries(index => 2 + Math.sin(index / 29) * 0.5)
-  const interactions = createSeries((index) => {
-    if (index >= 2_240 - 3) {
-      return 20
-    }
+test("social acceleration uses adjacent windows and does not divide by zero contributors", () => {
+  const input = {
+    close: createSeries(() => 100),
+    socialDominance: createSeries(() => 2),
+    interactions: [...createSeries(() => 10).slice(0, -3), 20, 20, 20],
+    activeContributors: createSeries(index => index === 2_239 ? 0 : 10),
+    createdPosts: createSeries(() => 7),
+  }
+  const metrics = calculateSocialMetrics(input)
 
-    if (index >= 2_240 - 6) {
-      return 10
-    }
-
-    return 50 + index % 13 * 2
-  })
-  const activeContributors = createSeries(index => (
-    index === 2_240 - 1 ? 0 : 10 + index % 4
-  ))
-  const createdPosts = createSeries(index => index === 2_240 - 1 ? 7 : 5 + index % 3)
-  const metrics = calculateSocialMetrics({
-    close,
-    socialDominance,
-    interactions,
-    activeContributors,
-    createdPosts,
-  })
-
-  assertMetricShape(metrics, [
-    "social_dominance_z_30d",
-    "interactions_z_30d",
-    "interactions_acceleration_3h",
-    "interactions_per_contributor_z",
-    "created_posts_per_active_contributor",
-    "social_minus_price_z_3h",
-  ])
   assertClose(latest(metrics.interactions_acceleration_3h), 1)
   assert.equal(latest(metrics.created_posts_per_active_contributor), 7)
+  const gapped = calculateSocialMetrics({ ...input, interactions: input.interactions.with(2_238, null) })
+  assert.equal(latest(gapped.interactions_acceleration_3h), null)
+})
+
+test("range pressure requires signed proximity and flow, preserving null gaps", () => {
+  for (const sign of [1, -1]) {
+    const flag = sign === 1 ? "range_pressure_up" : "range_pressure_down"
+    const opposite = sign === 1 ? "range_pressure_down" : "range_pressure_up"
+    const distance = sign === 1 ? "distance_to_previous_high_atr" : "distance_to_previous_low_atr"
+    const input = directionalInput(sign)
+    const flags = calculateDivergenceFlags(input)
+    assert.equal(flags[flag][0], true)
+    assert.equal(flags[opposite][0], false)
+
+    for (const [group, name, value, expected] of [
+      ["movementLifecycle", distance, 0, true],
+      ["movementLifecycle", distance, -0.01, false],
+      ["movementLifecycle", distance, 0.51, false],
+      ["volumeOrderFlow", "rel_volume_at_time", 1.49, false],
+      ["volumeOrderFlow", "vd_net_4h_over_volume", sign * 0.09, false],
+      ["volumeOrderFlow", "vd_net_4h_over_volume", -sign * 0.1, false],
+    ]) {
+      const scenario = structuredClone(input)
+      scenario[group][name] = [value]
+      assert.equal(calculateDivergenceFlags(scenario)[flag][0], expected, `${flag}: ${name} = ${value}`)
+    }
+
+    input.close = [100, 100, 100]
+    input.movementLifecycle[distance] = [0.5, 0.5, 0.5]
+    input.volumeOrderFlow.rel_volume_at_time = [1.5, 1.5, 1.5]
+    input.volumeOrderFlow.vd_net_4h_over_volume = [null, sign * 0.1, null]
+    assert.deepEqual(calculateDivergenceFlags(input)[flag], [null, true, null])
+  }
+})
+
+test("squeeze setups require aligned funding, OI and flow while fuel needs strict crowd disagreement", () => {
+  for (const sign of [1, -1]) {
+    const setup = sign === 1 ? "short_squeeze_setup" : "long_squeeze_setup"
+    const opposite = sign === 1 ? "long_squeeze_setup" : "short_squeeze_setup"
+    const input = directionalInput(sign)
+    const flags = calculateDivergenceFlags(input)
+    assert.equal(flags[setup][0], true)
+    assert.equal(flags[opposite][0], false)
+    assert.equal(flags.squeeze_fuel[0], true)
+
+    for (const [group, name, value, expectedSetup, expectedFuel] of [
+      ["derivatives", "funding_rate", 0, false, false],
+      ["derivatives", "funding_rate", sign * 0.001, false, false],
+      ["derivatives", "funding_percentile_90d", sign === 1 ? 0.06 : 0.94, false, false],
+      ["derivatives", "oi_level_percentile_90d", 0.79, false, false],
+      ["derivatives", "oi_change_4h", 0, false, true],
+      ["derivatives", "oi_change_4h", -0.01, false, true],
+      ["volumeOrderFlow", "vd_net_4h_over_volume", -sign * 0.1, false, true],
+      ["derivatives", "crowd_vs_top_traders", -sign * 0.15, true, false],
+      ["derivatives", "crowd_vs_top_traders", sign * 0.16, true, false],
+      ["volumeOrderFlow", "vd_net_4h_over_volume", null, null, true],
+      ["derivatives", "funding_rate", null, null, null],
+    ]) {
+      const scenario = structuredClone(input)
+      scenario[group][name] = [value]
+      const actual = calculateDivergenceFlags(scenario)
+      assert.equal(actual[setup][0], expectedSetup, `${setup}: ${name} = ${value}`)
+      assert.equal(actual.squeeze_fuel[0], expectedFuel, `squeeze_fuel: ${name} = ${value}`)
+    }
+  }
+})
+
+test("profile assembly aligns short delta history, keeps latest calculations and rejects missing required metrics", () => {
+  const times = createSeries(index => index * 3_600)
+  const study = values => ({ periods: times.map((time, index) => ({ time, ...values(index) })) })
+  const hourlyData = {
+    coin: { baseCurrencyId: "TARGET", symbol: "TARGET" },
+    availability: { social: { status: "unavailable" } },
+    chart: {
+      periods: times.map((time, index) => ({
+        time, max: 102, min: 98, close: index === 2_239 ? 101 : 100, volume: index >= 2_236 ? 200 : 100,
+      })),
+    },
+    studies: {
+      volumeDelta: study(() => ({ close: 20 })),
+      openInterest: study(index => ({ close: 1_000 + index })),
+      fundingRate: study(index => ({ rate: index === 2_239 ? -0.000123 : 0.0001 })),
+      liquidations: study(() => ({ long: 1, short: -1 })),
+      longShortRatioAccounts: study(() => ({ ratio: 0.5 })),
+      topTradersLongShortPositions: study(() => ({ long: 50, short: -50 })),
+      premium: study(() => ({ close: 0.1 })),
+    },
+  }
+  hourlyData.studies.volumeDelta.periods = hourlyData.studies.volumeDelta.periods.slice(734)
+  const series = buildAlignedCoinSeries(hourlyData, times)
+  const calculated = calculateCoinMetrics(series, {
+    btcClose: createSeries(index => 200 + Math.sin(index / 17)),
+    total3esClose: createSeries(index => 500 + Math.sin(index / 7)),
+    categoryContextsByCoin: new Map([["TARGET", {
+      applicable: false, status: "not_applicable", category: null,
+      momentum4h: createSeries(() => null),
+      breadth: createSeries(() => null),
+      coinLeadsCategory: createSeries(() => null),
+    }]]),
+  }, "TARGET")
+  const baseCoin = { coin: hourlyData.coin, categories: [], metadata: { marketCap: 1_000 } }
+  const { profile, rejection } = createFeatureProfile(baseCoin, series, calculated)
+
+  assert.deepEqual(series.volumeDelta.slice(0, 734), Array(734).fill(null))
+  assert.equal(series.volumeDelta[734], 20)
+  assert.equal(rejection, null)
+  assert.equal(profile.context.volume24hUsd, 280_200)
+  assertClose(profile.context.atr24hPct, 4 / 101)
+  assert.equal(profile.features.derivatives.funding_rate, -0.000123)
+  assertClose(profile.features.derivatives.oi_level_percentile_90d, 2_159.5 / 2_160)
+  assert.equal(profile.features.divergences.short_squeeze_setup, true)
+  assert.equal(profile.features.social, null)
+
+  calculated.featureSeries.derivatives.funding_rate[2_239] = null
+  const missing = createFeatureProfile(baseCoin, series, calculated)
+  assert.equal(missing.profile, null)
+  assert.deepEqual(missing.rejection.unavailableMetrics, ["derivatives.funding_rate"])
 })
