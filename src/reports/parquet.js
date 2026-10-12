@@ -107,7 +107,7 @@ export async function writeParquet (connection, filename, rows, sample = {}) {
       FROM json_each(?::JSON)
       ORDER BY position
     ) TO ${sqlString(filename)} (
-      FORMAT PARQUET, COMPRESSION ZSTD,
+      FORMAT PARQUET, COMPRESSION ZSTD, COMPRESSION_LEVEL 5,
       KV_METADATA {report_store_schema: ${sqlString(JSON.stringify(schema))}}
     )
   `, [JSON.stringify(values)])
