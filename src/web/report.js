@@ -8,7 +8,6 @@
   const chartStates = new Map(report.coins.map(coin => [coin.symbol, {
     data: coin.chartSnapshot?.data ?? null, pending: false, error: null, requested: false,
   }]))
-  const reportReadyTime = isString(report.reportCreatedAt) ? Date.parse(report.reportCreatedAt) / 1_000 : NaN
   const topCandidates = report.coins.filter(coin => coin.topRank != null)
     .sort((first, second) => first.topRank - second.topRank)
   let selectedSymbol = topCandidates[0]?.symbol ?? report.coins[0]?.symbol ?? null
@@ -1030,55 +1029,6 @@
     return coin.history.candles.some(candle => candle.time === hour) ? hour : null
   }
 
-  function releasePrimitive (timestamp) {
-    let scale = null
-    let x = null
-    const views = [{
-      zOrder: () => "top",
-      renderer: () => ({
-        draw (target) {
-          target.useMediaCoordinateSpace(({ context, mediaSize }) => {
-            if (x == null || x < 0 || x > mediaSize.width) {
-              return
-            }
-            context.save()
-            context.strokeStyle = "#77b7ff"
-            context.lineWidth = 1
-            context.setLineDash([4, 4])
-            context.beginPath()
-            context.moveTo(x, 0)
-            context.lineTo(x, mediaSize.height)
-            context.stroke()
-            context.font = "11px sans-serif"
-            context.fillStyle = "#77b7ff"
-            const width = context.measureText("Отчёт готов").width
-            context.fillText("Отчёт готов", Math.max(4, Math.min(x + 5, mediaSize.width - width - 4)), 14)
-            context.restore()
-          })
-        },
-      }),
-    }]
-    return {
-      attached ({ chart, requestUpdate }) {
-        scale = chart.timeScale()
-        requestUpdate()
-      },
-      detached () {
-        scale = null
-        x = null
-      },
-      updateAllViews () {
-        // The library's coordinate cache accepts integer indexes; interpolate within the hourly grid.
-        const index = 167 + (timestamp - Date.parse(report.asOf) / 1_000) / 3_600
-        const hour = Math.floor(index)
-        const from = scale?.logicalToCoordinate(hour)
-        const to = scale?.logicalToCoordinate(hour + 1)
-        x = from == null || to == null ? null : from + (to - from) * (index - hour)
-      },
-      paneViews: () => views,
-    }
-  }
-
   function renderUpdateState (coin) {
     const state = chartStates.get(coin.symbol)
     const button = byId("update-chart")
@@ -1126,15 +1076,7 @@
       const coin = coinsBySymbol.get(selectedSymbol)
       const to = historyEnd(chartHistory(coin))
       const from = to - (selectedDays * 24 - 1) * 3_600
-      const asOf = Date.parse(report.asOf) / 1_000
-      if (coin.chartSnapshot && isFinite(reportReadyTime) && reportReadyTime > to && reportReadyTime < asOf + 169 * 3_600) {
-        // Make room for the release line after the last bar without adding time slots or candles.
-        chart.timeScale().setVisibleLogicalRange({
-          from: 167 + (from - asOf) / 3_600, to: 168 + (reportReadyTime - asOf) / 3_600,
-        })
-      } else {
-        chart.timeScale().setVisibleRange({ from, to })
-      }
+      chart.timeScale().setVisibleRange({ from, to })
     }
     document.querySelectorAll("[data-days]").forEach((button) => {
       button.setAttribute("aria-pressed", String(Number(button.dataset.days) === selectedDays))
@@ -1272,9 +1214,6 @@
         LightweightCharts.createSeriesMarkers(candles, [{
           time: markerTime, position: "aboveBar", shape: "arrowDown", color: "#f2c56d", text: "Срез анализа",
         }])
-      }
-      if (coin.chartSnapshot && isFinite(reportReadyTime)) {
-        candles.attachPrimitive(releasePrimitive(reportReadyTime))
       }
       if (quote) {
         candles.createPriceLine({
