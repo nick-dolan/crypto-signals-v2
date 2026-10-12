@@ -72,11 +72,11 @@ test("universe context uses six-hour market metrics, four-hour categories and on
   assert.equal(context.stablecapChange6h[5], null)
   assertClose(context.stablecapChange6h[6], 0.06)
   assertClose(context.stablecapChange6h[24], 6 / 118)
-  assert.equal(context.segmentRotation6h[5], null)
-  assertClose(context.segmentRotation6h[6].btc, -0.006)
-  assertClose(context.segmentRotation6h[6].stables, 0.006)
-  assert.equal(context.segmentRotation6h[6].eth, 0)
-  assert.equal(context.segmentRotation6h[6].alts, 0)
+  assert.deepEqual(context.segmentShareChange6h[5], { btc: null, eth: null, alts: null, stables: null })
+  assertClose(context.segmentShareChange6h[6].btc, -0.015)
+  assertClose(context.segmentShareChange6h[6].stables, 0.06)
+  assert.equal(context.segmentShareChange6h[6].eth, 0)
+  assert.equal(context.segmentShareChange6h[6].alts, 0)
   assertClose(category.momentum4h[12], 103 / 101 - 1)
   assert.equal(category.breadth[4], null)
   assert.equal(category.breadth[12], 2 / 3)
@@ -94,6 +94,31 @@ test("universe context uses six-hour market metrics, four-hour categories and on
 
   baseCoins[1].times = times.with(12, times[12] + 1)
   assert.throws(() => buildUniverseContext(baseCoins, createMarketContext(times)), /identical hourly time grid/)
+})
+
+test("segment share changes use relative shares rather than capitalization or percentage-point differences", () => {
+  const times = Array.from({ length: 7 }, (_, index) => index * 3_600)
+  const market = createMarketContext(times)
+  market.series.total.periods[6].close = 1_100
+  market.series.totales.periods[6].close = 1_000
+  const context = buildUniverseContext(createBaseCoins(times), market)
+  const changes = context.segmentShareChange6h[6]
+
+  assertClose(changes.btc, 500 / 440 - 1)
+  assertClose(changes.eth, 1_000 / 1_100 - 1)
+  assertClose(changes.alts, 1_000 / 1_100 - 1)
+  assertClose(changes.stables, 1_000 / 1_100 - 1)
+  assert.equal(context.stablecapChange6h[6], 0)
+
+  market.series.totales.periods[0].close = 500
+  const zeroBase = buildUniverseContext(createBaseCoins(times), market).segmentShareChange6h[6]
+  assert.equal(zeroBase.btc, null)
+  assertClose(zeroBase.eth, changes.eth)
+
+  market.series.total2es.periods[0].close = null
+  const missingBase = buildUniverseContext(createBaseCoins(times), market).segmentShareChange6h[6]
+  assert.equal(missingBase.eth, null)
+  assertClose(missingBase.alts, changes.alts)
 })
 
 test("relative strength has numeric beta, correlation and residual references without lookahead or bridged gaps", () => {

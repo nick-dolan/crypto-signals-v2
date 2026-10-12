@@ -126,8 +126,8 @@
     }
   }
 
-  function marketMetric (context, currentKey, legacyKey) {
-    const key = Object.hasOwn(context, currentKey) || !Object.hasOwn(context, legacyKey) ? currentKey : legacyKey
+  function marketMetric (context, ...keys) {
+    const key = keys.find(key => Object.hasOwn(context, key)) ?? keys[0]
     return { key, value: context[key], period: key.match(/\d+h/)[0] }
   }
 
@@ -166,7 +166,8 @@
   function renderSummary () {
     const marketContext = { ...altMarketBackground, ...report.marketContext }
     if (
-      !Object.hasOwn(marketContext, "stablesRotation6hPct") && !Object.hasOwn(marketContext, "stablesRotation4hPct")
+      !Object.hasOwn(marketContext, "stablesShareChange6hPct")
+      && !Object.hasOwn(marketContext, "stablesRotation6hPct") && !Object.hasOwn(marketContext, "stablesRotation4hPct")
       && ["btcRotation4hPct", "ethRotation4hPct", "altsRotation4hPct"].some(key => Object.hasOwn(marketContext, key))
     ) {
       const rotations = ["btcRotation4hPct", "ethRotation4hPct", "altsRotation4hPct"]
@@ -191,15 +192,16 @@
 
     renderAltMarketBackground()
     byId("market-summary").replaceChildren(...[
-      ["breadth6h", "breadth4h", "Растущие монеты", 100, "%"],
-      ["btcRotation6hPct", "btcRotation4hPct", "Доля BTC", 1, " п.п."],
-      ["ethRotation6hPct", "ethRotation4hPct", "Доля ETH", 1, " п.п."],
-      ["altsRotation6hPct", "altsRotation4hPct", "Доля альткоинов", 1, " п.п."],
-      ["stablesRotation6hPct", "stablesRotation4hPct", "Доля стейблкоинов", 1, " п.п."],
-      ["stablecap6hPct", "stablecap24hPct", "Капитализация стейблов", 1, "%"],
-    ].map(([currentKey, legacyKey, label, multiplier, suffix]) => {
+      [["breadth6h", "breadth4h"], "Растущие монеты", 100],
+      [["btcShareChange6hPct", "btcRotation6hPct", "btcRotation4hPct"], "Изменение доли BTC", 1],
+      [["ethShareChange6hPct", "ethRotation6hPct", "ethRotation4hPct"], "Изменение доли ETH", 1],
+      [["altsShareChange6hPct", "altsRotation6hPct", "altsRotation4hPct"], "Изменение доли альткоинов", 1],
+      [["stablesShareChange6hPct", "stablesRotation6hPct", "stablesRotation4hPct"], "Изменение доли стейблкоинов", 1],
+      [["stablecap6hPct", "stablecap24hPct"], "Капитализация стейблов", 1],
+    ].map(([keys, label, multiplier]) => {
       const card = element("div", "market-card")
-      const { key, value, period } = marketMetric(marketContext, currentKey, legacyKey)
+      const { key, value, period } = marketMetric(marketContext, ...keys)
+      const suffix = key.includes("Rotation") ? " п.п." : "%"
       card.title = report.marketDefinitions?.[key] ?? ""
       card.append(
         element("span", "metric-label", `${label} · ${period}`),

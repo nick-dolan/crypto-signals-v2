@@ -67,7 +67,7 @@ test("agent data preserves order, units, signed funding and missing values throu
     asOf: "2026-08-31T09:00:00.000Z", timeframe: "1h", candidateCount: 2, candidates: [first, second],
     marketContext: {
       altMarketBackground: { status: "mixed", change6hPct: -1.23456789, breadth6h: 0.48858, warning: null },
-      segmentRotation6h: { btc: 0.0005958, eth: 0.0001151, alts: 0.0001051, stables: -0.000816 },
+      segmentShareChange6h: { btc: 1 / 60, eth: 0.025, alts: -0.01, stables: -0.01234567 },
       stablecapChange6h: -0.000232,
     },
   }
@@ -93,21 +93,33 @@ test("agent data preserves order, units, signed funding and missing values throu
   assert.equal(candidates[1].socialStatus, "unavailable")
   assert.equal(candidates[1].interactionsZ, null)
   assert.deepEqual(candidates[1].flags, ["coiling"])
-  assert.equal(payload.schemaVersion, 17)
+  assert.equal(payload.schemaVersion, 18)
   assert.deepEqual(payload.marketContext, {
     altMarketBackground: shortlist.marketContext.altMarketBackground,
-    btcRotation6hPct: 0.06, ethRotation6hPct: 0.012, altsRotation6hPct: 0.011,
-    stablesRotation6hPct: -0.082, stablecap6hPct: -0.023,
+    btcShareChange6hPct: 1.667, ethShareChange6hPct: 2.5, altsShareChange6hPct: -1,
+    stablesShareChange6hPct: -1.235, stablecap6hPct: -0.023,
   })
+
+  const partial = buildAgentPayload({
+    ...shortlist,
+    marketContext: {
+      ...shortlist.marketContext,
+      segmentShareChange6h: { ...shortlist.marketContext.segmentShareChange6h, btc: null },
+    },
+  })
+  assert.equal(partial.marketContext.btcShareChange6hPct, null)
+  assert.equal(partial.marketContext.ethShareChange6hPct, 2.5)
 })
 
-test("agent payload refuses to relabel old market context as six-hour data", () => {
-  assert.throws(() => buildAgentPayload({
-    candidateCount: 0,
-    candidates: [],
-    marketContext: {
-      segmentRotation: { btc: 0.01, eth: 0, alts: 0, stables: -0.01 },
-      stablecapChange: 0.02,
-    },
-  }), /6-hour market context; rerun steps 4 and 5/)
+test("agent payload refuses to relabel percentage-point rotations as relative share changes", () => {
+  for (const marketContext of [
+    { segmentRotation: { btc: 0.01, eth: 0, alts: 0, stables: -0.01 }, stablecapChange: 0.02 },
+    { segmentRotation6h: { btc: 0.01, eth: 0, alts: 0, stables: -0.01 }, stablecapChange6h: 0.02 },
+  ]) {
+    assert.throws(() => buildAgentPayload({
+      candidateCount: 0,
+      candidates: [],
+      marketContext,
+    }), /relative 6-hour segment share changes; rerun steps 4 and 5/)
+  }
 })

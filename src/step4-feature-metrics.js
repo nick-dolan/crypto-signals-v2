@@ -33,7 +33,7 @@ async function runFeatureMetricsStep () {
     marketContext: {
       breadth6h: universeContext.universeBreadth6h.at(-1),
       altMarketBackground: universeContext.altMarketBackground,
-      segmentRotation6h: universeContext.segmentRotation6h.at(-1),
+      segmentShareChange6h: universeContext.segmentShareChange6h.at(-1),
       stablecapChange6h: universeContext.stablecapChange6h.at(-1),
     },
     coinCount: profiles.length,

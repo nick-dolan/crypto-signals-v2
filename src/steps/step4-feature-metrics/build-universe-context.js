@@ -187,22 +187,12 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
       )),
     ]),
   )
-  const segmentRotation6h = times.map((_, index) => {
-    const change = key => (
-      isFinite(segmentShares[key][index])
-      && isFinite(segmentShares[key][index - 6])
-        ? segmentShares[key][index] - segmentShares[key][index - 6]
-        : null
-    )
-    const rotation = {
-      btc: change("btc"),
-      eth: change("eth"),
-      alts: change("alts"),
-      stables: change("stables"),
-    }
-
-    return Object.values(rotation).every(isFinite) ? rotation : null
-  })
+  const segmentShareReturns6h = Object.entries(segmentShares).map(([key, values]) => [
+    key, simpleReturns(values, 6),
+  ])
+  const segmentShareChange6h = times.map((_, index) => Object.fromEntries(
+    segmentShareReturns6h.map(([key, values]) => [key, values[index]]),
+  ))
   const returns6h = baseCoins.map(({ close }) => simpleReturns(close, 6))
   const universeBreadth6h = times.map((_, index) => {
     const finite = returns6h.map(values => values[index]).filter(isFinite)
@@ -228,7 +218,7 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
       breadth6h: universeBreadth6h.at(-1),
       marketData: marketContext,
     }),
-    segmentRotation6h,
+    segmentShareChange6h,
     stablecapChange6h: simpleReturns(stableCap, 6),
     categoryContextsByCoin,
     peerContextsByCoin: buildPeerContext(baseCoins, coinPeers),
