@@ -1078,7 +1078,7 @@ summary {
 .feature-table td:first-child {
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     color: #bbd2f1;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }
 
 .feature-table td:nth-child(2) {
