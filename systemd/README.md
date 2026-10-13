@@ -4,6 +4,12 @@
 
 С `Persistent=true` пропущенные во время отключения сервера или таймера запуски компенсируются одним запуском при активации таймера.
 
+Команда чтобы узнать когда след. таймер.
+
+```bash
+systemctl list-timers --all crypto-signals.timer
+```
+
 ## 1. Подготовка
 
 Сверьте `User`, `Group`, `WorkingDirectory` и `ExecStart` в `crypto-signals.service` с данными сервера:
