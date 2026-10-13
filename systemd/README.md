@@ -22,6 +22,10 @@ command -v pnpm
 Выполните из каталога проекта на сервере. Если задача уже запускается другим таймером, сначала отключите его, чтобы избежать дублей.
 
 ```bash
+/etc/systemd/system/
+```
+
+```bash
 sudo cp systemd/crypto-signals.service systemd/crypto-signals.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now crypto-signals.timer
