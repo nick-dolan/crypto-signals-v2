@@ -1,0 +1,19 @@
+[Unit]
+Description=Crypto signals report server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=nd
+Group=nd
+WorkingDirectory=/home/nd/crypto-signals-v2
+Environment=HOST=127.0.0.1 PORT=3000
+ExecStart=/home/nd/.local/share/pnpm/pnpm run server
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

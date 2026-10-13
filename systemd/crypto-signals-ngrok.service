@@ -1,0 +1,22 @@
+[Unit]
+Description=Crypto signals ngrok tunnel
+# Туннель остаётся работать при перезапусках веб-сервера.
+Wants=network-online.target crypto-signals-web.service
+After=network-online.target crypto-signals-web.service
+
+[Service]
+Type=simple
+User=nd
+Group=nd
+WorkingDirectory=/home/nd/crypto-signals-v2
+ExecStart=/usr/local/bin/ngrok http 3000 \
+    --url https://cryptosignals.ngrok.app \
+    --traffic-policy-file /home/nd/crypto-signals-v2/policy.yaml \
+    --log stdout
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
