@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-11T19:39:05.683Z",
+  "generatedAt": "2026-10-13T10:28:53.180Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-11T19:38:21.650Z"
+    "sourceGeneratedAt": "2026-10-13T10:28:14.409Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 274,
+  "coinCount": 276,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -4014,6 +4014,30 @@
         {
           "url": "https://docs.treasure.lol/magic",
           "checkedAt": "2026-10-11T19:39:03.909Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBIANRENSHENG",
+      "symbol": "BIANRENSHENG",
+      "name": "Bi An Ren Sheng",
+      "description": "币安人生（BinanceLife）— сообщественный мем-токен на BNB Chain, основанный на китайской интернет-культуре и образе жизни, ассоциируемом с успехом в экосистеме Binance. Источник связывает его с тикером BIANRENSHENG и торговой парой на Binance.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/bianrensheng",
+          "checkedAt": "2026-10-13T10:28:41.306Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCJTO",
+      "symbol": "JTO",
+      "name": "Jito",
+      "description": "Jito — сеть в экосистеме Solana, включающая JitoSOL и продукты MEV. Токен JTO служит для управления: его держатели могут голосовать по решениям, влияющим на сеть, включая параметры стейк-пула JitoSOL, стратегии делегирования и управление казначейством DAO.",
+      "sources": [
+        {
+          "url": "https://www.jito.network/blog/announcing-jto-the-jito-governance-token/",
+          "checkedAt": "2026-10-13T10:28:50.036Z"
         }
       ]
     }
