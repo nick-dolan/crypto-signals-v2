@@ -37,9 +37,6 @@ function containsNumber (value) {
 }
 
 function restoreHeader ({ report, manifest }) {
-  if (manifest.version === 1) {
-    return report
-  }
   const header = { ...report }
   for (const key of manifest.textFields) {
     if (!isString(header[key])) {
@@ -162,16 +159,16 @@ export async function createReportStore ({ directory = path.resolve("reports") }
     }
     validateMetadata(fields)
     if (
-      ![1, 2].includes(manifest?.version) || manifest.id !== id || manifest.coins !== fields.candidateCount
+      manifest?.version !== 2 || manifest.id !== id || manifest.coins !== fields.candidateCount
       || !isSafeInteger(manifest.history) || manifest.history < 0 || manifest.history > manifest.coins
       || ![0, 1].includes(manifest.peerRadar)
     ) {
       throw new Error("report.parquet has an invalid or unsupported manifest")
     }
-    if (manifest.version === 2 && (
+    if (
       !isArray(manifest.textFields) || !manifest.textFields.every(isTextField)
       || new Set(manifest.textFields).size !== manifest.textFields.length || !isBoolean(manifest.coinDescriptions)
-    )) {
+    ) {
       throw new Error("report.parquet has invalid compact-header metadata")
     }
     for (const [name, count] of [["report", 1], ["coins", manifest.coins], ["history", manifest.history], ["peer-radar", manifest.peerRadar]]) {

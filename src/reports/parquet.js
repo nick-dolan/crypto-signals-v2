@@ -70,19 +70,16 @@ function restoreValue (value, schema, label) {
 
 async function readSchema (connection, filename) {
   const result = await connection.runAndReadAll(`
-    SELECT decode(key) AS key, decode(value) AS schema FROM parquet_kv_metadata(?)
-    WHERE decode(key) IN ('report_store_schema', 'report_store_schema_gzip')
+    SELECT decode(value) AS schema FROM parquet_kv_metadata(?)
+    WHERE decode(key) = 'report_store_schema_gzip'
   `, [filename])
   const rows = result.getRowObjectsJS()
   if (rows.length !== 1) {
-    throw new Error(`${filename}: missing or ambiguous report schema Parquet metadata`)
+    throw new Error(`${filename}: missing or ambiguous report_store_schema_gzip Parquet metadata`)
   }
-  const { key, schema: value } = rows[0]
-  const schema = JSON.parse(
-    key === "report_store_schema_gzip" ? gunzipSync(Buffer.from(value, "base64")).toString("utf8") : value,
-  )
+  const schema = JSON.parse(gunzipSync(Buffer.from(rows[0].schema, "base64")).toString("utf8"))
   if (!isObject(schema)) {
-    throw new Error(`${filename}: invalid ${key} Parquet metadata`)
+    throw new Error(`${filename}: invalid report_store_schema_gzip Parquet metadata`)
   }
   return schema
 }

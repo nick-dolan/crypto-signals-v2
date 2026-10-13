@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { randomUUID } from "node:crypto"
+
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -7,19 +7,16 @@ import test from "node:test"
 import { gunzipSync, gzipSync } from "node:zlib"
 import { DuckDBInstance } from "@duckdb/node-api"
 
-import { readParquet, writeParquet } from "../src/reports/parquet.js"
+import { readParquet } from "../src/reports/parquet.js"
 import { createReportStore } from "../src/reports/store.js"
 
-async function parquetSchema (connection, filename, key = "report_store_schema_gzip") {
+async function parquetSchema (connection, filename) {
   const result = await connection.runAndReadAll(
     "SELECT decode(key) AS key, decode(value) AS value FROM parquet_kv_metadata(?)", [filename],
   )
   const metadata = result.getRowObjectsJS()
-  assert.deepEqual(metadata.map(entry => entry.key), [key], filename)
+  assert.deepEqual(metadata.map(entry => entry.key), ["report_store_schema_gzip"], filename)
   const value = metadata[0].value
-  if (key === "report_store_schema") {
-    return JSON.parse(value)
-  }
   const json = gunzipSync(Buffer.from(value, "base64")).toString("utf8")
   assert.equal(value, gzipSync(json, { level: 9 }).toString("base64"), filename)
   return JSON.parse(json)
@@ -103,7 +100,7 @@ test("saved reports preserve exact numbers, coin order, nulls and history gaps a
   assert.deepEqual((await store.list()).map(entry => entry.id), [id])
 })
 
-test("version 2 packs only eligible text and preserves physical DOUBLE columns with gzip schema metadata", async (context) => {
+test("saved reports pack only eligible text and preserve physical DOUBLE columns with gzip schema metadata", async (context) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "report-store-"))
   let store
   let instance
@@ -207,81 +204,4 @@ test("version 2 packs only eligible text and preserves physical DOUBLE columns w
       assert.equal(reportColumns.get(keys.at(-1))?.type, "DOUBLE", keys.join("."))
     }
   }
-})
-
-test("legacy version 1 snapshots with uncompressed schema metadata remain readable and listed", async (context) => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "report-store-"))
-  let store
-  let instance
-  let connection
-  context.after(async () => {
-    await store?.close()
-    connection?.closeSync()
-    instance?.closeSync()
-    await fs.rm(directory, { recursive: true, force: true })
-  })
-  instance = await DuckDBInstance.create(":memory:", { threads: "1", temp_directory: "" })
-  connection = await instance.connect()
-  // Simulate the old writer, not a version-2 snapshot with a relabeled manifest.
-  const legacyConnection = {
-    runAndReadAll: (...args) => connection.runAndReadAll(...args),
-    run: (sql, parameters) => connection.run(sql.replace(/report_store_schema_gzip:\s*'([^']+)'/, (_, value) => {
-      const schema = gunzipSync(Buffer.from(value, "base64")).toString("utf8")
-      return `report_store_schema: '${schema.replaceAll("'", "''")}'`
-    }), parameters),
-  }
-  const id = randomUUID()
-  const snapshotDirectory = path.join(directory, id)
-  await fs.mkdir(snapshotDirectory)
-  const report = {
-    reportCreatedAt: "2026-09-26T13:00:48.708Z",
-    asOf: "2026-09-26T11:00:00.000Z",
-    candidateCount: 0,
-    universeCoinCount: 250,
-    marketDefinitions: { status: "Старый формат" },
-    definitions: { "quoted'key": { description: "Неупакованный справочник", optional: null } },
-    flagDefinitions: [{ flag: "quietOi", description: "Тихий OI" }, {}],
-    coinDescriptions: Object.fromEntries([
-      ["A", { description: "Старое описание", sources: [] }],
-      ["B", { description: null }],
-    ]),
-    coins: [],
-  }
-  const { coins, ...header } = report
-  const filename = name => path.join(snapshotDirectory, `${name}.parquet`)
-  await writeParquet(legacyConnection, filename("report"), [{
-    report: header, manifest: { version: 1, id, coins: coins.length, history: 0, peerRadar: 0 },
-  }])
-  for (const [name, sample] of [
-    ["coins", { symbol: null, movementProbability: 0, topRank: 0, features: {} }],
-    ["history", {
-      coinIndex: 0,
-      history: {
-        candles: [{ time: 0, open: 0, high: 0, low: 0, close: 0 }],
-        volume: [{ time: 0, value: 0 }],
-        openInterest: [{ time: 0, value: 0 }],
-        warning: null,
-      },
-    }],
-    ["peer-radar", {
-      radar: { status: null, warning: null, data: { observations: [] } },
-      histories: [{ key: "", history: { points: [{ time: 0, value: 0 }] } }],
-    }],
-  ]) {
-    await writeParquet(legacyConnection, filename(name), [], sample)
-  }
-  for (const name of ["report", "coins", "history", "peer-radar"]) {
-    const schema = await parquetSchema(connection, filename(name), "report_store_schema")
-    if (name === "report") {
-      assert.equal(schema.report.definitions["quoted'key"].description, "VARCHAR")
-      assert.equal(schema.report.coinDescriptions.A.description, "VARCHAR")
-    }
-  }
-
-  store = await createReportStore({ directory })
-  assert.deepEqual(await store.list(), [{
-    id, reportCreatedAt: report.reportCreatedAt, asOf: report.asOf,
-    candidateCount: report.candidateCount, universeCoinCount: report.universeCoinCount,
-  }])
-  assert.deepEqual(await store.read(id), report)
 })
