@@ -24,6 +24,14 @@ which copilot
 COPILOT_CLI_PATH=/home/nick/.local/bin/copilot
 ```
 
+**OpenAI:** для `openai-unofficial` нужен отдельный вход в ChatGPT. После `pnpm install` выполните из корня проекта под пользователем сервиса, без `sudo`:
+
+```sh
+pnpm exec node --input-type=module -e 'import { getUnofficialOpenAISession } from "./src/api/openai-unofficial/auth.js"; await getUnofficialOpenAISession({ login: true })'
+```
+
+Подтвердите код по ссылке из терминала в браузере своего компьютера в течение **15 минут**. Сессия сохраняется в `.openai-token.json`; не добавляйте его в Git.
+
 ## Архив и сервер отчётов
 
 Запускать из корня проекта, в разных терминалах:
