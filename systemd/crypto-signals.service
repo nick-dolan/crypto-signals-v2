@@ -1,0 +1,19 @@
+[Unit]
+Description=Crypto signals
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+
+User=nd
+Group=nd
+
+WorkingDirectory=/home/nd/narrative-coins-for-scalping
+
+# Укажите абсолютный путь к pnpm.
+ExecStart=/home/nd/.local/share/pnpm/pnpm run all
+
+# Логи: journalctl -u crypto-signals.service -f
+StandardOutput=journal
+StandardError=journal

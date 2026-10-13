@@ -1,0 +1,12 @@
+[Unit]
+Description=Crypto signals timer
+
+[Timer]
+# 10:00, 16:00, 22:00 (UTC+3).
+OnCalendar=*-*-* 10,16,22:00:00 Europe/Moscow
+
+# Выполнить пропущенный запуск при включении таймера.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
