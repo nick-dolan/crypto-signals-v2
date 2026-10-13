@@ -17,3 +17,6 @@ ExecStart=/home/nd/.local/share/pnpm/pnpm run all
 # Логи: journalctl -u crypto-signals.service -f
 StandardOutput=journal
 StandardError=journal
+
+# Выполнить пропущенный запуск при включении таймера.
+# Persistent=true в crypto-signals.timer
