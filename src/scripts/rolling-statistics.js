@@ -81,13 +81,17 @@ function rollingMoments (source, window) {
     let average = total / window
     let variance = Math.max(0, totalSquares / window - average ** 2)
 
-    if (variance < 1e-14) {
+    if (variance < 1e-12 * Math.max(1, totalSquares / window)) {
       const values = source.slice(index - window + 1, index + 1)
       total = values.reduce((sum, current) => sum + current, 0)
       totalSquares = values.reduce((sum, current) => sum + current ** 2, 0)
-      average = total / window
-      variance = values.reduce(
-        (sum, current) => sum + (current - average) ** 2,
+
+      // Center first to preserve zero variance and small genuine changes.
+      const offsets = values.map(current => current - values[0])
+      const offsetMean = offsets.reduce((sum, current) => sum + current, 0) / window
+      average = values[0] + offsetMean
+      variance = offsets.reduce(
+        (sum, current) => sum + (current - offsetMean) ** 2,
         0,
       ) / window
     }

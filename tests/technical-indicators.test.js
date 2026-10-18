@@ -16,10 +16,10 @@ import {
 import { relativeToSeasonalMedian } from "../src/scripts/seasonality.js"
 import { difference, lag, ratioSeries } from "../src/scripts/series.js"
 
-function assertClose (actual, expected) {
+function assertClose (actual, expected, tolerance = 1e-12) {
   assert.notEqual(actual, null)
   assert.ok(
-    Math.abs(actual - expected) < 1e-12,
+    Math.abs(actual - expected) < tolerance,
     `Expected ${actual} to be close to ${expected}`,
   )
 }
@@ -81,6 +81,35 @@ test("rolling statistics use population variance, current z-score and midrank ti
   assertClose(rollingZScore([1, 2, 3], 3)[2], Math.sqrt(3 / 2))
   assert.deepEqual(rollingZScore([5, 5, 5], 3), [null, null, 0])
   assert.deepEqual(rollingPercentileRank([1, 2, 2, 2], 4), [null, null, null, 0.625])
+})
+
+test("constant log windows keep exact zero variance after expiry and gaps", () => {
+  for (const posts of [6, 14, 19, 33]) {
+    const value = Math.log1p(posts)
+    const source = [value + 1, ...Array(721).fill(value), null, ...Array(721).fill(value), value + 1]
+    const means = rollingMean(source, 720)
+    const deviations = rollingStandardDeviation(source, 720)
+    const scores = rollingZScore(source, 720)
+
+    assert.deepEqual(scores.slice(0, 719), Array(719).fill(null))
+    assert.deepEqual(scores.slice(722, 1_442), Array(720).fill(null))
+    for (const index of [720, 721, 1_442, 1_443]) {
+      assert.equal(means[index], value)
+      assert.equal(deviations[index], 0)
+      assert.equal(scores[index], 0)
+    }
+    assertClose(scores.at(-1), Math.sqrt(719), 1e-8)
+  }
+})
+
+test("small genuine variance survives cancellation without being clamped to zero", () => {
+  for (const [center, offset] of [[Math.log1p(14), 2 ** -30], [1_000_000_000, 1 / 1_024]]) {
+    const source = Array.from({ length: 720 }, (_, index) => center + (index % 2 === 0 ? -offset : offset))
+
+    assert.equal(rollingMean(source, 720).at(-1), center)
+    assert.equal(rollingStandardDeviation(source, 720).at(-1), offset)
+    assertClose(rollingZScore(source, 720).at(-1), 1)
+  }
 })
 
 test("correlation and beta preserve direction, aligned gaps and zero-variance semantics", () => {
