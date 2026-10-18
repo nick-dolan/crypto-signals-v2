@@ -16,8 +16,8 @@ async function runAgentAnalysisStep () {
     ),
   ])
 
-  if (payload.schemaVersion !== 18 || payload.objective !== "P(рост > 2.5 ATR в следующие 4–12 часов)") {
-    throw new Error("Growth analysis requires relative 6-hour segment share changes; rerun steps 4–9")
+  if (payload.schemaVersion !== 19 || payload.objective !== "P(рост > 2.5 ATR в следующие 4–12 часов)") {
+    throw new Error("Growth analysis requires schemaVersion 19 with Active Posts metrics and relative 6-hour segment share changes; rerun steps 2, 4, 5 and 9")
   }
 
   let analysis

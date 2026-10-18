@@ -89,11 +89,13 @@ function createCandidate (profile, information, pattern) {
         social.interactions_per_contributor_z,
         social.created_posts_per_active_contributor,
         social.social_minus_price_z_3h,
+        social.active_posts_z_30d,
+        social.active_posts_change_6h,
       ].every(isFinite)
     ))
     || (!socialAvailable && social !== null)
   ) {
-    throw new Error("Agent payload social features do not match their status")
+    throw new Error(`${coin.symbol} social features do not match their status: available requires eight finite metrics, unavailable requires null; rerun steps 2, 4 and 5`)
   }
 
   return {
@@ -154,6 +156,8 @@ function createCandidate (profile, information, pattern) {
       roundNullable(social?.interactions_per_contributor_z ?? null),
       roundNullable(social?.created_posts_per_active_contributor ?? null),
       roundNullable(social?.social_minus_price_z_3h ?? null),
+      roundNullable(social?.active_posts_z_30d ?? null),
+      roundNullable(social?.active_posts_change_6h ?? null),
     ],
     relativeStrength: [
       roundNumber(relative.beta_btc_7d),
@@ -232,7 +236,7 @@ export function buildAgentPayload (shortlist, context, patterns = null) {
   const patternContext = readPatternContext(shortlist, patterns)
 
   const payload = {
-    schemaVersion: 18,
+    schemaVersion: 19,
     asOf: shortlist.asOf,
     timeframe: shortlist.timeframe,
     objective: "P(рост > 2.5 ATR в следующие 4–12 часов)",
@@ -306,6 +310,8 @@ export function buildAgentPayload (shortlist, context, patterns = null) {
         "interactionsPerContributorZ",
         "postsPerContributor",
         "socialMinusPriceZ3h",
+        "activePostsZ",
+        "activePostsChange6h",
       ],
       relativeStrength: [
         "btcBeta7d",
@@ -375,13 +381,15 @@ export function buildAgentPayload (shortlist, context, patterns = null) {
       premiumZ: "Derivatives: z30d исходного Premium TradingView, уже относительного отклонения futures от index; без повторного деления на цену",
       liqImbalance: "Context: дисбаланс long и short ликвидаций от -1 до 1; плюс означает больше long. Не показывает величину или аномальность ликвидаций и сам по себе не является триггером",
       crowdVsTop: "Context: позиционирование обычных аккаунтов относительно top traders; плюс означает более long-настроенную толпу",
-      socialStatus: "available — все четыре social-ряда и шесть признаков доступны; unavailable — весь Social-блок недоступен, не контрсигнал",
+      socialStatus: "available — все пять social-рядов (Social Dominance, Interactions, Active Contributors, Created Posts, Active Posts) и восемь признаков доступны; unavailable — все восемь метрик Social равны null, не контрсигнал",
       socialDominanceZ: "Trigger: z-score доли внимания к монете за 30 дней",
       interactionsZ: "Trigger: z-score логарифма social-взаимодействий за 30 дней",
       socialAccel3hPct: "Trigger: изменение взаимодействий последних 3 часов к предыдущим 3 часам, %",
       interactionsPerContributorZ: "Context: z30d(log1p(interactions / max(active contributors, 1))); высокий уровень может означать концентрацию или накрутку",
       postsPerContributor: "Context: новых публикаций / max(active contributors, 1) в текущем часу",
       socialMinusPriceZ3h: "Trigger: z30d(ускорение interactions за 3h) минус z30d(abs price return за те же 3h); выше 1 означает необычно сильный social относительно одновременного движения цены",
+      activePostsZ: "Context: rollingZScore(log1p(Active Posts), 720) — аномальность уровня активных публикаций в полном 30-дневном окне; не число новых публикаций или пользователей",
+      activePostsChange6h: "Trigger: log1p(mean(Active Posts последних 6ч)) − log1p(mean(Active Posts предыдущих 6ч)); непересекающиеся окна, без ×100, не проценты; плюс — недавний рост активности",
       btcBeta7d: "Context: чувствительность часовых доходностей монеты к BTC за 7 дней",
       btcCorr24h: "Context: корреляция часовых доходностей монеты с BTC за 24 часа",
       btcCorrChange: "Context: корреляция с BTC за 24 часа минус корреляция за 7 дней; отрицательное значение означает расцепление",

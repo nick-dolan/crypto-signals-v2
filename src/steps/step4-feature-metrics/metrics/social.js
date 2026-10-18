@@ -1,5 +1,5 @@
-import { combineSeries, mapSeries } from "../../../scripts/series.js"
-import { rollingSum, rollingZScore } from "../../../scripts/rolling-statistics.js"
+import { combineSeries, difference, mapSeries } from "../../../scripts/series.js"
+import { rollingMean, rollingSum, rollingZScore } from "../../../scripts/rolling-statistics.js"
 import { simpleReturns } from "../../../scripts/returns.js"
 
 export function calculateSocialMetrics ({
@@ -8,6 +8,7 @@ export function calculateSocialMetrics ({
   interactions,
   activeContributors,
   createdPosts,
+  activePosts,
 }) {
   const interactionsAcceleration3h = simpleReturns(
     rollingSum(interactions, 3),
@@ -43,6 +44,14 @@ export function calculateSocialMetrics ({
         rollingZScore(absolutePriceReturn3h, 720),
       ],
       ([interactionsZScore, priceZScore]) => interactionsZScore - priceZScore,
+    ),
+    active_posts_z_30d: rollingZScore(
+      mapSeries(activePosts, value => Math.log1p(value)),
+      720,
+    ),
+    active_posts_change_6h: difference(
+      mapSeries(rollingMean(activePosts, 6), value => Math.log1p(value)),
+      6,
     ),
   }
 }

@@ -62,13 +62,14 @@ function getSocialStatus (hourlyData) {
     "interactions",
     "activeContributors",
     "createdPosts",
+    "activePosts",
   ].filter(key => hourlyData?.studies?.[key]).length
 
   if (
-    (status === "available" && studyCount !== 4)
+    (status === "available" && studyCount !== 5)
     || (status === "unavailable" && studyCount !== 0)
   ) {
-    throw new Error("Coin social studies do not match their availability")
+    throw new Error("Coin social studies do not match their availability; rerun step 2")
   }
 
   return status
@@ -134,6 +135,7 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
             times,
           ),
           createdPosts: studyField(hourlyData, "createdPosts", "value", times),
+          activePosts: studyField(hourlyData, "activePosts", "value", times),
         }
       : {}),
   }

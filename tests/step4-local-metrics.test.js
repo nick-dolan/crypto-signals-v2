@@ -33,6 +33,18 @@ function derivativesInput (openInterest) {
   }
 }
 
+function socialInput (activePosts) {
+  const filled = value => activePosts.map(() => value)
+  return {
+    close: filled(100),
+    socialDominance: filled(2),
+    interactions: filled(10),
+    activeContributors: filled(10),
+    createdPosts: filled(7),
+    activePosts,
+  }
+}
+
 function directionalInput (sign) {
   return {
     close: [100],
@@ -168,11 +180,9 @@ test("premium is not price-normalized and derivatives handle signed positions an
 
 test("social acceleration uses adjacent windows and does not divide by zero contributors", () => {
   const input = {
-    close: createSeries(() => 100),
-    socialDominance: createSeries(() => 2),
+    ...socialInput(createSeries(() => 0)),
     interactions: [...createSeries(() => 10).slice(0, -3), 20, 20, 20],
     activeContributors: createSeries(index => index === 2_239 ? 0 : 10),
-    createdPosts: createSeries(() => 7),
   }
   const metrics = calculateSocialMetrics(input)
 
@@ -180,6 +190,49 @@ test("social acceleration uses adjacent windows and does not divide by zero cont
   assert.equal(latest(metrics.created_posts_per_active_contributor), 7)
   const gapped = calculateSocialMetrics({ ...input, interactions: input.interactions.with(2_238, null) })
   assert.equal(latest(gapped.interactions_acceleration_3h), null)
+})
+
+test("active posts normalize log levels over 30 days and compare adjacent six-hour means", () => {
+  const metrics = calculateSocialMetrics(socialInput(createSeries(index => Math.expm1(index / 100))))
+
+  assert.equal(metrics.active_posts_z_30d[718], null)
+  assertClose(metrics.active_posts_z_30d[719], Math.sqrt(3 * 719 / 721), 1e-10)
+  assertClose(latest(metrics.active_posts_z_30d), Math.sqrt(3 * 719 / 721), 1e-10)
+  assert.deepEqual(metrics.active_posts_change_6h.slice(0, 11), Array(11).fill(null))
+  assertClose(metrics.active_posts_change_6h[11], 0.06)
+  assertClose(latest(metrics.active_posts_change_6h), 0.06)
+
+  const irregular = calculateSocialMetrics(socialInput([
+    ...createSeries(() => 5).slice(0, -12),
+    0, 2, 4, 6, 8, 10,
+    12, 16, 20, 24, 28, 32,
+  ]))
+  assertClose(latest(irregular.active_posts_change_6h), Math.log1p(22) - Math.log1p(5))
+})
+
+test("active posts preserve zeros and missing windows without looking ahead", () => {
+  const input = socialInput([...createSeries(() => 0).slice(0, -6), 1, 2, 3, 4, 5, 6])
+  const metrics = calculateSocialMetrics(input)
+
+  assert.equal(metrics.active_posts_z_30d[2_233], 0)
+  assert.equal(metrics.active_posts_change_6h[2_233], 0)
+  assertClose(latest(metrics.active_posts_change_6h), Math.log1p(3.5))
+
+  const prefix = calculateSocialMetrics(Object.fromEntries(
+    Object.entries(input).map(([name, series]) => [name, series.slice(0, 2_237)]),
+  ))
+  for (const [name, series] of Object.entries(prefix)) {
+    assert.deepEqual(series, metrics[name].slice(0, 2_237), name)
+  }
+
+  for (const index of [2_230, 2_236]) {
+    const gapped = calculateSocialMetrics({ ...input, activePosts: input.activePosts.with(index, null) })
+    assert.equal(latest(gapped.active_posts_change_6h), null)
+    assert.equal(latest(gapped.active_posts_z_30d), null)
+  }
+  const earlierGap = calculateSocialMetrics({ ...input, activePosts: input.activePosts.with(2_200, null) })
+  assert.equal(latest(earlierGap.active_posts_z_30d), null)
+  assertClose(latest(earlierGap.active_posts_change_6h), Math.log1p(3.5))
 })
 
 test("range pressure requires signed proximity and flow, preserving null gaps", () => {
@@ -268,7 +321,7 @@ test("profile assembly aligns short delta history, keeps latest calculations and
   }
   hourlyData.studies.volumeDelta.periods = hourlyData.studies.volumeDelta.periods.slice(734)
   const series = buildAlignedCoinSeries(hourlyData, times)
-  const calculated = calculateCoinMetrics(series, {
+  const universeContext = {
     btcClose: createSeries(index => 200 + Math.sin(index / 17)),
     total3esClose: createSeries(index => 500 + Math.sin(index / 7)),
     categoryContextsByCoin: new Map([["TARGET", {
@@ -277,7 +330,8 @@ test("profile assembly aligns short delta history, keeps latest calculations and
       breadth: createSeries(() => null),
       coinLeadsCategory: createSeries(() => null),
     }]]),
-  }, "TARGET")
+  }
+  const calculated = calculateCoinMetrics(series, universeContext, "TARGET")
   const baseCoin = { coin: hourlyData.coin, categories: [], metadata: { marketCap: 1_000 } }
   const { profile, rejection } = createFeatureProfile(baseCoin, series, calculated)
 
@@ -290,6 +344,38 @@ test("profile assembly aligns short delta history, keeps latest calculations and
   assertClose(profile.features.derivatives.oi_level_percentile_90d, 2_159.5 / 2_160)
   assert.equal(profile.features.divergences.short_squeeze_setup, true)
   assert.equal(profile.features.social, null)
+
+  const socialData = {
+    ...hourlyData,
+    availability: { social: { status: "available" } },
+    studies: {
+      ...hourlyData.studies,
+      socialDominance: study(() => ({ percent: 2 })),
+      interactions: study(() => ({ value: 10 })),
+      activeContributors: study(() => ({ value: 10 })),
+      createdPosts: study(() => ({ value: 7 })),
+      activePosts: study(index => ({ value: index >= 2_234 ? 42 : 0 })),
+    },
+  }
+  const socialSeries = buildAlignedCoinSeries(socialData, times)
+  assert.deepEqual(socialSeries.activePosts, createSeries(index => index >= 2_234 ? 42 : 0))
+  const socialCalculated = calculateCoinMetrics(socialSeries, universeContext, "TARGET")
+  const available = createFeatureProfile(baseCoin, socialSeries, socialCalculated)
+  assert.equal(available.rejection, null)
+  assert.equal(available.profile.context.socialStatus, "available")
+  assert.ok(available.profile.features.social.active_posts_z_30d > 0)
+  assertClose(available.profile.features.social.active_posts_change_6h, Math.log1p(42))
+
+  socialCalculated.featureSeries.social.active_posts_change_6h[2_239] = null
+  const partial = createFeatureProfile(baseCoin, socialSeries, socialCalculated)
+  assert.equal(partial.rejection, null)
+  assert.equal(partial.profile.context.socialStatus, "unavailable")
+  assert.equal(partial.profile.features.social, null)
+  assert.equal(partial.profile.features.divergences.attention_ahead, null)
+  assert.equal(partial.profile.features.divergences.exhausted_hype, null)
+
+  delete socialData.studies.activePosts
+  assert.throws(() => buildAlignedCoinSeries(socialData, times), /rerun step 2/)
 
   calculated.featureSeries.derivatives.funding_rate[2_239] = null
   const missing = createFeatureProfile(baseCoin, series, calculated)

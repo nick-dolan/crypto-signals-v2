@@ -98,6 +98,8 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
     latestFeatures.social.interactions_per_contributor_z,
     latestFeatures.social.created_posts_per_active_contributor,
     latestFeatures.social.social_minus_price_z_3h,
+    latestFeatures.social.active_posts_z_30d,
+    latestFeatures.social.active_posts_change_6h,
   ].every(isFinite)
   const features = socialAvailable
     ? latestFeatures

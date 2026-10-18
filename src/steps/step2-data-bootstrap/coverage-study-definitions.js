@@ -21,6 +21,7 @@ function getRequiredStudyDefinitions () {
     "socialDominance",
     "interactions",
     "activeContributors",
+    "activePosts",
     "createdPosts",
   ].map((key) => {
     const definition = definitionsByKey.get(key)

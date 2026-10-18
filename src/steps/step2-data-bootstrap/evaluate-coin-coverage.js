@@ -28,6 +28,7 @@ export function evaluateCoinCoverage (
       "socialDominance",
       "interactions",
       "activeContributors",
+      "activePosts",
       "createdPosts",
     ],
     volumeDeltaHours = 1_666,

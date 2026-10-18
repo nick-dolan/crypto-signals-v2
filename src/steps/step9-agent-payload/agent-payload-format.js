@@ -1,7 +1,11 @@
-import { isArray, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
+import { isArray, isObject, isString } from "../../helpers/utils.typed.js"
 
 export function decodeAgentPayload (payload) {
-  if (!isObject(payload?.schema)) {
+  if (payload?.schemaVersion !== 19) {
+    throw new Error("Step 9 requires schemaVersion 19 with Active Posts metrics; rerun steps 2, 4, 5 and 9")
+  }
+
+  if (!isObject(payload.schema)) {
     throw new Error("Step 9 schema must define named groups of columns; regenerate step 9 for older payloads")
   }
 
@@ -26,8 +30,7 @@ export function decodeAgentPayload (payload) {
     throw new Error("Step 9 candidates must be an array")
   }
 
-  const orderFields = payload.schemaVersion >= 13 ? [] : ["selectionRank"]
-  const candidateKeys = ["symbol", "name", ...orderFields, ...groups.map(([group]) => group), "flags"]
+  const candidateKeys = ["symbol", "name", ...groups.map(([group]) => group), "flags"]
   const candidates = payload.candidates.map((candidate, index) => {
     if (
       !isObject(candidate)
@@ -44,10 +47,6 @@ export function decodeAgentPayload (payload) {
       if (!isString(candidate[field]) || !candidate[field].trim()) {
         throw new Error(`Step 9 candidate ${index} contains an invalid ${field}`)
       }
-    }
-
-    if (orderFields.length > 0 && (!isSafeInteger(candidate.selectionRank) || candidate.selectionRank < 1)) {
-      throw new Error(`Step 9 candidate ${index} contains an invalid selectionRank`)
     }
 
     if (!isArray(candidate.flags)) {

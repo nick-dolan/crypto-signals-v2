@@ -176,6 +176,7 @@ function isSocialStudy (key) {
     "socialDominance",
     "interactions",
     "activeContributors",
+    "activePosts",
     "createdPosts",
   ].includes(key)
 }
@@ -198,8 +199,8 @@ export function createBootstrapHourlyData (
     .filter(isSocialStudy)
     .length
 
-  if (socialCoverage.status === "available" && availableSocialStudyCount !== 4) {
-    throw new Error("Available social coverage requires all four studies")
+  if (socialCoverage.status === "available" && availableSocialStudyCount !== 5) {
+    throw new Error("Available social coverage requires all five studies")
   }
 
   return {

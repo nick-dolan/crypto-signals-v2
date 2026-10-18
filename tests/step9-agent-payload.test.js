@@ -37,6 +37,7 @@ function createCandidate (symbol) {
       social: {
         social_dominance_z_30d: 0.92345, interactions_z_30d: 1.23456, interactions_acceleration_3h: 0.4321,
         interactions_per_contributor_z: 2.34567, created_posts_per_active_contributor: 0.12345, social_minus_price_z_3h: 1.14567,
+        active_posts_z_30d: 3.45678, active_posts_change_6h: -0.23456,
       },
       relativeStrength: {
         beta_btc_7d: 1.12345, corr_btc_24h: 0.65432, corr_btc_change_24h_vs_7d: -0.34567,
@@ -84,6 +85,15 @@ test("agent data preserves order, units, signed funding and missing values throu
   assert.equal(candidates[0].oiChange4hPct, 1.234)
   assert.equal(candidates[0].fundingRate, -0.0000123456789)
   assert.equal(candidates[0].socialAccel3hPct, 43.21)
+  assert.equal(candidates[0].activePostsZ, 3.457)
+  assert.equal(candidates[0].activePostsChange6h, -0.235)
+  assert.deepEqual(payload.schema.social, [
+    "socialStatus", "socialDominanceZ", "interactionsZ", "socialAccel3hPct",
+    "interactionsPerContributorZ", "postsPerContributor", "socialMinusPriceZ3h",
+    "activePostsZ", "activePostsChange6h",
+  ])
+  assert.deepEqual(payload.candidates[0].social, ["available", 0.923, 1.235, 43.21, 2.346, 0.123, 1.146, 3.457, -0.235])
+  assert.match(payload.definitions.activePostsChange6h, /не проценты/)
   assert.equal(candidates[0].residualLogReturn4hPct, 1.234)
   assert.equal(candidates[0].sustainedDownExcessMedianPct, 0.457)
   assert.equal(candidates[0].categoryMoveAtr, 1.458)
@@ -91,9 +101,12 @@ test("agent data preserves order, units, signed funding and missing values throu
   assert.equal(Object.hasOwn(candidates[0], "liquidations4hOverOi"), false)
   assert.equal(candidates[1].breakoutAgeHours, null)
   assert.equal(candidates[1].socialStatus, "unavailable")
-  assert.equal(candidates[1].interactionsZ, null)
+  assert.deepEqual(payload.candidates[1].social, ["unavailable", null, null, null, null, null, null, null, null])
+  for (const field of payload.schema.social.slice(1)) {
+    assert.equal(candidates[1][field], null)
+  }
   assert.deepEqual(candidates[1].flags, ["coiling"])
-  assert.equal(payload.schemaVersion, 18)
+  assert.equal(payload.schemaVersion, 19)
   assert.deepEqual(payload.marketContext, {
     altMarketBackground: shortlist.marketContext.altMarketBackground,
     btcShareChange6hPct: 1.667, ethShareChange6hPct: 2.5, altsShareChange6hPct: -1,
@@ -109,6 +122,31 @@ test("agent data preserves order, units, signed funding and missing values throu
   })
   assert.equal(partial.marketContext.btcShareChange6hPct, null)
   assert.equal(partial.marketContext.ethShareChange6hPct, 2.5)
+})
+
+test("available Social requires all eight metrics without replacing missing values by zero", () => {
+  const candidate = createCandidate("ZETA")
+  const social = candidate.features.social
+  const shortlist = {
+    asOf: "2026-08-31T09:00:00.000Z", timeframe: "1h", candidateCount: 1, candidates: [candidate],
+    marketContext: { segmentShareChange6h: { btc: 0, eth: 0, alts: 0, stables: 0 }, stablecapChange6h: 0 },
+  }
+
+  for (const field of Object.keys(social)) {
+    candidate.features.social = { ...social }
+    delete candidate.features.social[field]
+    assert.throws(() => buildAgentPayload(shortlist), /social features.*rerun steps 2, 4 and 5/, field)
+  }
+
+  candidate.features.social = { ...social, active_posts_z_30d: 0, active_posts_change_6h: 0 }
+  const { candidates } = decodeAgentPayload(buildAgentPayload(shortlist))
+  assert.equal(candidates[0].activePostsZ, 0)
+  assert.equal(candidates[0].activePostsChange6h, 0)
+})
+
+test("agent payload decoder refuses older schemas instead of accepting missing Active Posts columns", () => {
+  assert.throws(() => decodeAgentPayload({ schemaVersion: 18, schema: {}, candidates: [] }),
+    /schemaVersion 19.*rerun steps 2, 4, 5 and 9/)
 })
 
 test("agent payload refuses to relabel percentage-point rotations as relative share changes", () => {

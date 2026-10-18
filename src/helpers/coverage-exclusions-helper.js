@@ -153,6 +153,7 @@ function isSocialOnlyCoverageExclusion (exclusion) {
       "socialDominance",
       "interactions",
       "activeContributors",
+      "activePosts",
       "createdPosts",
     ].includes(metric))
 }

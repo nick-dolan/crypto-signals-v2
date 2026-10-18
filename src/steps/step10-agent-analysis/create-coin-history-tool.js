@@ -86,6 +86,8 @@ function getHistoryValue (field, chartPeriod, studyValue) {
       return studyValue("activeContributors", "value", chartPeriod.time)
     case "createdPosts":
       return studyValue("createdPosts", "value", chartPeriod.time)
+    case "activePosts":
+      return studyValue("activePosts", "value", chartPeriod.time)
     default:
       throw new Error(`Unsupported coin history field: ${field}`)
   }
@@ -206,6 +208,7 @@ export function createCoinHistoryTool (
             "interactions",
             "activeContributors",
             "createdPosts",
+            "activePosts",
           ],
         },
         description: "От одного до шести сырых часовых рядов",
