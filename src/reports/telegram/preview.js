@@ -6,11 +6,13 @@ import { buildCoinCardSvg, renderCoinCardPng } from "../coin-card/render-coin-ca
 import { buildTelegramRelease } from "./build-telegram-release.js"
 import { renderTelegramPreview } from "./render-telegram-preview.js"
 
-export async function writeTelegramPreview (report, { directory = "output/telegram-preview", source = null } = {}) {
+export async function writeTelegramPreview (report, {
+  directory = "output/telegram-preview", source = null, reportUrl,
+} = {}) {
   if (!isObject(report) || !isArray(report.coins) || !report.coins.every(isObject)) {
     throw new Error("Некорректный отчёт: coins должен быть массивом объектов монет")
   }
-  const manifest = { ...buildTelegramRelease(report), source }
+  const manifest = { ...buildTelegramRelease(report, { reportUrl }), source }
   const json = JSON.stringify(manifest, null, 2)
   const html = renderTelegramPreview(manifest)
   directory = path.resolve(directory)

@@ -29,7 +29,10 @@ export async function runTelegramStep ({
     await store.close()
   }
 
-  const result = await createPreview(report, { source: `reports/${saved.id}` })
+  const result = await createPreview(report, {
+    source: `reports/${saved.id}`,
+    reportUrl: `https://cryptosignals.ngrok.app/reports/${encodeURIComponent(saved.id)}`,
+  })
   const delivery = await sendRelease(result, { reportId: saved.id })
   console.log(`Step 14: Telegram post sent (message ID: ${delivery.messageId}).`)
   return { ...result, delivery }

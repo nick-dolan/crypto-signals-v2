@@ -42,7 +42,7 @@ export function selectTelegramCandidates (report) {
   return { candidates: eligible, eligibleCount: eligible.length, omittedCount: 0 }
 }
 
-export function buildTelegramRelease (report) {
+export function buildTelegramRelease (report, { reportUrl } = {}) {
   const asOf = isString(report?.asOf) ? Date.parse(report.asOf) : NaN
   if (report?.timeframe !== "1h" || !isSafeInteger(asOf) || asOf % 3_600_000 !== 0) {
     throw new Error("Telegram-выпуск требует сохранённый часовой отчёт (asOf, 1h)")
@@ -63,7 +63,7 @@ export function buildTelegramRelease (report) {
   const createdAt = isString(report.reportCreatedAt) && isFinite(Date.parse(report.reportCreatedAt))
     ? report.reportCreatedAt
     : closedAt
-  const html = renderTelegramHtml(report, { candidates, createdAt })
+  const html = renderTelegramHtml(report, { candidates, createdAt, reportUrl })
 
   return {
     schemaVersion: 2,

@@ -1,7 +1,7 @@
 import { isArray, isString } from "../../helpers/utils.typed.js"
 import { reportTitleTime, telegramLink, telegramText } from "./telegram-format.js"
 
-export function renderTelegramHtml (report, { candidates, createdAt }) {
+export function renderTelegramHtml (report, { candidates, createdAt, reportUrl }) {
   const photos = candidates.map(item => `<img src="tg://photo?id=${item.mediaId}"/>`).join("")
   const topCandidates = candidates.filter(item => item.section === "top")
   const newsCandidates = candidates.filter(item => item.section === "news")
@@ -54,6 +54,12 @@ export function renderTelegramHtml (report, { candidates, createdAt }) {
   }
   if (brief?.warning) {
     html.push(`<p>⚠ ${telegramText(brief.warning, 300)}</p>`)
+  }
+
+  const link = telegramLink("📊 Открыть полный отчёт →", reportUrl)
+  if (link) {
+    html.push("<p><br></p>")
+    html.push(`<p>${link}</p>`)
   }
 
   return html.join("\n")
