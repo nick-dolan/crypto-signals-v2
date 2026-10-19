@@ -6,10 +6,6 @@ function telegramError (message, deliveryUnknown, details = {}) {
   return Object.assign(new Error(message), { deliveryUnknown, ...details })
 }
 
-function isMessageResult (result) {
-  return isObject(result) && isSafeInteger(result.message_id) && result.message_id > 0
-}
-
 function messageForm (chatId, richMessage, files) {
   try {
     if (!isObject(richMessage) || !isString(richMessage.html) || !richMessage.html.trim()
@@ -45,7 +41,7 @@ function messageForm (chatId, richMessage, files) {
   }
 }
 
-async function postRequest (url, body, request, timeoutMs, validateResult) {
+async function postMessage (url, body, request, timeoutMs) {
   const controller = new AbortController()
   let deliveryUnknown = true
   let timeoutId
@@ -103,7 +99,8 @@ async function postRequest (url, body, request, timeoutMs, validateResult) {
       const detail = isString(payload?.description) ? `: ${payload.description}` : ""
       throw telegramError(`Telegram HTTP rejection: ${status}${detail}`, false, { status, code: payload?.error_code })
     }
-    if (payload?.ok !== true || !validateResult(payload.result)) {
+    if (payload?.ok !== true || !isObject(payload.result)
+      || !isSafeInteger(payload.result.message_id) || payload.result.message_id <= 0) {
       throw telegramError("Telegram malformed success response", true)
     }
     return { result: payload.result }
@@ -139,9 +136,9 @@ export function createTelegramClient ({
   const normalizedChatId = String(chatId).trim()
   const url = `https://api.telegram.org/bot${token.trim()}`
 
-  async function send (method, body, validateResult = isMessageResult) {
+  async function send (method, body) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const { result, retryAfter } = await postRequest(`${url}/${method}`, body, request, timeoutMs, validateResult)
+      const { result, retryAfter } = await postMessage(`${url}/${method}`, body, request, timeoutMs)
       if (result) {
         return result
       }
@@ -161,15 +158,6 @@ export function createTelegramClient ({
 
   return {
     chatId: normalizedChatId,
-    async setChatPhoto (photo) {
-      if (!Buffer.isBuffer(photo) || photo.length === 0) {
-        throw telegramError("Telegram chat photo must be a nonempty PNG Buffer", false)
-      }
-      const form = new FormData()
-      form.append("chat_id", normalizedChatId)
-      form.append("photo", new Blob([photo], { type: "image/png" }), "chat-photo.png")
-      return send("setChatPhoto", form, result => result === true)
-    },
     async sendRichMessage (richMessage, files = []) {
       return send("sendRichMessage", messageForm(normalizedChatId, richMessage, files))
     },

@@ -64,13 +64,11 @@ export function buildTelegramRelease (report, { reportUrl } = {}) {
     ? report.reportCreatedAt
     : closedAt
   const html = renderTelegramHtml(report, { candidates, createdAt, reportUrl })
-  const altMarketStatus = (report.altMarketBackground ?? report.marketContext?.altMarketBackground)?.status
 
   return {
     schemaVersion: 2,
     asOf: report.asOf,
     closedAt,
-    altMarketStatus: ["up", "down", "mixed"].includes(altMarketStatus) ? altMarketStatus : "unavailable",
     demo: report.demo === true,
     eligibleCount: selection.eligibleCount,
     omittedCount: selection.omittedCount,

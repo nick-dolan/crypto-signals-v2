@@ -1,40 +1,13 @@
-import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 
 import { createTelegramClient } from "../../api/telegram-api.js"
-import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isObject, isString } from "../../helpers/utils.typed.js"
-
-async function updateChatPhoto (status, client, directory) {
-  status = ["up", "down", "mixed"].includes(status) ? status : "unavailable"
-  const photo = await fs.readFile(new URL(`./avatars/${status}.png`, import.meta.url))
-  const photoHash = createHash("sha256").update(photo).digest("hex")
-  const statePath = path.resolve(directory, "chat-photos", `${encodeURIComponent(client.chatId)}.json`)
-  let previous
-  try {
-    previous = JSON.parse(await fs.readFile(statePath, "utf8"))
-  } catch (error) {
-    if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) {
-      throw error
-    }
-  }
-  if (previous?.chatId === client.chatId && previous?.status === status && previous?.photoHash === photoHash) {
-    return
-  }
-
-  await fs.mkdir(path.dirname(statePath), { recursive: true })
-  // An unconfirmed change may still replace the photo, so invalidate the old state first.
-  await fs.rm(statePath, { force: true })
-  await client.setChatPhoto(photo)
-  await fs.writeFile(statePath, JSON.stringify({ chatId: client.chatId, status, photoHash }), "utf8")
-}
 
 export async function sendTelegramRelease (release, {
   reportId,
   client = createTelegramClient(),
   directory = "output/telegram-delivery",
-  reportError = reportStepError,
 } = {}) {
   if (!isString(reportId) || !/^[a-z\d_-]{1,80}$/i.test(reportId)) {
     throw new Error("Telegram delivery requires a valid step 13 report ID")
@@ -62,12 +35,6 @@ export async function sendTelegramRelease (release, {
   await fs.mkdir(directory, { recursive: true })
   const receiptPath = path.resolve(directory, `${reportId}.json`)
   const startedAt = new Date().toISOString()
-  try {
-    await updateChatPhoto(manifest.altMarketStatus, client, directory)
-  } catch (error) {
-    await reportError(error, { step: "step14-telegram.js", operation: "set_chat_photo", source: manifest.source })
-  }
-
   let message
   try {
     message = await client.sendRichMessage(manifest.richMessage, files)

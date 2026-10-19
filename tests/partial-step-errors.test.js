@@ -165,7 +165,6 @@ test("a Telegram receipt failure retains its I/O cause without sending the relea
     schemaVersion: 2, source: "reports/test-report", richMessage: { text: "Report" }, candidates: [],
   }))
   t.mock.method(fs, "mkdir", async () => {})
-  t.mock.method(fs, "rm", async () => {})
   t.mock.method(fs, "writeFile", async () => {
     throw error
   })
@@ -173,7 +172,6 @@ test("a Telegram receipt failure retains its I/O cause without sending the relea
 
   await assert.rejects(sendTelegramRelease({ manifestPath: "memory/release.json" }, {
     reportId: "test-report", client,
-    reportError: async () => {},
   }), (failure) => {
     assert.equal(failure.cause, error)
     assert.match(failure.message, /do not resend blindly/)
