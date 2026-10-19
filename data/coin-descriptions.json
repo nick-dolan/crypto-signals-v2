@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-13T10:28:53.180Z",
+  "generatedAt": "2026-10-19T13:01:01.922Z",
   "language": "ru",
   "universe": {
     "sourcePath": "tmp/step1-crypto-universe.json",
-    "sourceGeneratedAt": "2026-10-13T10:28:14.409Z"
+    "sourceGeneratedAt": "2026-10-19T13:00:19.880Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 276,
+  "coinCount": 279,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -4038,6 +4038,54 @@
         {
           "url": "https://www.jito.network/blog/announcing-jto-the-jito-governance-token/",
           "checkedAt": "2026-10-13T10:28:50.036Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTRUTHSW",
+      "symbol": "TRUTH",
+      "name": "Swarm Network",
+      "description": "Swarm Network создаёт слой проверки данных для блокчейна: распределённые ИИ-агенты и криптографические доказательства позволяют проверять данные, в том числе конфиденциальные, и передавать результат в блокчейн. Токен TRUTH используется для участия в сетевых операциях и координации, а также для доступа к сервисам сети.",
+      "sources": [
+        {
+          "url": "https://gitbook.swarmnetwork.ai/tokenomics",
+          "checkedAt": "2026-10-14T07:00:44.869Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/swarm-network-2",
+          "checkedAt": "2026-10-14T07:00:44.914Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCZEREBRO",
+      "symbol": "ZEREBRO",
+      "name": "Zerebro",
+      "description": "Zerebro — автономная AI-система, предназначенная для создания, распространения и анализа контента на социальных и децентрализованных платформах. CoinGecko указывает, что её токен ZEREBRO выпущен в сети Solana.",
+      "sources": [
+        {
+          "url": "https://zerebro.org/",
+          "checkedAt": "2026-10-15T13:01:21.076Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/zerebro",
+          "checkedAt": "2026-10-15T13:01:21.486Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCICNT",
+      "symbol": "ICNT",
+      "name": "Impossible Cloud Network",
+      "description": "Impossible Cloud Network — децентрализованная сеть для доступа к распределённым ресурсам хранения и вычислений. Её токен ICNT используется для доступа к ресурсам сети, а также как залог для аппаратных провайдеров и средство вознаграждения участников.",
+      "sources": [
+        {
+          "url": "https://docs.icn.global/icn-economics/tokenomics",
+          "checkedAt": "2026-10-19T13:00:59.403Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/impossible-cloud-network-token",
+          "checkedAt": "2026-10-19T13:00:59.458Z"
         }
       ]
     }
