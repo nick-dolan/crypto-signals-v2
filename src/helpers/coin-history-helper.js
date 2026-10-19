@@ -1,6 +1,9 @@
 import { readTmpJson } from "./fs-helper.js"
+import { reportStepError } from "./step-error-helper.js"
 import { isArray, isError, isFinite, isSafeInteger } from "./utils.typed.js"
 import { createBootstrapDataRelativePath } from "../steps/step2-data-bootstrap/check-coin-data-coverage.js"
+
+class CoinHistoryUnavailableError extends Error {}
 
 function indexHistoryPeriods (periods, asOfTimestamp, warnings, label) {
   const byTime = new Map()
@@ -58,8 +61,11 @@ export function buildCoinHistory (data, coin, asOfTimestamp, { includeOpenIntere
     throw new Error("история должна использовать интервал 1h")
   }
 
-  if (!isArray(data.chart?.periods) || data.chart.periods.length === 0) {
-    throw new Error("свечи отсутствуют")
+  if (!isArray(data.chart?.periods)) {
+    throw new Error("некорректный формат свечей")
+  }
+  if (data.chart.periods.length === 0) {
+    throw new CoinHistoryUnavailableError("свечи отсутствуют")
   }
 
   const warnings = new Set()
@@ -80,7 +86,7 @@ export function buildCoinHistory (data, coin, asOfTimestamp, { includeOpenIntere
     .sort((first, second) => first.time - second.time)
 
   if (periods.at(-1)?.time !== asOfTimestamp) {
-    throw new Error("нет корректной свечи на asOf: история устарела или неполна")
+    throw new CoinHistoryUnavailableError("нет корректной свечи на asOf: история устарела или неполна")
   }
 
   if (periods.length < 168) {
@@ -117,13 +123,20 @@ export function buildCoinHistory (data, coin, asOfTimestamp, { includeOpenIntere
 export async function readCoinHistory (
   coin,
   asOfTimestamp,
-  { readCoinData = readTmpJson, includeOpenInterest = true } = {},
+  { readCoinData = readTmpJson, includeOpenInterest = true, step, reportError = reportStepError } = {},
 ) {
   try {
     const data = await readCoinData(createBootstrapDataRelativePath(coin))
 
     return buildCoinHistory(data, coin, asOfTimestamp, { includeOpenInterest })
   } catch (error) {
+    // Pipeline callers opt in; web requests keep unavailable history as optional data.
+    if (step && error?.code !== "ENOENT" && !(error instanceof CoinHistoryUnavailableError)) {
+      await reportError(error, {
+        step, operation: "read_coin_history", symbol: coin.symbol,
+        source: "step2-data-bootstrap", baseCurrencyId: coin.baseCurrencyId,
+      })
+    }
     return {
       candles: [],
       volume: [],

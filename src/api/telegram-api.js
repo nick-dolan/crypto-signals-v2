@@ -2,8 +2,8 @@ import "dotenv/config"
 import { setTimeout as delay } from "node:timers/promises"
 import { isArray, isFinite, isFunction, isObject, isSafeInteger, isString } from "../helpers/utils.typed.js"
 
-function telegramError (message, deliveryUnknown) {
-  return Object.assign(new Error(message), { deliveryUnknown })
+function telegramError (message, deliveryUnknown, details = {}) {
+  return Object.assign(new Error(message), { deliveryUnknown, ...details })
 }
 
 function messageForm (chatId, richMessage, files) {
@@ -41,7 +41,7 @@ function messageForm (chatId, richMessage, files) {
   }
 }
 
-async function postRichMessage (url, body, request, timeoutMs) {
+async function postMessage (url, body, request, timeoutMs) {
   const controller = new AbortController()
   let deliveryUnknown = true
   let timeoutId
@@ -58,15 +58,15 @@ async function postRichMessage (url, body, request, timeoutMs) {
     try {
       response = await request(url, { method: "POST", body, redirect: "manual", signal: controller.signal })
       status = response.status
-    } catch {
-      throw telegramError("Telegram transport failure", true)
+    } catch (error) {
+      throw telegramError("Telegram transport failure", true, { cause: error })
     }
 
     if (!isSafeInteger(status) || status < 200 || status > 599) {
       throw telegramError("Telegram invalid response", true)
     }
     if (status >= 500) {
-      throw telegramError("Telegram server error", true)
+      throw telegramError(`Telegram server error: HTTP ${status}`, true, { status })
     }
     if (status >= 300 && status < 400) {
       throw telegramError("Telegram redirects are not allowed", false)
@@ -90,16 +90,14 @@ async function postRichMessage (url, body, request, timeoutMs) {
     }
 
     if (payload?.ok === false && isSafeInteger(payload.error_code) && payload.error_code >= 500 && payload.error_code <= 599) {
-      throw telegramError("Telegram server error", true)
+      throw telegramError(`Telegram server error: ${payload.description || payload.error_code}`, true, { status, code: payload.error_code })
     }
     if (status === 429 || (payload?.ok === false && payload.error_code === 429)) {
       return { retryAfter: payload?.ok === false ? payload.parameters?.retry_after : undefined }
     }
-    if (status >= 400) {
-      throw telegramError(`Telegram HTTP rejection: ${status}`, false)
-    }
-    if (payload?.ok === false) {
-      throw telegramError("Telegram rejected the rich message", false)
+    if (status >= 400 || payload?.ok === false) {
+      const detail = isString(payload?.description) ? `: ${payload.description}` : ""
+      throw telegramError(`Telegram HTTP rejection: ${status}${detail}`, false, { status, code: payload?.error_code })
     }
     if (payload?.ok !== true || !isObject(payload.result)
       || !isSafeInteger(payload.result.message_id) || payload.result.message_id <= 0) {
@@ -136,29 +134,42 @@ export function createTelegramClient ({
   }
 
   const normalizedChatId = String(chatId).trim()
-  const url = `https://api.telegram.org/bot${token.trim()}/sendRichMessage`
+  const url = `https://api.telegram.org/bot${token.trim()}`
+
+  async function send (method, body) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { result, retryAfter } = await postMessage(`${url}/${method}`, body, request, timeoutMs)
+      if (result) {
+        return result
+      }
+      if (attempt > 0) {
+        throw telegramError("Telegram rate limit exceeded after one retry", false)
+      }
+      if (!isSafeInteger(retryAfter) || retryAfter <= 0 || retryAfter > Math.min(60, timeoutMs / 1_000)) {
+        throw telegramError("Telegram rate limit exceeded; retry_after exceeds the request time limit", false)
+      }
+      try {
+        await sleep(retryAfter * 1_000)
+      } catch (error) {
+        throw telegramError("Telegram rate-limit wait failed", false, { cause: error })
+      }
+    }
+  }
 
   return {
     chatId: normalizedChatId,
     async sendRichMessage (richMessage, files = []) {
-      const body = messageForm(normalizedChatId, richMessage, files)
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const { result, retryAfter } = await postRichMessage(url, body, request, timeoutMs)
-        if (result) {
-          return result
-        }
-        if (attempt > 0) {
-          throw telegramError("Telegram rate limit exceeded after one retry", false)
-        }
-        if (!isSafeInteger(retryAfter) || retryAfter <= 0 || retryAfter > 60) {
-          throw telegramError("Telegram rate limit exceeded; retry_after must be 1–60 seconds", false)
-        }
-        try {
-          await sleep(retryAfter * 1_000)
-        } catch {
-          throw telegramError("Telegram rate-limit wait failed", false)
-        }
+      return send("sendRichMessage", messageForm(normalizedChatId, richMessage, files))
+    },
+    async sendMessage (text) {
+      if (!isString(text) || !text.trim() || text.length > 4_096) {
+        throw telegramError("Telegram message must contain 1–4096 characters", false)
       }
+      return send("sendMessage", new URLSearchParams({
+        chat_id: normalizedChatId,
+        text,
+        link_preview_options: JSON.stringify({ is_disabled: true }),
+      }))
     },
   }
 }

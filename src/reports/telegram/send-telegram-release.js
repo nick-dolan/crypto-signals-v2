@@ -49,8 +49,8 @@ export async function sendTelegramRelease (release, {
       reportId, chatId: client.chatId, status: "sent", messageId: message.message_id,
       releaseDirectory: path.dirname(release.manifestPath), startedAt, sentAt: new Date().toISOString(),
     }, null, 2), "utf8")
-  } catch {
-    throw new Error(`Telegram sent message ${message.message_id}, but its delivery record could not be saved. Check ${receiptPath}; do not resend blindly.`)
+  } catch (error) {
+    throw new Error(`Telegram sent message ${message.message_id}, but its delivery record could not be saved. Check ${receiptPath}; do not resend blindly.`, { cause: error })
   }
   return { status: "sent", messageId: message.message_id, receiptPath }
 }

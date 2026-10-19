@@ -1,4 +1,5 @@
 import { readTmpJson } from "../../helpers/fs-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
 
@@ -67,7 +68,7 @@ function buildClosePoints (periods, { asOf, snapshotClosedAt }) {
   })
 }
 
-async function loadHistory (references, data, readCoinData) {
+async function loadHistory (references, data, readCoinData, reportError) {
   const { baseCurrencyId, symbol } = references[0]
   const markets = [...new Set(references.map(coin => coin.marketSymbol).filter(isText))]
   const history = {
@@ -90,13 +91,19 @@ async function loadHistory (references, data, readCoinData) {
       history.warning = `История ${symbol} неполная: отсутствуют положительные цены закрытия для ${missingCount} из 169 часов; пропуски не заполнены.`
     }
   } catch (error) {
+    if (error?.code !== "ENOENT") {
+      await reportError(error, {
+        step: "step13-report.js", operation: "read_peer_history", symbol,
+        source: "step2-data-bootstrap", baseCurrencyId,
+      })
+    }
     history.warning = `История ${symbol} недоступна: ${isError(error) ? error.message : "не удалось прочитать сохранённые данные шага 2"}.`
   }
 
   return [baseCurrencyId, history]
 }
 
-export async function buildPeerRadarHistories (data, { readCoinData = readTmpJson } = {}) {
+export async function buildPeerRadarHistories (data, { readCoinData = readTmpJson, reportError = reportStepError } = {}) {
   const coins = new Map()
   for (const { coin, leaders } of data.observations) {
     for (const reference of [coin, ...leaders]) {
@@ -108,6 +115,6 @@ export async function buildPeerRadarHistories (data, { readCoinData = readTmpJso
   }
 
   return Object.fromEntries(await Promise.all(
-    [...coins.values()].map(references => loadHistory(references, data, readCoinData)),
+    [...coins.values()].map(references => loadHistory(references, data, readCoinData, reportError)),
   ))
 }

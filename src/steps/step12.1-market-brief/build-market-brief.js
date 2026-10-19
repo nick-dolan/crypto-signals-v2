@@ -1,8 +1,10 @@
+import { redactSecrets } from "../../helpers/error-helper.js"
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
-import { isFinite, isString } from "../../helpers/utils.typed.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
+import { isError, isFinite, isString } from "../../helpers/utils.typed.js"
 import { collectMarketSources } from "./collect-market-sources.js"
 import { deduplicateMarketSources } from "./deduplicate-market-sources.js"
-import { InvalidMarketBriefError, parseMarketBrief } from "./parse-market-brief.js"
+import { parseMarketBrief } from "./parse-market-brief.js"
 
 function agentPayload (collection, groups) {
   const sources = new Map(collection.sources.map(source => [source.id, source]))
@@ -34,6 +36,7 @@ export async function buildMarketBrief (systemPrompt, {
   referenceTimestamp = Math.floor(Date.now() / 1_000),
   collectSources = collectMarketSources,
   callAgent = callModel,
+  reportError = reportStepError,
 } = {}) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
     throw new Error("Market brief system prompt is required")
@@ -42,7 +45,7 @@ export async function buildMarketBrief (systemPrompt, {
     throw new Error("Market brief marketAsOf must be a timestamp or null")
   }
   const modelSettings = getModelSettings("marketBrief")
-  const collection = await collectSources({ referenceTimestamp })
+  const collection = await collectSources({ referenceTimestamp, reportError })
   const groups = deduplicateMarketSources(collection.sources)
   const incomplete = collection.coverage.some(source => ["partial", "failed"].includes(source.status))
   const failed = collection.coverage.some(source => source.status === "failed" || source.error)
@@ -80,10 +83,14 @@ export async function buildMarketBrief (systemPrompt, {
     output.status = incomplete ? "partial" : items.length ? "available" : "empty"
     output.analysis.status = "complete"
   } catch (error) {
+    await reportError(error, {
+      step: "step12.1-market-brief.js", operation: "analyze_market_brief",
+      source: modelSettings.provider, provider: modelSettings.provider, model: modelSettings.model,
+    })
     output.status = "unavailable"
     output.warning = "Не удалось сформировать сводку. Собранные источники сохранены; основной анализ не изменён."
     output.analysis.status = "failed"
-    output.analysis.error = error instanceof InvalidMarketBriefError ? error.message : "Запрос к модели не выполнен"
+    output.analysis.error = redactSecrets(isError(error) ? error.message : String(error))
   }
   output.generatedAt = new Date().toISOString()
   return output

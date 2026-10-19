@@ -1,12 +1,14 @@
 import path from "node:path"
 import { parallel } from "radash"
 
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFunction, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { parsePatternEnrichment } from "./parse-pattern-enrichment.js"
 
-async function enrichCandidate (input, candidate, systemPrompt, modelSettings, callAgent, writeJson) {
+async function enrichCandidate (input, candidate, systemPrompt, modelSettings, callAgent, writeJson, reportError) {
   let content
   let result
   if (!candidate.ready) {
@@ -41,6 +43,10 @@ async function enrichCandidate (input, candidate, systemPrompt, modelSettings, c
         caveat: [candidate.caveat, enrichment.caveat].filter(Boolean).join(" ") || null,
       }
     } catch (error) {
+      await reportError(error, {
+        step: "step8.1-pattern-enrichment.js", operation: "analyze_pattern", symbol: candidate.symbol,
+        source: modelSettings.provider, provider: modelSettings.provider, model: modelSettings.model,
+      })
       result = {
         symbol: candidate.symbol,
         status: "unavailable",
@@ -62,6 +68,7 @@ async function enrichCandidate (input, candidate, systemPrompt, modelSettings, c
 export async function enrichCandidatesWithPatterns (input, systemPrompt, {
   callAgent = callModel,
   writeJson = writeTmpJson,
+  reportError = reportStepError,
   concurrency = 10,
 } = {}) {
   if (!isString(systemPrompt) || !systemPrompt.trim()) {
@@ -80,9 +87,16 @@ export async function enrichCandidatesWithPatterns (input, systemPrompt, {
   if (modelSettings.provider !== "copilot-sdk") {
     throw new Error("Pattern image analysis requires copilot-sdk attachments")
   }
-  const candidates = await parallel(concurrency, input.candidates, candidate => (
-    enrichCandidate(input, candidate, systemPrompt, modelSettings, callAgent, writeJson)
-  )).catch((error) => {
+  const candidates = await parallel(concurrency, input.candidates, async (candidate) => {
+    try {
+      return await enrichCandidate(input, candidate, systemPrompt, modelSettings, callAgent, writeJson, reportError)
+    } catch (error) {
+      throw withErrorContext(error, {
+        step: "step8.1-pattern-enrichment.js", operation: "write_pattern_analysis",
+        symbol: candidate.symbol, source: input.directory,
+      })
+    }
+  }).catch((error) => {
     throw error.errors?.[0] ?? error
   })
   return {

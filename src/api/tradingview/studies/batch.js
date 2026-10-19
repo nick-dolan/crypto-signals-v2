@@ -1,4 +1,5 @@
 import { cluster, select } from "radash"
+import { withErrorContext } from "../../../helpers/error-helper.js"
 import {
   isArray,
   isError,
@@ -173,7 +174,10 @@ function setChartMarket (
     timeoutId = setTimeout(() => {
       finish(
         reject,
-        new Error(`TradingView symbol ${symbol} loading timed out`),
+        withErrorContext(new Error(`TradingView symbol ${symbol} loading timed out`), {
+          source: "tradingview", operation: "load_chart_symbol", marketSymbol: symbol,
+          timeoutMs, type: "timeout", code: "ETIMEDOUT",
+        }),
       )
     }, timeoutMs)
 

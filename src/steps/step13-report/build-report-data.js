@@ -92,7 +92,7 @@ export async function buildReportData (
   analysis,
   payload,
   shortlist,
-  { readCoinData = readTmpJson } = {},
+  { readCoinData = readTmpJson, reportError } = {},
 ) {
   const { asOfTimestamp, rowsBySymbol, shortlistBySymbol, topBySymbol } = validateReportInputs(
     analysis, payload, shortlist,
@@ -124,7 +124,7 @@ export async function buildReportData (
       baseCurrencyId: coin.baseCurrencyId,
       marketSymbol: coin.marketSymbol,
       features: row,
-      history: await readCoinHistory(coin, asOfTimestamp, { readCoinData }),
+      history: await readCoinHistory(coin, asOfTimestamp, { readCoinData, step: "step13-report.js", reportError }),
     })
   }
 

@@ -1,5 +1,6 @@
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isObject, isSafeInteger } from "../../helpers/utils.typed.js"
 
 export function validatePositiveInteger (value, name) {
@@ -94,11 +95,16 @@ function createFailedCheckResult (error) {
   }
 }
 
+export function withRequestErrors (result, errors) {
+  return Object.defineProperty(result, "requestErrors", { value: errors })
+}
+
 export async function checkWithRetry (
   checkCoverage,
   coin,
   maxAttempts,
   onProgress,
+  { reportError = reportStepError } = {},
 ) {
   let result
   let previousUnavailableMetrics = new Set()
@@ -107,9 +113,11 @@ export async function checkWithRetry (
     try {
       result = await checkCoverage(coin, attempt)
     } catch (error) {
-      result = createFailedCheckResult(error)
+      result = withRequestErrors(createFailedCheckResult(error), [error])
     }
 
+    // Capture request failures before the public result is spread without internal metadata.
+    const requestErrors = result?.requestErrors ?? []
     const unavailableMetrics = new Set(
       isArray(result?.unavailableMetrics)
         ? result.unavailableMetrics
@@ -124,6 +132,16 @@ export async function checkWithRetry (
     }
 
     if (result?.complete || !result?.retryable || attempt === maxAttempts) {
+      for (const error of new Set(requestErrors)) {
+        if ((error?.code ?? error?.context?.code) === "ENOENT"
+          || (error?.context?.type ?? error?.type) === "unavailable") {
+          continue
+        }
+        await reportError(error, {
+          step: "step2-data-bootstrap.js", operation: "check_coin_coverage", symbol: coin.symbol,
+          marketSymbol: coin.market?.tradingViewSymbol, attempt,
+        })
+      }
       return {
         attempts: attempt,
         result,

@@ -1,4 +1,5 @@
 import { readTmpJson } from "../../helpers/fs-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { validateBriefEvents, validateBriefItems, validateBriefParagraphs } from "../step12.1-market-brief/parse-market-brief.js"
 import { normalizeSourceUrl } from "../step12.1-market-brief/source-normalization.js"
@@ -68,24 +69,35 @@ function unavailable (marketAsOf, warning) {
   }
 }
 
-export async function readMarketBriefReport (marketAsOf, { readJson = readTmpJson } = {}) {
+export async function readMarketBriefReport (marketAsOf, { readJson = readTmpJson, reportError = reportStepError } = {}) {
   let data
   try {
     data = await readJson("step12.1-market-brief.json")
   } catch (error) {
-    return unavailable(marketAsOf, error.code === "ENOENT"
+    if (error?.code !== "ENOENT") {
+      await reportError(error, {
+        step: "step13-report.js", operation: "read_market_brief", source: "step12.1-market-brief.json",
+      })
+    }
+    return unavailable(marketAsOf, error?.code === "ENOENT"
       ? "Сводка событий не подготовлена. Запустите шаг 12.1 и повторите шаг 13."
       : "Не удалось прочитать сводку событий. Основной отчёт доступен без неё.")
   }
   try {
     if (!validBrief(data)) {
+      await reportError(new Error("Invalid step 12.1 market brief format"), {
+        step: "step13-report.js", operation: "validate_market_brief", source: "step12.1-market-brief.json",
+      })
       return unavailable(marketAsOf, "Некорректный результат шага 12.1. Повторите сбор сводки; основной отчёт сохранён.")
     }
     if (data.marketAsOf !== marketAsOf) {
       return unavailable(marketAsOf, "Сводка событий относится к другому запуску анализа. Повторите шаг 12.1; старая сводка не показана.")
     }
     return data
-  } catch {
+  } catch (error) {
+    await reportError(error, {
+      step: "step13-report.js", operation: "validate_market_brief", source: "step12.1-market-brief.json",
+    })
     return unavailable(marketAsOf, "Некорректный результат шага 12.1. Повторите сбор сводки; основной отчёт сохранён.")
   }
 }

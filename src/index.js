@@ -1,27 +1,9 @@
-import { spawn } from "node:child_process"
-
+import { redactSecrets } from "./helpers/error-helper.js"
 import { resetTmpDirectory } from "./helpers/fs-helper.js"
+import { runStepProcess } from "./helpers/run-step-process.js"
+import { reportStepError } from "./helpers/step-error-helper.js"
 import { isError } from "./helpers/utils.typed.js"
 import { runPipeline } from "./steps/run-pipeline.js"
-
-function runStep (scriptPath, { concurrency } = {}) {
-  return new Promise((resolve, reject) => {
-    console.log("\n================================================")
-    console.log(`🚀 Running ${scriptPath}...`)
-    console.log("================================================\n")
-
-    const args = [scriptPath, ...(concurrency === undefined ? [] : ["--concurrency", String(concurrency)])]
-    const child = spawn(process.execPath, args, {
-      stdio: "inherit",
-      cwd: process.cwd(),
-      env: process.env,
-    })
-
-    child.on("close", code => resolve(code === 0))
-
-    child.on("error", reject)
-  })
-}
 
 async function runAll () {
   const startTime = Date.now()
@@ -31,7 +13,7 @@ async function runAll () {
     await resetTmpDirectory()
     console.log("\n🧹 Cleared tmp directory")
 
-    const { coinDescriptionsFailed, peerRadarFailed, marketBriefFailed, exitCode } = await runPipeline({ runStep })
+    const { coinDescriptionsFailed, peerRadarFailed, marketBriefFailed, exitCode } = await runPipeline({ runStep: runStepProcess })
     if (exitCode) {
       process.exitCode = exitCode
     }
@@ -56,10 +38,13 @@ async function runAll () {
       console.log(`\n✨ All steps completed successfully in ${duration}s! · ${date} ${time} UTC+3`)
     }
   } catch (error) {
-    const message = isError(error) ? error.message : "Unknown error"
+    const message = redactSecrets(isError(error) ? error.message : String(error))
 
     console.error(`\n❌ Pipeline failed: ${message}`)
     process.exitCode = 1
+    if (!error?.reported) {
+      await reportStepError(error, { step: "pipeline", fatal: true })
+    }
   }
 }
 

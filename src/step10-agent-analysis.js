@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 
+import { withErrorContext } from "./helpers/error-helper.js"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { isPrimitive, isString } from "./helpers/utils.typed.js"
@@ -30,16 +31,23 @@ async function runAgentAnalysisStep () {
       && isPrimitive(error.response)
       && isString(error.response)
     ) {
-      const invalidOutputPath = await writeTmpJson(
-        "step10-agent-analysis.invalid.json",
-        {
-          asOf: payload.asOf,
-          error: error.message,
-          response: error.response,
-        },
-      )
+      try {
+        const invalidOutputPath = await writeTmpJson(
+          "step10-agent-analysis.invalid.json",
+          {
+            asOf: payload.asOf,
+            error: error.message,
+            response: error.response,
+          },
+        )
 
-      console.error(`Saved invalid Copilot response to ${invalidOutputPath}`)
+        console.error(`Saved invalid Copilot response to ${invalidOutputPath}`)
+      } catch (writeError) {
+        error.cleanupErrors = [...(error.cleanupErrors ?? []), withErrorContext(writeError, {
+          step: "step10-agent-analysis.js", operation: "write_invalid_response",
+          source: "step10-agent-analysis.invalid.json",
+        })]
+      }
     }
 
     throw error

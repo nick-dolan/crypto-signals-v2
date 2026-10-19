@@ -4,6 +4,7 @@ import { parallel } from "radash"
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import {
   isArray,
   isError,
@@ -156,6 +157,7 @@ async function fetchCandidateNews (
   coin,
   referenceTimestamp,
   fetchNews,
+  reportError,
 ) {
   try {
     const { items } = await fetchNews({ symbol: coin.tradingViewSymbol })
@@ -168,6 +170,10 @@ async function fetchCandidateNews (
       error: null,
     }
   } catch (error) {
+    await reportError(error, {
+      step: "step6-news-enrichment.js", operation: "fetch_news", symbol: coin.symbol,
+      source: "tradingview", marketSymbol: coin.tradingViewSymbol,
+    })
     return {
       symbol: coin.symbol,
       requestedSymbol: coin.tradingViewSymbol,
@@ -238,7 +244,7 @@ function createUnavailableContent (contentError = null) {
   }
 }
 
-async function enrichArticle (article, fetchStory) {
+async function enrichArticle (article, fetchStory, reportError) {
   const item = {
     ...article.item,
     matchedCandidates: [...article.matchedCandidates],
@@ -260,6 +266,11 @@ async function enrichArticle (article, fetchStory) {
       }),
     }
   } catch (error) {
+    await reportError(error, {
+      step: "step6-news-enrichment.js", operation: "fetch_article_content",
+      symbol: item.matchedCandidates.join(", "), source: "tradingview",
+      articleId: item.id, url: item.tradingViewUrl,
+    })
     return {
       ...item,
       ...createUnavailableContent(getErrorMessage(error)),
@@ -272,6 +283,7 @@ export async function enrichCandidatesWithNews (
   {
     fetchNews = fetchTradingViewNews,
     fetchStory = fetchTradingViewNewsStory,
+    reportError = reportStepError,
     referenceTimestamp = getDefaultReferenceTimestamp(),
   } = {},
 ) {
@@ -285,12 +297,12 @@ export async function enrichCandidatesWithNews (
 
   const candidates = validateInput(shortlist)
   const candidateNews = await parallel(5, candidates, candidate => (
-    fetchCandidateNews(candidate, referenceTimestamp, fetchNews)
+    fetchCandidateNews(candidate, referenceTimestamp, fetchNews, reportError)
   ))
   const articles = collectArticles(candidateNews)
   const enrichedArticles = await parallel(5, articles, async article => ({
     ids: article.ids,
-    item: await enrichArticle(article, fetchStory),
+    item: await enrichArticle(article, fetchStory, reportError),
   }))
   const enrichedArticleById = new Map(enrichedArticles.flatMap(({ ids, item }) => (
     [...ids].map(id => [id, item])

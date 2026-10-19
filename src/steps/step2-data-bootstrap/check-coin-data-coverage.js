@@ -1,11 +1,12 @@
 import path from "node:path"
 
 import { fetchTradingViewChartStudies } from "../../api/tradingview/chart-studies.js"
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { writeTmpJson } from "../../helpers/fs-helper.js"
 import { getClosedHourlyBoundary } from "../../helpers/hourly-time-helper.js"
 import { isArray, isFinite, isFunction, isObject, isString } from "../../helpers/utils.typed.js"
 import { createCoverageStudyRequests } from "./coverage-study-definitions.js"
-import { getClosedHourlyPeriods } from "./data-coverage-helpers.js"
+import { getClosedHourlyPeriods, withRequestErrors } from "./data-coverage-helpers.js"
 import { evaluateCoinCoverage } from "./evaluate-coin-coverage.js"
 
 function summarizeBootstrapStudyCoverage (periods, fields, sourceCoverage) {
@@ -322,8 +323,14 @@ export function createCoinDataCoverageChecker ({
       },
     )
 
+    const requestErrors = Object.entries(fetchedChartData.studies ?? {})
+      .filter(([, result]) => result?.status === "rejected")
+      .map(([study, result]) => withErrorContext(result.reason, {
+        source: "tradingview", operation: "fetch_study", study, timeoutMs,
+      }))
+
     if (!coverage.complete) {
-      return coverage
+      return withRequestErrors(coverage, requestErrors)
     }
 
     const hourlyData = createBootstrapHourlyData(
@@ -338,10 +345,10 @@ export function createCoinDataCoverageChecker ({
     )
     const dataFile = await saveHourlyData(coin, hourlyData)
 
-    return {
+    return withRequestErrors({
       ...coverage,
       dataFile,
-    }
+    }, requestErrors)
   }
 }
 

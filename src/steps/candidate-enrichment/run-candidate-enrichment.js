@@ -5,8 +5,10 @@ import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTradingViewNews } from "../../api/tradingview/news.js"
 import { fetchTweetPage } from "../../api/twitter-api.js"
 import { createConcurrencyLimiter } from "../../helpers/concurrency-limiter.js"
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { readTmpJson, writeTmpJson } from "../../helpers/fs-helper.js"
 import { callModel } from "../../helpers/model-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isFinite, isFunction, isSafeInteger } from "../../helpers/utils.typed.js"
 import { runNewsEnrichmentStep } from "../../step6-news-enrichment.js"
 import { runTwitterEnrichmentStep, validateTwitterApiKey } from "../../step7-twitter-enrichment.js"
@@ -43,6 +45,7 @@ export async function runCandidateEnrichment ({
   enrichTwitter = enrichCandidatesWithTwitter,
   enrichContext = enrichCandidatesWithContext,
   enrichPatterns = enrichCandidatesWithPatterns,
+  reportError = reportStepError,
 } = {}) {
   const limiter = createConcurrencyLimiter(concurrency)
   if (concurrency > 10) {
@@ -57,7 +60,13 @@ export async function runCandidateEnrichment ({
     throw new Error("Candidate enrichment dependencies must be functions")
   }
   if (enrichTwitter === enrichCandidatesWithTwitter && fetchPage === fetchTweetPage) {
-    validateTwitterApiKey()
+    try {
+      validateTwitterApiKey()
+    } catch (error) {
+      throw withErrorContext(error, {
+        step: "step7-twitter-enrichment.js", operation: "validate_api_key", source: "twitterapi.io",
+      })
+    }
   }
 
   const shortlist = await readJson("step5-preliminary-filter.json")
@@ -70,7 +79,8 @@ export async function runCandidateEnrichment ({
     if (!failed) {
       failed = true
       failure = error
-      limiter.cancel(error)
+      // Cancelled workers must not attach their coin/context to the original failure.
+      limiter.cancel(new Error("Candidate enrichment cancelled", { cause: error }))
     }
   }
 
@@ -81,13 +91,14 @@ export async function runCandidateEnrichment ({
     return pending
   }
 
-  function required (callback) {
+  function required (callback, context = {}) {
     return async (...args) => {
       try {
         return await track(() => callback(...args))
       } catch (error) {
-        fail(error)
-        throw error
+        const contextualError = withErrorContext(error, context)
+        fail(contextualError)
+        throw contextualError
       }
     }
   }
@@ -99,56 +110,71 @@ export async function runCandidateEnrichment ({
     enrich: required(async (input) => {
       const output = await enrichNews(input, {
         referenceTimestamp,
+        reportError,
         fetchNews: (...args) => track(() => fetchNews(...args)),
         fetchStory: (...args) => track(() => fetchStory(...args)),
       })
       validatePublicationOutput(shortlist, output, "news", referenceTimestamp)
       return output
-    }),
-  }))()
+    }, { step: "step6-news-enrichment.js", operation: "enrich_news", source: "tradingview" }),
+  }), { step: "step6-news-enrichment.js", operation: "enrich_news", source: "tradingview" })()
   const twitterTask = required(async () => {
     const output = await enrichTwitter(twitterInput, {
       referenceTimestamp,
+      reportError,
       fetchPage: (...args) => track(() => fetchPage(...args)),
     })
     validatePublicationOutput(shortlist, output, "twitter", referenceTimestamp)
     return output
-  })()
+  }, { step: "step7-twitter-enrichment.js", operation: "enrich_twitter", source: "twitterapi.io" })()
   const patternTask = required(() => runPatternEnrichmentStep({
     readJson: async () => shortlist,
-    readPrompt: required(() => readPrompt("candidate-pattern-enrichment.md")),
-    removeJson: required(removeJson),
-    prepare: required(preparePatterns),
+    readPrompt: required(() => readPrompt("candidate-pattern-enrichment.md"), {
+      step: "step8.1-pattern-enrichment.js", operation: "read_prompt", source: "candidate-pattern-enrichment.md",
+    }),
+    removeJson: required(removeJson, { step: "step8.1-pattern-enrichment.js", operation: "remove_previous_output" }),
+    prepare: required(input => preparePatterns(input, { reportError }), {
+      step: "step8.1-pattern-enrichment.js", operation: "prepare_patterns",
+    }),
     enrich: required((input, prompt) => enrichPatterns(input, prompt, {
       callAgent: (...args) => limiter.run(() => track(() => callAgent(...args))),
       writeJson: write,
-    })),
+      reportError: (error, context) => failed && (error === failure || error?.cause === failure)
+        ? Promise.resolve()
+        : reportError(error, context),
+    }), { step: "step8.1-pattern-enrichment.js", operation: "enrich_patterns" }),
     writeJson: write,
-  }))()
+  }), { step: "step8.1-pattern-enrichment.js", operation: "enrich_patterns" })()
   const contextTask = required(async () => {
     const [news, rawTwitter] = await Promise.all([newsTask, twitterTask])
     if (failed) {
       throw failure
     }
-    const twitter = await runTwitterEnrichmentStep({
+    const twitter = await required(() => runTwitterEnrichmentStep({
       readJson: async () => news,
       enrich: () => mergePublicationEnrichment(shortlist, news, rawTwitter, referenceTimestamp),
       writeJson: write,
-    })
+    }), { step: "step7-twitter-enrichment.js", operation: "merge_publications" })()
     const context = await runContextEnrichmentStep({
       readJson: async () => twitter,
-      readPrompt: required(() => readPrompt("candidate-context-enrichment.md")),
+      readPrompt: required(() => readPrompt("candidate-context-enrichment.md"), {
+        step: "step8-context-enrichment.js", operation: "read_prompt", source: "candidate-context-enrichment.md",
+      }),
       enrich: required((input, prompt) => enrichContext(input, prompt, {
-        callAgent: (...args) => limiter.run(required(async () => {
-          const content = await callAgent(...args)
-          validateContextResponse(content, args[1])
+        callAgent: (prompt, message, settings) => limiter.run(required(async () => {
+          const content = await callAgent(prompt, message, settings)
+          validateContextResponse(content, message)
           return content
+        }, {
+          step: "step8-context-enrichment.js", operation: "summarize_publications",
+          symbol: JSON.parse(message).symbol, source: settings.provider,
+          provider: settings.provider, model: settings.model,
         })),
-      })),
+      }), { step: "step8-context-enrichment.js", operation: "enrich_context" }),
       writeJson: write,
     })
     return { news, twitter, context }
-  })()
+  }, { step: "step8-context-enrichment.js", operation: "enrich_context" })()
 
   const [, , patterns, publications] = await Promise.allSettled([newsTask, twitterTask, patternTask, contextTask])
   await limiter.drain()

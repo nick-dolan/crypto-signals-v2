@@ -23,6 +23,15 @@ test("successful pipeline analyzes candidates before publishing the report and T
   assert.equal(result.exitCode, 0)
 })
 
+test("the pipeline preserves the detailed error returned by a child process", async () => {
+  const failure = new Error("Agent timed out", { cause: new Error("upstream unavailable") })
+  await assert.rejects(runPipeline({
+    runStep: async file => path.basename(file) === "step10-agent-analysis.js"
+      ? { succeeded: false, error: failure }
+      : { succeeded: true },
+  }), error => error === failure)
+})
+
 test("a mandatory calculation failure stops selection and publication", async () => {
   const calls = []
 

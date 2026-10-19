@@ -1,6 +1,7 @@
 import { parallel } from "radash"
 
 import { requestBinanceFuturesJson } from "../../api/binance/request.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 import { createChartUpdater } from "../../web/chart-update.js"
 
@@ -27,6 +28,7 @@ function readQuote (coin, quotes) {
 export async function buildReportChartSnapshots (coins, asOf, {
   updateChartHistory = createChartUpdater({ isArray, isFinite, isSafeInteger, isString }),
   fetchQuotes = () => requestBinanceFuturesJson("/fapi/v2/ticker/price"),
+  reportError = reportStepError,
 } = {}) {
   if (!coins.length) {
     return []
@@ -47,6 +49,10 @@ export async function buildReportChartSnapshots (coins, asOf, {
       }
       return { ...coin, chartSnapshot: { data, quote: null, warning: null } }
     } catch (error) {
+      await reportError(error, {
+        step: "step13-report.js", operation: "update_chart_snapshot", symbol: coin.symbol,
+        source: "binance", marketSymbol: coin.marketSymbol,
+      })
       return {
         ...coin,
         chartSnapshot: { data: null, quote: null, warning: `График при выпуске не обновлён: ${message(error)}` },
@@ -64,16 +70,21 @@ export async function buildReportChartSnapshots (coins, asOf, {
     }
     quotes = new Map(rows.map(row => [row?.symbol, row]))
   } catch (error) {
+    await reportError(error, { step: "step13-report.js", operation: "fetch_release_quotes", source: "binance" })
     warning = `Цена при выпуске не получена: ${message(error)}`
   }
 
-  return snapshots.map((coin) => {
+  return Promise.all(snapshots.map(async (coin) => {
     let quote = null
     let quoteWarning = warning
     if (!quoteWarning) {
       try {
         quote = readQuote(coin, quotes)
       } catch (error) {
+        await reportError(error, {
+          step: "step13-report.js", operation: "read_release_quote", symbol: coin.symbol,
+          source: "binance", marketSymbol: coin.marketSymbol,
+        })
         quoteWarning = message(error)
       }
     }
@@ -85,5 +96,5 @@ export async function buildReportChartSnapshots (coins, asOf, {
         warning: [coin.chartSnapshot.warning, quoteWarning].filter(Boolean).join(". ") || null,
       },
     }
-  })
+  }))
 }

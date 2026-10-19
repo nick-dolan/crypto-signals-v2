@@ -1,6 +1,7 @@
 import { fetchTweetPage } from "../../api/twitter-api.js"
 import { createConcurrencyLimiter } from "../../helpers/concurrency-limiter.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import {
   isArray,
   isError,
@@ -155,6 +156,7 @@ async function enrichCandidate (
   { candidate, symbol },
   referenceTimestamp,
   fetchPage,
+  reportError,
 ) {
   // until_time is exclusive; the local window includes the exact snapshot second.
   const query = [
@@ -182,6 +184,10 @@ async function enrichCandidate (
       },
     }
   } catch (error) {
+    await reportError(error, {
+      step: "step7-twitter-enrichment.js", operation: "fetch_tweets", symbol,
+      source: "twitterapi.io",
+    })
     return {
       ...candidate,
       twitter: {
@@ -200,6 +206,7 @@ export async function enrichCandidatesWithTwitter (
   input,
   {
     fetchPage = fetchTweetPage,
+    reportError = reportStepError,
     referenceTimestamp = getDefaultReferenceTimestamp(input),
   } = {},
 ) {
@@ -214,7 +221,7 @@ export async function enrichCandidatesWithTwitter (
   const candidates = validateInput(input)
   const workers = createConcurrencyLimiter(10)
   const enrichedCandidates = await Promise.all(candidates.map(candidate => workers.run(
-    () => enrichCandidate(candidate, referenceTimestamp, fetchPage),
+    () => enrichCandidate(candidate, referenceTimestamp, fetchPage, reportError),
   )))
 
   return {

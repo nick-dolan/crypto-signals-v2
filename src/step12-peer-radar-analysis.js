@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import { pathToFileURL } from "node:url"
 
+import { withErrorContext } from "./helpers/error-helper.js"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { analyzePeerRadar } from "./steps/step12-peer-radar-analysis/analyze-peer-radar.js"
@@ -17,13 +18,20 @@ export async function runPeerRadarAnalysisStep ({ callAgent } = {}) {
     report = await analyzePeerRadar(scan, systemPrompt, { callAgent })
   } catch (error) {
     if (error instanceof InvalidPeerRadarAnalysisError) {
-      const invalidOutputPath = await writeTmpJson("step12-peer-radar-analysis.invalid.json", {
-        asOf: scan.asOf,
-        error: error.message,
-        response: error.response ?? null,
-      })
+      try {
+        const invalidOutputPath = await writeTmpJson("step12-peer-radar-analysis.invalid.json", {
+          asOf: scan.asOf,
+          error: error.message,
+          response: error.response ?? null,
+        })
 
-      console.error(`Saved invalid peer radar response to ${invalidOutputPath}`)
+        console.error(`Saved invalid peer radar response to ${invalidOutputPath}`)
+      } catch (writeError) {
+        error.cleanupErrors = [...(error.cleanupErrors ?? []), withErrorContext(writeError, {
+          step: "step12-peer-radar-analysis.js", operation: "write_invalid_response",
+          source: "step12-peer-radar-analysis.invalid.json",
+        })]
+      }
     }
     throw error
   }

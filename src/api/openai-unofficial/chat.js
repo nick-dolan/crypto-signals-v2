@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { isArray, isString } from "../../helpers/utils.typed.js"
+import { redactSecrets, withErrorContext } from "../../helpers/error-helper.js"
+import { isArray, isError, isNumber, isString } from "../../helpers/utils.typed.js"
 import { getUnofficialOpenAISession } from "./auth.js"
 
 function parseEvent (frame) {
@@ -19,8 +20,8 @@ function parseEvent (frame) {
 
   try {
     return JSON.parse(data)
-  } catch {
-    throw new Error("OpenAI returned an invalid SSE event")
+  } catch (cause) {
+    throw new Error("OpenAI returned an invalid SSE event", { cause })
   }
 }
 
@@ -68,14 +69,25 @@ function extractText (response) {
     .join("")
 }
 
-function eventError (event) {
+function eventError (event, redact) {
+  const error = event.error ?? event.response?.error ?? event
   const detail = event.error?.message ?? event.response?.error?.message
-    ?? event.message ?? event.response?.incomplete_details?.reason
+    ?? event.message ?? event.response?.incomplete_details?.reason ?? event.refusal
+  const failure = new Error(`OpenAI response failed: ${redact(isString(detail) ? detail : event.type)}`)
 
-  return new Error(`OpenAI response failed: ${isString(detail) ? detail : event.type}`)
+  return withErrorContext(failure, {
+    eventType: redact(event.type),
+    ...(isString(error.code) ? { code: redact(error.code) } : {}),
+    ...(isNumber(error.code) ? { code: error.code } : {}),
+    ...(isString(error.type) ? { type: redact(error.type) } : {}),
+    ...(isString(event.response?.status) ? { responseStatus: redact(event.response.status) } : {}),
+    ...(isString(event.response?.incomplete_details?.reason)
+      ? { incompleteReason: redact(event.response.incomplete_details.reason) }
+      : {}),
+  })
 }
 
-async function collectResponse (response) {
+async function collectResponse (response, redact) {
   let text = ""
 
   for await (const event of readEvents(response)) {
@@ -88,12 +100,12 @@ async function collectResponse (response) {
     }
 
     if (["error", "response.failed", "response.incomplete", "response.refusal.done"].includes(event.type)) {
-      throw eventError(event)
+      throw eventError(event, redact)
     }
 
     if (event.type === "response.completed" || event.type === "response.done") {
       if (event.response?.status && event.response.status !== "completed") {
-        throw eventError(event)
+        throw eventError(event, redact)
       }
 
       text = extractText(event.response) || text
@@ -120,72 +132,126 @@ export async function callUnofficialOpenAI (
   userMessage,
   { model, reasoningEffort, tools = [] } = {},
 ) {
-  if (tools.length > 0) {
-    throw new Error("openai-unofficial does not support tools")
-  }
-
-  if (!isString(model) || !model.trim()) {
-    throw new Error("OpenAI model must be a nonempty string")
-  }
-
-  if (!isString(systemPrompt) || !isString(userMessage) || !userMessage.trim()) {
-    throw new Error("OpenAI prompts must be strings with a nonempty user message")
-  }
-
-  if (reasoningEffort != null && (!isString(reasoningEffort) || !reasoningEffort.trim())) {
-    throw new Error("OpenAI reasoningEffort must be a nonempty string or null")
-  }
-
-  let session = await getUnofficialOpenAISession()
-  const requestId = randomUUID()
-  const signal = AbortSignal.timeout(10 * 60 * 1000)
-  const body = JSON.stringify({
-    model,
-    instructions: systemPrompt || "You are a helpful assistant.",
-    input: [{ role: "user", content: [{ type: "input_text", text: userMessage }] }],
-    ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-    stream: true,
-    store: false,
-  })
-  const request = () => fetch("https://chatgpt.com/backend-api/codex/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${session.token}`,
-      "ChatGPT-Account-ID": session.accountId,
-      "Content-Type": "application/json",
-      "Accept": "text/event-stream",
-      "OpenAI-Beta": "responses=experimental",
-      "User-Agent": "crypto-signals-v2",
-      "originator": "crypto-signals-v2",
-      "session_id": requestId,
-      "x-client-request-id": requestId,
-    },
-    body,
-    signal,
-  })
-
-  console.log(`Calling ${model} via unofficial OpenAI subscription API...`)
-
-  let response = await request()
-
-  if (response.status === 401) {
-    await response.body?.cancel()
-    session = await getUnofficialOpenAISession({ rejectedToken: session.token })
-    response = await request()
-  }
+  let signal
+  let context = { operation: "validate-request" }
+  let startedAt = Date.now()
+  const secrets = []
+  const redact = text => redactSecrets(secrets.reduce((text, secret) => text.replaceAll(secret, "[redacted]"), String(text)))
 
   try {
-    if (!response.ok) {
-      const data = await response.json().catch(() => null)
-      const message = isString(data?.error?.message) ? `: ${data.error.message}` : ""
-      throw new Error(`Unofficial OpenAI API failed: HTTP ${response.status}${message}`)
+    if (tools.length > 0) {
+      throw new Error("openai-unofficial does not support tools")
     }
 
-    return await collectResponse(response)
+    if (!isString(model) || !model.trim()) {
+      throw new Error("OpenAI model must be a nonempty string")
+    }
+
+    if (!isString(systemPrompt) || !isString(userMessage) || !userMessage.trim()) {
+      throw new Error("OpenAI prompts must be strings with a nonempty user message")
+    }
+
+    if (reasoningEffort != null && (!isString(reasoningEffort) || !reasoningEffort.trim())) {
+      throw new Error("OpenAI reasoningEffort must be a nonempty string or null")
+    }
+
+    context = { operation: "auth" }
+    startedAt = Date.now()
+    let session = await getUnofficialOpenAISession()
+    secrets.push(session.token, session.refreshToken)
+
+    context = { operation: "prepare-request" }
+    startedAt = Date.now()
+    const requestId = randomUUID()
+    const body = JSON.stringify({
+      model,
+      instructions: systemPrompt || "You are a helpful assistant.",
+      input: [{ role: "user", content: [{ type: "input_text", text: userMessage }] }],
+      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+      stream: true,
+      store: false,
+    })
+
+    console.log(`Calling ${model} via unofficial OpenAI subscription API...`)
+
+    const requestStartedAt = Date.now()
+    signal = AbortSignal.timeout(10 * 60 * 1000)
+    const request = async () => {
+      context = { operation: "responses", timeoutMs: 10 * 60 * 1000 }
+      startedAt = requestStartedAt
+      const response = await fetch("https://chatgpt.com/backend-api/codex/responses", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.token}`,
+          "ChatGPT-Account-ID": session.accountId,
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          "OpenAI-Beta": "responses=experimental",
+          "User-Agent": "crypto-signals-v2",
+          "originator": "crypto-signals-v2",
+          "session_id": requestId,
+          "x-client-request-id": requestId,
+        },
+        body,
+        signal,
+      })
+      context.status = response.status
+      return response
+    }
+
+    let response = await request()
+
+    if (response.status === 401) {
+      await response.body?.cancel()
+      context = { operation: "auth-refresh" }
+      startedAt = Date.now()
+      session = await getUnofficialOpenAISession({ rejectedToken: session.token })
+      secrets.push(session.token, session.refreshToken)
+      response = await request()
+    }
+
+    if (!response.ok) {
+      const failure = new Error(`Unofficial OpenAI API failed: HTTP ${response.status}`)
+      const data = await response.json().catch((cause) => {
+        failure.cause = cause
+        return null
+      })
+      const detail = data?.error ?? data
+
+      if (isString(detail?.message)) {
+        failure.message += `: ${redact(detail.message)}`
+      }
+
+      throw withErrorContext(failure, {
+        ...(isString(detail?.code) ? { code: redact(detail.code) } : {}),
+        ...(isNumber(detail?.code) ? { code: detail.code } : {}),
+        ...(isString(detail?.type) ? { type: redact(detail.type) } : {}),
+      })
+    }
+
+    return await collectResponse(response, redact)
   } catch (error) {
-    const message = isString(error?.message) ? error.message : String(error)
-    const redacted = message.replaceAll(session.token, "[redacted]")
-      .replaceAll(session.refreshToken, "[redacted]")
-    throw redacted === message ? error : new Error(redacted)
+    const failure = withErrorContext(error, {
+      ...context,
+      elapsedMs: Date.now() - startedAt,
+      ...(context.timeoutMs && signal?.aborted ? { type: "timeout" } : {}),
+    })
+    const seen = new Set()
+
+    for (let cause = failure; isError(cause) && !seen.has(cause); cause = cause.cause) {
+      seen.add(cause)
+      const message = redact(cause.message)
+      const stack = isString(cause.stack) ? redact(cause.stack) : cause.stack
+
+      if (message !== cause.message) {
+        Object.defineProperty(cause, "message", { value: message, configurable: true, writable: true })
+      }
+
+      if (stack !== cause.stack) {
+        cause.stack = stack
+      }
+    }
+
+    throw failure
   }
 }

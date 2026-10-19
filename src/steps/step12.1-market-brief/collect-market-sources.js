@@ -3,6 +3,7 @@ import { sleep } from "radash"
 import { fetchTradingViewCryptoNews } from "../../api/tradingview/news.js"
 import { fetchTradingViewNewsStory } from "../../api/tradingview/news-story.js"
 import { fetchTweetPage } from "../../api/twitter-api.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isFunction, isObject, isSafeInteger } from "../../helpers/utils.typed.js"
 import { normalizeSourceUrl, sourceAuthor, sourcePublishedAt, sourceString } from "./source-normalization.js"
 
@@ -95,7 +96,7 @@ function compareSources (first, second) {
     || first.text.localeCompare(second.text)
 }
 
-async function collectTradingView (referenceTimestamp, fetchNews, fetchStory) {
+async function collectTradingView (referenceTimestamp, fetchNews, fetchStory, reportError) {
   const collection = createCollection("tradingview")
   let items
 
@@ -103,6 +104,9 @@ async function collectTradingView (referenceTimestamp, fetchNews, fetchStory) {
     items = readItems(await fetchNews(), "items")
     collection.successes += 1
   } catch (error) {
+    await reportError(error, {
+      step: "step12.1-market-brief.js", operation: "fetch_crypto_news", source: "tradingview",
+    })
     fail(collection, "crypto feed", error)
     return collection
   }
@@ -158,13 +162,17 @@ async function collectTradingView (referenceTimestamp, fetchNews, fetchStory) {
   }))
   const storiesById = new Map()
 
-  stories.forEach((result, index) => {
+  for (const [index, result] of stories.entries()) {
     if (result.status === "fulfilled") {
       storiesById.set(readable[index].id, result.value)
     } else {
+      await reportError(result.reason, {
+        step: "step12.1-market-brief.js", operation: "fetch_article_content", source: "tradingview",
+        articleId: readable[index].id, url: readable[index].storyUrl,
+      })
       fail(collection, "story fetch failed; headline/snippet retained", result.reason)
     }
-  })
+  }
 
   collection.sources = selected.map(({ id, source, snippet }) => {
     const story = storiesById.get(id)
@@ -195,7 +203,7 @@ function tweetUrl (tweet) {
     : `https://x.com/i/web/status/${encodeURIComponent(id)}`
 }
 
-async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
+async function collectTwitter (referenceTimestamp, fetchTweets, wait, reportError) {
   const collection = createCollection("twitter")
   const query = [
     "(crypto OR bitcoin OR ethereum)",
@@ -222,6 +230,9 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
       tweets = readItems(page, "tweets")
       collection.successes += 1
     } catch (error) {
+      await reportError(error, {
+        step: "step12.1-market-brief.js", operation: "fetch_tweets", source: "twitterapi.io", page: pageNumber,
+      })
       fail(collection, `page ${pageNumber} failed; earlier pages retained`, error)
       break
     }
@@ -256,6 +267,9 @@ async function collectTwitter (referenceTimestamp, fetchTweets, wait) {
     }
 
     if (!nextCursor || cursors.has(nextCursor)) {
+      await reportError(new Error("Twitter returned a missing or repeated pagination cursor"), {
+        step: "step12.1-market-brief.js", operation: "paginate_tweets", source: "twitterapi.io", page: pageNumber,
+      })
       fail(collection, "missing or repeated pagination cursor; remaining pages unavailable")
       break
     }
@@ -279,6 +293,7 @@ export async function collectMarketSources ({
   fetchStory = fetchTradingViewNewsStory,
   fetchTweets = fetchTweetPage,
   wait = sleep,
+  reportError = reportStepError,
 } = {}) {
   if (
     !isSafeInteger(referenceTimestamp)
@@ -293,8 +308,8 @@ export async function collectMarketSources ({
   }
 
   const collections = await Promise.all([
-    collectTradingView(referenceTimestamp, fetchNews, fetchStory),
-    collectTwitter(referenceTimestamp, fetchTweets, wait),
+    collectTradingView(referenceTimestamp, fetchNews, fetchStory, reportError),
+    collectTwitter(referenceTimestamp, fetchTweets, wait, reportError),
   ])
 
   return {

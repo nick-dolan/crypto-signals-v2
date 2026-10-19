@@ -18,12 +18,13 @@ export async function runPipeline ({ runStep, onWarning = console.warn } = {}) {
   const start = (step, onFailure, options = {}) => {
     const task = Promise.resolve().then(() => (
       stopped || fatal !== null ? false : runStep(`src/${step}`, options)
-    )).then((succeeded) => {
+    )).then((result) => {
+      const succeeded = result === true || result?.succeeded === true
       if (!succeeded && !stopped && fatal === null) {
         if (onFailure) {
           onFailure()
         } else {
-          fatal = new Error(`Pipeline step failed: ${step}`)
+          fatal = result?.error ?? new Error(`Pipeline step failed: ${step}`)
         }
       }
       return succeeded

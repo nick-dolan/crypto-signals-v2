@@ -1,4 +1,5 @@
 import { readTmpJson } from "../../helpers/fs-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
 
 function isText (value) {
@@ -76,10 +77,14 @@ function unavailable (warning) {
   return { status: "unavailable", warning, data: null }
 }
 
-export async function readPeerRadarReport (asOf, { readJson = readTmpJson } = {}) {
+export async function readPeerRadarReport (asOf, { readJson = readTmpJson, reportError = reportStepError } = {}) {
+  let source = "step12-peer-radar-analysis.json"
   try {
     const data = await readJson("step12-peer-radar-analysis.json")
     if (!isRadarReport(data)) {
+      await reportError(new Error("Invalid step 12 peer radar format"), {
+        step: "step13-report.js", operation: "validate_peer_radar", source,
+      })
       return unavailable("Некорректный формат результата шага 12. Перезапустите анализ радара; основной отчёт сохранён.")
     }
     if (data.asOf !== asOf) {
@@ -87,12 +92,18 @@ export async function readPeerRadarReport (asOf, { readJson = readTmpJson } = {}
     }
 
     // When a newer scan exists, don't include an older analysis in the snapshot.
-    const scan = await readJson("step11-peer-radar.json").catch((error) => {
-      if (error.code === "ENOENT") {
+    source = "step11-peer-radar.json"
+    const scan = await readJson(source).catch((error) => {
+      if (error?.code === "ENOENT") {
         return undefined
       }
       throw error
     })
+    if (scan !== undefined && scan?.schemaVersion !== 1) {
+      await reportError(new Error("Invalid step 11 peer radar scan format"), {
+        step: "step13-report.js", operation: "validate_peer_radar_scan", source,
+      })
+    }
     if (scan !== undefined && (
       scan?.schemaVersion !== 1 || scan.asOf !== data.asOf
       || scan.snapshotClosedAt !== data.snapshotClosedAt || scan.generatedAt !== data.scanGeneratedAt
@@ -102,7 +113,10 @@ export async function readPeerRadarReport (asOf, { readJson = readTmpJson } = {}
 
     return { status: "available", warning: null, data }
   } catch (error) {
-    return unavailable(error.code === "ENOENT"
+    if (error?.code !== "ENOENT") {
+      await reportError(error, { step: "step13-report.js", operation: "read_peer_radar", source })
+    }
+    return unavailable(error?.code === "ENOENT"
       ? "Результат шага 12 отсутствует. Запустите радар и повторите шаг 13; основной отчёт доступен без него."
       : `Не удалось загрузить радар соседей: ${isError(error) ? error.message : "неизвестная ошибка"}. Основной отчёт сохранён.`)
   }

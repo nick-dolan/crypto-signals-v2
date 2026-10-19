@@ -1,5 +1,6 @@
 import { parallel } from "radash"
 
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { toIsoTimestamp } from "../../helpers/normalization-helper.js"
 import { isFunction, isString } from "../../helpers/utils.typed.js"
 import {
@@ -19,6 +20,7 @@ export async function buildCompleteCryptoUniverse (
     generatedAt = new Date().toISOString(),
     maxAttempts = 2,
     onProgress = () => {},
+    reportError,
   } = {},
 ) {
   const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)
@@ -58,6 +60,7 @@ export async function buildCompleteCryptoUniverse (
           coin,
           maxAttempts,
           event => onProgress({ ...event, ...progress }),
+          { reportError },
         )
 
         if (result?.complete) {
@@ -89,7 +92,10 @@ export async function buildCompleteCryptoUniverse (
         return { rejection }
       } catch (error) {
         stopped = true
-        throw error
+        throw withErrorContext(error, {
+          step: "step2-data-bootstrap.js", operation: "check_coin_coverage", symbol: coin.symbol,
+          marketSymbol: coin.market?.tradingViewSymbol,
+        })
       }
     },
   ).catch((error) => {

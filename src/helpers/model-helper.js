@@ -2,6 +2,7 @@ import modelsInUse from "../../models-in-use.json" with { type: "json" }
 import { callCopilotWithTools } from "../api/copilot/chat.js"
 import { callUnofficialCopilot } from "../api/copilot-unofficial/chat.js"
 import { callUnofficialOpenAI } from "../api/openai-unofficial/chat.js"
+import { withErrorContext } from "./error-helper.js"
 import { isObject, isString } from "./utils.typed.js"
 
 export function getModelSettings (task, registry = modelsInUse) {
@@ -39,27 +40,31 @@ export async function callModel (
     callOpenAI = callUnofficialOpenAI,
   } = {},
 ) {
-  if (provider === "copilot-sdk") {
-    return callSdk(systemPrompt, userMessage, {
-      model,
-      reasoningEffort,
-      tools,
-      ...(attachments.length > 0 ? { attachments } : {}),
-    })
-  }
-
-  if (["copilot-unofficial", "openai-unofficial"].includes(provider)) {
-    if (attachments.length > 0) {
-      throw new Error(`${provider} does not support attachments; use copilot-sdk`)
+  try {
+    if (provider === "copilot-sdk") {
+      return await callSdk(systemPrompt, userMessage, {
+        model,
+        reasoningEffort,
+        tools,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      })
     }
 
-    if (tools.length > 0) {
-      throw new Error(`${provider} does not support tools; use copilot-sdk`)
+    if (["copilot-unofficial", "openai-unofficial"].includes(provider)) {
+      if (attachments.length > 0) {
+        throw new Error(`${provider} does not support attachments; use copilot-sdk`)
+      }
+
+      if (tools.length > 0) {
+        throw new Error(`${provider} does not support tools; use copilot-sdk`)
+      }
+
+      const call = provider === "openai-unofficial" ? callOpenAI : callUnofficial
+      return await call(systemPrompt, userMessage, { model, reasoningEffort })
     }
 
-    const call = provider === "openai-unofficial" ? callOpenAI : callUnofficial
-    return call(systemPrompt, userMessage, { model, reasoningEffort })
+    throw new Error(`Unknown model provider: ${provider}`)
+  } catch (error) {
+    throw withErrorContext(error, { provider, model, operation: "call-model" })
   }
-
-  throw new Error(`Unknown model provider: ${provider}`)
 }

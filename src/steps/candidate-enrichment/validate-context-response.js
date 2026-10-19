@@ -1,3 +1,4 @@
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { InvalidContextEnrichmentError, parseContextEnrichment } from "../step8-context-enrichment/parse-context-enrichment.js"
 
 // Validate before releasing the shared slot: radash reports worker errors only after draining all candidates.
@@ -18,6 +19,8 @@ export function validateContextResponse (content, userMessage) {
       error.symbol = candidate.symbol
       error.response = content
     }
-    throw error
+    throw withErrorContext(error, {
+      step: "step8-context-enrichment.js", operation: "summarize_publications", symbol: candidate.symbol,
+    })
   }
 }

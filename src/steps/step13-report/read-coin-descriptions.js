@@ -1,13 +1,14 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isObject, isString } from "../../helpers/utils.typed.js"
 
 function isText (value) {
   return isString(value) && value.trim().length > 0
 }
 
-export async function readCoinDescriptions (coins, { readFile = fs.readFile } = {}) {
+export async function readCoinDescriptions (coins, { readFile = fs.readFile, reportError = reportStepError } = {}) {
   try {
     const data = JSON.parse(await readFile(path.resolve(process.cwd(), "data", "coin-descriptions.json"), "utf8"))
     if (!isObject(data) || !isArray(data.coins)) {
@@ -22,6 +23,10 @@ export async function readCoinDescriptions (coins, { readFile = fs.readFile } = 
         continue
       }
       if (descriptions.has(coin.baseCurrencyId)) {
+        await reportError(new Error(`Duplicate coin description: ${coin.baseCurrencyId}`), {
+          step: "step13-report.js", operation: "read_coin_descriptions", symbol: coin.symbol,
+          source: "data/coin-descriptions.json", baseCurrencyId: coin.baseCurrencyId,
+        })
         descriptions.set(coin.baseCurrencyId, null)
         console.warn(`⚠ Повторяющийся baseCurrencyId в data/coin-descriptions.json: ${coin.baseCurrencyId}; описание пропущено.`)
         continue
@@ -47,6 +52,9 @@ export async function readCoinDescriptions (coins, { readFile = fs.readFile } = 
     return Object.fromEntries([...descriptions].filter(([, description]) => description !== null))
   } catch (error) {
     if (error?.code !== "ENOENT") {
+      await reportError(error, {
+        step: "step13-report.js", operation: "read_coin_descriptions", source: "data/coin-descriptions.json",
+      })
       console.warn(`⚠ Не удалось загрузить data/coin-descriptions.json: ${isError(error) ? error.message : "неизвестная ошибка"}`)
     }
     return {}

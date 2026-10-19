@@ -1,5 +1,6 @@
 import { parallel } from "radash"
 
+import { withErrorContext } from "../../helpers/error-helper.js"
 import { callModel, getModelSettings } from "../../helpers/model-helper.js"
 import { getRequiredString } from "../../helpers/normalization-helper.js"
 import { isArray, isFunction, isObject, isSafeInteger, isString } from "../../helpers/utils.typed.js"
@@ -88,14 +89,11 @@ async function enrichCandidate (
     }
   }
 
-  const content = await callAgent(
-    systemPrompt,
-    buildUserMessage(input, candidate),
-    modelSettings,
-  )
+  let content
   let enrichment
 
   try {
+    content = await callAgent(systemPrompt, buildUserMessage(input, candidate), modelSettings)
     enrichment = parseContextEnrichment(content, candidate.symbol)
 
     for (const [field, publications] of [
@@ -108,11 +106,16 @@ async function enrichCandidate (
     }
   } catch (error) {
     if (error instanceof InvalidContextEnrichmentError) {
-      error.symbol = candidate.symbol
-      error.response = content
+      error.symbol ??= candidate.symbol
+      if (content !== undefined) {
+        error.response = content
+      }
     }
 
-    throw error
+    throw withErrorContext(error, {
+      step: "step8-context-enrichment.js", operation: "summarize_publications", symbol: candidate.symbol,
+      source: modelSettings.provider, provider: modelSettings.provider, model: modelSettings.model,
+    })
   }
 
   return {

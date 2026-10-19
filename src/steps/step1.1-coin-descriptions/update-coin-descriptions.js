@@ -5,8 +5,9 @@ import { indexBinanceMarkets } from "../../api/coingecko/index-binance-markets.j
 import { requestCoinGeckoJson } from "../../api/coingecko/request.js"
 import { writeDataJson } from "../../helpers/fs-helper.js"
 import { getRequiredString, toIsoTimestamp } from "../../helpers/normalization-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isObject } from "../../helpers/utils.typed.js"
-import { describeCoin } from "./describe-coin.js"
+import { CoinDescriptionUnavailableError, describeCoin } from "./describe-coin.js"
 
 function getCoinIds (coins, label) {
   if (!isArray(coins)) {
@@ -48,7 +49,7 @@ async function readRegistry (readFile) {
   }
 }
 
-async function loadCoinGeckoDetails (coin, coinIdsByMarket, { request, pause, onWarning }) {
+async function loadCoinGeckoDetails (coin, coinIdsByMarket, { request, pause, onWarning, reportError }) {
   const coinId = coinIdsByMarket.get(coin.market?.tradingViewSymbol)
 
   if (!coinId) {
@@ -74,6 +75,10 @@ async function loadCoinGeckoDetails (coin, coinIdsByMarket, { request, pause, on
 
     return details
   } catch (error) {
+    await reportError(error, {
+      step: "step1.1-coin-descriptions.js", operation: "fetch_coin_details", symbol: coin.symbol,
+      source: "coingecko", coinId,
+    })
     onWarning(`⚠ CoinGecko context for ${coin.symbol}: ${isError(error) ? error.message : "Unknown error"}; continuing with web research`)
     return null
   }
@@ -91,6 +96,7 @@ export async function updateCoinDescriptions (
     pause = sleep,
     onProgress = () => {},
     onWarning = message => console.warn(message),
+    reportError = reportStepError,
   } = {},
 ) {
   getCoinIds(sourceUniverse?.coins, "Step 1 universe")
@@ -118,6 +124,9 @@ export async function updateCoinDescriptions (
     })
     coinIdsByMarket = indexBinanceMarkets(futures).coinIdsByMarket
   } catch (error) {
+    await reportError(error, {
+      step: "step1.1-coin-descriptions.js", operation: "fetch_coin_market_mapping", source: "coingecko",
+    })
     onWarning(`⚠ CoinGecko context unavailable: ${isError(error) ? error.message : "Unknown error"}; continuing with web research`)
   }
 
@@ -125,8 +134,8 @@ export async function updateCoinDescriptions (
 
   for (const [index, coin] of missing.entries()) {
     try {
-      const details = await loadCoinGeckoDetails(coin, coinIdsByMarket, { request, pause, onWarning })
-      const { description, sources } = await describeCoin(coin, details, prompt, { callAgent, requestTavily })
+      const details = await loadCoinGeckoDetails(coin, coinIdsByMarket, { request, pause, onWarning, reportError })
+      const { description, sources } = await describeCoin(coin, details, prompt, { callAgent, requestTavily, reportError })
       additions.push({
         baseCurrencyId: coin.baseCurrencyId,
         symbol: coin.symbol,
@@ -135,6 +144,12 @@ export async function updateCoinDescriptions (
         sources,
       })
     } catch (error) {
+      if (!(error instanceof CoinDescriptionUnavailableError)) {
+        await reportError(error, {
+          step: "step1.1-coin-descriptions.js", operation: "describe_coin", symbol: coin.symbol,
+          source: "coin-description-agent", baseCurrencyId: coin.baseCurrencyId,
+        })
+      }
       result.failedCount += 1
       onWarning(`⚠ Description ${coin.symbol} (${coin.baseCurrencyId}): ${isError(error) ? error.message : "Unknown error"}; will retry next run`)
     }

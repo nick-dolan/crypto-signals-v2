@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import { pathToFileURL } from "node:url"
 
+import { withErrorContext } from "./helpers/error-helper.js"
 import { readTmpJson, writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { enrichCandidatesWithContext } from "./steps/step8-context-enrichment/enrich-candidates-with-context.js"
@@ -30,6 +31,10 @@ export async function runContextEnrichmentStep ({
         })
         console.error(`Saved invalid context response to ${invalidOutputPath}`)
       } catch (writeError) {
+        error.cleanupErrors = [...(error.cleanupErrors ?? []), withErrorContext(writeError, {
+          step: "step8-context-enrichment.js", operation: "write_invalid_response", symbol: error.symbol,
+          source: "step8-context-enrichment.invalid.json",
+        })]
         console.error("Could not save invalid context response:", writeError)
       }
     }

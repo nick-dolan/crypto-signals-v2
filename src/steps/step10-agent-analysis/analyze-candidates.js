@@ -13,6 +13,7 @@ export async function analyzeCandidates (
   {
     callAgent = callModel,
     readCoinData,
+    reportError,
   } = {},
 ) {
   const { shortlistedCoins } = validateAgentInputs(payload, shortlist)
@@ -27,7 +28,7 @@ export async function analyzeCandidates (
     shortlistedCoins.map(coin => [coin.symbol, coin.marketSymbol]),
   )
   const tools = payload.candidateCount > 0
-    ? [createCoinHistoryTool(payload, shortlist, { readCoinData })]
+    ? [createCoinHistoryTool(payload, shortlist, { readCoinData, reportError })]
     : []
   const content = await callAgent(systemPrompt, JSON.stringify(payload), {
     ...getModelSettings("candidateAnalysis"),

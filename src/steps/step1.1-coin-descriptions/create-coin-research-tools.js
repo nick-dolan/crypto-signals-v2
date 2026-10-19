@@ -2,6 +2,7 @@ import { isIP } from "node:net"
 import { defineTool } from "@github/copilot-sdk"
 
 import { requestTavilyJson } from "../../api/tavily/request.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isObject, isString } from "../../helpers/utils.typed.js"
 
 function normalizeUrl (value) {
@@ -61,7 +62,9 @@ function createToolFailure (error, fallback) {
   }
 }
 
-export function createCoinResearchTools ({ seedUrls = [], request = requestTavilyJson } = {}) {
+export function createCoinResearchTools ({
+  seedUrls = [], request = requestTavilyJson, symbol, reportError = reportStepError,
+} = {}) {
   const allowedUrls = new Set((isArray(seedUrls) ? seedUrls : []).map(normalizeUrl).filter(Boolean))
   const sourcesByUrl = new Map()
   const sourcesById = new Map()
@@ -126,6 +129,7 @@ export function createCoinResearchTools ({ seedUrls = [], request = requestTavil
         },
       },
       handler: async (args) => {
+        let requestStarted = false
         try {
           const query = getArgument(args, "query")
 
@@ -134,6 +138,7 @@ export function createCoinResearchTools ({ seedUrls = [], request = requestTavil
           }
 
           searchCount += 1
+          requestStarted = true
           const response = await request("/search", {
             query,
             search_depth: "basic",
@@ -164,6 +169,11 @@ export function createCoinResearchTools ({ seedUrls = [], request = requestTavil
           results.forEach(({ url }) => allowedUrls.add(url))
           return createToolSuccess({ results })
         } catch (error) {
+          if (requestStarted) {
+            await reportError(error, {
+              step: "step1.1-coin-descriptions.js", operation: "search_coin_sources", symbol, source: "tavily",
+            })
+          }
           return createToolFailure(error, "Не удалось выполнить поиск через Tavily")
         }
       },
@@ -181,8 +191,10 @@ export function createCoinResearchTools ({ seedUrls = [], request = requestTavil
         },
       },
       handler: async (args) => {
+        let requestStarted = false
+        let url
         try {
-          const url = normalizeUrl(getArgument(args, "url"))
+          url = normalizeUrl(getArgument(args, "url"))
 
           if (!url || !allowedUrls.has(url)) {
             throw new Error("Нужен безопасный HTTP(S) URL из seedUrls или результатов поиска")
@@ -201,8 +213,14 @@ export function createCoinResearchTools ({ seedUrls = [], request = requestTavil
             pendingReads.set(url, readSource(url).finally(() => pendingReads.delete(url)))
           }
 
+          requestStarted = true
           return createToolSuccess(await pendingReads.get(url))
         } catch (error) {
+          if (requestStarted) {
+            await reportError(error, {
+              step: "step1.1-coin-descriptions.js", operation: "read_coin_source", symbol, source: "tavily", url,
+            })
+          }
           return createToolFailure(error, "Не удалось прочитать страницу через Tavily")
         }
       },

@@ -1,6 +1,7 @@
 import { defineTool } from "@github/copilot-sdk"
 
 import { readTmpJson } from "../../helpers/fs-helper.js"
+import { reportStepError } from "../../helpers/step-error-helper.js"
 import { isArray, isError, isFinite, isInt, isObject } from "../../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath } from "../step2-data-bootstrap/check-coin-data-coverage.js"
 import { decodeAgentPayload } from "../step9-agent-payload/agent-payload-format.js"
@@ -168,7 +169,7 @@ function createToolFailure (message) {
 export function createCoinHistoryTool (
   payload,
   shortlist,
-  { readCoinData = readTmpJson } = {},
+  { readCoinData = readTmpJson, reportError = reportStepError } = {},
 ) {
   const { symbols, shortlistedCoins } = validateAgentInputs(payload, shortlist)
   const coinBySymbol = new Map(shortlistedCoins.map(coin => [coin.symbol, coin]))
@@ -236,6 +237,7 @@ export function createCoinHistoryTool (
         return createToolFailure("За один анализ разрешено не более пяти запросов истории")
       }
 
+      let readingHistory = false
       try {
         if (!isObject(args)) {
           throw new Error("Аргументы инструмента должны быть объектом")
@@ -270,6 +272,7 @@ export function createCoinHistoryTool (
           throw new Error("Глубина истории должна быть целым числом от 12 до 168")
         }
 
+        readingHistory = true
         if (!dataBySymbol.has(symbol)) {
           dataBySymbol.set(
             symbol,
@@ -286,6 +289,7 @@ export function createCoinHistoryTool (
         const serialized = JSON.stringify(result)
 
         if (Buffer.byteLength(serialized, "utf8") > 45_000) {
+          readingHistory = false
           throw new Error("Запрос истории слишком большой; сократи число часов или рядов")
         }
 
@@ -294,6 +298,12 @@ export function createCoinHistoryTool (
           resultType: "success",
         }
       } catch (error) {
+        if (readingHistory) {
+          await reportError(error, {
+            step: "step10-agent-analysis.js", operation: "read_coin_history", symbol: args.symbol,
+            source: "step2-data-bootstrap",
+          })
+        }
         return createToolFailure(
           isError(error) ? error.message : "Не удалось прочитать историю",
         )

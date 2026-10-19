@@ -2,10 +2,35 @@ import "dotenv/config"
 
 import fs from "node:fs/promises"
 import { sleep } from "radash"
+import { redactSecrets, withErrorContext } from "../../helpers/error-helper.js"
 import { isNumber, isString } from "../../helpers/utils.typed.js"
 
 // Experimental client for Copilot's undocumented HTTP API, isolated from the official SDK.
 let currentSession = null
+
+async function responseError (response, message, operation, secret) {
+  const failure = new Error(message)
+  const data = await response.json().catch((cause) => {
+    failure.cause = cause
+    return null
+  })
+  const detail = isString(data?.error)
+    ? { code: data.error, message: data.error_description }
+    : data?.error ?? data
+  const redact = text => redactSecrets(secret ? text.replaceAll(secret, "[redacted]") : text)
+
+  if (isString(detail?.message)) {
+    failure.message += `: ${redact(detail.message)}`
+  }
+
+  return withErrorContext(failure, {
+    operation,
+    status: response.status,
+    ...(isString(detail?.code) ? { code: redact(detail.code) } : {}),
+    ...(isNumber(detail?.code) ? { code: detail.code } : {}),
+    ...(isString(detail?.type) ? { type: redact(detail.type) } : {}),
+  })
+}
 
 async function readJson (fileUrl) {
   try {
@@ -50,7 +75,7 @@ async function githubDeviceLogin () {
   })
 
   if (!response.ok) {
-    throw new Error(`Device code request failed: HTTP ${response.status}`)
+    throw await responseError(response, `Device code request failed: HTTP ${response.status}`, "auth.device-code")
   }
 
   const data = await response.json()
@@ -80,7 +105,7 @@ async function githubDeviceLogin () {
     })
 
     if (!tokenResponse.ok) {
-      throw new Error(`Token poll failed: HTTP ${tokenResponse.status}`)
+      throw await responseError(tokenResponse, `Token poll failed: HTTP ${tokenResponse.status}`, "auth.device-poll")
     }
 
     const tokenData = await tokenResponse.json()
@@ -101,14 +126,16 @@ async function githubDeviceLogin () {
     }
 
     if (tokenData.error === "expired_token") {
-      throw new Error("Device code expired, run login again")
+      throw withErrorContext(new Error("Device code expired, run login again"), { code: tokenData.error })
     }
 
     if (tokenData.error === "access_denied") {
-      throw new Error("GitHub login was cancelled")
+      throw withErrorContext(new Error("GitHub login was cancelled"), { code: tokenData.error })
     }
 
-    throw new Error(`GitHub OAuth failed: ${tokenData.error || "unknown error"}`)
+    throw withErrorContext(new Error("GitHub OAuth failed"), {
+      ...(isString(tokenData.error) ? { code: redactSecrets(tokenData.error) } : {}),
+    })
   }
 
   throw new Error("Device code expired, run login again")
@@ -176,8 +203,9 @@ async function exchangeCopilotToken (githubToken) {
   })
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "")
-    throw new Error(`Copilot token exchange failed: HTTP ${response.status} ${body}`)
+    throw await responseError(
+      response, `Copilot token exchange failed: HTTP ${response.status}`, "auth.token-exchange", githubToken,
+    )
   }
 
   const data = await response.json()

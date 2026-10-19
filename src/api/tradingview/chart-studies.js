@@ -1,3 +1,4 @@
+import { withErrorContext } from "../../helpers/error-helper.js"
 import {
   isArray,
   isError,
@@ -168,9 +169,12 @@ function waitForChart (chart, options) {
     timeoutId = setTimeout(() => {
       finish(
         reject,
-        new Error(
+        withErrorContext(new Error(
           `TradingView chart ${options.symbol} timed out after ${options.timeoutMs} ms with ${availablePeriodCount} periods`,
-        ),
+        ), {
+          source: "tradingview", operation: "wait_for_chart", marketSymbol: options.symbol,
+          timeoutMs: options.timeoutMs, type: "timeout", code: "ETIMEDOUT",
+        }),
       )
     }, options.timeoutMs)
 

@@ -1,11 +1,36 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import { sleep } from "radash"
-import { isFinite, isString, isURLSearchParams } from "../../helpers/utils.typed.js"
+import { redactSecrets, withErrorContext } from "../../helpers/error-helper.js"
+import { isFinite, isNumber, isString, isURLSearchParams } from "../../helpers/utils.typed.js"
 
 let currentSession = null
 let pendingSession = null
 let unsavedSession = false
+
+async function responseError (response, message, operation, secret) {
+  const failure = new Error(message)
+  const data = await response.json().catch((cause) => {
+    failure.cause = cause
+    return null
+  })
+  const detail = isString(data?.error)
+    ? { code: data.error, message: data.error_description }
+    : data?.error ?? data
+  const redact = text => redactSecrets(secret ? text.replaceAll(secret, "[redacted]") : text)
+
+  if (isString(detail?.message)) {
+    failure.message += `: ${redact(detail.message)}`
+  }
+
+  return withErrorContext(failure, {
+    operation,
+    status: response.status,
+    ...(isString(detail?.code) ? { code: redact(detail.code) } : {}),
+    ...(isNumber(detail?.code) ? { code: detail.code } : {}),
+    ...(isString(detail?.type) ? { type: redact(detail.type) } : {}),
+  })
+}
 
 function isSession (session) {
   return isString(session?.token) && session.token.trim().length > 0
@@ -31,8 +56,8 @@ async function loadSession () {
 
   try {
     session = JSON.parse(text)
-  } catch {
-    throw new Error("Invalid OpenAI token file; sign in again with getUnofficialOpenAISession({ login: true })")
+  } catch (cause) {
+    throw new Error("Invalid OpenAI token file; sign in again with getUnofficialOpenAISession({ login: true })", { cause })
   }
 
   if (!isSession(session)) {
@@ -70,9 +95,11 @@ async function postAuth (endpoint, body, signal = AbortSignal.timeout(30_000)) {
 
 async function readTokenResponse (response, previousRefreshToken) {
   if (!response.ok) {
-    await response.body?.cancel()
-    throw new Error(
+    throw await responseError(
+      response,
       `OpenAI token request failed: HTTP ${response.status}. Sign in again with getUnofficialOpenAISession({ login: true })`,
+      "auth.token",
+      previousRefreshToken,
     )
   }
 
@@ -82,8 +109,8 @@ async function readTokenResponse (response, previousRefreshToken) {
   try {
     const payload = JSON.parse(Buffer.from(data.access_token.split(".")[1], "base64url").toString("utf8"))
     accountId = payload["https://api.openai.com/auth"]?.chatgpt_account_id
-  } catch {
-    throw new Error("OpenAI token response has no valid ChatGPT account ID")
+  } catch (cause) {
+    throw new Error("OpenAI token response has no valid ChatGPT account ID", { cause })
   }
 
   const expiresIn = Number(data.expires_in)
@@ -107,9 +134,10 @@ async function deviceLogin () {
   })
 
   if (!response.ok) {
-    await response.body?.cancel()
-    throw new Error(
+    throw await responseError(
+      response,
       `OpenAI device code request failed: HTTP ${response.status}. Check device-code authorization in ChatGPT and retry.`,
+      "auth.device-code",
     )
   }
 
@@ -141,8 +169,9 @@ async function deviceLogin () {
     }
 
     if (!tokenResponse.ok) {
-      await tokenResponse.body?.cancel()
-      throw new Error(`OpenAI device authorization failed: HTTP ${tokenResponse.status}`)
+      throw await responseError(
+        tokenResponse, `OpenAI device authorization failed: HTTP ${tokenResponse.status}`, "auth.device-poll",
+      )
     }
 
     const authorization = await tokenResponse.json()

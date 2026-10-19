@@ -1,3 +1,4 @@
+import { withErrorContext } from "../../../helpers/error-helper.js"
 import {
   isArray,
   isBoolean,
@@ -276,9 +277,12 @@ function waitForStudy (
     timeoutId = setTimeout(() => {
       finish(
         reject,
-        new Error(
-          `TradingView ${label} request timed out: received ${availablePeriods} source periods`,
-        ),
+        withErrorContext(new Error(
+          `TradingView ${label} request timed out after ${timeoutMs} ms: received ${availablePeriods} source periods`,
+        ), {
+          source: "tradingview", operation: "wait_for_study", study: label,
+          timeoutMs, type: "timeout", code: "ETIMEDOUT",
+        }),
       )
     }, timeoutMs)
   })
