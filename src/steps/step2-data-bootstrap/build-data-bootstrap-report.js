@@ -1,5 +1,5 @@
 import { connectTradingView, disconnectTradingView } from "../../api/tradingview/client.js"
-import { buildCompleteCryptoUniverse } from "./build-complete-crypto-universe.js"
+import { buildCompleteCoinList } from "./build-complete-coin-list.js"
 import { checkCoinDataCoverage } from "./check-coin-data-coverage.js"
 
 function logProgress (event) {
@@ -92,12 +92,12 @@ export function createDataBootstrapSummary ({
   }
 }
 
-export async function buildDataBootstrapReport (sourceUniverse) {
+export async function buildDataBootstrapReport (sourceCoinList) {
   const nowTimestamp = Number(process.env.PIPELINE_STARTED_AT) || Math.floor(Date.now() / 1_000)
 
   try {
-    const report = await buildCompleteCryptoUniverse(
-      sourceUniverse,
+    const report = await buildCompleteCoinList(
+      sourceCoinList,
       async (coin) => {
         const client = await connectTradingView()
 

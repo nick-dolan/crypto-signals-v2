@@ -4,11 +4,11 @@ import { runStep } from "./helpers/run-step-helper.js"
 import { updateCoinDescriptions } from "./steps/step1.1-coin-descriptions/update-coin-descriptions.js"
 
 async function runCoinDescriptionsStep () {
-  const [sourceUniverse, systemPrompt] = await Promise.all([
-    readTmpJson("step1-crypto-universe.json"),
+  const [sourceCoinList, systemPrompt] = await Promise.all([
+    readTmpJson("step1-coin-list.json"),
     fs.readFile(new URL("./prompts/coin-description.md", import.meta.url), "utf8"),
   ])
-  const result = await updateCoinDescriptions(sourceUniverse, systemPrompt, {
+  const result = await updateCoinDescriptions(sourceCoinList, systemPrompt, {
     onProgress: ({ index, total, addedCount }) => {
       console.log(`✓ Checked new coin descriptions ${index}/${total}: ${addedCount} ready`)
     },

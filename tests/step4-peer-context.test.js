@@ -38,7 +38,7 @@ function registry (pairs = [["TARGET", "LEADER"]]) {
   return {
     schemaVersion: 1,
     generatedAt: "2026-09-22T16:02:05.780Z",
-    universe: {
+    coinList: {
       coins: [...new Set(pairs.flat())].map(baseCurrencyId => ({ baseCurrencyId, reviewStatus: "reviewed" })),
     },
     relations: pairs.map(coinIds => ({

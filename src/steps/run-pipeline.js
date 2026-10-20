@@ -49,7 +49,7 @@ export async function runPipeline ({ runStep, onWarning = console.warn } = {}) {
 
   try {
     await waitFor([
-      start("step1-crypto-universe.js"),
+      start("step1-coin-list.js"),
       start("step3-market-context.js"),
     ])
 

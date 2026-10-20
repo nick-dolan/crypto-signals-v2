@@ -5,13 +5,13 @@ import { isArray } from "../../helpers/utils.typed.js"
 import { normalizeCoinGeckoTrending, selectCoinGeckoTrendingCoins } from "./build-coingecko-trending-context.js"
 
 export async function fetchCoinGeckoTrendingData ({
-  sourceUniverse,
+  sourceCoinList,
   request = requestCoinGeckoJson,
   pause = sleep,
   onProgress = () => {},
 } = {}) {
-  if (!isArray(sourceUniverse?.coins)) {
-    throw new Error("CoinGecko fetcher requires universe coins array")
+  if (!isArray(sourceCoinList?.coins)) {
+    throw new Error("CoinGecko fetcher requires a coin list array")
   }
 
   const [trending, futures] = await Promise.all([
@@ -23,7 +23,7 @@ export async function fetchCoinGeckoTrendingData ({
   const { coins } = normalizeCoinGeckoTrending(trending)
 
   const { coinIdsByMarket } = indexBinanceMarkets(futures)
-  const matchedCoins = selectCoinGeckoTrendingCoins(sourceUniverse, coins, coinIdsByMarket)
+  const matchedCoins = selectCoinGeckoTrendingCoins(sourceCoinList, coins, coinIdsByMarket)
   const coinCategories = []
 
   for (const coin of matchedCoins) {

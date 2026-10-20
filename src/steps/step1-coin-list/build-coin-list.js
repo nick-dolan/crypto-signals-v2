@@ -3,12 +3,12 @@ import { isArray, isSet, isString } from "../../helpers/utils.typed.js"
 
 import {
   isStablecoin,
-  normalizeUniverseCandidate,
-  selectUniverseMarketsByBaseCurrencyId,
-  toUniverseCoin,
+  normalizeCoinCandidate,
+  selectCoinMarketsByBaseCurrencyId,
+  toCoinListEntry,
   validatePositiveInteger,
-  validateUniqueUniverseCandidates,
-} from "./crypto-universe-helpers.js"
+  validateUniqueCoinCandidates,
+} from "./coin-list-helpers.js"
 
 function normalizeCoverageExcludedBaseCurrencyIds (value) {
   if (!isArray(value) && !isSet(value)) {
@@ -28,7 +28,7 @@ function normalizeCoverageExcludedBaseCurrencyIds (value) {
   return normalized
 }
 
-export function buildCryptoUniverse (
+export function buildCoinList (
   candidates,
   markets,
   {
@@ -39,7 +39,7 @@ export function buildCryptoUniverse (
   } = {},
 ) {
   if (!isArray(candidates)) {
-    throw new Error("Crypto universe candidates must be an array")
+    throw new Error("Coin list candidates must be an array")
   }
 
   validatePositiveInteger(candidateRankMax, "candidateRankMax")
@@ -50,10 +50,10 @@ export function buildCryptoUniverse (
   }
 
   const normalizedCandidates = candidates.map(
-    (candidate, index) => normalizeUniverseCandidate(candidate, index, candidateRankMax),
+    (candidate, index) => normalizeCoinCandidate(candidate, index, candidateRankMax),
   )
 
-  validateUniqueUniverseCandidates(normalizedCandidates)
+  validateUniqueCoinCandidates(normalizedCandidates)
 
   const excludedBaseCurrencyIds = normalizeCoverageExcludedBaseCurrencyIds(
     coverageExcludedBaseCurrencyIds,
@@ -61,7 +61,7 @@ export function buildCryptoUniverse (
   const orderedCandidates = normalizedCandidates.sort(
     (first, second) => first.rank - second.rank,
   )
-  const selectedMarkets = selectUniverseMarketsByBaseCurrencyId(markets)
+  const selectedMarkets = selectCoinMarketsByBaseCurrencyId(markets)
   const eligibleCandidates = []
   let excludedStablecoinCount = 0
   let excludedCoverageCount = 0
@@ -90,7 +90,7 @@ export function buildCryptoUniverse (
 
   const coins = eligibleCandidates
     .slice(0, targetCount)
-    .map(({ candidate, market }) => toUniverseCoin(candidate, market))
+    .map(({ candidate, market }) => toCoinListEntry(candidate, market))
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),

@@ -2,7 +2,7 @@ import { writeTmpJson } from "./helpers/fs-helper.js"
 import { runStep } from "./helpers/run-step-helper.js"
 import { buildBaseSeries } from "./steps/step4-feature-metrics/build-base-series.js"
 import { buildFeatureProfiles } from "./steps/step4-feature-metrics/build-feature-profiles.js"
-import { buildUniverseContext } from "./steps/step4-feature-metrics/build-universe-context.js"
+import { buildCoinListContext } from "./steps/step4-feature-metrics/build-coin-list-context.js"
 import { readFeatureInput } from "./steps/step4-feature-metrics/read-feature-input.js"
 
 function logProgress (event) {
@@ -19,22 +19,22 @@ function logProgress (event) {
 async function runFeatureMetricsStep () {
   const input = await readFeatureInput()
   const baseCoins = buildBaseSeries(input)
-  const universeContext = buildUniverseContext(baseCoins, input.marketContext, input.coinPeers)
+  const coinListContext = buildCoinListContext(baseCoins, input.marketContext, input.coinPeers)
   const { profiles, rejected } = buildFeatureProfiles(
     baseCoins,
-    universeContext,
+    coinListContext,
     { onProgress: logProgress },
   )
   const output = {
     generatedAt: new Date().toISOString(),
-    asOf: universeContext.asOf,
+    asOf: coinListContext.asOf,
     source: "tradingview",
     timeframe: "1h",
     marketContext: {
-      breadth6h: universeContext.universeBreadth6h.at(-1),
-      altMarketBackground: universeContext.altMarketBackground,
-      segmentShareChange6h: universeContext.segmentShareChange6h.at(-1),
-      stablecapChange6h: universeContext.stablecapChange6h.at(-1),
+      breadth6h: coinListContext.breadth6h.at(-1),
+      altMarketBackground: coinListContext.altMarketBackground,
+      segmentShareChange6h: coinListContext.segmentShareChange6h.at(-1),
+      stablecapChange6h: coinListContext.stablecapChange6h.at(-1),
     },
     coinCount: profiles.length,
     rejectedCoinCount: rejected.length,

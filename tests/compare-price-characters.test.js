@@ -1,8 +1,12 @@
 import assert from "node:assert/strict"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import test from "node:test"
 
 import { isFinite } from "../src/helpers/utils.typed.js"
 import { comparePriceCharacters } from "../src/research/compare-price-characters.js"
+import { runPriceCharacterScan } from "../src/research/scan-price-characters.js"
 
 function fixture (baseCurrencyId = "XTVCREF", analysisDays = 58) {
   const endTime = 1_800_000_000
@@ -32,7 +36,7 @@ function fixture (baseCurrencyId = "XTVCREF", analysisDays = 58) {
 
 function compare (profiles, reference = fixture()) {
   return comparePriceCharacters({
-    reference, profiles, universeGeneratedAt: "2027-01-15T06:00:00.000Z", universeCount: profiles.length + 1,
+    reference, profiles, coinListGeneratedAt: "2027-01-15T06:00:00.000Z", coinCount: profiles.length + 1,
   })
 }
 
@@ -63,6 +67,9 @@ test("tied midranks precede eligibility gates and all six distance groups have e
   }
   const result = compare([high, low, clone], reference)
   const entry = candidate(result, "XTVCLOW")
+
+  assert.equal(result.coinListGeneratedAt, "2027-01-15T06:00:00.000Z")
+  assert.equal(result.coverage.total, 4)
 
   // Midranks are 1/8 for low, 1/2 for reference/clone and 7/8 for high, even though high is ineligible.
   for (const group of ["bursts", "pace", "wicks", "path", "amplitude"]) {
@@ -102,4 +109,74 @@ test("missing historical baselines and matching metrics from a different period 
     window.endTime += 900
   })
   assert.throws(() => compare([shifted]), /одинаковые полные периоды/)
+})
+
+function coinListFixture (symbol) {
+  return {
+    generatedAt: "2027-01-15T06:00:00.000Z",
+    coins: ["PROVE", symbol].map((symbol, index) => ({
+      baseCurrencyId: `XTVC${symbol}`, symbol, rank: index + 1,
+      market: { tradingViewSymbol: `BINANCE:${symbol}USDT.P` },
+    })),
+  }
+}
+
+async function scanDirectory (context) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "price-character-"))
+  context.after(() => fs.rm(directory, { recursive: true, force: true }))
+  return directory
+}
+
+test("resuming migrates the legacy frozen coin list without replacing its coins or cached snapshots", async (context) => {
+  const directory = await scanDirectory(context)
+  const coinList = coinListFixture("OLD")
+  const coinListPath = path.join(directory, "current-coin-list.json")
+  const snapshot = {
+    source: "tradingview", symbol: "PROVE", marketSymbol: "BINANCE:PROVEUSDT.P", timeframe: "15m",
+    endTime: 1_800_000_000, analysisDays: 30,
+    periods: Array.from({ length: 30 * 96 + 97 }, (_, index) => ({
+      time: 1_800_000_000 - (30 * 96 + 97 - index) * 900,
+      open: 100 + index / 100, max: 101 + index / 100, min: 99 + index / 100,
+      close: 100.5 + index / 100, volume: 100,
+    })),
+  }
+  await fs.mkdir(path.join(directory, "candles"))
+  await Promise.all([
+    fs.writeFile(path.join(directory, "reference.json"), JSON.stringify(snapshot)),
+    fs.writeFile(path.join(directory, "universe.json"), JSON.stringify(coinList)),
+    fs.writeFile(coinListPath, JSON.stringify(coinListFixture("NEW"))),
+    fs.writeFile(path.join(directory, "candles", "XTVCOLD.json"), JSON.stringify({
+      ...snapshot, symbol: "OLD", marketSymbol: "BINANCE:OLDUSDT.P",
+    })),
+  ])
+
+  const report = await runPriceCharacterScan({ directory, coinListPath, cached: true })
+  assert.equal(report.coinListGeneratedAt, coinList.generatedAt)
+  assert.equal(report.coverage.total, 2)
+  assert.equal(report.coverage.loaded, 2)
+  assert.deepEqual(report.candidates.map(coin => coin.baseCurrencyId), ["XTVCOLD"])
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "coin-list.json"), "utf8")), coinList)
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "universe.json"), "utf8")), coinList)
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "report.json"), "utf8")), JSON.parse(JSON.stringify(report)))
+
+  await Promise.all([fs.rm(path.join(directory, "universe.json")), fs.rm(coinListPath)])
+  const resumed = await runPriceCharacterScan({ directory, coinListPath, cached: true })
+  assert.equal(resumed.coinListGeneratedAt, coinList.generatedAt)
+  assert.deepEqual(resumed.candidates.map(coin => coin.baseCurrencyId), ["XTVCOLD"])
+  assert.equal(resumed.coverage.loaded, 2)
+})
+
+test("conflicting frozen coin lists stop a resumed scan without overwriting either list", async (context) => {
+  const directory = await scanDirectory(context)
+  const previous = coinListFixture("OLD")
+  const current = coinListFixture("NEW")
+  await Promise.all([
+    fs.writeFile(path.join(directory, "reference.json"), "{}"),
+    fs.writeFile(path.join(directory, "universe.json"), JSON.stringify(previous)),
+    fs.writeFile(path.join(directory, "coin-list.json"), JSON.stringify(current)),
+  ])
+
+  await assert.rejects(runPriceCharacterScan({ directory, cached: true }), /Conflicting frozen coin lists/)
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "universe.json"), "utf8")), previous)
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, "coin-list.json"), "utf8")), current)
 })

@@ -321,7 +321,7 @@ test("profile assembly aligns short delta history, keeps latest calculations and
   }
   hourlyData.studies.volumeDelta.periods = hourlyData.studies.volumeDelta.periods.slice(734)
   const series = buildAlignedCoinSeries(hourlyData, times)
-  const universeContext = {
+  const coinListContext = {
     btcClose: createSeries(index => 200 + Math.sin(index / 17)),
     total3esClose: createSeries(index => 500 + Math.sin(index / 7)),
     categoryContextsByCoin: new Map([["TARGET", {
@@ -331,7 +331,7 @@ test("profile assembly aligns short delta history, keeps latest calculations and
       coinLeadsCategory: createSeries(() => null),
     }]]),
   }
-  const calculated = calculateCoinMetrics(series, universeContext, "TARGET")
+  const calculated = calculateCoinMetrics(series, coinListContext, "TARGET")
   const baseCoin = { coin: hourlyData.coin, categories: [], metadata: { marketCap: 1_000 } }
   const { profile, rejection } = createFeatureProfile(baseCoin, series, calculated)
 
@@ -359,7 +359,7 @@ test("profile assembly aligns short delta history, keeps latest calculations and
   }
   const socialSeries = buildAlignedCoinSeries(socialData, times)
   assert.deepEqual(socialSeries.activePosts, createSeries(index => index >= 2_234 ? 42 : 0))
-  const socialCalculated = calculateCoinMetrics(socialSeries, universeContext, "TARGET")
+  const socialCalculated = calculateCoinMetrics(socialSeries, coinListContext, "TARGET")
   const available = createFeatureProfile(baseCoin, socialSeries, socialCalculated)
   assert.equal(available.rejection, null)
   assert.equal(available.profile.context.socialStatus, "available")

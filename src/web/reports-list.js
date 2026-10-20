@@ -20,7 +20,7 @@
         && isArray(item.reports) && item.reports.every(report => isObject(report) && isReportId(report.id)
           && validTimestamp(report.reportCreatedAt) && validTimestamp(report.asOf)
           && isSafeInteger(report.candidateCount) && report.candidateCount >= 0
-          && isSafeInteger(report.universeCoinCount) && report.universeCoinCount >= 0))
+          && isSafeInteger(report.coinCount) && report.coinCount >= 0))
   }
 
   function time (value) {
@@ -44,7 +44,7 @@
     const counts = element("div", "report-counts")
     counts.append(
       element("span", "", `Кандидатов: ${report.candidateCount}`),
-      element("span", "muted", `Монет во вселенной: ${report.universeCoinCount}`),
+      element("span", "muted", `Монет в списке: ${report.coinCount}`),
     )
     const download = element("a", "report-download", "Скачать HTML")
     download.href = `/api/reports/${encodeURIComponent(report.id)}/download`

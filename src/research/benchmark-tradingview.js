@@ -10,7 +10,7 @@ import { fetchTradingViewChartStudies } from "../api/tradingview/chart-studies.j
 import { connectTradingView, disconnectTradingView } from "../api/tradingview/client.js"
 import { isError, isFinite, isSafeInteger, isString } from "../helpers/utils.typed.js"
 import { createBootstrapDataRelativePath, createCoinDataCoverageChecker } from "../steps/step2-data-bootstrap/check-coin-data-coverage.js"
-import { getClosedHourlyPeriods, normalizeSourceUniverse } from "../steps/step2-data-bootstrap/data-coverage-helpers.js"
+import { getClosedHourlyPeriods, normalizeSourceCoinList } from "../steps/step2-data-bootstrap/data-coverage-helpers.js"
 
 function errorMessage (error) {
   let message = isError(error) ? error.message : String(error)
@@ -93,8 +93,8 @@ export async function runTradingViewBenchmark (
   }
 
   const root = path.resolve(directory)
-  const [sourceUniverse, reference, previous] = await Promise.all([
-    fs.readFile(path.join(root, "inputs", "step1-crypto-universe.json"), "utf8").then(JSON.parse),
+  const [sourceCoinList, reference, previous] = await Promise.all([
+    fs.readFile(path.join(root, "inputs", "step1-coin-list.json"), "utf8").then(JSON.parse),
     fs.readFile(path.join(root, "inputs", "step3-market-context.json"), "utf8").then(JSON.parse),
     baseline ? fs.readFile(baseline, "utf8").then(JSON.parse) : null,
   ])
@@ -102,7 +102,7 @@ export async function runTradingViewBenchmark (
   if (!isFinite(nowTimestamp)) {
     throw new Error("Frozen collectedAt is required")
   }
-  const { candidates } = normalizeSourceUniverse(sourceUniverse)
+  const { candidates } = normalizeSourceCoinList(sourceCoinList)
   const coins = [...candidates].sort((first, second) => first.rank - second.rank).slice(0, count)
   if (count !== undefined && coins.length !== count) {
     throw new Error(`Requested ${count} coins; only ${coins.length} are available`)

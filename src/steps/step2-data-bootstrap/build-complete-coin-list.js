@@ -6,14 +6,14 @@ import { isFunction, isString } from "../../helpers/utils.typed.js"
 import {
   checkWithRetry,
   createCoverageRejection,
-  normalizeSourceUniverse,
+  normalizeSourceCoinList,
   summarizeRejections,
   toPublicMarket,
   validatePositiveInteger,
 } from "./data-coverage-helpers.js"
 
-export async function buildCompleteCryptoUniverse (
-  sourceUniverse,
+export async function buildCompleteCoinList (
+  sourceCoinList,
   checkCoverage,
   {
     concurrency = 6,
@@ -23,7 +23,7 @@ export async function buildCompleteCryptoUniverse (
     reportError,
   } = {},
 ) {
-  const { source, selection, candidates } = normalizeSourceUniverse(sourceUniverse)
+  const { source, selection, candidates } = normalizeSourceCoinList(sourceCoinList)
 
   validatePositiveInteger(concurrency, "concurrency")
   validatePositiveInteger(maxAttempts, "maxAttempts")

@@ -5,8 +5,8 @@ import { readCoinPeers } from "../../helpers/coin-peers-helper.js"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 
 export async function readPeerRadarInput () {
-  const [sourceUniverse, bootstrapSummary, coinPeers, entries] = await Promise.all([
-    readTmpJson("step1-crypto-universe.json"),
+  const [sourceCoinList, bootstrapSummary, coinPeers, entries] = await Promise.all([
+    readTmpJson("step1-coin-list.json"),
     readTmpJson("step2-data-bootstrap.json"),
     readCoinPeers(),
     fs.readdir(path.resolve("tmp", "step2-data-bootstrap"), { withFileTypes: true }),
@@ -20,5 +20,5 @@ export async function readPeerRadarInput () {
     throw new Error(`Step 2 declares ${bootstrapSummary.coinCount} coins but contains ${files.length} data files`)
   }
 
-  return { sourceUniverse, coinPeers, coinData: await Promise.all(files.map(readTmpJson)) }
+  return { sourceCoinList, coinPeers, coinData: await Promise.all(files.map(readTmpJson)) }
 }

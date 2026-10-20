@@ -17,7 +17,7 @@ function createInput (last = 804) {
     market: { tradingViewSymbol: `BINANCE:${id}USDT.P` },
   }))
   const input = {
-    sourceUniverse: { generatedAt: new Date((times.at(-1) + 3_600) * 1_000).toISOString(), coins },
+    sourceCoinList: { generatedAt: new Date((times.at(-1) + 3_600) * 1_000).toISOString(), coins },
     coinData: coins.map(coin => ({
       coin: { baseCurrencyId: coin.baseCurrencyId, marketSymbol: coin.market.tradingViewSymbol },
       chart: { periods: times.map(time => ({ time, close: 100, max: 101, min: 99, volume: 100 })) },
@@ -25,7 +25,7 @@ function createInput (last = 804) {
     coinPeers: {
       schemaVersion: 1,
       generatedAt: "2026-07-31T00:00:00.000Z",
-      universe: { coins: coins.map(({ baseCurrencyId }) => ({ baseCurrencyId, reviewStatus: "reviewed" })) },
+      coinList: { coins: coins.map(({ baseCurrencyId }) => ({ baseCurrencyId, reviewStatus: "reviewed" })) },
       relations: [{ coinIds: ["TARGET", "LEADER"], type: "competitor", basis: "Shared product", caveat: "Different token economics" }],
     },
   }

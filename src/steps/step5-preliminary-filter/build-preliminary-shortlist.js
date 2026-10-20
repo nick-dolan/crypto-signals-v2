@@ -394,7 +394,7 @@ export function buildPreliminaryShortlist (profiles) {
   }))
 
   return {
-    universeCoinCount: profiles.length,
+    coinCount: profiles.length,
     candidateCount: candidates.length,
     excludedCoinCount: profiles.length - candidates.length,
     filter: {

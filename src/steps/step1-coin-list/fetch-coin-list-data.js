@@ -1,7 +1,7 @@
 import { fetchTradingViewCoins } from "../../api/tradingview/coin-screener.js"
 import { fetchTradingViewCryptoMarkets } from "../../api/tradingview/crypto-market-screener.js"
 
-export async function fetchCryptoUniverseData () {
+export async function fetchCoinListData () {
   const candidates = await fetchTradingViewCoins({ rankMax: 500 })
 
   const markets = await fetchTradingViewCryptoMarkets({

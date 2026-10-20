@@ -11,7 +11,7 @@ export function validatePositiveInteger (value, name) {
 
 function validateCandidateMarket (candidate, index) {
   const market = candidate.market
-  const fieldName = `Crypto universe candidate at index ${index} market`
+  const fieldName = `Coin list candidate at index ${index} market`
 
   if (!isObject(market)) {
     throw new Error(`${fieldName} is required`)
@@ -27,29 +27,29 @@ function validateCandidateMarket (candidate, index) {
 
 function validateCandidates (candidates) {
   if (!isArray(candidates)) {
-    throw new Error("Crypto universe candidates must be an array")
+    throw new Error("Coin list candidates must be an array")
   }
 
   const baseCurrencyIds = new Set()
 
   for (const [index, candidate] of candidates.entries()) {
     if (!isObject(candidate)) {
-      throw new Error(`Crypto universe candidate at index ${index} must be an object`)
+      throw new Error(`Coin list candidate at index ${index} must be an object`)
     }
 
     if (!isSafeInteger(candidate.rank) || candidate.rank <= 0) {
-      throw new Error(`Crypto universe candidate at index ${index} rank is invalid`)
+      throw new Error(`Coin list candidate at index ${index} rank is invalid`)
     }
 
     getRequiredString(
       candidate.baseCurrencyId,
-      `Crypto universe candidate at index ${index} baseCurrencyId`,
+      `Coin list candidate at index ${index} baseCurrencyId`,
     )
     validateCandidateMarket(candidate, index)
 
     if (baseCurrencyIds.has(candidate.baseCurrencyId)) {
       throw new Error(
-        `Crypto universe contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
+        `Coin list contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
       )
     }
 
@@ -57,24 +57,24 @@ function validateCandidates (candidates) {
   }
 }
 
-export function normalizeSourceUniverse (sourceUniverse) {
-  if (!isObject(sourceUniverse)) {
-    throw new Error("Source crypto universe must be an object")
+export function normalizeSourceCoinList (sourceCoinList) {
+  if (!isObject(sourceCoinList)) {
+    throw new Error("Source coin list must be an object")
   }
 
-  const source = getRequiredString(sourceUniverse.source, "Crypto universe source")
-  const selection = sourceUniverse.selection
+  const source = getRequiredString(sourceCoinList.source, "Coin list source")
+  const selection = sourceCoinList.selection
 
   if (!isObject(selection)) {
-    throw new Error("Crypto universe selection is required")
+    throw new Error("Coin list selection is required")
   }
 
-  validateCandidates(sourceUniverse.coins)
+  validateCandidates(sourceCoinList.coins)
 
   return {
     source,
     selection: { ...selection },
-    candidates: sourceUniverse.coins,
+    candidates: sourceCoinList.coins,
   }
 }
 

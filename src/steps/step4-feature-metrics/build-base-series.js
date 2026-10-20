@@ -85,7 +85,7 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
     || times.length !== expectedTimes.length
     || !times.every((time, index) => time === expectedTimes[index])
   ) {
-    throw new Error(`${hourlyData?.coin?.symbol ?? "Coin"} does not use the universe hourly grid`)
+    throw new Error(`${hourlyData?.coin?.symbol ?? "Coin"} does not use the shared hourly grid`)
   }
 
   return {
@@ -141,16 +141,16 @@ export function buildAlignedCoinSeries (hourlyData, expectedTimes) {
   }
 }
 
-export function buildBaseSeries ({ coinData, sourceUniverse, coingeckoTrending }) {
-  if (coingeckoTrending && coingeckoTrending.universeGeneratedAt !== sourceUniverse.generatedAt) {
-    throw new Error("CoinGecko context does not match the current universe; rerun step 3.1")
+export function buildBaseSeries ({ coinData, sourceCoinList, coingeckoTrending }) {
+  if (coingeckoTrending && coingeckoTrending.coinListGeneratedAt !== sourceCoinList.generatedAt) {
+    throw new Error("CoinGecko context does not match the current coin list; rerun step 3.1")
   }
 
   const coingeckoById = new Map(
     (coingeckoTrending ? coingeckoTrending.matches : []).map(match => [match.baseCurrencyId, match]),
   )
   const metadataById = new Map(
-    sourceUniverse.coins.map(coin => [coin.baseCurrencyId, coin]),
+    sourceCoinList.coins.map(coin => [coin.baseCurrencyId, coin]),
   )
 
   return coinData.map((hourlyData) => {

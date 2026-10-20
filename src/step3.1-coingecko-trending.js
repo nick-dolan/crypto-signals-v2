@@ -4,14 +4,14 @@ import { buildCoinGeckoTrendingContext } from "./steps/step3.1-coingecko-trendin
 import { fetchCoinGeckoTrendingData } from "./steps/step3.1-coingecko-trending/fetch-coingecko-trending-data.js"
 
 async function runCoinGeckoTrendingStep () {
-  const sourceUniverse = await readTmpJson("step1-crypto-universe.json")
+  const sourceCoinList = await readTmpJson("step1-coin-list.json")
   const data = await fetchCoinGeckoTrendingData({
-    sourceUniverse,
+    sourceCoinList,
     onProgress: ({ index, total, coinId }) => {
       console.log(`✓ Loaded CoinGecko categories ${index}/${total}: ${coinId}`)
     },
   })
-  const context = buildCoinGeckoTrendingContext(sourceUniverse, data)
+  const context = buildCoinGeckoTrendingContext(sourceCoinList, data)
   const outputPath = await writeTmpJson("step3.1-coingecko-trending.json", context)
 
   console.log(`✓ Loaded ${context.trendingCoins.length} trending coins and ${context.trendingCategories.length} trending categories`)

@@ -3,7 +3,7 @@ import { constants } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import { parseArgs } from "node:util"
+import { isDeepStrictEqual, parseArgs } from "node:util"
 
 import { fetchTradingViewChartPeriods } from "../api/tradingview/chart-candles.js"
 import { connectTradingView, disconnectTradingView } from "../api/tradingview/client.js"
@@ -49,17 +49,27 @@ async function freezeJson (file, source) {
   }
 }
 
+async function freezeCoinList (directory, source) {
+  const legacyPath = path.join(directory, "universe.json")
+  const previous = await readOptionalJson(legacyPath)
+  const coinList = await freezeJson(path.join(directory, "coin-list.json"), previous ? legacyPath : source)
+  if (previous && !isDeepStrictEqual(coinList, previous)) {
+    throw new Error("Conflicting frozen coin lists; resolve the saved inputs before resuming")
+  }
+  return coinList
+}
+
 async function writeJson (file, data) {
   const temporary = `${file}.${process.pid}.tmp`
   await fs.writeFile(temporary, JSON.stringify(data), "utf8")
   await fs.rename(temporary, file)
 }
 
-function universeCoins (universe) {
-  if (!isArray(universe?.coins) || !universe.coins.length) {
-    throw new Error("A nonempty crypto universe is required")
+function normalizeCoinListCoins (coinList) {
+  if (!isArray(coinList?.coins) || !coinList.coins.length) {
+    throw new Error("A nonempty coin list is required")
   }
-  const coins = universe.coins.map(coin => ({
+  const coins = coinList.coins.map(coin => ({
     baseCurrencyId: coin.baseCurrencyId,
     symbol: coin.symbol,
     name: coin.name,
@@ -69,11 +79,11 @@ function universeCoins (universe) {
   if (coins.some(coin => !isString(coin.baseCurrencyId) || !/^[A-Za-z0-9_-]+$/.test(coin.baseCurrencyId)
     || !isString(coin.symbol) || !coin.symbol.trim()
     || !isString(coin.marketSymbol) || !/^BINANCE:[A-Z0-9_]+USDT\.P$/.test(coin.marketSymbol))) {
-    throw new Error("Universe requires safe unique IDs and Binance USDT perpetual symbols")
+    throw new Error("The coin list requires safe unique IDs and Binance USDT perpetual symbols")
   }
   if (new Set(coins.map(coin => coin.baseCurrencyId)).size !== coins.length
     || new Set(coins.map(coin => coin.marketSymbol)).size !== coins.length) {
-    throw new Error("Duplicate coin ID or market in the universe")
+    throw new Error("Duplicate coin ID or market in the coin list")
   }
   return coins
 }
@@ -99,7 +109,7 @@ function reason (error) {
 export async function runPriceCharacterScan ({
   directory = "reports/price-character",
   referencePath = "reports/prove-15m/candles.json",
-  universePath = "tmp/step1-crypto-universe.json",
+  coinListPath = "tmp/step1-coin-list.json",
   limit = 50,
   cached = false,
   retryFailed = false,
@@ -113,11 +123,11 @@ export async function runPriceCharacterScan ({
   }
   await Promise.all(["", "candles", "results"].map(part => fs.mkdir(path.join(directory, part), { recursive: true })))
   const referenceSnapshot = await freezeJson(path.join(directory, "reference.json"), referencePath)
-  const universe = await freezeJson(path.join(directory, "universe.json"), universePath)
-  const coins = universeCoins(universe)
+  const coinList = await freezeCoinList(directory, coinListPath)
+  const coins = normalizeCoinListCoins(coinList)
   const referenceCoin = coins.find(coin => coin.symbol === "PROVE" && coin.marketSymbol === "BINANCE:PROVEUSDT.P")
   if (!referenceCoin) {
-    throw new Error("PROVE must be present in the frozen universe")
+    throw new Error("PROVE must be present in the frozen coin list")
   }
   const reference = toProfile(referenceSnapshot, referenceCoin, referenceSnapshot)
   const profiles = new Map([[referenceCoin.baseCurrencyId, reference]])
@@ -215,8 +225,8 @@ export async function runPriceCharacterScan ({
   const report = comparePriceCharacters({
     reference,
     profiles: [...profiles.values()].filter(profile => profile.baseCurrencyId !== referenceCoin.baseCurrencyId),
-    universeGeneratedAt: universe.generatedAt,
-    universeCount: coins.length,
+    coinListGeneratedAt: coinList.generatedAt,
+    coinCount: coins.length,
     rejected: [...rejected.values()].sort((first, second) => first.coin.rank - second.coin.rank),
     pending: coins.filter(coin => !profiles.has(coin.baseCurrencyId) && !rejected.has(coin.baseCurrencyId)),
   })

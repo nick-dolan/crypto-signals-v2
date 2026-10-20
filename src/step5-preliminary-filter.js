@@ -6,9 +6,9 @@ async function runPreliminaryFilterStep () {
   const featureMetrics = await readTmpJson("step4-feature-metrics.json")
   const shortlist = buildPreliminaryShortlist(featureMetrics.profiles)
 
-  if (featureMetrics.coinCount !== shortlist.universeCoinCount) {
+  if (featureMetrics.coinCount !== shortlist.coinCount) {
     throw new Error(
-      `Step 4 declares ${featureMetrics.coinCount} profiles but contains ${shortlist.universeCoinCount}`,
+      `Step 4 declares ${featureMetrics.coinCount} profiles but contains ${shortlist.coinCount}`,
     )
   }
 
@@ -24,7 +24,7 @@ async function runPreliminaryFilterStep () {
   const outputPath = await writeTmpJson("step5-preliminary-filter.json", output)
 
   console.log(
-    `✓ Selected ${output.candidateCount} of ${output.universeCoinCount} feature profiles`,
+    `✓ Selected ${output.candidateCount} of ${output.coinCount} feature profiles`,
   )
   console.log(`✓ Saved preliminary shortlist to ${outputPath}`)
 }

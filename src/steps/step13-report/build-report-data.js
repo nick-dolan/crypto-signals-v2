@@ -60,10 +60,10 @@ function validateReportInputs (analysis, payload, shortlist) {
   }
 
   if (
-    !isSafeInteger(shortlist.universeCoinCount)
-    || shortlist.universeCoinCount < shortlist.candidateCount
+    !isSafeInteger(shortlist.coinCount)
+    || shortlist.coinCount < shortlist.candidateCount
   ) {
-    throw new Error("Step 5 universe coin count must include all candidates")
+    throw new Error("Step 5 coin count must include all candidates")
   }
 
   if ([rowsBySymbol, shortlistBySymbol].some(bySymbol => (
@@ -133,7 +133,7 @@ export async function buildReportData (
     timeframe: "1h",
     objective: analysis.objective ?? payload.objective,
     candidateCount: analysis.candidateCount,
-    universeCoinCount: shortlist.universeCoinCount,
+    coinCount: shortlist.coinCount,
     marketContext: payload.marketContext,
     altMarketBackground: payload.marketContext?.altMarketBackground ?? null,
     marketDefinitions: payload.marketDefinitions,

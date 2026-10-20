@@ -27,8 +27,8 @@ export function normalizeCoinGeckoTrending (trending) {
   }
 }
 
-export function selectCoinGeckoTrendingCoins (sourceUniverse, coins, coinIdsByMarket) {
-  const candidateIds = new Set(sourceUniverse.coins.map(coin => (
+export function selectCoinGeckoTrendingCoins (sourceCoinList, coins, coinIdsByMarket) {
+  const candidateIds = new Set(sourceCoinList.coins.map(coin => (
     coinIdsByMarket.get(coin.market.tradingViewSymbol)
   )))
 
@@ -36,18 +36,18 @@ export function selectCoinGeckoTrendingCoins (sourceUniverse, coins, coinIdsByMa
 }
 
 export function buildCoinGeckoTrendingContext (
-  sourceUniverse,
+  sourceCoinList,
   { trending, futures, coinCategories },
   { generatedAt = new Date().toISOString() } = {},
 ) {
-  if (!isArray(sourceUniverse?.coins) || !isArray(coinCategories)) {
-    throw new Error("CoinGecko context requires universe coins and coin categories arrays")
+  if (!isArray(sourceCoinList?.coins) || !isArray(coinCategories)) {
+    throw new Error("CoinGecko context requires a coin list and coin categories arrays")
   }
 
   const normalized = normalizeCoinGeckoTrending(trending)
   const { coinIdsByMarket, skippedMissingCoinIdCount } = indexBinanceMarkets(futures)
   const matchedCoinIds = new Set(selectCoinGeckoTrendingCoins(
-    sourceUniverse, normalized.coins, coinIdsByMarket,
+    sourceCoinList, normalized.coins, coinIdsByMarket,
   ).map(coin => coin.id))
   const categoriesById = new Map(coinCategories.map(coin => [coin.id, coin.categories]))
   const trendingCoins = normalized.coins.map((coin) => {
@@ -76,7 +76,7 @@ export function buildCoinGeckoTrendingContext (
     }
   })
   const trendingById = new Map(trendingCoins.map(coin => [coin.id, coin]))
-  const matches = sourceUniverse.coins.flatMap((coin) => {
+  const matches = sourceCoinList.coins.flatMap((coin) => {
     const marketSymbol = coin.market.tradingViewSymbol
     const trendingCoin = trendingById.get(coinIdsByMarket.get(marketSymbol))
 
@@ -95,7 +95,7 @@ export function buildCoinGeckoTrendingContext (
 
   return {
     generatedAt: toIsoTimestamp(generatedAt, "generatedAt"),
-    universeGeneratedAt: toIsoTimestamp(sourceUniverse.generatedAt, "universeGeneratedAt"),
+    coinListGeneratedAt: toIsoTimestamp(sourceCoinList.generatedAt, "coinListGeneratedAt"),
     source: "coingecko",
     skippedMissingCoinIdCount,
     trendingCategories: normalized.categories,

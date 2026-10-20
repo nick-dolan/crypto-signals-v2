@@ -130,7 +130,7 @@ function compareEntries (first, second, metric) {
   return first.baseCurrencyId < second.baseCurrencyId ? -1 : 1
 }
 
-export function comparePriceCharacters ({ reference, profiles, universeGeneratedAt, universeCount, rejected = [], pending = [] }) {
+export function comparePriceCharacters ({ reference, profiles, coinListGeneratedAt, coinCount, rejected = [], pending = [] }) {
   if (!isArray(profiles) || !isArray(rejected) || !isArray(pending)) {
     throw new Error("profiles, rejected и pending должны быть массивами")
   }
@@ -141,8 +141,8 @@ export function comparePriceCharacters ({ reference, profiles, universeGenerated
   if (new Set(ids).size !== ids.length) {
     throw new Error("Дубликаты baseCurrencyId между эталоном, profiles, rejected или pending недопустимы")
   }
-  if (!isInt(universeCount) || universeCount < ids.length) {
-    throw new Error("universeCount должен быть целым и не меньше числа учтённых монет")
+  if (!isInt(coinCount) || coinCount < ids.length) {
+    throw new Error("Число монет должно быть целым и не меньше числа учтённых монет")
   }
   const analysisDays = reference.coverage?.analysisDays
   if (!isInt(analysisDays) || analysisDays < 30 || analysisDays > 90
@@ -221,13 +221,13 @@ export function comparePriceCharacters ({ reference, profiles, universeGenerated
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    universeGeneratedAt,
+    coinListGeneratedAt,
     timeframe: "15m",
     analysisDays,
     startTime: reference.startTime,
     endTime: reference.endTime,
     coverage: {
-      total: universeCount, loaded: profiles.length + 1, failed: rejected.length, pending: pending.length,
+      total: coinCount, loaded: profiles.length + 1, failed: rejected.length, pending: pending.length,
       eligible: candidates.filter(entry => entry.eligible).length,
     },
     reference: entries[0],
@@ -242,10 +242,10 @@ export function comparePriceCharacters ({ reference, profiles, universeGenerated
       analysisDays < reference.coverage.requestedDays
         ? `Ограничение исходной истории эталона унаследовано: ${analysisDays} дней из запрошенных ${reference.coverage.requestedDays}; более длинные окна не достраиваем.`
         : null,
-      profiles.length + 1 < universeCount ? `Неполное покрытие: загружено ${profiles.length + 1} из ${universeCount} монет.` : null,
+      profiles.length + 1 < coinCount ? `Неполное покрытие: загружено ${profiles.length + 1} из ${coinCount} монет.` : null,
       pending.length ? `Ожидают загрузки ${pending.length} монет: ранги предварительные, состав когорты и оценки могут измениться.` : null,
       rejected.length ? `Не загружено ${rejected.length} монет: они не сравнивались; причины сохранены в rejected.` : null,
-      ids.length < universeCount ? `Для ${universeCount - ids.length} монет нет профиля или статуса загрузки; ранги предварительные.` : null,
+      ids.length < coinCount ? `Для ${coinCount - ids.length} монет нет профиля или статуса загрузки; ранги предварительные.` : null,
       described[0].exclusions.length ? "Эталон содержит неполные или некорректные метрики: ранжирование недоступно." : null,
     ].filter(Boolean),
     methodology: [

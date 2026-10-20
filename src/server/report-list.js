@@ -63,7 +63,7 @@ function metadataRow (metadata) {
       reportCreatedAt: metadata.reportCreatedAt,
       asOf: metadata.asOf,
       candidateCount: metadata.candidateCount,
-      universeCoinCount: metadata.universeCoinCount,
+      coinCount: metadata.coinCount,
     },
   }
 }

@@ -12,7 +12,7 @@ import { calculateVolumeOrderFlowMetrics } from "./metrics/volume-order-flow.js"
 
 export function calculateCoinMetrics (
   coinSeries,
-  universeContext,
+  coinListContext,
   baseCurrencyId,
 ) {
   const atr24hPct = calculateAtr24hPct(coinSeries)
@@ -35,19 +35,19 @@ export function calculateCoinMetrics (
     : null
   const relativeStrength = calculateRelativeStrengthMetrics({
     coinClose: coinSeries.close,
-    btcClose: universeContext.btcClose,
-    total3esClose: universeContext.total3esClose,
+    btcClose: coinListContext.btcClose,
+    total3esClose: coinListContext.total3esClose,
   })
-  const categoryContext = universeContext.categoryContextsByCoin.get(baseCurrencyId)
+  const categoryContext = coinListContext.categoryContextsByCoin.get(baseCurrencyId)
 
   if (!categoryContext) {
-    throw new Error(`${baseCurrencyId} is missing from the universe context`)
+    throw new Error(`${baseCurrencyId} is missing from the coin list context`)
   }
 
   const breadthNarrative = calculateBreadthNarrativeMetrics({ categoryContext })
   const divergences = calculateDivergenceFlags({
     close: coinSeries.close,
-    btcClose: universeContext.btcClose,
+    btcClose: coinListContext.btcClose,
     volatilityCompression,
     movementLifecycle,
     volumeOrderFlow,
@@ -60,7 +60,7 @@ export function calculateCoinMetrics (
   return {
     atr24hPct,
     categoryContext,
-    peerContext: universeContext.peerContextsByCoin?.get(baseCurrencyId) ?? null,
+    peerContext: coinListContext.peerContextsByCoin?.get(baseCurrencyId) ?? null,
     featureSeries: {
       volatilityCompression,
       movementLifecycle,
@@ -68,7 +68,7 @@ export function calculateCoinMetrics (
       derivatives,
       social,
       relativeStrength,
-      sustainedStrength: universeContext.sustainedStrengthByCoin?.get(baseCurrencyId) ?? null,
+      sustainedStrength: coinListContext.sustainedStrengthByCoin?.get(baseCurrencyId) ?? null,
       breadthNarrative,
       divergences,
     },

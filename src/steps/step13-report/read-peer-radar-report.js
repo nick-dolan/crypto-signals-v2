@@ -56,14 +56,14 @@ function isRadarReport (data) {
     || !isObject(data.coverage)
     || !["available", "partial", "no_peers", "insufficient_data", "not_covered", "unreviewed", "unavailable"]
       .every(key => isCount(data.coverage[key]))
-      || ![data.universeCoinCount, data.loadedCoinCount, data.candidateCount, data.observationCount, data.watchCount].every(isCount)
+      || ![data.coinCount, data.loadedCoinCount, data.candidateCount, data.observationCount, data.watchCount].every(isCount)
       || !isArray(data.observations) || !data.observations.every(isObservation)
   ) {
     return false
   }
 
   return Object.values(data.coverage).reduce((sum, count) => sum + count, 0) === data.loadedCoinCount
-    && data.loadedCoinCount <= data.universeCoinCount
+    && data.loadedCoinCount <= data.coinCount
     && data.observationCount <= data.loadedCoinCount
     && data.candidateCount === data.observationCount
     && data.observationCount === data.observations.length

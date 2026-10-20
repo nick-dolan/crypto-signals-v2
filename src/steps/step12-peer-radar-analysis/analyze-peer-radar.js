@@ -89,7 +89,7 @@ function buildPeerRadarFacts (scan) {
     ...selectFacts(
       scan,
       ["generatedAt", "asOf", "snapshotClosedAt", "timeframe"],
-      ["schemaVersion", "universeCoinCount", "loadedCoinCount", "candidateCount"],
+      ["schemaVersion", "coinCount", "loadedCoinCount", "candidateCount"],
       "Step 11 peer scan",
     ),
     registryGeneratedAt: scan.registryGeneratedAt,
@@ -113,7 +113,7 @@ function buildPeerRadarFacts (scan) {
   }
 
   if (
-    ![payload.universeCoinCount, payload.loadedCoinCount, ...Object.values(payload.coverage)]
+    ![payload.coinCount, payload.loadedCoinCount, ...Object.values(payload.coverage)]
       .every(value => isSafeInteger(value) && value >= 0)
       || Object.values(payload.coverage).reduce((sum, count) => sum + count, 0) !== payload.loadedCoinCount
   ) {

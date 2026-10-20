@@ -40,7 +40,7 @@ async function readRegistry (readFile) {
       return {
         schemaVersion: 1,
         language: "ru",
-        sourceNotes: "Накопительный справочник. Новые описания составлены по страницам, прочитанным через Tavily; checkedAt — дата получения текста, а не обновления проекта. universe указывает последний список, из которого добавлялись монеты.",
+        sourceNotes: "Накопительный справочник. Новые описания составлены по страницам, прочитанным через Tavily; checkedAt — дата получения текста, а не обновления проекта. coinList указывает последний список, из которого добавлялись монеты.",
         coins: [],
       }
     }
@@ -85,7 +85,7 @@ async function loadCoinGeckoDetails (coin, coinIdsByMarket, { request, pause, on
 }
 
 export async function updateCoinDescriptions (
-  sourceUniverse,
+  sourceCoinList,
   systemPrompt,
   {
     readFile = fs.readFile,
@@ -99,7 +99,7 @@ export async function updateCoinDescriptions (
     reportError = reportStepError,
   } = {},
 ) {
-  getCoinIds(sourceUniverse?.coins, "Step 1 universe")
+  getCoinIds(sourceCoinList?.coins, "Step 1 coin list")
   const registry = await readRegistry(readFile)
 
   if (!isObject(registry) || registry.schemaVersion !== 1 || registry.language !== "ru") {
@@ -107,7 +107,7 @@ export async function updateCoinDescriptions (
   }
 
   const knownIds = getCoinIds(registry.coins, "coin-descriptions.json")
-  const missing = sourceUniverse.coins.filter(coin => !knownIds.has(coin.baseCurrencyId))
+  const missing = sourceCoinList.coins.filter(coin => !knownIds.has(coin.baseCurrencyId))
   const result = { missingCount: missing.length, addedCount: 0, failedCount: 0, coinCount: registry.coins.length }
 
   if (!missing.length) {
@@ -115,7 +115,7 @@ export async function updateCoinDescriptions (
   }
 
   const prompt = getRequiredString(systemPrompt, "Coin description system prompt")
-  const sourceGeneratedAt = toIsoTimestamp(sourceUniverse.generatedAt, "Step 1 generatedAt")
+  const sourceGeneratedAt = toIsoTimestamp(sourceCoinList.generatedAt, "Step 1 generatedAt")
   let coinIdsByMarket = new Map()
 
   try {
@@ -158,14 +158,14 @@ export async function updateCoinDescriptions (
   }
 
   if (additions.length) {
-    // The universe is the latest source, not the contents of this cumulative registry.
+    // The coin list is the latest source, not the contents of this cumulative registry.
     const coins = [...registry.coins, ...additions]
     await saveRegistry({
       ...registry,
       generatedAt: new Date().toISOString(),
-      universe: {
-        ...registry.universe,
-        sourcePath: "tmp/step1-crypto-universe.json",
+      coinList: {
+        ...registry.coinList,
+        sourcePath: "tmp/step1-coin-list.json",
         sourceGeneratedAt,
       },
       coinCount: coins.length,

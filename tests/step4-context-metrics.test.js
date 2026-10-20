@@ -3,7 +3,7 @@ import test from "node:test"
 
 import { isFinite } from "../src/helpers/utils.typed.js"
 import { buildAltMarketBackground } from "../src/steps/step4-feature-metrics/build-alt-market-background.js"
-import { buildUniverseContext } from "../src/steps/step4-feature-metrics/build-universe-context.js"
+import { buildCoinListContext } from "../src/steps/step4-feature-metrics/build-coin-list-context.js"
 import { calculateDivergenceFlags } from "../src/steps/step4-feature-metrics/metrics/divergence-flags.js"
 import { calculateRelativeStrengthMetrics } from "../src/steps/step4-feature-metrics/metrics/relative-strength.js"
 
@@ -61,14 +61,14 @@ function closeFromFourHourReturns (returns) {
   return close
 }
 
-test("universe context uses six-hour market metrics, four-hour categories and one hourly grid", () => {
+test("coin list context uses six-hour market metrics, four-hour categories and one hourly grid", () => {
   const times = Array.from({ length: 25 }, (_, index) => index * 3_600)
   const baseCoins = createBaseCoins(times)
-  const context = buildUniverseContext(baseCoins, createMarketContext(times))
+  const context = buildCoinListContext(baseCoins, createMarketContext(times))
   const category = context.categoryContextsByCoin.get("TARGET")
 
-  assert.equal(context.universeBreadth6h[5], null)
-  assert.equal(context.universeBreadth6h[12], 2 / 7)
+  assert.equal(context.breadth6h[5], null)
+  assert.equal(context.breadth6h[12], 2 / 7)
   assert.equal(context.stablecapChange6h[5], null)
   assertClose(context.stablecapChange6h[6], 0.06)
   assertClose(context.stablecapChange6h[24], 6 / 118)
@@ -86,14 +86,14 @@ test("universe context uses six-hour market metrics, four-hour categories and on
   const market = createMarketContext(snapshotTimes)
   market.series.total3es.periods[9].close = 1_000
   market.series.total3es.periods[12].close = 270
-  const snapshot = buildUniverseContext(createBaseCoins(snapshotTimes), market)
+  const snapshot = buildCoinListContext(createBaseCoins(snapshotTimes), market)
   assert.equal(snapshot.asOf, "1970-01-01T12:00:00.000Z")
   assert.equal(snapshot.altMarketBackground.status, "down")
   assert.equal(snapshot.altMarketBackground.change6hPct, -10)
   assert.equal(snapshot.altMarketBackground.breadth6h, 2 / 7)
 
   baseCoins[1].times = times.with(12, times[12] + 1)
-  assert.throws(() => buildUniverseContext(baseCoins, createMarketContext(times)), /identical hourly time grid/)
+  assert.throws(() => buildCoinListContext(baseCoins, createMarketContext(times)), /identical hourly time grid/)
 })
 
 test("segment share changes use relative shares rather than capitalization or percentage-point differences", () => {
@@ -101,7 +101,7 @@ test("segment share changes use relative shares rather than capitalization or pe
   const market = createMarketContext(times)
   market.series.total.periods[6].close = 1_100
   market.series.totales.periods[6].close = 1_000
-  const context = buildUniverseContext(createBaseCoins(times), market)
+  const context = buildCoinListContext(createBaseCoins(times), market)
   const changes = context.segmentShareChange6h[6]
 
   assertClose(changes.btc, 500 / 440 - 1)
@@ -111,12 +111,12 @@ test("segment share changes use relative shares rather than capitalization or pe
   assert.equal(context.stablecapChange6h[6], 0)
 
   market.series.totales.periods[0].close = 500
-  const zeroBase = buildUniverseContext(createBaseCoins(times), market).segmentShareChange6h[6]
+  const zeroBase = buildCoinListContext(createBaseCoins(times), market).segmentShareChange6h[6]
   assert.equal(zeroBase.btc, null)
   assertClose(zeroBase.eth, changes.eth)
 
   market.series.total2es.periods[0].close = null
-  const missingBase = buildUniverseContext(createBaseCoins(times), market).segmentShareChange6h[6]
+  const missingBase = buildCoinListContext(createBaseCoins(times), market).segmentShareChange6h[6]
   assert.equal(missingBase.eth, null)
   assertClose(missingBase.alts, changes.alts)
 })

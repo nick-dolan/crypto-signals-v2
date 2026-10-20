@@ -63,7 +63,7 @@ function calculateChange6hPct (marketData, asOf) {
 export function buildAltMarketBackground ({ asOf, breadth6h, marketData }) {
   const breadth = isFinite(breadth6h) && breadth6h >= 0 && breadth6h <= 1 ? breadth6h : null
   const warnings = breadth === null
-    ? ["Ширина рынка за 6ч недоступна: требуется число от 0 до 1 по всей вселенной монет"]
+    ? ["Ширина рынка за 6ч недоступна: требуется число от 0 до 1 по полному списку монет"]
     : []
   let change6hPct = null
 

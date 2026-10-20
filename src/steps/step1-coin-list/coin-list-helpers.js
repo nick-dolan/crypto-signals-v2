@@ -20,7 +20,7 @@ function normalizeOptionalPositiveNumber (value, fieldName) {
 }
 
 function getCandidateFieldName (index, field) {
-  return `Crypto universe candidate at index ${index} ${field}`
+  return `Coin list candidate at index ${index} ${field}`
 }
 
 function normalizeCandidateCategories (value, index) {
@@ -34,9 +34,9 @@ function normalizeCandidateCategories (value, index) {
   ))
 }
 
-export function normalizeUniverseCandidate (candidate, index, candidateRankMax) {
+export function normalizeCoinCandidate (candidate, index, candidateRankMax) {
   if (!isObject(candidate)) {
-    throw new Error(`Crypto universe candidate at index ${index} must be an object`)
+    throw new Error(`Coin list candidate at index ${index} must be an object`)
   }
 
   const rank = parseInteger(
@@ -84,13 +84,13 @@ export function normalizeUniverseCandidate (candidate, index, candidateRankMax) 
   }
 }
 
-export function validateUniqueUniverseCandidates (candidates) {
+export function validateUniqueCoinCandidates (candidates) {
   const baseCurrencyIds = new Set()
 
   for (const candidate of candidates) {
     if (baseCurrencyIds.has(candidate.baseCurrencyId)) {
       throw new Error(
-        `Crypto universe contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
+        `Coin list contains duplicate baseCurrencyId: ${candidate.baseCurrencyId}`,
       )
     }
 
@@ -117,9 +117,9 @@ function isRequiredMarket (market) {
     && market.volume24hUsd > 0
 }
 
-export function selectUniverseMarketsByBaseCurrencyId (markets) {
+export function selectCoinMarketsByBaseCurrencyId (markets) {
   if (!isArray(markets)) {
-    throw new Error("Crypto universe markets must be an array")
+    throw new Error("Coin list markets must be an array")
   }
 
   const selectedMarkets = new Map()
@@ -143,7 +143,7 @@ export function selectUniverseMarketsByBaseCurrencyId (markets) {
   return selectedMarkets
 }
 
-function toUniverseMarket (market) {
+function toCoinMarket (market) {
   return {
     tradingViewSymbol: market.tradingViewSymbol,
     symbol: market.symbol,
@@ -158,7 +158,7 @@ function toUniverseMarket (market) {
   }
 }
 
-export function toUniverseCoin (candidate, market) {
+export function toCoinListEntry (candidate, market) {
   return {
     rank: candidate.rank,
     baseCurrencyId: candidate.baseCurrencyId,
@@ -169,6 +169,6 @@ export function toUniverseCoin (candidate, market) {
     circulatingSupply: candidate.circulatingSupply,
     marketCap: candidate.marketCap,
     fullyDilutedValuation: candidate.fullyDilutedValuation,
-    market: toUniverseMarket(market),
+    market: toCoinMarket(market),
   }
 }

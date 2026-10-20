@@ -152,7 +152,7 @@ export function createFeatureProfile (baseCoin, coinSeries, calculated) {
 
 export function buildFeatureProfiles (
   baseCoins,
-  universeContext,
+  coinListContext,
   { onProgress = () => {} } = {},
 ) {
   const profiles = []
@@ -161,11 +161,11 @@ export function buildFeatureProfiles (
   for (const [index, baseCoin] of baseCoins.entries()) {
     const coinSeries = buildAlignedCoinSeries(
       baseCoin.hourlyData,
-      universeContext.times,
+      coinListContext.times,
     )
     const calculated = calculateCoinMetrics(
       coinSeries,
-      universeContext,
+      coinListContext,
       baseCoin.coin.baseCurrencyId,
     )
     const result = createFeatureProfile(baseCoin, coinSeries, calculated)

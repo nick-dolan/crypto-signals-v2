@@ -36,7 +36,7 @@ function marketClose (marketContext, key, times) {
   const periods = marketContext?.series?.[key]?.periods
 
   if (!isArray(periods) || !hasGrid(periods.map(period => period?.time), times)) {
-    throw new Error(`Market context ${key} must use the universe hourly grid`)
+    throw new Error(`Market context ${key} must use the shared hourly grid`)
   }
 
   return periods.map(period => period.close)
@@ -140,7 +140,7 @@ function buildCategoryContext (baseCoins, returns4h, coinIndex, length) {
   }
 }
 
-export function buildUniverseContext (baseCoins, marketContext, coinPeers = null) {
+export function buildCoinListContext (baseCoins, marketContext, coinPeers = null) {
   if (!isArray(baseCoins) || baseCoins.length === 0) {
     throw new Error("baseCoins must be a nonempty array")
   }
@@ -194,7 +194,7 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
     segmentShareReturns6h.map(([key, values]) => [key, values[index]]),
   ))
   const returns6h = baseCoins.map(({ close }) => simpleReturns(close, 6))
-  const universeBreadth6h = times.map((_, index) => {
+  const breadth6h = times.map((_, index) => {
     const finite = returns6h.map(values => values[index]).filter(isFinite)
     return finite.length === 0
       ? null
@@ -212,10 +212,10 @@ export function buildUniverseContext (baseCoins, marketContext, coinPeers = null
     times,
     btcClose: btc.close,
     total3esClose,
-    universeBreadth6h,
+    breadth6h,
     altMarketBackground: buildAltMarketBackground({
       asOf,
-      breadth6h: universeBreadth6h.at(-1),
+      breadth6h: breadth6h.at(-1),
       marketData: marketContext,
     }),
     segmentShareChange6h,

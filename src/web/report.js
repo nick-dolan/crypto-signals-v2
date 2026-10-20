@@ -151,7 +151,7 @@
     byId("alt-market-status").textContent = label
     byId("alt-market-icon").replaceChildren(createIcon(icon))
     byId("alt-market-change-label").textContent = `Капитализация альткоинов · ${change.period.replace("h", "ч")}`
-    byId("alt-market-breadth-label").textContent = `Растущие монеты вселенной · ${breadth.period.replace("h", "ч")}`
+    byId("alt-market-breadth-label").textContent = `Доля растущих монет · ${breadth.period.replace("h", "ч")}`
     byId("alt-market-change").textContent = change.value == null
       ? "Нет данных"
       : `${number(change.value, 3, "exceptZero")}%`
@@ -179,7 +179,7 @@
 
     byId("as-of").dateTime = report.asOf
     byId("as-of").textContent = time(report.asOf)
-    byId("coverage").textContent = `Оценено агентом: ${report.candidateCount} из ${report.universeCoinCount} монет`
+    byId("coverage").textContent = `Оценено агентом: ${report.candidateCount} из ${report.coinCount} монет`
     byId("candidate-count").textContent = report.candidateCount
     byId("objective").textContent = `Цель анализа: ${report.objective}`
     if (growthObjective) {
@@ -824,7 +824,7 @@
       ["Ограниченная интерпретация", data.observationCount - data.watchCount],
     ].map(([label, count]) => element("span", "badge", `${label}: ${number(count, 0)}`)))
     byId("peer-radar-time").textContent = `Срез закрыт: ${publicationTime(data.snapshotClosedAt)} · Анализ выпущен: ${time(data.generatedAt, true)} UTC+3`
-    byId("peer-radar-coverage").textContent = `Загружено ${number(data.loadedCoinCount, 0)} / ${number(data.universeCoinCount, 0)} монет · Частичное покрытие: ${number(data.coverage.partial, 0)} · Неизвестные связи: ${number(data.coverage.not_covered + data.coverage.unreviewed + data.coverage.unavailable, 0)} · Без соседей: ${number(data.coverage.no_peers, 0)} (не ошибка)`
+    byId("peer-radar-coverage").textContent = `Загружено ${number(data.loadedCoinCount, 0)} / ${number(data.coinCount, 0)} монет · Частичное покрытие: ${number(data.coverage.partial, 0)} · Неизвестные связи: ${number(data.coverage.not_covered + data.coverage.unreviewed + data.coverage.unavailable, 0)} · Без соседей: ${number(data.coverage.no_peers, 0)} (не ошибка)`
     byId("peer-radar-coverage-counts").replaceChildren(...[
       ["available", "Полное покрытие"], ["partial", "Частичное покрытие"], ["no_peers", "Без соседей"],
       ["insufficient_data", "Недостаточно данных"], ["not_covered", "Вне справочника"],

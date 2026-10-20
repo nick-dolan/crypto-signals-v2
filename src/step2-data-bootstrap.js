@@ -11,10 +11,10 @@ import {
 } from "./steps/step2-data-bootstrap/build-data-bootstrap-report.js"
 
 async function runDataBootstrapStep () {
-  const sourceUniverse = await readTmpJson("step1-crypto-universe.json")
+  const sourceCoinList = await readTmpJson("step1-coin-list.json")
 
   const dataDirectoryPath = await resetTmpSubdirectory("step2-data-bootstrap")
-  const report = await buildDataBootstrapReport(sourceUniverse)
+  const report = await buildDataBootstrapReport(sourceCoinList)
   const checkedCoins = [...report.coins, ...report.rejected]
   const excludedCoins = selectCoverageExclusions(report.rejected)
   await updateCoverageExclusions({

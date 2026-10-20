@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { randomUUID } from "node:crypto"
 
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -7,7 +8,7 @@ import test from "node:test"
 import { gunzipSync, gzipSync } from "node:zlib"
 import { DuckDBInstance } from "@duckdb/node-api"
 
-import { readParquet } from "../src/reports/parquet.js"
+import { readParquet, writeParquet } from "../src/reports/parquet.js"
 import { createReportStore } from "../src/reports/store.js"
 
 async function parquetSchema (connection, filename) {
@@ -41,7 +42,7 @@ test("saved reports preserve exact numbers, coin order, nulls and history gaps a
     reportCreatedAt: "2026-09-26T13:00:48.708Z",
     asOf: "2026-09-26T11:00:00.000Z",
     candidateCount: 2,
-    universeCoinCount: 250,
+    coinCount: 250,
     marketDefinitions: {
       status: "Текст с 'кавычками', \"JSON\" и переносом\nстроки 🚀",
       optional: null,
@@ -82,7 +83,7 @@ test("saved reports preserve exact numbers, coin order, nulls and history gaps a
     ],
     peerRadar: {
       status: "available",
-      data: { observations: [{ symbol: "OUTSIDE", leaders: [{ symbol: "LEADER", gapAtr: 5.688581314878884 }] }] },
+      data: { coinCount: 245, observations: [{ symbol: "OUTSIDE", leaders: [{ symbol: "LEADER", gapAtr: 5.688581314878884 }] }] },
       histories: {
         OUTSIDE: { points: [{ time: 100 }, { time: 200, value: null }, { time: 300, value: 0.09964 }] },
       },
@@ -98,6 +99,59 @@ test("saved reports preserve exact numbers, coin order, nulls and history gaps a
 
   assert.deepEqual(await store.read(id), expected)
   assert.deepEqual((await store.list()).map(entry => entry.id), [id])
+})
+
+test("legacy coin counts are restored for listing, reading and saving without legacy fields", async (context) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "report-store-"))
+  let store
+  let instance
+  let connection
+  context.after(async () => {
+    await store?.close()
+    connection?.closeSync()
+    instance?.closeSync()
+    await fs.rm(directory, { recursive: true, force: true })
+  })
+  instance = await DuckDBInstance.create(":memory:", { threads: "1", temp_directory: "" })
+  connection = await instance.connect()
+  const expected = {
+    reportCreatedAt: "2026-09-26T13:00:48.708Z",
+    asOf: "2026-09-26T11:00:00.000Z",
+    candidateCount: 1,
+    coinCount: 250,
+    coins: [{ symbol: "A", movementProbability: 0.6000000000000001 }],
+    peerRadar: { status: "available", data: { coinCount: 245, loadedCoinCount: 200, observations: [] } },
+  }
+  const { coins, peerRadar, coinCount, ...header } = expected
+  const { coinCount: radarCoinCount, ...radarData } = peerRadar.data
+  const id = randomUUID()
+  const folder = path.join(directory, id)
+  await fs.mkdir(folder)
+  await writeParquet(connection, path.join(folder, "report.parquet"), [{
+    report: { ...header, universeCoinCount: coinCount },
+    manifest: { version: 2, id, coins: 1, history: 0, peerRadar: 1, textFields: [], coinDescriptions: false },
+  }])
+  await writeParquet(connection, path.join(folder, "coins.parquet"), coins)
+  await writeParquet(connection, path.join(folder, "history.parquet"), [], { coinIndex: 0, history: null })
+  await writeParquet(connection, path.join(folder, "peer-radar.parquet"), [{
+    radar: { ...peerRadar, data: { ...radarData, universeCoinCount: radarCoinCount } },
+  }])
+
+  store = await createReportStore({ directory })
+  const metadata = { ...header, coinCount }
+  assert.deepEqual(await store.list(), [{ id, ...metadata }])
+  const restored = await store.read(id)
+  assert.deepEqual(restored, expected)
+  const saved = await store.save(restored)
+  await store.close()
+  store = await createReportStore({ directory })
+  assert.deepEqual(await store.read(saved.id), expected)
+  assert.deepEqual(await store.list(), [id, saved.id].sort().map(id => ({ id, ...metadata })))
+
+  const [savedHeader] = await readParquet(connection, path.join(saved.directory, "report.parquet"))
+  const [savedRadar] = await readParquet(connection, path.join(saved.directory, "peer-radar.parquet"))
+  assert.deepEqual(savedHeader.report, { ...header, coinCount })
+  assert.deepEqual(savedRadar.radar, peerRadar)
 })
 
 test("saved reports pack only eligible text and preserve physical DOUBLE columns with gzip schema metadata", async (context) => {
@@ -159,7 +213,7 @@ test("saved reports pack only eligible text and preserve physical DOUBLE columns
       reportCreatedAt: "2026-09-26T13:00:48.708Z",
       asOf: "2026-09-26T11:00:00.000Z",
       candidateCount: 1,
-      universeCoinCount: 250,
+      coinCount: 250,
       marketContext: { changePct: 0.2262839160786661 },
       notes: { label: "Не из списка текстовых блоков" },
       coins: [{

@@ -16,7 +16,7 @@ function prices (returns, initial = 100) {
   return close
 }
 
-function createUniverse ({ hours = 2_399, target = value => value + 0.0003, market } = {}) {
+function createCoinList ({ hours = 2_399, target = value => value + 0.0003, market } = {}) {
   const returns = Array.from({ length: hours }, (_, index) => (
     market ? market(index) : Math.floor(index / 24) % 2 === 0 ? -0.002 : 0.002
   ))
@@ -29,13 +29,13 @@ function createUniverse ({ hours = 2_399, target = value => value + 0.0003, mark
   return { baseCoins, total3esClose: prices(returns, 1_000) }
 }
 
-function targetMetrics (universe) {
-  return buildSustainedStrength(universe.baseCoins, universe.total3esClose).get("TARGET")
+function targetMetrics (coinList) {
+  return buildSustainedStrength(coinList.baseCoins, coinList.total3esClose).get("TARGET")
 }
 
 test("persistent strength uses full disjoint history and exact current return horizons", () => {
-  const universe = createUniverse()
-  const metrics = targetMetrics(universe)
+  const coinList = createCoinList()
+  const metrics = targetMetrics(coinList)
 
   assert.equal(metrics.status, "persistent")
   assert.equal(metrics.history_hours, 2_399)
@@ -50,17 +50,17 @@ test("persistent strength uses full disjoint history and exact current return ho
   assert.equal(metrics.daily_win_rate, 1)
   assert.equal(metrics.weekly_win_rate, 1)
   for (const [field, hours] of [["excess_4h", 4], ["excess_12h", 12], ["excess_24h", 24], ["excess_7d", 168]]) {
-    const coin = universe.baseCoins[0].close
-    const market = universe.total3esClose
+    const coin = coinList.baseCoins[0].close
+    const market = coinList.total3esClose
     assertClose(metrics[field], coin.at(-1) / coin.at(-1 - hours) - market.at(-1) / market.at(-1 - hours))
   }
 })
 
 test("recent strength overrides history while an old pump or a motionless coin stays neutral", () => {
-  const fading = targetMetrics(createUniverse({ target: (value, index) => value + (index >= 2_375 ? -0.003 : 0.0003) }))
-  const emerging = targetMetrics(createUniverse({ target: (value, index) => value + (index >= 2_375 ? 0.003 : -0.001) }))
-  const pump = targetMetrics(createUniverse({ target: (value, index) => value + (index === 240 ? Math.log(5) : 0) }))
-  const flat = targetMetrics(createUniverse({ target: () => 0 }))
+  const fading = targetMetrics(createCoinList({ target: (value, index) => value + (index >= 2_375 ? -0.003 : 0.0003) }))
+  const emerging = targetMetrics(createCoinList({ target: (value, index) => value + (index >= 2_375 ? 0.003 : -0.001) }))
+  const pump = targetMetrics(createCoinList({ target: (value, index) => value + (index === 240 ? Math.log(5) : 0) }))
+  const flat = targetMetrics(createCoinList({ target: () => 0 }))
 
   assert.equal(fading.status, "fading")
   assert.ok(fading.history_score > 90)
@@ -105,32 +105,32 @@ test("peer medians exclude the coin and tied cross-sectional ranks do not depend
 })
 
 test("strength needs enough peers, full history and repeated regimes confirmed by breadth and TOTAL3ES", () => {
-  const short = targetMetrics(createUniverse({ hours: 671 }))
+  const short = targetMetrics(createCoinList({ hours: 671 }))
   assert.equal(short.status, "insufficient_data")
   assert.equal(short.history_score, null)
   assert.equal(short.current_score, 100)
-  assert.equal(targetMetrics(createUniverse({ hours: 672 })).status, "persistent")
+  assert.equal(targetMetrics(createCoinList({ hours: 672 })).status, "persistent")
 
-  const small = createUniverse()
+  const small = createCoinList()
   small.baseCoins.pop()
   const tooFewPeers = targetMetrics(small)
   assert.equal(tooFewPeers.history_score, null)
   assert.equal(tooFewPeers.current_score, null)
   assert.equal(tooFewPeers.excess_4h, null)
 
-  const oneSided = targetMetrics(createUniverse({ market: () => 0.002 }))
+  const oneSided = targetMetrics(createCoinList({ market: () => 0.002 }))
   assert.equal(oneSided.status, "insufficient_data")
   assert.equal(oneSided.down_windows, 0)
   assert.equal(oneSided.down_win_rate, null)
   assert.equal(oneSided.history_score, null)
   assert.equal(oneSided.current_score, 100)
 
-  const fewDown = targetMetrics(createUniverse({ market: index => index < 24 ? -0.002 : 0.002 }))
+  const fewDown = targetMetrics(createCoinList({ market: index => index < 24 ? -0.002 : 0.002 }))
   // The 2399-hour snapshot leaves the oldest three hours outside full 4h windows.
   assert.equal(fewDown.down_windows, 5)
   assert.equal(fewDown.history_score, null)
 
-  const conflicting = createUniverse()
+  const conflicting = createCoinList()
   conflicting.total3esClose = conflicting.total3esClose.map(value => 1_000_000 / value)
   const noAgreement = targetMetrics(conflicting)
   assert.equal(noAgreement.down_windows, 0)
@@ -139,15 +139,15 @@ test("strength needs enough peers, full history and repeated regimes confirmed b
 })
 
 test("missing or zero interior prices invalidate the whole horizon instead of silently bridging it", () => {
-  const short = targetMetrics(createUniverse({ hours: 24 }))
+  const short = targetMetrics(createCoinList({ hours: 24 }))
   assert.ok(short.excess_24h > 0)
   assert.equal(short.excess_7d, null)
   assert.equal(short.current_score, null)
 
   for (const value of [null, 0]) {
-    const universe = createUniverse()
-    universe.baseCoins[1].close[2_300] = value
-    const metrics = targetMetrics(universe)
+    const coinList = createCoinList()
+    coinList.baseCoins[1].close[2_300] = value
+    const metrics = targetMetrics(coinList)
     assert.equal(metrics.status, "insufficient_data")
     assert.equal(metrics.current_score, null)
     assert.equal(metrics.excess_7d, null)

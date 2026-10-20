@@ -5,8 +5,8 @@ import { readCoinPeers } from "../../helpers/coin-peers-helper.js"
 import { readTmpJson } from "../../helpers/fs-helper.js"
 
 export async function readFeatureInput () {
-  const [sourceUniverse, bootstrapSummary, marketContext, coingeckoTrending, coinPeers, entries] = await Promise.all([
-    readTmpJson("step1-crypto-universe.json"),
+  const [sourceCoinList, bootstrapSummary, marketContext, coingeckoTrending, coinPeers, entries] = await Promise.all([
+    readTmpJson("step1-coin-list.json"),
     readTmpJson("step2-data-bootstrap.json"),
     readTmpJson("step3-market-context.json"),
     readTmpJson("step3.1-coingecko-trending.json"),
@@ -28,7 +28,7 @@ export async function readFeatureInput () {
   }
 
   return {
-    sourceUniverse,
+    sourceCoinList,
     marketContext,
     coingeckoTrending,
     coinPeers,

@@ -48,12 +48,12 @@ function laggingReaction (leader) {
   }
 }
 
-export function buildPeerRadar ({ sourceUniverse, coinData, coinPeers = null }) {
-  if (!isArray(sourceUniverse?.coins) || !isArray(coinData) || !coinData.length) {
-    throw new Error("Peer radar requires the universe and non-empty hourly coin data from steps 1–2")
+export function buildPeerRadar ({ sourceCoinList, coinData, coinPeers = null }) {
+  if (!isArray(sourceCoinList?.coins) || !isArray(coinData) || !coinData.length) {
+    throw new Error("Peer radar requires the coin list and non-empty hourly coin data from steps 1–2")
   }
 
-  const baseCoins = buildBaseSeries({ sourceUniverse, coinData })
+  const baseCoins = buildBaseSeries({ sourceCoinList, coinData })
   const times = baseCoins[0].times
   if (
     new Set(baseCoins.map(({ coin }) => coin.baseCurrencyId)).size !== baseCoins.length
@@ -94,7 +94,7 @@ export function buildPeerRadar ({ sourceUniverse, coinData, coinPeers = null }) 
     snapshotClosedAt: new Date((times.at(-1) + 3_600) * 1_000).toISOString(),
     timeframe: "1h",
     registryGeneratedAt: coinPeers?.generatedAt ?? null,
-    universeCoinCount: sourceUniverse.coins.length,
+    coinCount: sourceCoinList.coins.length,
     loadedCoinCount: baseCoins.length,
     coverage: Object.fromEntries([
       "available", "partial", "no_peers", "insufficient_data", "not_covered", "unreviewed", "unavailable",

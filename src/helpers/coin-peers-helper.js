@@ -21,7 +21,7 @@ export function indexCoinPeers (registry) {
     registry?.schemaVersion !== 1
     || !isString(registry.generatedAt)
     || !isFinite(Date.parse(registry.generatedAt))
-    || !isArray(registry.universe?.coins)
+    || !isArray(registry.coinList?.coins)
     || !isArray(registry.relations)
   ) {
     throw new Error("Invalid coin peers registry: expected schemaVersion 1, generatedAt, coins and relations")
@@ -30,7 +30,7 @@ export function indexCoinPeers (registry) {
   const coins = new Map()
   const neighbors = new Map()
 
-  for (const coin of registry.universe.coins) {
+  for (const coin of registry.coinList.coins) {
     const id = coin?.baseCurrencyId
     if (
       !isString(id) || !id.trim() || coins.has(id)

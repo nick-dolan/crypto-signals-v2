@@ -15,9 +15,9 @@ function validateMetadata (report) {
   }
   if (
     !isSafeInteger(report.candidateCount) || report.candidateCount < 0
-    || !isSafeInteger(report.universeCoinCount) || report.universeCoinCount < report.candidateCount
+    || !isSafeInteger(report.coinCount) || report.coinCount < report.candidateCount
   ) {
-    throw new Error("candidateCount and universeCoinCount must be non-negative integers including all candidates")
+    throw new Error("candidateCount and coinCount must be non-negative integers including all candidates")
   }
 }
 
@@ -36,8 +36,16 @@ function containsNumber (value) {
   return isFinite(value) || ((isArray(value) || isObject(value)) && Object.values(value).some(containsNumber))
 }
 
+function restoreCoinCount (value) {
+  if (!isObject(value) || !Object.hasOwn(value, "universeCoinCount")) {
+    return value
+  }
+  const { universeCoinCount, ...rest } = value
+  return { coinCount: universeCoinCount, ...rest }
+}
+
 function restoreHeader ({ report, manifest }) {
-  const header = { ...report }
+  const header = { ...restoreCoinCount(report) }
   for (const key of manifest.textFields) {
     if (!isString(header[key])) {
       throw new Error(`report.parquet has an invalid compact text field: ${key}`)
@@ -142,11 +150,15 @@ export async function createReportStore ({ directory = path.resolve("reports") }
         throw new Error(`${filename}: expected a regular Parquet file`)
       }
     }
+    const schema = await connection.runAndReadAll(
+      "DESCRIBE SELECT unnest(data.report) FROM read_parquet(?)", [path.join(folder, "report.parquet")],
+    )
+    const countField = schema.getRowObjectsJS().some(column => column.column_name === "coinCount") ? "coinCount" : "universeCoinCount"
     // Project only metadata, never the report's descriptions, features, or time series.
     const result = await connection.runAndReadAll(`
       SELECT position, data.manifest AS manifest,
         data.report.reportCreatedAt AS reportCreatedAt, data.report.asOf AS asOf,
-        data.report.candidateCount AS candidateCount, data.report.universeCoinCount AS universeCoinCount
+        data.report.candidateCount AS candidateCount, data.report.${countField} AS coinCount
       FROM read_parquet(?)
     `, [path.join(folder, "report.parquet")])
     const rows = result.getRowObjectsJS()
@@ -244,6 +256,9 @@ export async function createReportStore ({ directory = path.resolve("reports") }
               throw new Error("peer-radar.parquet is missing its radar record")
             }
             report.peerRadar = radar[0].radar
+            if (isObject(report.peerRadar?.data)) {
+              report.peerRadar.data = restoreCoinCount(report.peerRadar.data)
+            }
             if (Object.hasOwn(radar[0], "histories")) {
               const entries = radar[0].histories
               if (

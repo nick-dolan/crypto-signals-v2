@@ -30,7 +30,7 @@ function shortlist (report) {
 function introduction (report) {
   return [
     `Эталон: ${report.reference.symbol} · ${report.reference.marketSymbol}. Свечи ${report.timeframe}, ${number(report.analysisDays, 0)} полных дней. Период UTC: [${utc(report.startTime)} → ${utc(report.endTime)}), конец не включён.`,
-    `Отчёт: ${utc(report.generatedAt)} UTC; список монет: ${utc(report.universeGeneratedAt)} UTC.`,
+    `Отчёт: ${utc(report.generatedAt)} UTC; список монет: ${utc(report.coinListGeneratedAt)} UTC.`,
     `Монет в выборке: ${number(report.coverage.total, 0)}; загружено: ${number(report.coverage.loaded, 0)}; допущено: ${number(report.coverage.eligible, 0)}; отказов: ${number(report.coverage.failed, 0)}; ожидают: ${number(report.coverage.pending, 0)}.`,
     report.pending.length
       ? "Предварительный результат: есть ожидающие монеты; подборки могут измениться."
