@@ -50,6 +50,7 @@ test("market brief reports the original model failure without losing collected s
   assert.ok(context.provider && context.model)
   assert.equal(output.status, "unavailable")
   assert.equal(output.analysis.status, "failed")
+  assert.equal(output.analysis.callCount, 1)
   assert.equal(output.analysis.error, error.message)
   assert.equal(output.sources, collection.sources)
   assert.deepEqual(output.items, [])

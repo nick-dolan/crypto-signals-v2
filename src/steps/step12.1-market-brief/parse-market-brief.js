@@ -33,9 +33,8 @@ function readPlainText (value, limit, field) {
 
 function readTitle (value) {
   const title = readPlainText(value, 60, "item title")
-  const words = title.split(/\s+/).filter(word => /[\p{L}\p{N}]/u.test(word))
-  if (/[\r\n\u2028\u2029]/u.test(title) || words.length < 2 || words.length > 6) {
-    throw new InvalidMarketBriefError("item title must be a single line of two to six words")
+  if (/[\r\n\u2028\u2029]/u.test(title)) {
+    throw new InvalidMarketBriefError("item title must be a single line")
   }
   return title
 }
@@ -56,23 +55,30 @@ export function validateBriefItems (items, sources, schemaVersion = 5) {
     throw new InvalidMarketBriefError("items must contain at most five news items")
   }
   const sourceIds = new Set(sources.map(source => source.id))
-  const result = items.map((item) => {
-    requireKeys(item, [
-      ...(schemaVersion === 5 ? ["title"] : []),
-      "text", ...(schemaVersion >= 4 ? ["sentiment"] : []), "sourceIds",
-    ])
-    if (schemaVersion >= 4 && !["bullish", "neutral", "bearish"].includes(item.sentiment)) {
-      throw new InvalidMarketBriefError("item sentiment must be bullish, neutral or bearish")
-    }
-    const ids = readSourceIds(item.sourceIds, sourceIds)
-    if (ids.length > 2) {
-      throw new InvalidMarketBriefError("each news item must cite at most two sources")
-    }
-    return {
-      ...(schemaVersion === 5 ? { title: readTitle(item.title) } : {}),
-      text: (schemaVersion === 5 ? readPlainText : readText)(item.text, 250, "item text"),
-      ...(schemaVersion >= 4 ? { sentiment: item.sentiment } : {}),
-      sourceIds: ids,
+  const result = items.map((item, index) => {
+    try {
+      requireKeys(item, [
+        ...(schemaVersion === 5 ? ["title"] : []),
+        "text", ...(schemaVersion >= 4 ? ["sentiment"] : []), "sourceIds",
+      ])
+      if (schemaVersion >= 4 && !["bullish", "neutral", "bearish"].includes(item.sentiment)) {
+        throw new InvalidMarketBriefError("item sentiment must be bullish, neutral or bearish")
+      }
+      const ids = readSourceIds(item.sourceIds, sourceIds)
+      if (ids.length > 2) {
+        throw new InvalidMarketBriefError("each news item must cite at most two sources")
+      }
+      return {
+        ...(schemaVersion === 5 ? { title: readTitle(item.title) } : {}),
+        text: (schemaVersion === 5 ? readPlainText : readText)(item.text, 250, "item text"),
+        ...(schemaVersion >= 4 ? { sentiment: item.sentiment } : {}),
+        sourceIds: ids,
+      }
+    } catch (error) {
+      if (error instanceof InvalidMarketBriefError) {
+        error.message = error.message.replace("Invalid market brief: ", `Invalid market brief: item ${index + 1}: `)
+      }
+      throw error
     }
   })
   if (new Set(result.map(item => item.text.toLowerCase())).size !== result.length) {
