@@ -1,9 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { createTradingViewStudyFetcher } from "../src/api/tradingview/studies/study.js"
 import { getActiveCoverageExclusionIds } from "../src/helpers/coverage-exclusions-helper.js"
 import { createCoinDataCoverageChecker } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
 import { createCoverageStudyRequests } from "../src/steps/step2-data-bootstrap/coverage-study-definitions.js"
+import { checkWithRetry } from "../src/steps/step2-data-bootstrap/data-coverage-helpers.js"
 
 function createFixture () {
   const nowTimestamp = Date.UTC(2026, 9, 18, 12, 30) / 1_000
@@ -149,6 +151,103 @@ for (const { label, reasonCode, invalidate } of [
     ])
   })
 }
+
+async function fetchRejectedStudy (request, messages) {
+  const fetchStudy = createTradingViewStudyFetcher({
+    createIndicator: async () => ({ indicator: {}, metadata: {} }),
+  })
+  const chart = {
+    Study: class {
+      onError (callback) {
+        if (messages) {
+          queueMicrotask(() => callback(...messages))
+        }
+      }
+
+      onUpdate () {}
+      onReady () {}
+      remove () {}
+    },
+  }
+  const [result] = await Promise.allSettled([
+    fetchStudy(chart, request, { timeoutMs: 10 }),
+  ])
+
+  assert.equal(result.status, "rejected")
+
+  return result
+}
+
+test("missing CRYPTOFUND social series keep diagnostics and core data without error notifications", async (t) => {
+  const fixture = createFixture()
+  const socialKeys = ["socialDominance", "interactions", "activeContributors", "activePosts", "createdPosts"]
+
+  for (const [index, key] of socialKeys.entries()) {
+    const request = fixture.chartData.studies[key].value.request
+    const metric = request.id.replace("STD;CryptoFund_", "").toUpperCase()
+    const payload = {
+      ctx: { symbol: `CRYPTOFUND:CRYPTO;TESTUSD;${metric}` },
+      error: "Symbol resolve error: {symbol}",
+    }
+    fixture.chartData.studies[key] = await fetchRejectedStudy(
+      request,
+      [index % 2 === 0 ? JSON.stringify(payload) : payload, undefined],
+    )
+  }
+
+  const { result, hourlyData } = await checkFixture(fixture)
+  const reportError = t.mock.fn(async () => {})
+  const checked = await checkWithRetry(async () => result, fixture.coin, 2, () => {}, { reportError })
+
+  assert.equal(checked.attempts, 1)
+  assert.equal(reportError.mock.callCount(), 0)
+  assert.equal(result.coverage.social.status, "unavailable")
+  assert.deepEqual(result.coverage.social.unavailableMetrics, socialKeys)
+  assert.equal(result.requestErrors.length, 5)
+  assert.equal(hourlyData.availability.social.status, "unavailable")
+  assert.equal(Object.keys(hourlyData.studies).length, 7)
+
+  for (const key of socialKeys) {
+    assert.match(result.coverage.studies[key].error, /Symbol resolve error: \{symbol\}/)
+    assert.ok(result.coverage.social.reasonCodes.includes(`${key}:request_failed`))
+    assert.equal(Object.hasOwn(hourlyData.studies, key), false)
+  }
+})
+
+test("real social study failures still send error notifications", async (t) => {
+  for (const { label, messages } of [
+    { label: "timeout" },
+    { label: "network failure", messages: [new Error("WebSocket connection closed")] },
+    {
+      label: "script failure",
+      messages: [{ ctx: { symbol: "CRYPTOFUND:CRYPTO;TESTUSD;POSTS_ACTIVE" }, error: "Script execution failed" }],
+    },
+    {
+      label: "unresolved market symbol",
+      messages: [{ ctx: { symbol: "BINANCE:TESTUSDT.P" }, error: "Symbol resolve error: {symbol}" }],
+    },
+    {
+      label: "malformed payload",
+      messages: ["{\"ctx\":{\"symbol\":\"CRYPTOFUND:CRYPTO;TESTUSD;POSTS_ACTIVE\"},\"error\":\"Symbol resolve error: {symbol}\""],
+    },
+    { label: "unknown error", messages: ["Unknown study error"] },
+  ]) {
+    await t.test(label, async () => {
+      const fixture = createFixture()
+      fixture.chartData.studies.activePosts = await fetchRejectedStudy(
+        fixture.chartData.studies.activePosts.value.request,
+        messages,
+      )
+      const { result } = await checkFixture(fixture)
+      const reportError = t.mock.fn(async () => {})
+      await checkWithRetry(async () => result, fixture.coin, 2, () => {}, { reportError })
+
+      assert.equal(result.coverage.social.status, "unavailable")
+      assert.equal(reportError.mock.callCount(), 1)
+      assert.equal(reportError.mock.calls[0].arguments[0], fixture.chartData.studies.activePosts.reason)
+    })
+  }
+})
 
 test("zero activePosts values are complete data and are preserved", async () => {
   const fixture = createFixture()

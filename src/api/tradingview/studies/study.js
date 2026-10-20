@@ -41,6 +41,19 @@ function getErrorMessage (error) {
   }
 }
 
+function isUnavailableStudyError (message) {
+  try {
+    const details = isString(message) ? JSON.parse(message) : message
+
+    return isString(details?.ctx?.symbol)
+      && details.ctx.symbol.startsWith("CRYPTOFUND:")
+      && isString(details?.error)
+      && details.error.startsWith("Symbol resolve error:")
+  } catch {
+    return false
+  }
+}
+
 function validatePositiveNumber (value, name) {
   if (!isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`)
@@ -253,10 +266,13 @@ function waitForStudy (
 
     study.onError((...messages) => {
       const details = messages.map(getErrorMessage).filter(Boolean).join(" ")
-      finish(
-        reject,
-        new Error(`TradingView ${label} error: ${details || "Unknown error"}`),
-      )
+      const error = new Error(`TradingView ${label} error: ${details || "Unknown error"}`)
+
+      if (messages.some(isUnavailableStudyError)) {
+        withErrorContext(error, { type: "unavailable" })
+      }
+
+      finish(reject, error)
     })
 
     study.onUpdate((changes) => {
