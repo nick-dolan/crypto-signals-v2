@@ -4,6 +4,10 @@
 
 https://cryptosignals.ngrok.app
 
+```
+sudo systemctl restart crypto-signals-web.service
+```
+
 ## Установка Copilot на Ubuntu
 
 Установите CLI без `sudo`:
