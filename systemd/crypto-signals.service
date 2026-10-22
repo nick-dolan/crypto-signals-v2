@@ -12,7 +12,7 @@ Group=nd
 WorkingDirectory=/home/nd/crypto-signals-v2
 
 # Укажите абсолютный путь к pnpm.
-ExecStart=/home/nd/.local/share/pnpm/pnpm run all
+ExecStart=/home/nd/.local/share/pnpm/bin/pnpm run all
 
 # Логи: journalctl -u crypto-signals.service -f
 StandardOutput=journal
