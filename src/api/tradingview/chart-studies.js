@@ -8,6 +8,7 @@ import {
   isSafeInteger,
   isString,
 } from "../../helpers/utils.typed.js"
+import { normalizeTradingViewChartPeriods } from "./chart-periods.js"
 import { fetchTradingViewStudy } from "./studies/index.js"
 
 function getRequiredString (value, name) {
@@ -133,7 +134,7 @@ function waitForChart (chart, options) {
     }
 
     const resolveAfterUpdates = () => {
-      if (!symbolLoaded || availablePeriodCount === 0) {
+      if (settled || !symbolLoaded || availablePeriodCount === 0) {
         return
       }
 
@@ -144,25 +145,25 @@ function waitForChart (chart, options) {
       )
     }
 
-    chart.onError((...messages) => {
-      const details = messages.map(getErrorMessage).join(" ")
+    chart.on("error", (error) => {
       finish(
         reject,
         new Error(
-          `TradingView chart ${options.symbol} error: ${details || "Unknown error"}`,
+          `TradingView chart ${options.symbol} error: ${getErrorMessage(error)}`,
+          { cause: error },
         ),
       )
     })
-    chart.onSymbolLoaded(() => {
+    chart.on("symbolLoaded", () => {
       symbolLoaded = true
       resolveAfterUpdates()
     })
-    chart.onUpdate((changes) => {
+    chart.on("update", (changes) => {
       if (!isArray(changes) || !changes.includes("$prices")) {
         return
       }
 
-      availablePeriodCount = chart.periods.length
+      availablePeriodCount = chart.candles.length
       resolveAfterUpdates()
     })
 
@@ -181,7 +182,7 @@ function waitForChart (chart, options) {
     try {
       chart.setMarket(options.symbol, {
         timeframe: options.timeframe,
-        range: options.range,
+        count: options.range,
         ...(options.to === undefined ? {} : { to: options.to }),
       })
     } catch (error) {
@@ -194,13 +195,6 @@ function waitForChart (chart, options) {
       )
     }
   })
-}
-
-function normalizeChartPeriods (periods) {
-  return periods
-    .filter(isObject)
-    .map(period => ({ ...period }))
-    .sort((first, second) => first.time - second.time)
 }
 
 function getChartInfo (infos) {
@@ -232,13 +226,13 @@ export function createTradingViewChartStudiesFetcher ({
     requests,
     options = {},
   ) {
-    if (!client?.Session?.Chart) {
+    if (!isFunction(client?.createChart)) {
       throw new Error("Connected TradingView client is required")
     }
 
     const normalizedRequests = normalizeRequests(requests)
     const normalizedOptions = normalizeOptions(options)
-    const chart = new client.Session.Chart()
+    const chart = client.createChart()
 
     try {
       await waitForChart(chart, normalizedOptions)
@@ -256,8 +250,8 @@ export function createTradingViewChartStudiesFetcher ({
 
       return {
         chart: {
-          info: getChartInfo(chart.infos),
-          periods: normalizeChartPeriods(chart.periods),
+          info: getChartInfo(chart.symbolInfo),
+          periods: normalizeTradingViewChartPeriods(chart.candles),
         },
         studies: Object.fromEntries(
           settledStudies.map((result, index) => [

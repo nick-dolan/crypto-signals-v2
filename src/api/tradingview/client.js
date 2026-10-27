@@ -1,4 +1,4 @@
-import TradingView from "@mathieuc/tradingview"
+import { getIndicator, getUser, TradingViewClient } from "@mathieuc/tradingview"
 import dotenv from "dotenv"
 import { isError, isFinite, isString } from "../../helpers/utils.typed.js"
 
@@ -19,8 +19,8 @@ function getRequiredEnvironmentVariable (name) {
 
 function getCredentials () {
   return {
-    sessionId: getRequiredEnvironmentVariable("TV_SESSIONID"),
-    sessionIdSign: getRequiredEnvironmentVariable("TV_SESSIONID_SIGN"),
+    session: getRequiredEnvironmentVariable("TV_SESSIONID"),
+    signature: getRequiredEnvironmentVariable("TV_SESSIONID_SIGN"),
   }
 }
 
@@ -41,15 +41,12 @@ function getErrorMessage (error) {
 
 async function authenticate (location) {
   const credentials = getCredentials()
-  const user = await TradingView.getUser(
-    credentials.sessionId,
-    credentials.sessionIdSign,
-    location,
-  )
+  const user = await getUser(credentials, { location })
 
   return {
     credentials,
     user: getPublicUser(user),
+    authToken: user.authToken,
   }
 }
 
@@ -70,41 +67,6 @@ async function authenticateForConnection (location) {
   }
 }
 
-function waitForConnection (client, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    let settled = false
-
-    const finish = (callback, value) => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      clearInterval(intervalId)
-      clearTimeout(timeoutId)
-      callback(value)
-    }
-
-    const checkConnection = () => {
-      if (client.isOpen && client.isLogged) {
-        finish(resolve, client)
-      }
-    }
-
-    client.onConnected(checkConnection)
-    client.onDisconnected(() => {
-      finish(reject, new Error("TradingView disconnected before authentication completed"))
-    })
-
-    const intervalId = setInterval(checkConnection, 50)
-    const timeoutId = setTimeout(() => {
-      finish(reject, new Error(`TradingView connection timed out after ${timeoutMs} ms`))
-    }, timeoutMs)
-
-    checkConnection()
-  })
-}
-
 async function createConnection (options) {
   const {
     connectionTimeoutMs = 15_000,
@@ -115,24 +77,24 @@ async function createConnection (options) {
     throw new Error("connectionTimeoutMs must be a positive number")
   }
 
-  const { credentials } = await authenticateForConnection(clientOptions.location)
-  const client = new TradingView.Client({
+  const { authToken } = await authenticateForConnection(clientOptions.location)
+  const client = new TradingViewClient({
     ...clientOptions,
-    token: credentials.sessionId,
-    signature: credentials.sessionIdSign,
+    authToken,
+    connectTimeoutMs: connectionTimeoutMs,
   })
 
-  client.onDisconnected(() => {
+  client.on("close", () => {
     if (activeClient === client) {
       activeClient = null
     }
   })
 
   try {
-    await waitForConnection(client, connectionTimeoutMs)
+    await client.ready
     return client
   } catch (error) {
-    await client.end()
+    await client.close()
     throw error
   }
 }
@@ -145,7 +107,7 @@ export async function validateTradingViewCredentials (options = {}) {
 export function getTradingViewCookieHeader () {
   const credentials = getCredentials()
 
-  return `sessionid=${credentials.sessionId};sessionid_sign=${credentials.sessionIdSign}`
+  return `sessionid=${credentials.session};sessionid_sign=${credentials.signature}`
 }
 
 export async function getTradingViewIndicator (id, version = "last") {
@@ -162,16 +124,11 @@ export async function getTradingViewIndicator (id, version = "last") {
 
   const credentials = getCredentials()
 
-  return TradingView.getIndicator(
-    normalizedId,
-    normalizedVersion,
-    credentials.sessionId,
-    credentials.sessionIdSign,
-  )
+  return getIndicator(normalizedId, { version: normalizedVersion, credentials })
 }
 
 export async function connectTradingView (options = {}) {
-  if (activeClient?.isOpen && activeClient.isLogged) {
+  if (activeClient?.isOpen && activeClient.isAuthenticated) {
     return activeClient
   }
 
@@ -200,6 +157,6 @@ export async function disconnectTradingView () {
   activeClient = null
 
   if (client) {
-    await client.end()
+    await client.close()
   }
 }

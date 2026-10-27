@@ -1,2 +1,4 @@
 allowBuilds:
   koffi: true
+patchedDependencies:
+  '@mathieuc/tradingview@4.1.0': patches/@mathieuc__tradingview@4.1.0.patch

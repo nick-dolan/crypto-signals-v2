@@ -130,12 +130,12 @@ export async function runTradingViewBenchmark (
   try {
     const client = await connect()
     metrics.connectionTimeMs = performance.now() - started
-    client.onError((...messages) => {
-      const message = messages.map(errorMessage).join(" ")
+    client.on("error", (error) => {
+      const message = errorMessage(error)
       metrics.clientErrors.push(message)
       stop(message)
     })
-    client.onDisconnected(() => {
+    client.on("close", () => {
       if (!closing) {
         metrics.unexpectedDisconnects++
         stop("Shared TradingView connection disconnected")

@@ -1,4 +1,5 @@
-import { isArray, isError, isFinite, isInt, isString } from "../../helpers/utils.typed.js"
+import { isArray, isError, isFinite, isFunction, isInt, isString } from "../../helpers/utils.typed.js"
+import { normalizeTradingViewChartPeriods } from "./chart-periods.js"
 
 function getRequiredString (value, name) {
   const normalizedValue = isString(value) ? value.trim() : ""
@@ -34,12 +35,8 @@ function validateNonNegativeNumber (value, name) {
   return value
 }
 
-function formatChartError (messages) {
-  const details = messages
-    .map(message => isError(message) ? message.message : String(message))
-    .join(" ")
-
-  return details || "Unknown error"
+function getErrorMessage (error) {
+  return isError(error) ? error.message : String(error)
 }
 
 function normalizeOptions ({
@@ -71,7 +68,7 @@ function normalizeOptions ({
 }
 
 export async function fetchTradingViewChartPeriods (client, options = {}) {
-  if (!client?.Session?.Chart) {
+  if (!isFunction(client?.createChart)) {
     throw new Error("Connected TradingView client is required")
   }
 
@@ -83,7 +80,7 @@ export async function fetchTradingViewChartPeriods (client, options = {}) {
     timeoutMs,
     to,
   } = normalizeOptions(options)
-  const chart = new client.Session.Chart()
+  const chart = client.createChart()
 
   try {
     return await new Promise((resolve, reject) => {
@@ -103,24 +100,25 @@ export async function fetchTradingViewChartPeriods (client, options = {}) {
         callback(value)
       }
 
-      chart.onError((...messages) => {
+      chart.on("error", (error) => {
         finish(
           reject,
           new Error(
-            `TradingView chart ${symbol} error: ${formatChartError(messages)}`,
+            `TradingView chart ${symbol} error: ${getErrorMessage(error)}`,
+            { cause: error },
           ),
         )
       })
 
-      chart.onUpdate((changes) => {
-        if (!isArray(changes) || !changes.includes("$prices")) {
+      chart.on("update", (changes) => {
+        if (settled || !isArray(changes) || !changes.includes("$prices")) {
           return
         }
 
-        availablePeriodCount = chart.periods.length
+        availablePeriodCount = chart.candles.length
         clearTimeout(settleTimeoutId)
         settleTimeoutId = setTimeout(() => {
-          finish(resolve, [...chart.periods])
+          finish(resolve, normalizeTradingViewChartPeriods(chart.candles).reverse())
         }, settleDelayMs)
       })
 
@@ -136,7 +134,7 @@ export async function fetchTradingViewChartPeriods (client, options = {}) {
       try {
         chart.setMarket(symbol, {
           timeframe,
-          range,
+          count: range,
           ...(to === undefined ? {} : { to }),
         })
       } catch (error) {

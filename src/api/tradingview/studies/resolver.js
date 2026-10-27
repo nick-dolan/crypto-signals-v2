@@ -1,4 +1,4 @@
-import TradingView from "@mathieuc/tradingview"
+import { PineIndicator as TradingViewPineIndicator } from "@mathieuc/tradingview"
 import {
   isArray,
   isError,
@@ -96,11 +96,11 @@ function createIndicatorTemplate (indicator, requestedId, requestedVersion) {
   }
 
   const id = getRequiredString(
-    indicator.pineId || requestedId,
+    indicator.id || requestedId,
     "Resolved TradingView indicator id",
   )
   const version = getRequiredString(
-    indicator.pineVersion || requestedVersion,
+    indicator.version || requestedVersion,
     "Resolved TradingView indicator version",
   )
   const script = isString(indicator.script) ? indicator.script : ""
@@ -134,8 +134,8 @@ function createIndicatorTemplate (indicator, requestedId, requestedVersion) {
 
 function createIndicatorOptions (template) {
   return {
-    pineId: template.id,
-    pineVersion: template.version,
+    id: template.id,
+    version: template.version,
     description: template.name,
     shortDescription: template.shortName,
     inputs: cloneIndicatorInputs(template.inputs),
@@ -160,7 +160,7 @@ function createPublicMetadata (template, indicatorInputs = template.inputs) {
 
 export function createTradingViewIndicatorResolver ({
   loadIndicator = getTradingViewIndicator,
-  PineIndicator = TradingView.PineIndicator,
+  PineIndicator = TradingViewPineIndicator,
 } = {}) {
   if (!isFunction(loadIndicator)) {
     throw new Error("loadIndicator must be a function")
@@ -222,7 +222,7 @@ export function createTradingViewIndicatorResolver ({
 
     for (const [key, value] of Object.entries(normalizedRequest.inputs)) {
       try {
-        indicator.setOption(key, value)
+        indicator.setInput(key, value)
       } catch (error) {
         throw new Error(
           `Invalid input ${key} for TradingView indicator ${template.id}: ${getErrorMessage(error)}`,

@@ -16,7 +16,7 @@
   "dependencies": {
     "@duckdb/node-api": "1.5.6-r.1",
     "@github/copilot-sdk": "^1.0.26",
-    "@mathieuc/tradingview": "^3.5.2",
+    "@mathieuc/tradingview": "4.1.0",
     "@resvg/resvg-js": "^2.6.2",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import { TradingViewError } from "@mathieuc/tradingview"
+
 import { createTradingViewStudyFetcher } from "../src/api/tradingview/studies/study.js"
 import { getActiveCoverageExclusionIds } from "../src/helpers/coverage-exclusions-helper.js"
 import { createCoinDataCoverageChecker } from "../src/steps/step2-data-bootstrap/check-coin-data-coverage.js"
@@ -152,28 +154,29 @@ for (const { label, reasonCode, invalidate } of [
   })
 }
 
-async function fetchRejectedStudy (request, messages) {
+async function fetchRejectedStudy (request, error) {
   const fetchStudy = createTradingViewStudyFetcher({
     createIndicator: async () => ({ indicator: {}, metadata: {} }),
   })
   const chart = {
-    Study: class {
-      onError (callback) {
-        if (messages) {
-          queueMicrotask(() => callback(...messages))
+    createStudy: () => ({
+      on (event, callback) {
+        if (event === "error" && error) {
+          queueMicrotask(() => callback(error))
         }
-      }
-
-      onUpdate () {}
-      onReady () {}
-      remove () {}
-    },
+      },
+      remove () {},
+    }),
   }
   const [result] = await Promise.allSettled([
     fetchStudy(chart, request, { timeoutMs: 10 }),
   ])
 
   assert.equal(result.status, "rejected")
+
+  if (error) {
+    assert.equal(result.reason, error)
+  }
 
   return result
 }
@@ -189,10 +192,16 @@ test("missing CRYPTOFUND social series keep diagnostics and core data without er
       ctx: { symbol: `CRYPTOFUND:CRYPTO;TESTUSD;${metric}` },
       error: "Symbol resolve error: {symbol}",
     }
-    fixture.chartData.studies[key] = await fetchRejectedStudy(
-      request,
-      [index % 2 === 0 ? JSON.stringify(payload) : payload, undefined],
-    )
+    const details = [index % 2 === 0 ? JSON.stringify(payload) : payload, undefined]
+    const message = index % 2 === 0 ? details[0] : `Symbol resolve error: ${payload.ctx.symbol}`
+    const error = new TradingViewError("STUDY_ERROR", `Study error: ${message}`, { details })
+    fixture.chartData.studies[key] = await fetchRejectedStudy(request, error)
+
+    assert.equal(error.details, details)
+    assert.deepEqual(error.context, {
+      source: "tradingview", operation: "wait_for_study", study: request.name || request.key,
+      timeoutMs: 10, type: "unavailable",
+    })
   }
 
   const { result, hourlyData } = await checkFixture(fixture)
@@ -208,35 +217,63 @@ test("missing CRYPTOFUND social series keep diagnostics and core data without er
   assert.equal(Object.keys(hourlyData.studies).length, 7)
 
   for (const key of socialKeys) {
-    assert.match(result.coverage.studies[key].error, /Symbol resolve error: \{symbol\}/)
+    assert.match(result.coverage.studies[key].error, /Symbol resolve error:/)
     assert.ok(result.coverage.social.reasonCodes.includes(`${key}:request_failed`))
     assert.equal(Object.hasOwn(hourlyData.studies, key), false)
   }
 })
 
 test("real social study failures still send error notifications", async (t) => {
-  for (const { label, messages } of [
+  const unavailablePayload = {
+    ctx: { symbol: "CRYPTOFUND:CRYPTO;TESTUSD;POSTS_ACTIVE" },
+    error: "Symbol resolve error: {symbol}",
+  }
+  const malformedPayload = JSON.stringify(unavailablePayload).slice(0, -1)
+  const cause = new Error("WebSocket connection closed")
+  const networkError = new TradingViewError("DISCONNECTED", cause.message, {
+    cause, details: { code: 1006, reason: "Connection lost" },
+  })
+  networkError.context = { operation: "receive_packet" }
+
+  for (const { label, error } of [
     { label: "timeout" },
-    { label: "network failure", messages: [new Error("WebSocket connection closed")] },
+    { label: "network failure", error: networkError },
+    {
+      label: "connection failure with resolver diagnostics",
+      error: new TradingViewError("CONNECTION_ERROR", "WebSocket connection closed", {
+        details: [unavailablePayload],
+      }),
+    },
     {
       label: "script failure",
-      messages: [{ ctx: { symbol: "CRYPTOFUND:CRYPTO;TESTUSD;POSTS_ACTIVE" }, error: "Script execution failed" }],
+      error: new TradingViewError("STUDY_ERROR", "Study error: Script execution failed", {
+        details: [{ ...unavailablePayload, error: "Script execution failed" }, unavailablePayload],
+      }),
     },
     {
       label: "unresolved market symbol",
-      messages: [{ ctx: { symbol: "BINANCE:TESTUSDT.P" }, error: "Symbol resolve error: {symbol}" }],
+      error: new TradingViewError("STUDY_ERROR", "Study error: Symbol resolve error: BINANCE:TESTUSDT.P", {
+        details: [{ ...unavailablePayload, ctx: { symbol: "BINANCE:TESTUSDT.P" } }],
+      }),
     },
     {
       label: "malformed payload",
-      messages: ["{\"ctx\":{\"symbol\":\"CRYPTOFUND:CRYPTO;TESTUSD;POSTS_ACTIVE\"},\"error\":\"Symbol resolve error: {symbol}\""],
+      error: new TradingViewError("STUDY_ERROR", `Study error: ${malformedPayload}`, {
+        details: [malformedPayload],
+      }),
     },
-    { label: "unknown error", messages: ["Unknown study error"] },
+    {
+      label: "unknown error",
+      error: new TradingViewError("STUDY_ERROR", "Study error: Unknown study error", {
+        details: ["Unknown study error"],
+      }),
+    },
   ]) {
     await t.test(label, async () => {
       const fixture = createFixture()
       fixture.chartData.studies.activePosts = await fetchRejectedStudy(
         fixture.chartData.studies.activePosts.value.request,
-        messages,
+        error,
       )
       const { result } = await checkFixture(fixture)
       const reportError = t.mock.fn(async () => {})
@@ -247,6 +284,10 @@ test("real social study failures still send error notifications", async (t) => {
       assert.equal(reportError.mock.calls[0].arguments[0], fixture.chartData.studies.activePosts.reason)
     })
   }
+
+  assert.equal(networkError.cause, cause)
+  assert.equal(networkError.context.operation, "receive_packet")
+  assert.equal(networkError.context.source, "tradingview")
 })
 
 test("zero activePosts values are complete data and are preserved", async () => {

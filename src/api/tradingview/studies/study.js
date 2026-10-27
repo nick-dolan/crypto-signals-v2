@@ -2,7 +2,6 @@ import { withErrorContext } from "../../../helpers/error-helper.js"
 import {
   isArray,
   isBoolean,
-  isError,
   isFinite,
   isFunction,
   isInt,
@@ -21,29 +20,14 @@ function getRequiredString (value, name) {
   return normalizedValue
 }
 
-function getErrorMessage (error) {
-  if (isError(error)) {
-    return error.message
-  }
-
-  if (isString(error)) {
-    return error
-  }
-
-  if (error === undefined || error === null) {
-    return ""
+function isUnavailableStudyError (error) {
+  if (error?.code !== "STUDY_ERROR" || !isArray(error.details)) {
+    return false
   }
 
   try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
-}
-
-function isUnavailableStudyError (message) {
-  try {
-    const details = isString(message) ? JSON.parse(message) : message
+    const payload = error.details[0]
+    const details = isString(payload) ? JSON.parse(payload) : payload
 
     return isString(details?.ctx?.symbol)
       && details.ctx.symbol.startsWith("CRYPTOFUND:")
@@ -260,32 +244,28 @@ function waitForStudy (
 
       clearTimeout(settleTimeoutId)
       settleTimeoutId = setTimeout(() => {
-        finish(resolve, study.periods)
+        finish(resolve, study.values)
       }, settleDelayMs)
     }
 
-    study.onError((...messages) => {
-      const details = messages.map(getErrorMessage).filter(Boolean).join(" ")
-      const error = new Error(`TradingView ${label} error: ${details || "Unknown error"}`)
-
-      if (messages.some(isUnavailableStudyError)) {
-        withErrorContext(error, { type: "unavailable" })
-      }
-
-      finish(reject, error)
+    study.on("error", (error) => {
+      finish(reject, withErrorContext(error, {
+        source: "tradingview", operation: "wait_for_study", study: label, timeoutMs,
+        ...(isUnavailableStudyError(error) ? { type: "unavailable" } : {}),
+      }))
     })
 
-    study.onUpdate((changes) => {
+    study.on("update", (changes) => {
       if (!isArray(changes) || !changes.includes("plots")) {
         return
       }
 
       hasPlotUpdate = true
-      availablePeriods = getSourcePeriodCount(study.periods, window)
+      availablePeriods = getSourcePeriodCount(study.values, window)
       resolveAfterUpdates()
     })
 
-    study.onReady(() => {
+    study.on("ready", () => {
       ready = true
       resolveAfterUpdates()
     })
@@ -528,15 +508,15 @@ export function createTradingViewStudyFetcher ({
     request,
     options = {},
   ) {
-    if (!chart?.Study) {
-      throw new Error("TradingView chart with Study support is required")
+    if (!isFunction(chart?.createStudy)) {
+      throw new Error("TradingView chart with createStudy support is required")
     }
 
     const normalizedRequest = normalizeStudyRequest(request)
     const normalizedOptions = normalizeStudyOptions(options)
     const { indicator, metadata } = await createIndicator(normalizedRequest)
     const label = normalizedRequest.name || metadata.name || normalizedRequest.key
-    const study = new chart.Study(indicator)
+    const study = chart.createStudy(indicator)
 
     try {
       const sourcePeriods = await waitForStudy(

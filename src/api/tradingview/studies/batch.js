@@ -134,10 +134,6 @@ function normalizeOptions ({
   })
 }
 
-function formatChartError (messages) {
-  return messages.map(getErrorMessage).join(" ")
-}
-
 function setChartMarket (
   chart,
   {
@@ -162,14 +158,13 @@ function setChartMarket (
       callback(value)
     }
 
-    chart.onError((...messages) => {
-      const details = formatChartError(messages)
+    chart.on("error", (error) => {
       finish(
         reject,
-        new Error(`TradingView chart error: ${details || "Unknown error"}`),
+        new Error(`TradingView chart error: ${getErrorMessage(error)}`, { cause: error }),
       )
     })
-    chart.onSymbolLoaded(() => finish(resolve))
+    chart.on("symbolLoaded", () => finish(resolve))
 
     timeoutId = setTimeout(() => {
       finish(
@@ -184,7 +179,7 @@ function setChartMarket (
     try {
       chart.setMarket(symbol, {
         timeframe,
-        ...(range === undefined ? {} : { range }),
+        ...(range === undefined ? {} : { count: range }),
         ...(to === undefined ? {} : { to }),
       })
     } catch (error) {
@@ -221,7 +216,7 @@ export function createTradingViewStudiesFetcher ({
   }
 
   async function fetchStudyGroup (client, requests, options) {
-    const chart = new client.Session.Chart()
+    const chart = client.createChart()
 
     try {
       await setChartMarket(chart, options)
@@ -276,7 +271,7 @@ export function createTradingViewStudiesFetcher ({
       return {}
     }
 
-    if (!client?.Session?.Chart) {
+    if (!isFunction(client?.createChart)) {
       throw new Error("Connected TradingView client is required")
     }
 

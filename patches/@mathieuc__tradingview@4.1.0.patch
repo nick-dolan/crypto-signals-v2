@@ -1,0 +1,26 @@
+diff --git a/dist/chart/chart-session.js b/dist/chart/chart-session.js
+index aa9c6c7e9382fee97aaead88d58e43a1687bae9b..e3bf353c774cb8ca76fab04925ae43e3c3482dd0 100644
+--- a/dist/chart/chart-session.js
++++ b/dist/chart/chart-session.js
+@@ -299,7 +299,7 @@ export class ChartSession extends Emitter {
+             const [time, open, high, low, close, volume] = bar.v;
+             this.#barIndexes.set(bar.i, time);
+             this.#candles.set(time, {
+-                time, open, high, low, close, volume: volume ?? 0,
++                time, open, high, low, close, volume,
+             });
+         }
+     }
+diff --git a/dist/http/indicators.js b/dist/http/indicators.js
+index f36fb7b6854806af1e561b7bd1d268613e8ce15d..1307d498703275a3570e6003a5d55a4a3972b38e 100644
+--- a/dist/http/indicators.js
++++ b/dist/http/indicators.js
+@@ -106,7 +106,7 @@ export function parseIndicatorDefinition(result, id, version) {
+         shortDescription: meta.shortDescription,
+         inputs: parseInputs(meta.inputs),
+         plots: parsePlots(meta.styles ?? {}, meta.plots ?? []),
+-        script: result.ilTemplate,
++        script: result.ilTemplate ?? meta.defaults?.inputs?.text,
+     });
+ }
+ /**
