@@ -1,4 +1,5 @@
 import "dotenv/config"
+import { sleep } from "radash"
 import { isArray, isError, isFinite, isObject, isString, isURLSearchParams } from "../../helpers/utils.typed.js"
 
 function createUrl (endpoint, searchParams) {
@@ -50,36 +51,44 @@ export async function requestCoinGeckoJson (endpoint, { searchParams, timeoutMs 
   }
 
   const label = `CoinGecko ${url.pathname}`
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
-      redirect: "manual",
-      signal: controller.signal,
-    })
-    const body = await response.text()
+  for (let attempt = 1; ; attempt += 1) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        redirect: "manual",
+        signal: controller.signal,
+      })
+      const body = await response.text()
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      return JSON.parse(body)
+    } catch (error) {
+      if (controller.signal.aborted) {
+        if (attempt === 3) {
+          throw new Error(`${label} request timed out after ${timeoutMs} ms`, { cause: error })
+        }
+        console.warn(`⚠ ${label} request timed out after ${timeoutMs} ms; retrying in 2000 ms (attempt ${attempt + 1}/3)`)
+      } else {
+        if (error instanceof SyntaxError) {
+          throw new Error(`${label} returned invalid JSON`, { cause: error })
+        }
+
+        throw new Error(`${label} request failed: ${isError(error) ? error.message : "Unknown error"}`, {
+          cause: error,
+        })
+      }
+    } finally {
+      clearTimeout(timeoutId)
     }
 
-    return JSON.parse(body)
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(`${label} request timed out after ${timeoutMs} ms`, { cause: error })
-    }
-
-    if (error instanceof SyntaxError) {
-      throw new Error(`${label} returned invalid JSON`, { cause: error })
-    }
-
-    throw new Error(`${label} request failed: ${isError(error) ? error.message : "Unknown error"}`, {
-      cause: error,
-    })
-  } finally {
-    clearTimeout(timeoutId)
+    await sleep(2_000)
   }
 }

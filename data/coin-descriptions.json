@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-21T07:00:56.574Z",
+  "generatedAt": "2026-10-27T13:00:47.945Z",
   "language": "ru",
   "coinList": {
     "sourcePath": "tmp/step1-coin-list.json",
-    "sourceGeneratedAt": "2026-10-21T07:00:03.713Z"
+    "sourceGeneratedAt": "2026-10-27T13:00:01.313Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 282,
+  "coinCount": 285,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -4126,6 +4126,46 @@
         {
           "url": "https://www.coingecko.com/en/coins/iostoken",
           "checkedAt": "2026-10-21T07:00:54.665Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBIRBMO",
+      "symbol": "BIRB",
+      "name": "Moonbirds",
+      "description": "Moonbirds — бренд цифровых коллекционных активов, для которого создан токен BIRB на Solana. CoinGecko описывает BIRB как утилитарный токен экосистемы, предназначенный для вознаграждений и стимулов.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/moonbirds",
+          "checkedAt": "2026-10-24T07:00:45.085Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCREZ",
+      "symbol": "REZ",
+      "name": "Renzo",
+      "description": "REZ — нативный токен управления Renzo Protocol, позволяющий участникам сообщества влиять на будущее протокола.",
+      "sources": [
+        {
+          "url": "https://docs.renzoprotocol.com/docs/rez/basic-info",
+          "checkedAt": "2026-10-24T07:00:59.837Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAINI",
+      "symbol": "AIN",
+      "name": "Infinity Ground",
+      "description": "Infinity Ground — Web3-платформа с AI-средой разработки, позволяющей создавать приложения, игры и смарт-контракты с помощью естественного языка и AI-агентов. CoinGecko связывает тикер AIN с Infinity Ground; официальный сайт описывает платформу, но не объясняет назначение токена.",
+      "sources": [
+        {
+          "url": "https://www.infinityg.ai/",
+          "checkedAt": "2026-10-27T13:00:44.209Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/infinity-ground",
+          "checkedAt": "2026-10-27T13:00:44.227Z"
         }
       ]
     }
