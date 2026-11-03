@@ -9,7 +9,7 @@ Type=simple
 User=nd
 Group=nd
 WorkingDirectory=/home/nd/crypto-signals-v2
-ExecStart=/usr/local/bin/ngrok http 3000 \
+ExecStart=/usr/local/bin/ngrok http 3100 \
     --url https://cryptosignals.ngrok.app \
     --traffic-policy-file /home/nd/crypto-signals-v2/policy.yaml \
     --log stdout

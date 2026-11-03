@@ -19,7 +19,7 @@ systemctl --no-pager --full status crypto-signals-web.service crypto-signals-ngr
 sudo journalctl -u crypto-signals-web.service -u crypto-signals-ngrok.service -n 50 --no-pager
 ```
 
-Сервер слушает только `127.0.0.1:3000`; ограничение внешнего доступа настраивается в `policy.yaml`.
+Сервер слушает только `127.0.0.1:3100`; ограничение внешнего доступа настраивается в `policy.yaml`.
 
 После изменения unit-файлов:
 

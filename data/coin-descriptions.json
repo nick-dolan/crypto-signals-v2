@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-27T13:00:47.945Z",
+  "generatedAt": "2026-11-02T07:00:46.301Z",
   "language": "ru",
   "coinList": {
     "sourcePath": "tmp/step1-coin-list.json",
-    "sourceGeneratedAt": "2026-10-27T13:00:01.313Z"
+    "sourceGeneratedAt": "2026-11-02T07:00:01.248Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 285,
+  "coinCount": 292,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -4166,6 +4166,110 @@
         {
           "url": "https://www.coingecko.com/en/coins/infinity-ground",
           "checkedAt": "2026-10-27T13:00:44.227Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCINIT",
+      "symbol": "INIT",
+      "name": "Initia",
+      "description": "Initia объединяет приложения и роллапы в мультичейн-экосистеме на основе Interwoven Stack. INIT — нативный токен проекта; документация описывает его использование в механизме Enshrined Liquidity и для вознаграждений стейкинга, а также в программе VIP.",
+      "sources": [
+        {
+          "url": "https://initia.xyz/",
+          "checkedAt": "2026-10-28T19:00:45.424Z"
+        },
+        {
+          "url": "https://docs.initia.xyz/home/core-concepts/init-token/tokenomics",
+          "checkedAt": "2026-10-28T19:00:45.578Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCARIAA",
+      "symbol": "ARIA",
+      "name": "AriaAI",
+      "description": "AriaAI — проект разработки и издания игр с собственной игровой вселенной и интеграцией ИИ. ARIA — нативный токен экосистемы, используемый для голосования по развитию проекта, приобретения игровых активов и использования ИИ.",
+      "sources": [
+        {
+          "url": "https://docs.playariagame.com/tokenomics/token-use-cases",
+          "checkedAt": "2026-10-29T07:00:45.457Z"
+        },
+        {
+          "url": "https://docs.playariagame.com/getting-started/what-is-aria.ai",
+          "checkedAt": "2026-10-29T07:00:45.528Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPARTI",
+      "symbol": "PARTI",
+      "name": "Particle Network",
+      "description": "Particle Network — блокчейн первого уровня, предназначенный для абстракции блокчейнов и объединения пользовательских аккаунтов и балансов в разных сетях. PARTI используется как нативный газовый токен сети и токен для расчетов в Universal Liquidity.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/particle-network",
+          "checkedAt": "2026-10-30T07:00:41.420Z"
+        },
+        {
+          "url": "https://whitepaper.particle.network/tokenomics/usdparti-utility-and-purpose",
+          "checkedAt": "2026-10-30T07:00:46.190Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCON",
+      "symbol": "ON",
+      "name": "Orochi Network",
+      "description": "Orochi Network — инфраструктура проверяемых данных, использующая криптографические методы для обеспечения целостности и конфиденциальности. Среди продуктов проекта — zkDatabase для создания криптографически проверяемых данных, децентрализованный оракул Orocle и генератор случайных чисел Orand.",
+      "sources": [
+        {
+          "url": "https://orochi.network/",
+          "checkedAt": "2026-10-30T13:00:47.936Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/orochi-network",
+          "checkedAt": "2026-10-30T13:00:48.008Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCAIOT",
+      "symbol": "AIOT",
+      "name": "OKZOO",
+      "description": "OKZOO — децентрализованная сеть датчиков окружающей среды на базе AIoT: распределённые устройства собирают и проверяют данные из реального мира. В источнике AIOT указан как служебный токен для вознаграждений и доступа к данным сети.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/okzoo",
+          "checkedAt": "2026-10-31T07:00:49.395Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCPOWR",
+      "symbol": "POWR",
+      "name": "Powerledger",
+      "description": "Powerledger разрабатывает программные решения на основе блокчейна для отслеживания и торговли возобновляемой энергией, услугами гибкости и экологическими активами. POWR используется как лицензия для доступа организаций к платформе и может применяться для оплаты транзакций в блокчейне Powerledger.",
+      "sources": [
+        {
+          "url": "https://powerledger.io/",
+          "checkedAt": "2026-11-01T13:00:42.606Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/power-ledger",
+          "checkedAt": "2026-11-01T13:00:44.785Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCBEATA",
+      "symbol": "BEAT",
+      "name": "Audiera",
+      "description": "Audiera — игровая платформа, объединяющая ритм-игры, создание музыки и участие пользователей и AI-агентов. Токен BEAT используется для стимулов за игровой процесс и участие, создания контента и доступа к функциям платформы.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/audiera",
+          "checkedAt": "2026-11-02T07:00:38.145Z"
         }
       ]
     }
