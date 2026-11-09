@@ -1,4 +1,5 @@
 description: Detect early signs of strong crypto price moves
+queue: crypto-jobs
 schedule: "CRON_TZ=Europe/Moscow 0 10,16,22 * * *"
 catchup_window: 12h
 overlap_policy: latest
