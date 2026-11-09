@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-02T07:00:46.301Z",
+  "generatedAt": "2026-11-07T19:01:11.246Z",
   "language": "ru",
   "coinList": {
     "sourcePath": "tmp/step1-coin-list.json",
-    "sourceGeneratedAt": "2026-11-02T07:00:01.248Z"
+    "sourceGeneratedAt": "2026-11-07T19:00:01.201Z"
   },
   "sourceNotes": "Описания составлены кратко и своими словами. Часть ссылок и дат checkedAt перенесена из data/coin-peers.json без повторного открытия; дополнительные сведения проверены через CoinGecko Demo API и официальную документацию. checkedAt — дата проверки источника, а не дата обновления информации самим проектом.",
-  "coinCount": 292,
+  "coinCount": 296,
   "coins": [
     {
       "baseCurrencyId": "XTVCBTC",
@@ -4270,6 +4270,62 @@
         {
           "url": "https://www.coingecko.com/en/coins/audiera",
           "checkedAt": "2026-11-02T07:00:38.145Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCLISTA",
+      "symbol": "LISTA",
+      "name": "Lista DAO",
+      "description": "Lista DAO — протокол на BNB Chain для кредитования, ликвидного стейкинга BNB и создания стейблкоина lisUSD под залог. LISTA — токен управления, владельцы которого могут участвовать в голосованиях и предлагать изменения.",
+      "sources": [
+        {
+          "url": "https://docs.bsc.lista.org/",
+          "checkedAt": "2026-11-05T19:00:58.965Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCTA",
+      "symbol": "TA",
+      "name": "Trusta.AI",
+      "description": "Trusta AI — инфраструктура идентификации и репутации для Web3 и ИИ, предоставляющая проверки Proof of Humanity, обнаружение Sybil-аккаунтов и оценку репутации. Токен TA используется для оплаты услуг идентификации и аттестации, а также для участия в управлении протоколом.",
+      "sources": [
+        {
+          "url": "https://static.trustalabs.ai/staticfiles/app/home/Trusta_MiCAR_Whitepaper.pdf",
+          "checkedAt": "2026-11-07T13:00:48.597Z"
+        },
+        {
+          "url": "https://www.coingecko.com/en/coins/trusta-ai",
+          "checkedAt": "2026-11-07T13:00:50.852Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCIDOLM",
+      "symbol": "IDOL",
+      "name": "MEET48",
+      "description": "MEET48 — развлекательная экосистема, объединяющая ИИ и пользовательский контент; платформа позволяет создавать виртуальных идолов с ИИ и взаимодействовать с ними. По данным CoinGecko, IDOL — служебный токен для голосования, покупки виртуальных товаров и участия в управлении экосистемой.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/meet48",
+          "checkedAt": "2026-11-07T19:00:49.818Z"
+        }
+      ]
+    },
+    {
+      "baseCurrencyId": "XTVCONE",
+      "symbol": "ONE",
+      "name": "Harmony",
+      "description": "Harmony — блокчейн с консенсусом Proof-of-Stake. ONE — его нативный токен: им оплачивают комиссии за транзакции, участвуют в стейкинге и голосуют по предложениям управления сетью.",
+      "sources": [
+        {
+          "url": "https://www.coingecko.com/en/coins/harmony",
+          "checkedAt": "2026-11-07T19:01:05.567Z"
+        },
+        {
+          "url": "https://docs.harmony.one/home/general/technology/tokenomics",
+          "checkedAt": "2026-11-07T19:01:08.947Z"
         }
       ]
     }
