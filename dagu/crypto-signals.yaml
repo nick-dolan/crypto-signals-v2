@@ -1,0 +1,15 @@
+description: Detect early signs of strong crypto price moves
+schedule: "CRON_TZ=Europe/Moscow 0 10,16,22 * * *"
+catchup_window: 12h
+overlap_policy: latest
+working_dir: /home/nd/crypto-signals-v2
+timeout_sec: 0
+dotenv: []
+
+env:
+  HOME: /home/nd
+  PATH: /home/nd/.local/share/pnpm/bin:/home/nd/.local/share/pnpm:/home/nd/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+steps:
+  - id: crypto_signals
+    run: pnpm run all
