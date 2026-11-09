@@ -1,9 +1,0 @@
-[Unit]
-Description=Crypto signals timer
-
-[Timer]
-OnCalendar=*-*-* 10,16,22:00:00 Europe/Moscow
-Persistent=true
-
-[Install]
-WantedBy=timers.target
