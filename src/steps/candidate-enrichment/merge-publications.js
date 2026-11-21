@@ -57,7 +57,7 @@ export function validatePublicationOutput (shortlist, output, source, referenceT
   for (const [symbol, candidate] of actual) {
     const publications = candidate[source]
     if (!isObject(publications)
-      || !["available", "empty", "failed"].includes(publications.status)
+      || !["available", "empty", "failed", ...(source === "twitter" ? ["partial"] : [])].includes(publications.status)
       || !isArray(publications[source === "news" ? "items" : "tweets"])) {
       throw new Error(`${source} candidate ${symbol} publications are required`)
     }

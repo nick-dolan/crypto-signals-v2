@@ -106,25 +106,31 @@ async function fetchRecentTweets (
 ) {
   const firstPage = await fetchPage(query)
   const firstPageTweets = selectRecentTweets(firstPage, 1, referenceTimestamp)
+  const result = {
+    query,
+    error: null,
+    fetchedPageCount: 1,
+    tweets: mergeTweets(firstPageTweets),
+  }
   const cursor = isString(firstPage.next_cursor)
     ? firstPage.next_cursor.trim()
     : ""
 
   if (!cursor || firstPage.has_next_page === false) {
-    return {
-      query,
-      fetchedPageCount: 1,
-      tweets: mergeTweets(firstPageTweets),
-    }
+    return result
   }
 
-  const secondPage = await fetchPage(query, cursor)
-  const secondPageTweets = selectRecentTweets(secondPage, 2, referenceTimestamp)
+  try {
+    const secondPage = await fetchPage(query, cursor)
+    const secondPageTweets = selectRecentTweets(secondPage, 2, referenceTimestamp)
 
-  return {
-    query,
-    fetchedPageCount: 2,
-    tweets: mergeTweets(firstPageTweets, secondPageTweets),
+    return {
+      ...result,
+      fetchedPageCount: 2,
+      tweets: mergeTweets(firstPageTweets, secondPageTweets),
+    }
+  } catch (error) {
+    return { ...result, error: getErrorMessage(error) }
   }
 }
 
@@ -156,7 +162,6 @@ async function enrichCandidate (
   { candidate, symbol },
   referenceTimestamp,
   fetchPage,
-  reportError,
 ) {
   // until_time is exclusive; the local window includes the exact snapshot second.
   const query = [
@@ -176,18 +181,14 @@ async function enrichCandidate (
       ...candidate,
       twitter: {
         query: result.query,
-        status: result.tweets.length > 0 ? "available" : "empty",
-        error: null,
+        status: result.error !== null ? "partial" : result.tweets.length > 0 ? "available" : "empty",
+        error: result.error,
         fetchedPageCount: result.fetchedPageCount,
         recentTweetCount: result.tweets.length,
         tweets: result.tweets,
       },
     }
   } catch (error) {
-    await reportError(error, {
-      step: "step7-twitter-enrichment.js", operation: "fetch_tweets", symbol,
-      source: "twitterapi.io",
-    })
     return {
       ...candidate,
       twitter: {
@@ -221,8 +222,20 @@ export async function enrichCandidatesWithTwitter (
   const candidates = validateInput(input)
   const workers = createConcurrencyLimiter(10)
   const enrichedCandidates = await Promise.all(candidates.map(candidate => workers.run(
-    () => enrichCandidate(candidate, referenceTimestamp, fetchPage, reportError),
+    () => enrichCandidate(candidate, referenceTimestamp, fetchPage),
   )))
+  const incomplete = enrichedCandidates.filter(({ twitter }) => ["failed", "partial"].includes(twitter.status))
+
+  if (incomplete.length > 0) {
+    const failedCount = incomplete.filter(({ twitter }) => twitter.status === "failed").length
+    const reasons = [...new Set(incomplete.map(({ twitter }) => twitter.error))].join("; ")
+    await reportError(new Error(
+      `Twitter: ${failedCount} монет без данных, ${incomplete.length - failedCount} — с частичными данными (всего ${candidates.length}). ${reasons}`,
+    ), {
+      step: "step7-twitter-enrichment.js", operation: "fetch_tweets", source: "twitterapi.io",
+      symbols: incomplete.map(({ symbol }) => symbol).join(", "),
+    })
+  }
 
   return {
     ...input,

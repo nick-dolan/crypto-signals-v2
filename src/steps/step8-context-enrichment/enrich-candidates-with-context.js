@@ -37,7 +37,7 @@ function validateInput (input) {
     }
 
     for (const source of ["news", "twitter"]) {
-      if (!["available", "empty", "failed"].includes(candidate[source].status)) {
+      if (!["available", "empty", "failed", ...(source === "twitter" ? ["partial"] : [])].includes(candidate[source].status)) {
         throw new Error(`Step 7 enrichment candidate ${symbol} ${source} status is invalid`)
       }
     }
@@ -80,9 +80,11 @@ async function enrichCandidate (
       ...identity,
       newsSummary: null,
       twitterSummary: null,
-      contextCaveat: [candidate.news.status, candidate.twitter.status].includes("failed")
-        ? "Публикации недоступны: загрузка одного или обоих источников завершилась ошибкой."
-        : "В доступной выборке за последние сутки публикаций нет.",
+      contextCaveat: candidate.twitter.status === "partial"
+        ? "Выборка Twitter неполная: загрузка второй страницы завершилась ошибкой. Отсутствие публикаций за последние сутки не подтверждено."
+        : [candidate.news.status, candidate.twitter.status].includes("failed")
+            ? "Публикации недоступны: загрузка одного или обоих источников завершилась ошибкой."
+            : "В доступной выборке за последние сутки публикаций нет.",
       socialSignificant: null,
       socialReason: null,
       socialSentiment: null,

@@ -34,6 +34,9 @@ export async function runTwitterEnrichmentStep ({
   const failedCandidateCount = output.candidates.filter(candidate => (
     candidate.twitter.status === "failed"
   )).length
+  const partialCandidateCount = output.candidates.filter(candidate => (
+    candidate.twitter.status === "partial"
+  )).length
 
   console.log(
     `✓ Enriched ${output.candidates.length} preliminary candidates with ${tweetCount} tweets from the last 24 hours in ${outputPath}`,
@@ -41,6 +44,9 @@ export async function runTwitterEnrichmentStep ({
 
   if (failedCandidateCount > 0) {
     console.log(`✗ Twitter unavailable for ${failedCandidateCount} preliminary candidates`)
+  }
+  if (partialCandidateCount > 0) {
+    console.log(`⚠ Twitter partially available for ${partialCandidateCount} preliminary candidates; fetched tweets retained`)
   }
 
   return output

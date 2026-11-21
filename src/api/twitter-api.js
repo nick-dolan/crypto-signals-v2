@@ -35,7 +35,7 @@ function retryAfterDelay (value) {
   return isFinite(timestamp) && new Date(timestamp).toUTCString() === text ? Math.max(0, timestamp - Date.now()) : undefined
 }
 
-export async function fetchTweetPage (query, cursor = "", { timeoutMs = 15_000, requestLimiter = defaultRequestLimiter } = {}) {
+export async function fetchTweetPage (query, cursor = "", { timeoutMs = 60_000, requestLimiter = defaultRequestLimiter } = {}) {
   const apiKey = process.env.TWITTERAPI_IO_KEY?.trim()
 
   if (!apiKey) {
@@ -51,8 +51,11 @@ export async function fetchTweetPage (query, cursor = "", { timeoutMs = 15_000, 
   url.searchParams.set("queryType", "Latest")
   url.searchParams.set("cursor", cursor)
 
+  let transientRetries = 0
+  let rateLimitRetries = 0
+
   try {
-    for (let attempt = 0; ; attempt += 1) {
+    for (;;) {
       const result = await requestLimiter.run(async () => {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
@@ -72,16 +75,33 @@ export async function fetchTweetPage (query, cursor = "", { timeoutMs = 15_000, 
               text = await response.text()
             }
           } catch {
+            if (controller.signal.aborted && transientRetries < 1) {
+              transientRetries += 1
+              requestLimiter.pause(1_000)
+              return { retry: true }
+            }
             throw new Error(`Twitter ${controller.signal.aborted ? "request timed out" : "transport failure"}`)
           }
 
           if (!response.ok) {
+            try {
+              await response.body?.cancel()
+            } catch {
+              controller.abort()
+            }
+
             if (response.status === 429) {
-              const delayMs = retryAfterDelay(response.headers?.get("retry-after")) ?? 1_000 * 2 ** attempt
+              const delayMs = retryAfterDelay(response.headers?.get("retry-after")) ?? 1_000 * 2 ** rateLimitRetries
               requestLimiter.pause(delayMs)
-              if (attempt < 2 && delayMs <= 60_000) {
+              if (rateLimitRetries < 2 && delayMs <= 60_000) {
+                rateLimitRetries += 1
                 return { retry: true }
               }
+            }
+            if ([502, 503, 504].includes(response.status) && transientRetries < 1) {
+              transientRetries += 1
+              requestLimiter.pause(1_000)
+              return { retry: true }
             }
             throw new Error(`Twitter API error: ${response.status} ${STATUS_CODES[response.status] ?? "HTTP error"}`)
           }

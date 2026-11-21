@@ -18,7 +18,7 @@ function validateCandidate (candidate) {
   }
 
   for (const source of ["news", "twitter"]) {
-    if (!["available", "empty", "failed"].includes(candidate[`${source}Status`])) {
+    if (!["available", "empty", "failed", ...(source === "twitter" ? ["partial"] : [])].includes(candidate[`${source}Status`])) {
       throw new Error(`Step 8 ${candidate.symbol} ${source}Status is invalid`)
     }
   }

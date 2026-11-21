@@ -54,7 +54,7 @@ export function formatStepError (error, context = {}, env = process.env) {
     `Время: ${new Date().toISOString()}`,
   ]
   for (const [key, label] of [
-    ["operation", "Операция"], ["symbol", "Монета"], ["source", "Источник"],
+    ["operation", "Операция"], ["symbol", "Монета"], ["symbols", "Монеты"], ["source", "Источник"],
     ["provider", "Провайдер"], ["model", "Модель"], ["code", "Код"], ["type", "Тип провайдера"],
     ["exitCode", "Код завершения"],
   ]) {

@@ -410,7 +410,7 @@ export function buildAgentPayload (shortlist, context, patterns = null) {
       coingeckoTrendingCategories: "Context: массив названий пересечения категорий монеты CoinGecko с trending-категориями CoinGecko, не TV-категории. [] — у подтверждённой trending-монеты нет пересечений, не отсутствие данных; null — нет подтверждённого совпадения",
       newsStatus: "Information: available — публикации получены; empty — в выборке нет публикаций; failed — сбой загрузки; unavailable — контекст не передан. Отсутствие публикаций не доказывает отсутствие событий",
       newsSummary: "Information: краткая сводка новостей; null — нет содержательной сводки, не нейтральный или медвежий сигнал",
-      twitterStatus: "Information: available — твиты получены; empty — в выборке нет твитов; failed — сбой загрузки; unavailable — контекст не передан",
+      twitterStatus: "Information: available — твиты получены; empty — в выборке нет твитов; partial — первая страница получена, вторая не загрузилась, покрытие неполное; failed — сбой загрузки; unavailable — контекст не передан. Пустая выборка при partial не подтверждает отсутствие публикаций",
       twitterSummary: "Information: краткая сводка Twitter; обсуждения и охват не доказывают достоверность событий; null — сводка недоступна",
       socialSignificant: "Information: true — существенный свежий инфоповод, false — доступные публикации не дают существенного сигнала, null — данных недостаточно; это не вероятность роста",
       socialReason: "Information: краткое основание значимости инфоповода или недостаточности данных; null — основание не сформулировано",

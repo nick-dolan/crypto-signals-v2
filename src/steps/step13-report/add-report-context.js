@@ -51,10 +51,12 @@ function validateSourceWindow (sources, context, key) {
 function validateContainer (container, itemsKey, label) {
   if (
     !isObject(container)
-    || !["available", "empty", "failed"].includes(container.status)
+    || !["available", "empty", "failed", ...(itemsKey === "tweets" ? ["partial"] : [])].includes(container.status)
     || !isArray(container[itemsKey])
   ) {
-    throw new Error(`${label} must have an available, empty or failed status and a ${itemsKey} array`)
+    throw new Error(
+      `${label} must have an available, empty${itemsKey === "tweets" ? ", partial" : ""} or failed status and a ${itemsKey} array`,
+    )
   }
 }
 
