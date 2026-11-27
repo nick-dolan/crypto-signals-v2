@@ -1,4 +1,14 @@
 allowBuilds:
   koffi: true
+minimumReleaseAgeExclude:
+  - '@microsoft/copilot-sdk-darwin-arm64@2.0.4'
+  - '@microsoft/copilot-sdk-darwin-x64@2.0.4'
+  - '@microsoft/copilot-sdk-linux-arm64@2.0.4'
+  - '@microsoft/copilot-sdk-linux-x64@2.0.4'
+  - '@microsoft/copilot-sdk-linuxmusl-arm64@2.0.4'
+  - '@microsoft/copilot-sdk-linuxmusl-x64@2.0.4'
+  - '@microsoft/copilot-sdk-win32-arm64@2.0.4'
+  - '@microsoft/copilot-sdk-win32-x64@2.0.4'
+  - '@microsoft/copilot-sdk@2.0.4'
 patchedDependencies:
   '@mathieuc/tradingview@4.1.0': patches/@mathieuc__tradingview@4.1.0.patch
