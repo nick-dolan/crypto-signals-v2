@@ -35,7 +35,7 @@ function retryAfterDelay (value) {
   return isFinite(timestamp) && new Date(timestamp).toUTCString() === text ? Math.max(0, timestamp - Date.now()) : undefined
 }
 
-export async function fetchTweetPage (query, cursor = "", { timeoutMs = 60_000, requestLimiter = defaultRequestLimiter } = {}) {
+export async function fetchTweetPage (query, cursor = "", { timeoutMs = 30_000, requestLimiter = defaultRequestLimiter } = {}) {
   const apiKey = process.env.TWITTERAPI_IO_KEY?.trim()
 
   if (!apiKey) {

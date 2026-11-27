@@ -40,7 +40,7 @@ function waitForAbort (signal) {
   })
 }
 
-test("Twitter retries a request timeout once with a fresh signal and defaults to 60 seconds", async (t) => {
+test("Twitter retries a request timeout once with a fresh signal and defaults to 30 seconds", async (t) => {
   const signals = []
   const { request, requestLimiter } = mockTwitter(t, async (url, { signal }) => {
     signals.push(signal)
@@ -48,7 +48,7 @@ test("Twitter retries a request timeout once with a fresh signal and defaults to
   })
 
   const page = fetchTweetPage("private-query", "private-cursor", { requestLimiter })
-  t.mock.timers.tick(59_999)
+  t.mock.timers.tick(29_999)
   assert.equal(request.mock.callCount(), 1)
   assert.equal(signals[0].aborted, false)
   t.mock.timers.tick(1)
@@ -61,7 +61,7 @@ test("Twitter retries a request timeout once with a fresh signal and defaults to
   assert.equal(request.mock.calls[0].arguments[0], request.mock.calls[1].arguments[0])
   assert.equal(request.mock.calls[1].arguments[1].headers["X-API-Key"], "test-twitter-key")
   assert.equal(request.mock.calls[1].arguments[1].redirect, "manual")
-  t.mock.timers.tick(60_000)
+  t.mock.timers.tick(30_000)
   assert.equal(signals[1].aborted, false)
 })
 
