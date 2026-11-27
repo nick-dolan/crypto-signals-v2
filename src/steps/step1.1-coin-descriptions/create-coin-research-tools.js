@@ -1,5 +1,5 @@
 import { isIP } from "node:net"
-import { defineTool } from "@github/copilot-sdk"
+import { defineTool } from "@microsoft/copilot-sdk"
 
 import { requestTavilyJson } from "../../api/tavily/request.js"
 import { reportStepError } from "../../helpers/step-error-helper.js"

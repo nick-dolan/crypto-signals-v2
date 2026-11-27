@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { registerHooks } from "node:module"
 import test, { after, afterEach, beforeEach, mock } from "node:test"
+import { CopilotClient } from "@microsoft/copilot-sdk"
 
 const state = {}
 globalThis[Symbol.for("crypto-signals-v2.model-errors")] = state
@@ -8,7 +9,7 @@ globalThis[Symbol.for("crypto-signals-v2.model-errors")] = state
 // Only external backends and dotenv are stubbed; the error helper is real.
 const hooks = registerHooks({
   resolve (specifier, context, nextResolve) {
-    if (["dotenv/config", "@github/copilot-sdk"].includes(specifier)) {
+    if (specifier === "dotenv/config") {
       return { url: `model-errors:${specifier}`, shortCircuit: true }
     }
 
@@ -19,8 +20,6 @@ const hooks = registerHooks({
 
     if (url === "model-errors:dotenv/config") {
       source = "export {}"
-    } else if (url === "model-errors:@github/copilot-sdk") {
-      source = "export class CopilotClient { constructor() { return state.client } }"
     } else if (url === new URL("../src/api/copilot-unofficial/auth.js", import.meta.url).href) {
       source = "export const getUnofficialCopilotSession = () => state.copilotAuth()"
     } else if (url === new URL("../src/api/openai-unofficial/auth.js", import.meta.url).href) {
@@ -67,24 +66,22 @@ test("SDK errors retain original identity, cause and session metadata despite cl
   const failure = Object.assign(new Error("Rate limited", { cause }), { code: "SDK_ERROR" })
   const cleanup = new Error("Stop failed")
   const stack = failure.stack
-  state.client = {
-    start: async () => {},
-    createSession: async () => ({
-      on: (type, handler) => {
-        state.onSessionError = handler
-      },
-      sendAndWait: async () => {
-        state.onSessionError({ data: {
-          errorCode: "user_model_rate_limited", errorType: "rate_limit", statusCode: 429,
-          providerCallId: "provider-request", serviceRequestId: "service-request",
-        } })
-        throw failure
-      },
-    }),
-    stop: async () => {
-      throw cleanup
+  mock.method(CopilotClient.prototype, "start", async () => {})
+  mock.method(CopilotClient.prototype, "createSession", async () => ({
+    on: (type, handler) => {
+      state.onSessionError = handler
     },
-  }
+    sendAndWait: async () => {
+      state.onSessionError({ data: {
+        errorCode: "user_model_rate_limited", errorType: "rate_limit", statusCode: 429,
+        providerCallId: "provider-request", serviceRequestId: "service-request",
+      } })
+      throw failure
+    },
+  }))
+  mock.method(CopilotClient.prototype, "stop", async () => {
+    throw cleanup
+  })
 
   await assert.rejects(requestModel("copilot-sdk"), (error) => {
     assert.equal(error, failure)

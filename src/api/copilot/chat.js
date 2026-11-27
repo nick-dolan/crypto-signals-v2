@@ -1,7 +1,7 @@
 import "dotenv/config"
 import { homedir } from "node:os"
 import path from "node:path"
-import { CopilotClient } from "@github/copilot-sdk"
+import { CopilotClient, RuntimeConnection } from "@microsoft/copilot-sdk"
 import { withErrorContext } from "../../helpers/error-helper.js"
 import { isArray, isFinite, isString } from "../../helpers/utils.typed.js"
 
@@ -19,8 +19,10 @@ async function sendCopilotRequest (
   try {
     client = new CopilotClient({
       mode: "empty",
-      baseDirectory: process.env.COPILOT_HOME || path.join(homedir(), ".copilot"),
-      logLevel: "error",
+      runtime: RuntimeConnection.forSpawnedStdio({
+        baseDirectory: process.env.COPILOT_HOME || path.join(homedir(), ".copilot"),
+      }),
+      observability: { logLevel: "error" },
     })
 
     context = { operation: "start" }
@@ -31,24 +33,23 @@ async function sendCopilotRequest (
     startedAt = Date.now()
     const hasTools = tools.length > 0
 
-    console.log(`Calling ${model} via GitHub Copilot SDK...`)
+    console.log(`Calling ${model} via Microsoft Copilot SDK...`)
 
     const session = await client.createSession({
       clientName: "crypto-signals-v2",
       model,
-      ...(reasoningEffort ? { reasoningEffort } : {}),
-      ...(hasTools
-        ? {
-            tools,
-            toolSearch: { enabled: false },
-          }
-        : {}),
-      availableTools: tools.map(tool => `custom:${tool.name}`),
+      ...(reasoningEffort ? { inference: { reasoningEffort } } : {}),
+      tools: {
+        ...(hasTools ? { definitions: tools, search: { enabled: false } } : {}),
+        availableTools: tools.map(tool => `custom:${tool.name}`),
+      },
       enableConfigDiscovery: false,
-      onPermissionRequest: () => ({
-        kind: "reject",
-        feedback: "Only explicitly registered read-only tools are allowed.",
-      }),
+      permissions: {
+        onRequest: () => ({
+          kind: "reject",
+          feedback: "Only explicitly registered read-only tools are allowed.",
+        }),
+      },
       systemMessage: {
         mode: "customize",
         sections: {
@@ -58,9 +59,11 @@ async function sendCopilotRequest (
         },
         content: systemPrompt,
       },
-      infiniteSessions: { enabled: false },
-      memory: { enabled: false },
-      enableSessionStore: false,
+      state: {
+        infiniteSessions: { enabled: false },
+        memory: { enabled: false },
+        enableCrossSessionStore: false,
+      },
     })
 
     session.on("session.error", (event) => {

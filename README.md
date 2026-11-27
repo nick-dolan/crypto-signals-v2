@@ -10,25 +10,14 @@ sudo systemctl restart crypto-signals-web.service
 
 ## Установка Copilot на Ubuntu
 
-Установите CLI без `sudo`:
+Для входа установите и запустите CLI под пользователем сервиса, без `sudo`:
 
 ```sh
 curl -fsSL https://gh.io/copilot-install | bash
 ~/.local/bin/copilot
 ```
 
-В Copilot выполните `/login`. После выхода определите путь:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-which copilot
-```
-
-Чтобы SDK использовал установленный CLI, укажите полученный абсолютный путь в `.env`, например:
-
-```dotenv
-COPILOT_CLI_PATH=/home/nick/.local/bin/copilot
-```
+Выполните `/login`. Не задавайте `COPILOT_CLI_PATH`: SDK использует совместимый runtime из своего пакета.
 
 **OpenAI:** для `openai-unofficial` нужен отдельный вход в ChatGPT. После `pnpm install` выполните из корня проекта под пользователем сервиса, без `sudo`:
 

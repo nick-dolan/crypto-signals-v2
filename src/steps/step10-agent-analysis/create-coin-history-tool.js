@@ -1,4 +1,4 @@
-import { defineTool } from "@github/copilot-sdk"
+import { defineTool } from "@microsoft/copilot-sdk"
 
 import { readTmpJson } from "../../helpers/fs-helper.js"
 import { reportStepError } from "../../helpers/step-error-helper.js"
